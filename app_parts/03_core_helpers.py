@@ -20,8 +20,8 @@ _TRADE_COLUMNS = frozenset({
     "plan_errors", "plan_warnings", "plan_override_reason", "plan_snapshot",
     "tags", "custom_blocks",
     "schema_version", "created_at", "updated_at",
+    "leverage",
 })
-
 _SCREENSHOT_COLUMNS = frozenset({
     "id", "trade_id", "filename", "caption", "created_at",
 })

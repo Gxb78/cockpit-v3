@@ -67,6 +67,17 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   pointer-events: none;
 }
 
+.journal-day-trades.is-editing .journal-flip-card {
+  pointer-events: none;
+}
+
+/* Neutralise toute rotation pendant l'edition */
+.journal-no-flip .journal-flip-card .journal-flip-card-inner,
+.journal-no-flip .journal-flip-card.is-flipped .journal-flip-card-inner {
+  transform: none !important;
+  transition: none !important;
+}
+
 .journal-flip-card {
   height: min(720px, calc(88vh - 34px));
   min-height: 620px;
@@ -111,7 +122,7 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   display: flex;
   flex-direction: column;
   border-radius: 34px;
-  background: #f7f8fb;
+  background: #ffffff;
   color: #10131b;
   border: 1px solid rgba(255, 255, 255, 0.88);
   box-shadow:
@@ -531,11 +542,16 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   font-weight: 700;
   padding: 6px 8px;
   outline: none;
-  box-sizing: border-box;
-  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.jcard-field:focus {
+/* Filled input → pas de fond ni bordure (blanc card) */
+.jcard-field:not(:placeholder-shown) {
+  background: transparent;
+  border-color: transparent;
+}
+
+/* Focus → blanc quoi qu'il arrive */
+.jcard-field.jcard-field:focus {
   border-color: rgba(0, 197, 220, 0.6);
   box-shadow: 0 0 0 3px rgba(0, 197, 220, 0.12);
   background: #fff;
@@ -984,11 +1000,18 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   font: 750 13px/1.35 "JetBrains Mono", monospace;
   padding: 9px 12px;
   outline: none;
-  transition: background 0.16s, border-color 0.16s, box-shadow 0.16s;
 }
 
-.jedit-field:focus {
-  border-color: rgba(0,197,220,0.6);
+.jedit-field:not(:placeholder-shown),
+.jedit-field-wrap select:not(:placeholder-shown),
+.jedit-field-wrap textarea:not(:placeholder-shown) {
+  background: transparent;
+  border-color: transparent;
+}
+
+.jedit-field.jedit-field:focus,
+.jedit-field-wrap select:focus,
+.jedit-field-wrap textarea:focus {
   background: #fff;
   box-shadow: 0 0 0 3px rgba(0,197,220,0.12);
 }
