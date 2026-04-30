@@ -203,21 +203,16 @@ function _journalCardScheduleSave(tid) {
 // ---- card-style editor drawer ----
 
 function _journalEditorSetStatus(editor, state, text) {
-  // Use the save button text to show status (avoids layout shift + overflow)
+  // Use the save button text to show status (avoids layout shift, min-width:130px on button)
   var saveBtn = editor && editor.querySelector('.jedit-save');
   if (!saveBtn) return;
   if (state === 'saving') {
     saveBtn.textContent = text || 'Sauvegarde...';
-    saveBtn.disabled = true;
   } else if (state === 'saved') {
     saveBtn.textContent = text || 'Sauvegarde';
-    setTimeout(function () { saveBtn.textContent = 'Sauver'; saveBtn.disabled = false; }, 2200);
-  } else if (state === 'error') {
-    saveBtn.textContent = text && text.length > 20 ? text.slice(0, 18) + '…' : (text || 'Erreur');
-    setTimeout(function () { saveBtn.textContent = 'Sauver'; saveBtn.disabled = false; }, 4000);
+    setTimeout(function () { if (document.body.contains(saveBtn)) saveBtn.textContent = 'Sauver'; }, 2200);
   } else {
     saveBtn.textContent = 'Sauver';
-    saveBtn.disabled = false;
   }
 }
 
@@ -305,11 +300,7 @@ function _journalEditorRecalcMetrics(collected, originalTrade) {
 function _journalEditorRefreshUI(editor, trade) {
   if (!editor || !trade) return;
 
-  // Update strategy title
-  var title = editor.querySelector('.jedit-hero-copy h3');
-  if (title) title.textContent = trade.strategy ? prettify(trade.strategy) : 'Strategie inconnue';
-
-  // Update direction badge in topline
+  // Update direction badge in topline (strategy title is updated live on select change)
   var topline = editor.querySelector('.jedit-topline');
   if (topline) {
     var badges = topline.querySelectorAll('span');
@@ -320,6 +311,48 @@ function _journalEditorRefreshUI(editor, trade) {
   // Update scenario/why text
   var summary = editor.querySelector('.jedit-hero-copy p');
   if (summary) summary.textContent = journalShortText(trade.why_trade, trade.scenario, trade.why_entry);
+}
+
+// ---- Inline warnings in editor sections ----
+
+function _journalEditorWarningSection(error) {
+  var e = error.toLowerCase();
+  if (e.indexOf('stop') >= 0 || e.indexOf('tp') >= 0 || e.indexOf('prix d\'entree') >= 0) return 1; // Niveaux
+  if (e.indexOf('pnl') >= 0) return 1; // Niveaux (champ PnL dans la grille niveaux)
+  if (e.indexOf('these') >= 0 || e.indexOf('execution') >= 0 || e.indexOf('lecon') >= 0) return 3; // Review
+  if (e.indexOf('plan') >= 0 || e.indexOf('override') >= 0) return 4; // Plan
+  return 0; // fallback → Setup (section 01)
+}
+
+function _journalEditorShowWarnings(editor, errorMsg) {
+  _journalEditorClearWarnings(editor);
+  if (!errorMsg) return;
+
+  // Split multi-error messages (separated by "; ")
+  var errors = errorMsg.split('; ');
+  errors.forEach(function (err) {
+    err = err.trim();
+    if (!err) return;
+    var sectionIdx = _journalEditorWarningSection(err);
+    if (sectionIdx < 0) return;
+
+    var sections = editor.querySelectorAll('.jedit-block');
+    var target = sections[sectionIdx];
+    if (!target) return;
+
+    var warn = document.createElement('div');
+    warn.className = 'jedit-block-msg';
+    warn.textContent = err;
+    var title = target.querySelector('.jedit-block-title');
+    if (title) {
+      title.parentNode.insertBefore(warn, title.nextSibling);
+    }
+  });
+}
+
+function _journalEditorClearWarnings(editor) {
+  if (!editor) return;
+  editor.querySelectorAll('.jedit-block-msg').forEach(function (el) { el.remove(); });
 }
 
 function _journalEditorSave(tid) {
@@ -340,10 +373,11 @@ function _journalEditorSave(tid) {
       _journalCardRefreshMetrics(tidStr, updated);
       _journalEditorRefreshUI(editor, updated);
       _journalSyncStateAfterSave(tidStr, updated);
+      _journalEditorClearWarnings(editor);
       _journalEditorSetStatus(editor, 'saved', 'Sauvegarde');
     })
     .catch(function (err) {
-      _journalEditorSetStatus(editor, 'error', (err && err.message) ? err.message : 'Erreur');
+      _journalEditorShowWarnings(editor, (err && err.message) ? err.message : null);
     });
 }
 
@@ -561,6 +595,12 @@ function bindJournalDayTrades() {
     var editor = editorField.closest('.journal-trade-editor');
     var editorTid = editor && editor.dataset.tradeId;
     if (editorTid) _journalEditorScheduleSave(editorTid);
+    // Live preview: update strategy title on select change
+    if (editorField.tagName === 'SELECT' && editorField.dataset.field === 'strategy') {
+      var title = editor && editor.querySelector('.jedit-hero-copy h3');
+      if (title) title.textContent = editorField.options[editorField.selectedIndex] ?
+        editorField.options[editorField.selectedIndex].text : editorField.value;
+    }
   });
 
   wrap.addEventListener("keydown", function (e) {

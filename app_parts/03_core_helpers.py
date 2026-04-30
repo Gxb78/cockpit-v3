@@ -195,20 +195,20 @@ def _validate_trade_semantics(payload):
 
     if direction == "long":
         if entry is not None and stop is not None and not (stop < entry):
-            errors.append("Stop plus haut que l'entree")
+            errors.append("Stop au-dessus du prix d'entree")
         if entry is not None and target is not None and not (target > entry):
-            errors.append("TP plus bas que l'entree")
+            errors.append("TP en dessous du prix d'entree")
     elif direction == "short":
         if entry is not None and stop is not None and not (stop > entry):
-            errors.append("Stop plus bas que l'entree")
+            errors.append("Stop en dessous du prix d'entree")
         if entry is not None and target is not None and not (target < entry):
-            errors.append("TP plus haut que l'entree")
+            errors.append("TP au-dessus du prix d'entree")
 
     if direction and entry is not None and stop is not None and target is not None:
         if direction == "long" and not (target > entry > stop):
-            errors.append("TP < entree ou Stop > entree")
+            errors.append("TP sous l'entree ou Stop au-dessus")
         if direction == "short" and not (target < entry < stop):
-            errors.append("TP > entree ou Stop < entree")
+            errors.append("TP au-dessus ou Stop en dessous")
 
     pnl = _as_float(payload.get("pnl"))
     is_win = payload.get("is_win")
@@ -218,9 +218,9 @@ def _validate_trade_semantics(payload):
         is_win = int(is_win.strip())
     if is_win in (0, 1) and pnl is not None and pnl != 0:
         if pnl > 0 and is_win == 0:
-            errors.append("incoherence: pnl positif avec is_win=0")
+            errors.append("PnL positif mais marque en perte")
         if pnl < 0 and is_win == 1:
-            errors.append("incoherence: pnl negatif avec is_win=1")
+            errors.append("PnL negatif mais marque en gain")
 
     return errors
 

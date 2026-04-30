@@ -899,6 +899,18 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   scrollbar-color: rgba(10,18,28,0.22) transparent;
 }
 
+.jedit-block-msg {
+  margin: 8px 0 4px;
+  padding: 9px 14px;
+  border-radius: 12px;
+  background: rgba(255,229,234,0.85);
+  color: #8a1429;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.35;
+  border: 1px solid rgba(138,20,41,0.18);
+}
+
 .jedit-block {
   border-radius: 29px;
   border: 1px solid #e7eaf0;
