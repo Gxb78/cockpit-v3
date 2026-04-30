@@ -29,3 +29,7 @@ Thumbs.db
 # Local config
 .claude/
 .env
+# Artifacts Windows / DB
+nul
+*.backup
+*.backup_clean
