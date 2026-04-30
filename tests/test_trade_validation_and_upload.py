@@ -39,12 +39,12 @@ class TradeValidationAndUploadTests(unittest.TestCase):
     def test_rejects_incoherent_price_levels_for_long(self):
         resp = self._create_trade(direction="long", entry_price=100, stop_loss=110, take_profit=120)
         self.assertEqual(resp.status_code, 400)
-        self.assertIn("niveaux invalides", resp.json["error"])
+        self.assertIn("Stop au-dessus", resp.json["error"])
 
     def test_rejects_pnl_is_win_conflict(self):
         resp = self._create_trade(pnl=50, is_win=0)
         self.assertEqual(resp.status_code, 400)
-        self.assertIn("incoherence", resp.json["error"])
+        self.assertIn("PnL positif", resp.json["error"])
 
     def test_update_rejects_pnl_is_win_conflict_with_existing_data(self):
         created = self._create_trade(pnl=50, is_win=1)
@@ -52,7 +52,7 @@ class TradeValidationAndUploadTests(unittest.TestCase):
         trade_id = created.json["id"]
         resp = self.client.put(f"/api/trades/{trade_id}", json={"is_win": 0})
         self.assertEqual(resp.status_code, 400)
-        self.assertIn("incoherence", resp.json["error"])
+        self.assertIn("PnL positif", resp.json["error"])
 
     def test_upload_rejects_extension_content_mismatch(self):
         created = self._create_trade()

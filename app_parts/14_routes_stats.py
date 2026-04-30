@@ -63,10 +63,10 @@ def stats():
             t["plan_alignment"] = "unknown"
         derived = _derive_trade_metrics(t)
         t["_direction_eff"] = derived["direction"]
-        t["_pnl_eff"] = derived["pnl_effective"]
+        t["_pnl_eff"] = derived["pnl"]
         t["_pnl_known"] = derived["pnl_known"]
-        t["_is_win_eff"] = derived["is_win_effective"]
-        t["_rr_eff"] = derived["rr_effective"]
+        t["_is_win_eff"] = derived["is_win"]
+        t["_rr_eff"] = derived["rr"]
 
     total_pnl = sum((t.get("_pnl_eff", t.get("pnl")) or 0) for t in trades)
     wins      = [t for t in trades if t.get("_is_win_eff") == 1]

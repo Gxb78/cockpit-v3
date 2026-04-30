@@ -15,7 +15,8 @@ _PART_FILES = [
     "05_payload_normalizers.py",    # 05 — normalisation des payloads
     "06_query_legacy_helpers.py",   # 06 — helpers requetes legacy
     "07_routes_pages.py",           # 07 — routes pages (index, settings)
-    "09_routes_days.py",            # 08 — routes API days
+    "08_trade_math.py",             # 08 — canonical trade math (PnL, RR, direction)
+    "09_routes_days.py",            # 09 — routes API days
     "12_plan_engine.py",            # 09 — moteur coherence plan / PO3
     "10_routes_trades.py",          # 09 — routes API trades
     "11_routes_screenshots.py",     # 10 — routes API screenshots

@@ -14833,3 +14833,72 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   transform: none;
   filter: none;
 }
+
+/* ---- 051_focus_transitions.css ---- */
+/* ---- Focus mode — transition simple card → éditeur ---- */
+/* Animé depuis TradeEditorController.open() / close() */
+
+/* Neutraliser le dimming global de .is-editing sur la grille
+   — on gère le focus visuel sur les cards individuellement */
+.journal-day-trades.is-focusing.is-editing .journal-day-trades-grid,
+.journal-day-trades.is-unfocusing.is-editing .journal-day-trades-grid {
+  opacity: 1 !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+/* La card source monte un peu */
+.journal-day-trades.is-focusing .journal-flip-card.is-source {
+  transition: transform 0.35s cubic-bezier(.2,.8,.2,1),
+              box-shadow 0.35s ease,
+              filter 0.35s ease;
+  transform: scale(1.03) translateY(-6px);
+  filter: brightness(1.08);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.16), 0 6px 16px rgba(0,0,0,0.08);
+}
+
+/* Les autres cards s'atténuent */
+.journal-day-trades.is-focusing .journal-flip-card:not(.is-source) {
+  transition: opacity 0.35s ease, transform 0.35s ease, filter 0.35s ease;
+  opacity: 0.3;
+  transform: scale(0.94) translateY(12px);
+  filter: saturate(0.5) brightness(0.8);
+  pointer-events: none;
+}
+
+/* Retour à la normale — transition */
+.journal-day-trades.is-unfocusing .journal-flip-card.is-source {
+  transition: transform 0.35s cubic-bezier(.55,0,.78,.2),
+              box-shadow 0.35s ease,
+              filter 0.35s ease;
+  transform: scale(1) translateY(0);
+  filter: brightness(1);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+
+.journal-day-trades.is-unfocusing .journal-flip-card:not(.is-source) {
+  transition: opacity 0.35s ease, transform 0.35s ease, filter 0.35s ease;
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  filter: saturate(1) brightness(1);
+}
+
+/* Éditeur — slide depuis la droite */
+.journal-day-trades.is-focusing .journal-trade-editor {
+  opacity: 0;
+  transform: translateX(60px) scale(0.96);
+  transition: none;
+}
+
+.journal-day-trades.is-focusing .journal-trade-editor.is-visible {
+  transition: opacity 0.35s ease-out, transform 0.4s cubic-bezier(.14,.82,.22,1);
+  opacity: 1;
+  transform: translateX(0) scale(1);
+}
+
+/* Fermeture éditeur */
+.journal-day-trades.is-unfocusing .journal-trade-editor {
+  transition: opacity 0.28s ease-in, transform 0.3s cubic-bezier(.55,0,.78,.2);
+  opacity: 0;
+  transform: translateX(40px) scale(0.94);
+}
