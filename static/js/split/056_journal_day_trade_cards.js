@@ -18,7 +18,7 @@ var _consumeNextCardClick = false;
   window._intRegistered = true;
   console.log('[INT_SETUP] Registering');
   window.addEventListener('click', function interceptor(e) {
-    console.log('[INT_HIT]', Date.now(), 'target:', (e.target.className||'').slice(0,40), 'isEditing:', document.getElementById('journalDayTrades')?.classList.contains('is-editing'));
+    console.log('[INT_HIT]', Date.now(), 'target:', (typeof e.target.className === 'string' ? e.target.className.slice(0,40) : String(e.target.className||'')), 'isEditing:', document.getElementById('journalDayTrades')?.classList.contains('is-editing'));
     var wrap = document.getElementById('journalDayTrades');
     if (!wrap || !wrap.classList.contains('is-editing')) return;
     var inPanel = e.target.closest('.jedit-panel');
