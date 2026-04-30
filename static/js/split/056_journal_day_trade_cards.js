@@ -10,21 +10,17 @@ var _journalRefreshTimer = null;
 var _justClosedEditor = false;
 var _lastEditorCloseTime = 0;
 var _jcardFieldFocused = false;
-var _consumeNextCardClick = false;
 
 // ---- Intercepteur anti re-fired click (enregistre avant tout) ----
 (function() {
   if (window._intRegistered) return;
   window._intRegistered = true;
-  console.log('[INT_SETUP] Registering');
   window.addEventListener('click', function interceptor(e) {
-    console.log('[INT_HIT]', Date.now(), 'target:', (typeof e.target.className === 'string' ? e.target.className.slice(0,40) : String(e.target.className||'')), 'isEditing:', document.getElementById('journalDayTrades')?.classList.contains('is-editing'));
     var wrap = document.getElementById('journalDayTrades');
     if (!wrap || !wrap.classList.contains('is-editing')) return;
     var inPanel = e.target.closest('.jedit-panel');
     if (inPanel) return;
     if (!wrap.contains(e.target)) return;
-    console.log('[INT_CLOSE] closing editor, isEditing was true, target:', (e.target.className||'').slice(0,50));
     closeJournalTradeEditor();
     window._consumeClick = true;
     setTimeout(function() { window._consumeClick = false; }, 1000);
@@ -32,40 +28,6 @@ var _consumeNextCardClick = false;
     e.preventDefault();
   }, true);
 })();
-
-// ---- MONKEYPATCH DEBUG : tracer qui ajoute is-flipped ----
-(function(){
-  var origToggle = DOMTokenList.prototype.toggle;
-  var origAdd = DOMTokenList.prototype.add;
-  DOMTokenList.prototype.toggle = function(token) {
-    if (token === 'is-flipped') console.trace('[FLIP_TOGGLE]', this.ownerElement, this.value);
-    return origToggle.apply(this, arguments);
-  };
-  DOMTokenList.prototype.add = function() {
-    var args = arguments;
-    if (args.length && (args[0] === 'is-flipped' || Array.from(args).includes('is-flipped'))) {
-      console.trace('[FLIP_ADD]', this.ownerElement, this.value);
-    }
-    return origAdd.apply(this, args);
-  };
-})();
-
-// ---- MutationObserver (annule les is-flipped ajoutes apres coup) ----
-var _flipObserver = new MutationObserver(function(mutations) {
-  var wrap = document.getElementById("journalDayTrades");
-  if (!wrap) return;
-  mutations.forEach(function(m) {
-    if (m.type !== "attributes") return;
-    var node = m.target;
-    if (!node.classList) return;
-    if (node.classList.contains("journal-flip-card") && node.classList.contains("is-flipped")) {
-      if (wrap.classList.contains("is-editing") || _justClosedEditor || _consumeNextCardClick) {
-        node.classList.remove("is-flipped");
-      }
-    }
-  });
-});
-_flipObserver.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["class"] });
 
 // ---- collect / summarize helpers ----
 
@@ -460,7 +422,6 @@ function openJournalTradeEditor(tid) {
   wrap.classList.add('is-editing');
   // 🛡️ CLASSE HTML : source de vérité qui survit à closeJournalDayTrades()
   document.documentElement.classList.add('html-editor-open');
-  console.log('[OPEN_EDITOR] added html-editor-open, current classes:', document.documentElement.className);
   document.documentElement.classList.add('journal-no-flip');
   wrap.insertAdjacentHTML('beforeend', journalTradeEditorHtml(day, trade));
 
@@ -535,8 +496,7 @@ function bindJournalDayTrades() {
   wrap.addEventListener("click", function (e) {
 
     // 🛡️ Bouclier anti re-fired click du navigateur
-    if (_consumeNextCardClick || window._consumeClick) {
-      _consumeNextCardClick = false;
+    if (window._consumeClick) {
       window._consumeClick = false;
       e.stopImmediatePropagation();
       e.preventDefault();
@@ -661,9 +621,6 @@ function bindJournalDayTrades() {
     if (e.target.closest('input, textarea, select, .jcard-pills, .jcard-stars')) return;
 
     // 🛡️ GUARD ULTIME : classe html-editor-open sur <html>.
-    // Survit à closeJournalDayTrades(), closeJournalTradeEditor({immediate:true}),
-    // et NETTOYAGE différé (1000ms). Source de vérité unique.
-    console.log('[HTML_GUARD] html-editor-open=', document.documentElement.classList.contains('html-editor-open'), 'classList=', document.documentElement.className);
     if (document.documentElement.classList.contains('html-editor-open')) {
       closeJournalTradeEditor();
       return;
