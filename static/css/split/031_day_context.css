@@ -1,0 +1,279 @@
+/* ---------- Day context card (compact modal layout) — light theme ---------- */
+
+.day-context-card {
+  background: #fff;
+  border: 1px solid #e7eaf0;
+  border-radius: 18px;
+  padding: 12px 14px;
+  margin-top: 10px;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+}
+
+.day-context-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e7eaf0;
+}
+
+.day-context-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #111827;
+}
+
+.day-context-title svg {
+  opacity: 0.85;
+  color: #111827;
+  flex-shrink: 0;
+}
+
+.day-context-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.day-inline-field {
+  min-width: 0;
+}
+
+.day-inline-field input,
+.day-inline-field select {
+  height: 34px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid #dde2ea;
+  background: #f4f6fa;
+  color: #111827;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  outline: none;
+  transition: color, background, border-color 0.16s var(--ease);
+}
+
+.day-inline-date input {
+  width: 140px;
+}
+
+.day-inline-instrument .select-wrapper {
+  position: relative;
+  min-width: 88px;
+}
+.day-inline-instrument {
+  min-width: 88px;
+}
+
+.day-inline-instrument select {
+  width: 88px;
+  padding-right: 26px;
+  appearance: none;
+  cursor: pointer;
+}
+
+.day-inline-instrument .select-arrow {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  transform: translateY(-50%);
+  color: #98a1af;
+  pointer-events: none;
+}
+
+.day-inline-field input:hover,
+.day-inline-field select:hover {
+  border-color: rgba(15, 23, 42, 0.16);
+  background: #fff;
+}
+
+.day-inline-field input:focus,
+.day-inline-field select:focus {
+  border-color: rgba(0, 197, 220, 0.6);
+  box-shadow: 0 0 0 3px rgba(0, 197, 220, 0.12);
+  background: #fff;
+}
+
+.day-context-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.day-context-field-wide {
+  grid-column: 1 / -1;
+}
+
+.day-context-field label {
+  display: block;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #98a1af;
+  margin-bottom: 6px;
+  font-family: "JetBrains Mono", monospace;
+}
+
+.day-context-field input,
+.day-context-field select,
+.day-context-field textarea {
+  width: 100%;
+  background: #f4f6fa;
+  color: #111827;
+  border: 1px solid #dde2ea;
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: color, background, border-color 0.18s var(--ease);
+  box-shadow: none;
+}
+
+.day-context-field input:hover,
+.day-context-field select:hover,
+.day-context-field textarea:hover {
+  border-color: rgba(15, 23, 42, 0.16);
+  background: #fff;
+}
+
+.day-context-field input:focus,
+.day-context-field select:focus,
+.day-context-field textarea:focus {
+  border-color: rgba(0, 197, 220, 0.6);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(0, 197, 220, 0.12);
+}
+
+.day-context-field textarea {
+  resize: vertical;
+  min-height: 46px;
+  line-height: 1.5;
+}
+
+.day-context-field textarea::placeholder {
+  color: #98a1af;
+  font-style: italic;
+  font-size: 12.5px;
+}
+
+.day-context-field .select-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.day-context-field .select-wrapper select {
+  appearance: none;
+  padding-right: 32px;
+  cursor: pointer;
+}
+
+.day-context-field .select-arrow {
+  position: absolute;
+  right: 12px;
+  width: 12px;
+  height: 12px;
+  color: #98a1af;
+  pointer-events: none;
+}
+
+/* Pills in day context */
+.day-context-field .pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.day-context-field .pill-choice {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid #dde2ea;
+  background: #f4f6fa;
+  color: #626b7a;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+  transition: color, background, border-color 0.15s var(--ease);
+  font-family: inherit;
+}
+
+.day-context-field .pill-choice:hover {
+  border-color: rgba(15, 23, 42, 0.16);
+  background: #fff;
+  color: #111827;
+}
+
+.day-context-field .pill-choice.active {
+  color: #fff;
+  border-color: #08090c;
+  background: #08090c;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+}
+
+.day-context-field .pill-choice.lime.active {
+  color: #20570b;
+  border-color: rgba(45, 122, 19, 0.18);
+  background: rgba(232, 255, 222, 0.90);
+  box-shadow: none;
+}
+
+.day-context-field .pill-choice.rose.active {
+  color: #8a1429;
+  border-color: rgba(180, 35, 60, 0.18);
+  background: rgba(255, 229, 234, 0.92);
+  box-shadow: none;
+}
+
+/* Trades section header in modal */
+.trades-section {
+  margin-bottom: 0;
+}
+
+.trades-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.trades-section-header h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #111827;
+}
+
+.trades-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+@media (max-width: 880px) {
+  .day-context-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .day-context-inline {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

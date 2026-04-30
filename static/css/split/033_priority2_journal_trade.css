@@ -1,0 +1,1352 @@
+/* ============================================================
+   PRIORITY 2 JOURNAL + TRADE CREATION
+   Light theme — harmonized with flip-card aesthetic.
+   ============================================================ */
+
+.page[data-page="journal"].active {
+  --journal-toolbar-h: 52px;
+  --bg: #f6f7fb;
+  --bg-2: #eef2f7;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --surface-3: #eef1f6;
+  --surface-solid: #f7f8fb;
+  --text: #111827;
+  --text-soft: #263244;
+  --text-muted: #64748b;
+  --text-dim: #98a1af;
+  --text-faint: #b0b8c5;
+  --border: rgba(15, 23, 42, 0.10);
+  --border-strong: rgba(15, 23, 42, 0.18);
+  --win: #2d7a13;
+  --loss: #b4233c;
+  --green: #2d7a13;
+  --red: #b4233c;
+  --cyan: #0891b2;
+  --amber: #d97706;
+  --magenta: #9333ea;
+  background: #f6f7fb;
+  color: #111827;
+}
+
+.page[data-page="journal"] select,
+.page[data-page="journal"] input[type="date"] {
+  color-scheme: light;
+}
+
+.page[data-page="journal"] * {
+  scrollbar-color: rgba(10, 18, 28, 0.18) transparent;
+}
+
+.journal-top-bar {
+  margin-bottom: 0;
+}
+
+.journal-today-btn {
+  border-radius: 999px;
+}
+
+.journal-metric-bar {
+  display: none;
+}
+
+.journal-metric-bar > * {
+  pointer-events: auto;
+}
+
+.journal-filters,
+.journal-trade-filters {
+  border: 1px solid #e3e7ee;
+  background: #fff;
+  border-radius: 18px;
+  padding: 8px;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+}
+
+.journal-filters {
+  align-items: center;
+  margin: 0 0 8px;
+}
+
+.journal-control-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.calendar-view-toggle,
+.calendar-layout-toggle,
+.calendar-range-toggle,
+.calendar-metric-toggle,
+.calendar-quick-range {
+  border-radius: 999px;
+  border-color: #e3e7ee;
+  background: #eef1f6;
+  box-shadow: none;
+}
+
+.calendar-view-btn,
+.calendar-layout-btn,
+.calendar-range-btn,
+.calendar-metric-btn,
+.calendar-quick-btn {
+  min-height: 30px;
+  border-radius: 999px;
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #626b7a;
+}
+
+.calendar-view-btn.active,
+.calendar-layout-btn.active,
+.calendar-range-btn.active,
+.calendar-metric-btn.active,
+.calendar-quick-btn.active {
+  color: #fff;
+  background: #08090c;
+  border-color: #08090c;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+}
+
+.calendar-custom-range {
+  margin-left: auto;
+  padding: 0 2px;
+}
+
+.calendar-custom-label {
+  min-width: 132px;
+  font-size: 11.5px;
+}
+
+.journal-trade-filters {
+  grid-template-columns: minmax(140px, 1.25fr) minmax(112px, .8fr) minmax(112px, .8fr) minmax(88px, auto) minmax(88px, auto) auto;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.journal-filter-field label {
+  display: block;
+  margin-bottom: 5px;
+  color: #98a1af;
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 11px;
+  font-weight: 650;
+  font-family: "JetBrains Mono", monospace;
+}
+
+.journal-filter-field input,
+.journal-filter-field select,
+.journal-filter-field .custom-select-trigger {
+  min-height: 34px;
+  border-radius: 999px;
+  background: #f4f6fa;
+  border-color: #dde2ea;
+  font-size: 12px;
+  color: #111827;
+}
+
+.journal-filter-reset {
+  align-self: end;
+  height: 34px;
+  border-radius: 999px;
+}
+
+.calendar-head {
+  padding: 3px 5px 6px;
+  color: #98a1af;
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 11px;
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 850;
+}
+
+.calendar-grid {
+  gap: 5px;
+}
+
+.day {
+  border-radius: 18px;
+  background: #fff;
+  border-color: #e7eaf0;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+  transition: transform 0.18s var(--ease), border-color 0.18s var(--ease), box-shadow 0.18s var(--ease);
+}
+
+.day::before {
+  display: none;
+}
+
+.day:hover {
+  transform: translateY(-2px);
+  border-color: rgba(15, 23, 42, 0.16);
+  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
+}
+
+.day.win {
+  background: rgba(232, 255, 222, 0.90);
+  border-color: rgba(45, 122, 19, 0.18);
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+}
+
+.day.loss {
+  background: rgba(255, 229, 234, 0.92);
+  border-color: rgba(180, 35, 60, 0.18);
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+}
+
+.day.win:hover {
+  border-color: rgba(45, 122, 19, 0.30);
+  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
+}
+
+.day.loss:hover {
+  border-color: rgba(180, 35, 60, 0.30);
+  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
+}
+
+.day.today {
+  border-color: rgba(0, 197, 220, 0.45);
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06), 0 0 0 2px rgba(0, 197, 220, 0.15);
+}
+
+.day.today .day-num,
+.day-stack-indicator {
+  background: #eef1f6;
+  color: #626b7a;
+  border: 1px solid #e3e7ee;
+  box-shadow: none;
+}
+
+.day-stack-indicator.trades {
+  color: #201106;
+  background: rgba(245, 184, 75, 0.22);
+  border-color: rgba(245, 184, 75, 0.4);
+}
+
+.day-num {
+  color: #4b5563;
+}
+
+.day-metric {
+  text-shadow: none;
+}
+
+.day-metric-pnl {
+  font-size: clamp(20px, 1.35vw, 28px);
+  letter-spacing: -0.04em;
+}
+
+.day-metric-pnl.pos { color: #2d7a13; text-shadow: none; }
+.day-metric-pnl.neg { color: #b4233c; text-shadow: none; }
+.day-metric-pnl.flat { color: #111827; text-shadow: none; }
+
+.day-dot.win  { background: #2d7a13; box-shadow: none; }
+.day-dot.loss { background: #b4233c; box-shadow: none; }
+
+.day-empty-mark {
+  background: rgba(15, 23, 42, 0.12);
+  box-shadow: none;
+}
+
+.day:active {
+  border-color: rgba(15, 23, 42, 0.18);
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.10);
+}
+
+.day.today .day-num {
+  background: rgba(0, 197, 220, 0.15);
+  color: #0891b2;
+  border: 1px solid rgba(0, 197, 220, 0.25);
+  box-shadow: none;
+}
+
+.mode-trades .day-metric-trades {
+  font-size: clamp(26px, 1.75vw, 38px);
+  color: #111827;
+  text-shadow: none;
+}
+
+.mode-both .day-mix-inline {
+  border-radius: 9px;
+  background: #eef1f6;
+  border-color: #e3e7ee;
+}
+
+.mode-both .day-mix-slash {
+  color: rgba(15, 23, 42, 0.25);
+}
+
+.mode-both .day-metric-trades {
+  color: #111827;
+  text-shadow: none;
+}
+
+.day-metric-sub {
+  color: #98a1af;
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 10px;
+}
+
+.journal-table-wrap {
+  border-radius: 24px;
+  background: #fff;
+  border-color: #e7eaf0;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+}
+
+.journal-table-head h3 {
+  color: #111827;
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.journal-trades-table {
+  font-size: 12.5px;
+}
+
+.journal-trades-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f7f8fb;
+  color: #98a1af;
+  text-transform: uppercase;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.journal-trades-table tbody tr {
+  transition: background 0.14s var(--ease);
+}
+
+.journal-trades-table tbody tr:hover {
+  background: rgba(0, 197, 220, 0.05);
+}
+
+.journal-tag-chip,
+.trade-meta-pill,
+.trade-chip,
+.trade-result,
+.trade-direction {
+  border-radius: 999px;
+}
+
+.journal-open-btn {
+  border-radius: 999px;
+}
+
+.modal-content {
+  width: min(700px, 94vw);
+  background: #f7f8fb;
+  border-radius: 27px;
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  box-shadow:
+    0 38px 84px rgba(0, 0, 0, 0.44),
+    0 16px 34px rgba(10, 18, 28, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.modal-header {
+  padding: 16px 20px;
+  background: #fff;
+  border-bottom: 1px solid #e7eaf0;
+}
+
+.modal-header h2 {
+  color: #111827;
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  letter-spacing: 0;
+}
+
+.modal-scroll {
+  padding: 16px 20px 10px;
+}
+
+.modal-sticky {
+  padding: 8px 20px;
+  background: #f7f8fb;
+}
+
+.day-context-card {
+  border-radius: 18px;
+  background: #fff;
+  border-color: #e7eaf0;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+}
+
+.trades-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 0 10px;
+}
+
+.trades-section-header h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 850;
+  letter-spacing: 0;
+}
+
+.btn-add-trade {
+  min-height: 36px;
+  border-radius: 999px;
+  border: 1px solid #e3e7ee;
+  background: #fff;
+  color: #111827;
+  font-weight: 850;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+}
+
+.trades-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.trades-empty {
+  grid-column: 1 / -1;
+  border-radius: 18px;
+  background: #eef1f6;
+}
+
+.trade-card {
+  border-radius: 18px;
+  border: 1px solid #e7eaf0;
+  background: #fff;
+  overflow: hidden;
+  transition: border-color 0.16s var(--ease), transform 0.16s var(--ease), box-shadow 0.16s var(--ease), opacity 0.16s var(--ease);
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+}
+
+.trade-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(15, 23, 42, 0.16);
+  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
+}
+
+.trade-card.active {
+  border-color: rgba(0, 197, 220, 0.45);
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06), 0 0 0 2px rgba(0, 197, 220, 0.15);
+}
+
+.trade-card-media {
+  min-height: 118px;
+}
+
+.trade-card-media.is-empty {
+  background:
+    linear-gradient(135deg, rgba(0, 229, 255, 0.10), rgba(255, 46, 196, 0.06)),
+    #edf1f5;
+}
+
+.trade-card-body {
+  padding: 12px;
+}
+
+.trade-card-title {
+  color: #111827;
+  letter-spacing: 0;
+  font-weight: 860;
+}
+
+.trade-card-kpis {
+  gap: 6px;
+}
+
+.trade-kpi {
+  border-radius: 18px;
+  background: #eef1f6;
+  border: 1px solid #e3e7ee;
+}
+
+.trade-edit-hint {
+  color: #98a1af;
+}
+
+.trade-form-section {
+  border-radius: 18px;
+  background: #fff;
+  border-color: #e7eaf0;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+}
+
+#entryModal.modal-trade-focus .trade-form-section {
+  border-color: rgba(0, 197, 220, 0.38);
+  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
+}
+
+#entryModal.modal-trade-focus .trades-section-header {
+  background: #fff;
+  border-bottom: 1px solid #e7eaf0;
+}
+
+.trade-form-header {
+  padding: 14px 16px;
+  background: #f7f8fb;
+  border-bottom-color: #e7eaf0;
+}
+
+.trade-form-title {
+  color: #111827;
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  letter-spacing: 0;
+}
+
+.trade-flow-nav {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  padding: 10px 14px 0;
+  overflow-x: auto;
+}
+
+.trade-flow-step {
+  min-width: 92px;
+  height: 34px;
+  border-radius: 999px;
+  letter-spacing: 0;
+  background: #eef1f6;
+  border-color: #e3e7ee;
+  color: #626b7a;
+}
+
+.trade-flow-step.is-active {
+  color: #fff;
+  background: #08090c;
+  border-color: #08090c;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+}
+
+.trade-flow-step.is-active .trade-flow-dot {
+  background: #fff;
+  box-shadow: none;
+}
+
+.trade-flow-step.is-done:not(.is-active) {
+  color: #111827;
+}
+
+.trade-form-inner {
+  padding: 12px 14px 4px;
+}
+
+#tradeFormSection .block {
+  border-radius: 18px;
+  background: #f7f8fb;
+  border-color: #e7eaf0;
+}
+
+#tradeFormSection .block:focus-within {
+  border-color: rgba(0, 197, 220, 0.45);
+  box-shadow: 0 0 0 3px rgba(0, 197, 220, 0.12);
+}
+
+#tradeFormSection .block .block-h {
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 12px;
+  color: #111827;
+}
+
+.field label,
+.wiz-label {
+  letter-spacing: 0;
+  text-transform: none;
+  color: #98a1af;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.field input,
+.field select,
+.field textarea,
+.wiz-input,
+.wiz-textarea,
+.wiz-level-input,
+.wiz-stdv-input {
+  border-radius: 10px;
+  background: #f4f6fa;
+  border: 1px solid #dde2ea;
+  color: #111827;
+}
+
+.trade-form-actions {
+  background: #fff;
+  border-top-color: #e7eaf0;
+}
+
+.wiz-panel {
+  border-radius: 27px;
+  background: #f7f8fb;
+}
+
+.wiz-progress-fill {
+  background: #08090c;
+}
+
+.wiz-card,
+.wiz-pill,
+.wiz-choice-btn,
+.wiz-dir-btn {
+  border-radius: 999px;
+}
+
+.wiz-card.active,
+.wiz-pill.active,
+.wiz-choice-btn.active {
+  box-shadow: none;
+  background: #08090c;
+  color: #fff;
+}
+
+@media (min-width: 761px) {
+  .page[data-page="journal"].active {
+    height: calc(100vh - 102px);
+  }
+
+  .page[data-page="journal"].active .journal-body {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .journal-metric-bar {
+    justify-content: flex-start;
+    margin: 0 0 8px;
+  }
+
+  .journal-trade-filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .trade-flow-nav {
+    grid-template-columns: repeat(4, minmax(92px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .page[data-page="journal"].active {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+
+  .journal-top-bar .calendar-nav {
+    justify-content: space-between;
+    overflow-x: auto;
+  }
+
+  .journal-month-control {
+    min-width: 168px;
+  }
+
+  .journal-filters,
+  .journal-trade-filters {
+    padding: 8px;
+  }
+
+  .journal-control-group {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 2px;
+  }
+
+  .calendar-custom-range {
+    width: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .journal-trade-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .journal-filter-field {
+    min-width: 0;
+  }
+
+  .journal-filter-reset {
+    width: 100%;
+  }
+
+  .calendar-grid {
+    grid-auto-rows: 96px;
+    gap: 4px;
+  }
+
+  .journal-table-scroll {
+    overflow: visible;
+  }
+}
+
+/* ============================================================
+   JOURNAL — nouveau filtre style Insights
+   ============================================================ */
+
+.journal-filters {
+  border: 1px solid #e3e7ee;
+  background: #fff;
+  border-radius: 18px;
+  padding: 10px 14px;
+  margin: 0 0 10px;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+}
+
+.journal-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.jfilter-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.jfilter-group label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: #98a1af;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.jfilter-group input[type="date"],
+.jfilter-group select {
+  border: 1px solid #dde2ea;
+  background: #f4f6fa;
+  color: #111827;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11.5px;
+  color-scheme: light;
+}
+
+.jfilter-group select {
+  padding-right: 24px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='none' stroke='%2398a1af' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  background-size: 12px;
+  cursor: pointer;
+}
+
+/* Quick period buttons */
+.jfilter-quick {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.jfilter-quick .qbtn {
+  border: 1px solid #e3e7ee;
+  background: transparent;
+  color: #626b7a;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.jfilter-quick .qbtn:hover {
+  color: #111827;
+  border-color: rgba(15, 23, 42, 0.16);
+  background: #eef1f6;
+}
+
+.jfilter-quick .qbtn.active {
+  color: #fff;
+  background: #08090c;
+  border-color: #08090c;
+}
+
+/* Layout toggle */
+.jfilter-layout {
+  margin-left: auto;
+}
+
+.jfilter-layout-btn {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #626b7a;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 11px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.jfilter-layout-btn:hover {
+  color: #111827;
+  background: #eef1f6;
+}
+
+.jfilter-layout-btn.active {
+  color: #fff;
+  background: #08090c;
+}
+
+  .journal-trades-table,
+  .journal-trades-table thead,
+  .journal-trades-table tbody,
+  .journal-trades-table tr,
+  .journal-trades-table th,
+  .journal-trades-table td {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .journal-trades-table thead {
+    display: none;
+  }
+
+  .journal-trades-table tbody {
+    display: grid;
+    gap: 8px;
+  }
+
+  .journal-trades-table tbody tr {
+    border: 1px solid #e7eaf0;
+    border-radius: 18px;
+    background: #fff;
+    padding: 8px 10px;
+    box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+  }
+
+  .journal-trades-table tbody td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid #e7eaf0;
+    padding: 7px 0;
+  }
+
+  .journal-trades-table tbody td:last-child {
+    border-bottom: none;
+    justify-content: flex-end;
+  }
+
+  .journal-trades-table tbody td::before {
+    content: "";
+    color: #98a1af;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .journal-trades-table tbody td:nth-child(1)::before { content: "Date"; }
+  .journal-trades-table tbody td:nth-child(2)::before { content: "Instrument"; }
+  .journal-trades-table tbody td:nth-child(3)::before { content: "Strategie"; }
+  .journal-trades-table tbody td:nth-child(4)::before { content: "Direction"; }
+  .journal-trades-table tbody td:nth-child(5)::before { content: "Entree"; }
+  .journal-trades-table tbody td:nth-child(6)::before { content: "Sortie"; }
+  .journal-trades-table tbody td:nth-child(7)::before { content: "RR"; }
+  .journal-trades-table tbody td:nth-child(8)::before { content: "PnL"; }
+  .journal-trades-table tbody td:nth-child(9)::before { content: "Resultat"; }
+  .journal-trades-table tbody td:nth-child(10)::before { content: "Tags"; }
+
+  .modal-content {
+    width: 100%;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+
+  .modal-header {
+    border-radius: 0;
+  }
+
+  .modal-body {
+    max-height: calc(100dvh - 66px);
+  }
+
+  .modal-scroll,
+  .modal-sticky {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .trades-list {
+    grid-template-columns: 1fr;
+  }
+
+  .trade-flow-nav {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .trade-flow-step {
+    flex: 0 0 auto;
+  }
+
+  .grid-4,
+  .grid-3,
+  .grid-2,
+  .block-row,
+  .pm-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .trade-form-actions {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 460px) {
+  .calendar-view-btn,
+  .calendar-layout-btn,
+  .calendar-range-btn,
+  .calendar-metric-btn {
+    padding-left: 9px;
+    padding-right: 9px;
+  }
+
+  .day-metric-pnl {
+    font-size: 16px;
+  }
+
+  .mode-trades .day-metric-trades {
+    font-size: 24px;
+  }
+}
+
+/* ============================================================
+   BLOCK SYSTEM — light overrides (012_modal_body leaks)
+   ============================================================ */
+
+/* Kill the glassmorphism / dark gradients on form blocks */
+.block {
+  background: #f7f8fb;
+  border-color: #e7eaf0;
+  box-shadow: none;
+}
+
+.block::after {
+  display: none;
+}
+
+.block:has(.block-h.magenta),
+.block:has(.block-h.lime),
+.block:has(.block-h.amber) {
+  background: #f7f8fb;
+}
+
+.block:focus-within {
+  border-color: rgba(0, 197, 220, 0.45);
+  box-shadow: 0 0 0 3px rgba(0, 197, 220, 0.12);
+}
+
+.block:has(.block-h.magenta):focus-within,
+.block:has(.block-h.lime):focus-within,
+.block:has(.block-h.amber):focus-within {
+  border-color: rgba(0, 197, 220, 0.45);
+  box-shadow: 0 0 0 3px rgba(0, 197, 220, 0.12);
+}
+
+/* Block section header */
+.block-h {
+  border-bottom-color: #e7eaf0;
+  color: #626b7a;
+}
+
+.block-h .icon {
+  background: #eef1f6;
+  color: #0891b2;
+  box-shadow: none;
+}
+
+.block-h.magenta .icon {
+  background: rgba(147, 51, 234, 0.08);
+  color: #9333ea;
+  box-shadow: none;
+}
+
+.block-h.lime .icon {
+  background: rgba(45, 122, 19, 0.10);
+  color: #2d7a13;
+  box-shadow: none;
+}
+
+.block-h.amber .icon {
+  background: rgba(217, 119, 6, 0.10);
+  color: #d97706;
+  box-shadow: none;
+}
+
+/* Close / icon-sm buttons — light style (012 sets dark glass) */
+.btn-icon-sm {
+  background: #eef1f6;
+  color: #626b7a;
+  border: 1px solid #e3e7ee;
+  border-radius: 999px;
+}
+
+.btn-icon-sm:hover {
+  color: #b4233c;
+  border-color: rgba(180, 35, 60, 0.22);
+  background: rgba(255, 229, 234, 0.80);
+  box-shadow: none;
+}
+
+/* Existing entries chip */
+.existing-entries {
+  background: #f4f6fa;
+  border-color: #e3e7ee;
+}
+
+.existing-chip {
+  background: #fff;
+  border-color: #e3e7ee;
+  color: #111827;
+}
+
+.existing-chip:hover {
+  border-color: rgba(0, 197, 220, 0.45);
+}
+
+/* ============================================================
+   WIZARD — light-theme active states
+   CSS vars don't cascade into fixed-position modals so we need
+   hardcoded overrides here (this file loads after 025).
+   ============================================================ */
+
+.wiz-dir-btn.active-long {
+  border-color: rgba(45, 122, 19, 0.28);
+  color: #20570b;
+  background: rgba(232, 255, 222, 0.92);
+}
+
+.wiz-dir-btn.active-short {
+  border-color: rgba(180, 35, 60, 0.28);
+  color: #8a1429;
+  background: rgba(255, 229, 234, 0.92);
+}
+
+.wiz-upload-zone {
+  border-color: #dde2ea;
+  color: #626b7a;
+  background: #f4f6fa;
+}
+
+.wiz-upload-zone:hover,
+.wiz-upload-zone.dragover {
+  border-color: rgba(8, 145, 178, 0.50);
+  color: #0891b2;
+  background: rgba(8, 145, 178, 0.04);
+}
+
+.wiz-draft-banner {
+  background: rgba(8, 145, 178, 0.05);
+  border-color: rgba(8, 145, 178, 0.18);
+}
+
+.wiz-draft-yes { color: #0891b2; }
+.wiz-recap-edit { color: #0891b2; }
+
+.wiz-missing-box {
+  border-color: #e3e7ee;
+  background: #f4f6fa;
+}
+
+.wiz-missing-box.ok {
+  border-color: rgba(45, 122, 19, 0.22);
+  background: rgba(232, 255, 222, 0.65);
+}
+
+.wiz-missing-edit {
+  border-color: #e3e7ee;
+  background: #f4f6fa;
+  color: #0891b2;
+}
+
+/* ============================================================
+   MODAL — global light overrides (neon from 011b bleeds through)
+   ============================================================ */
+
+/* Kill the neon cyan/purple top line on all modals */
+.modal-content::before {
+  display: none;
+}
+
+/* Softer backdrop — matches the entryModal override */
+.modal-backdrop {
+  background: rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Badge in modal header */
+.modal-header .badge {
+  background: #eef1f6;
+  border-color: #e3e7ee;
+  color: #626b7a;
+}
+
+/* Light scrollbar inside modal scroll area */
+.modal-scroll,
+.modal-body {
+  scrollbar-color: rgba(10, 18, 28, 0.18) transparent;
+  scrollbar-width: thin;
+}
+
+/* ============================================================
+   CALENDAR — additional polish
+   ============================================================ */
+
+/* Other-month cells: slightly more visible on light background */
+.day.other-month {
+  opacity: 0.42;
+}
+
+/* Day num: ensure consistent size + weight */
+.day-num {
+  font-size: 13px;
+  font-weight: 750;
+}
+
+/* Hover: smooth shadow intensification without color shift */
+.day:hover {
+  transform: translateY(-2px);
+  border-color: rgba(15, 23, 42, 0.14);
+  box-shadow: 0 16px 32px rgba(10, 18, 28, 0.10);
+}
+
+.day.win:hover {
+  border-color: rgba(45, 122, 19, 0.28);
+  box-shadow: 0 16px 32px rgba(10, 18, 28, 0.10);
+}
+
+.day.loss:hover {
+  border-color: rgba(180, 35, 60, 0.28);
+  box-shadow: 0 16px 32px rgba(10, 18, 28, 0.10);
+}
+
+/* ============================================================
+   TRADE FLOW NAV — neon leaks from 022 not covered by prior rules
+   ============================================================ */
+
+/* Base dot — was rgba(255,255,255,0.35) — invisible on light bg */
+.trade-flow-dot {
+  background: rgba(15, 23, 42, 0.20);
+  box-shadow: none;
+}
+
+/* Done-step dot — was neon lime */
+.trade-flow-step.is-done .trade-flow-dot {
+  background: #2d7a13;
+  box-shadow: none;
+}
+
+/* Hover — was neon cyan */
+.trade-flow-step:hover {
+  border-color: rgba(15, 23, 42, 0.16);
+  color: #111827;
+  background: #fff;
+}
+
+/* ============================================================
+   RR PREVIEW — light-theme states (:root vars = neon in modals)
+   ============================================================ */
+
+.rr-preview {
+  background: #f4f6fa;
+  border-color: #e3e7ee;
+  color: #626b7a;
+}
+
+.rr-preview.rr-good {
+  background: rgba(232, 255, 222, 0.70);
+  border-color: rgba(45, 122, 19, 0.20);
+}
+
+.rr-preview.rr-ok {
+  background: rgba(8, 145, 178, 0.05);
+  border-color: rgba(8, 145, 178, 0.20);
+}
+
+.rr-preview.rr-bad {
+  background: rgba(255, 229, 234, 0.70);
+  border-color: rgba(180, 35, 60, 0.20);
+}
+
+.rr-preview.rr-good .rr-preview-value { color: #2d7a13; }
+.rr-preview.rr-ok   .rr-preview-value { color: #0891b2; }
+.rr-preview.rr-bad  .rr-preview-value { color: #b4233c; }
+
+/* ============================================================
+   MIDNIGHT COACH — light card style
+   ============================================================ */
+
+.midnight-coach {
+  border-color: rgba(8, 145, 178, 0.22);
+  background: rgba(8, 145, 178, 0.04);
+}
+
+.midnight-coach-status {
+  border-color: #e3e7ee;
+  background: #f4f6fa;
+  color: #626b7a;
+}
+
+.midnight-coach-status.good {
+  border-color: rgba(45, 122, 19, 0.22);
+  background: rgba(232, 255, 222, 0.70);
+}
+
+.midnight-coach-status.warn {
+  border-color: rgba(217, 119, 6, 0.22);
+  background: rgba(253, 243, 210, 0.80);
+}
+
+.midnight-coach-status.bad {
+  border-color: rgba(180, 35, 60, 0.22);
+  background: rgba(255, 229, 234, 0.70);
+}
+
+.midnight-coach-score { color: #0891b2; }
+
+.midnight-coach-next {
+  border-color: rgba(8, 145, 178, 0.22);
+  color: #626b7a;
+}
+
+.midnight-coach-next strong { color: #0891b2; }
+
+.midnight-coach-bullet { background: rgba(15, 23, 42, 0.18); }
+
+/* ============================================================
+   WIZARD CARDS / PILLS / INPUTS — :root neon vars don't cascade
+   ============================================================ */
+
+.wiz-card.active {
+  border-color: rgba(0, 197, 220, 0.45);
+  color: #0891b2;
+  background: rgba(8, 145, 178, 0.06);
+  box-shadow: 0 0 0 3px rgba(0, 197, 220, 0.12);
+}
+
+.wiz-pill.active {
+  border-color: rgba(0, 197, 220, 0.45);
+  color: #0891b2;
+  background: rgba(8, 145, 178, 0.06);
+}
+
+.wiz-pill.active.lime {
+  border-color: rgba(45, 122, 19, 0.28);
+  color: #20570b;
+  background: rgba(232, 255, 222, 0.85);
+}
+
+.wiz-pill.active.rose {
+  border-color: rgba(180, 35, 60, 0.28);
+  color: #8a1429;
+  background: rgba(255, 229, 234, 0.85);
+}
+
+.wiz-pill.active.amber {
+  border-color: rgba(217, 119, 6, 0.28);
+  color: #92400e;
+  background: rgba(253, 243, 210, 0.90);
+}
+
+/* Focus rings — replace neon rgba(0,229,255) with proper cyan */
+.wiz-input:focus,
+.wiz-textarea:focus,
+.wiz-level-input:focus,
+.wiz-stdv-input:focus {
+  border-color: rgba(0, 197, 220, 0.6);
+  box-shadow: 0 0 0 3px rgba(0, 197, 220, 0.12);
+}
+
+/* Date shortcuts */
+.wiz-date-btn:hover,
+.wiz-date-btn.active {
+  border-color: rgba(0, 197, 220, 0.45);
+  color: #0891b2;
+  background: rgba(8, 145, 178, 0.06);
+}
+
+/* Choice buttons */
+.wiz-choice-btn.active {
+  border-color: rgba(0, 197, 220, 0.45);
+  color: #0891b2;
+  background: rgba(8, 145, 178, 0.06);
+}
+
+/* Context banner */
+.wiz-ctx-banner {
+  background: rgba(8, 145, 178, 0.05);
+  border-color: rgba(8, 145, 178, 0.18);
+}
+
+.wiz-ctx-banner-icon { color: #0891b2; }
+
+/* Strategy chip dot */
+.wiz-strategy-chip-dot { background: #0891b2; }
+
+/* Section divider */
+.wiz-divider { background: #e7eaf0; }
+
+/* ============================================================
+   DAY MODE SUB-LABEL — #a6d6e6 reads as washed-out on light bg
+   ============================================================ */
+
+.day-mode-trades .day-metric-sub { color: #98a1af; }
+
+/* ============================================================
+   PM BUTTON — neon amber hover → proper amber
+   ============================================================ */
+
+.trade-card-pm-btn:hover {
+  border-color: rgba(217, 119, 6, 0.30);
+  color: #d97706;
+  background: rgba(253, 243, 210, 0.70);
+}
+
+/* ============================================================
+   WIZARD CARD TEXT — var(--text) resolves to #f0f3ff (white!)
+   ============================================================ */
+
+.wiz-card-main { color: #111827; }
+.wiz-card-sub  { color: #6b7280; }
+.wiz-ctx-banner-text { color: #4b5563; }
+.wiz-ctx-banner-text strong { color: #111827; }
+
+/* STDV row — was var(--surface) = dark bg */
+.wiz-stdv-row {
+  background: #f4f6fa;
+  border-color: #dde2ea;
+}
+.wiz-stdv-row label { color: #6b7280; }
+.wiz-stdv-hint { color: #9ca3af; }
+
+/* Midnight coach intro — muted text */
+.midnight-coach-intro { color: #6b7280; }

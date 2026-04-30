@@ -1,0 +1,97 @@
+/* ============================================================
+   Ambient surfaces - pages Today et Journal
+   Light theme — subtle depth grid on light bg.
+   ============================================================ */
+
+.page[data-page="today"],
+.page[data-page="journal"] {
+  position: relative;
+}
+
+.page[data-page="today"]::before,
+.page[data-page="journal"]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(to right, rgba(15, 23, 42, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.03) 1px, transparent 1px);
+  background-size: 52px 52px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 40%, transparent 85%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 40%, transparent 85%);
+}
+
+.page[data-page="today"] > *,
+.page[data-page="journal"] > * {
+  position: relative;
+  z-index: 2;
+}
+
+.page[data-page="today"] .page-head,
+.page[data-page="journal"] .page-head {
+  margin-bottom: 24px;
+}
+
+.page[data-page="today"] .page-head > div:first-child h1 {
+  font-family: "Instrument Serif", serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 32px;
+  letter-spacing: 0;
+  margin-bottom: 2px;
+  color: var(--text);
+}
+
+.page[data-page="today"] .page-head .page-title .accent {
+  background: linear-gradient(135deg, #60a5fa, #818cf8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-style: normal;
+  font-weight: 500;
+}
+
+.page[data-page="today"] .page-subtitle,
+.page[data-page="journal"] .page-subtitle {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  color: #98a1af;
+}
+
+.page[data-page="today"] .kpi,
+.page[data-page="today"] .panel,
+.page[data-page="journal"] .panel,
+.page[data-page="journal"] .journal-filters,
+.page[data-page="journal"] .journal-table-wrap,
+.page[data-page="journal"] .journal-calendar-wrap {
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.3s, transform 0.3s, box-shadow 0.3s;
+}
+
+.page[data-page="today"] .kpi:hover {
+  border-color: rgba(15, 23, 42, 0.16);
+  transform: translateY(-2px);
+  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.10);
+}
+
+.page[data-page="today"] .panel:hover,
+.page[data-page="journal"] .panel:hover,
+.page[data-page="journal"] .journal-filters:hover,
+.page[data-page="journal"] .journal-table-wrap:hover,
+.page[data-page="journal"] .journal-calendar-wrap:hover {
+  border-color: rgba(15, 23, 42, 0.16);
+  transform: translateY(-1px);
+  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.10);
+}
+
+.page[data-page="today"] .kpi > *,
+.page[data-page="today"] .panel > *,
+.page[data-page="journal"] .panel > *,
+.page[data-page="journal"] .journal-filters > *,
+.page[data-page="journal"] .journal-table-wrap > * {
+  position: relative;
+  z-index: 1;
+}

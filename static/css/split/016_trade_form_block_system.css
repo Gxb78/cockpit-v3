@@ -1,0 +1,203 @@
+/* ============================================================
+   BLOCK SYSTEM (Phase 2)
+   ============================================================ */
+
+.block-h {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+.block-h-spacer { flex: 1; }
+
+.block-h .chevron {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px 3px 8px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.09);
+  background: rgba(255,255,255,0.05);
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background, border-color, color 0.2s var(--ease);
+}
+.block-body {
+  padding: 0 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.block-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.pm-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.scenario-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stdv-input-wrap {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.stdv-value {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.label-unit {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-left: 2px;
+}
+
+.block-h .chevron::before {
+  content: "Réduire";
+  font-family: inherit;
+}
+.block-h .chevron svg {
+  width: 12px; height: 12px;
+  flex-shrink: 0;
+  transition: transform 0.25s var(--ease);
+}
+.block-h .chevron:hover {
+  background: rgba(255,255,255,0.10);
+  border-color: rgba(255,255,255,0.20);
+  color: var(--text);
+}
+
+/* Collapsed state */
+.block.collapsed .block-h .chevron {
+  background: rgba(0,229,255,0.07);
+  border-color: rgba(0,229,255,0.22);
+  color: var(--cyan);
+}
+.block.collapsed .block-h .chevron::before { content: "Ouvrir"; }
+.block.collapsed .block-h .chevron svg { transform: rotate(-90deg); }
+.block.collapsed .block-h .chevron:hover {
+  background: rgba(0,229,255,0.13);
+  border-color: rgba(0,229,255,0.35);
+}
+.block.collapsed > *:not(.block-h) { display: none; }
+.block.collapsed { padding-bottom: 18px; }
+.block.collapsed .block-h { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+
+.block-summary {
+  display: none;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-soft);
+  margin-left: 6px;
+  text-transform: none;
+  letter-spacing: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: italic;
+  opacity: 0.75;
+}
+.block.collapsed .block-summary { display: inline; }
+
+/* Custom blocks */
+.custom-blocks { display: flex; flex-direction: column; gap: 12px; }
+.custom-block .block-h .icon {
+  background: rgba(255, 170, 0, 0.10);
+  color: var(--amber);
+}
+.custom-block-title {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0;
+  flex: 1;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-family: inherit;
+  min-width: 0;
+}
+.custom-block-title::placeholder { color: var(--text-faint); }
+.custom-block-delete {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  transition: color, background 0.15s;
+  cursor: pointer;
+}
+.custom-block-delete:hover { color: var(--loss); background: var(--loss-bg); }
+.custom-block-delete svg { width: 12px; height: 12px; }
+
+.add-block-btn {
+  width: 100%;
+  padding: 14px;
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-sm);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  transition: color, border-color, background 0.2s var(--ease);
+}
+.add-block-btn:hover {
+  color: var(--cyan);
+  border-color: var(--cyan);
+  background: rgba(0,229,255,0.04);
+}
+.add-block-btn svg { width: 14px; height: 14px; }
+
+/* ============================================================
+   FIELD: markdown preview toggle
+   ============================================================ */
+
+.field-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.field-h label {
+  margin: 0;
+}
+.field-toggle {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: color, border-color, background 0.15s;
+  font-size: 10px;
+}

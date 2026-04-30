@@ -1,0 +1,997 @@
+/* ---- 047_trade_form_light_cards.css ---- */
+/* Light Apple-inspired card style for the trade form (inline + wizard).
+   Matches the design tokens from 046_journal_day_trade_cards.css.
+   Scoped to #entryModal and .wiz so it only affects the trade form/wizard. */
+
+/* ============================================================
+   TOKENS (scoped override)
+   ============================================================ */
+
+#entryModal,
+.wiz {
+  --card-bg:          #f7f8fb;
+  --card-surface:     #ffffff;
+  --card-strip:       #eef1f6;
+  --card-input-bg:    #f4f6fa;
+  --card-border:      #e7eaf0;
+  --card-border-soft: #e3e7ee;
+  --card-text:        #10131b;
+  --card-text-muted:  #8b94a3;
+  --card-text-faint:  #b0b8c6;
+  --card-win-bg:      rgba(232, 255, 222, 0.90);
+  --card-win-text:    #20570b;
+  --card-loss-bg:     rgba(255, 229, 234, 0.92);
+  --card-loss-text:   #8a1429;
+  --card-cta-bg:      #08090c;
+  --card-cta-text:    #ffffff;
+  --card-shadow:      0 38px 84px rgba(0,0,0,0.44);
+  --card-tile-shadow: 0 10px 22px rgba(12,18,28,0.06);
+  --card-radius:      34px;
+  --card-radius-inner: 27px;
+  --card-radius-dtl:  18px;
+  --card-radius-pill: 999px;
+}
+
+/* ============================================================
+   TRADE FORM SECTION (inside day modal)
+   ============================================================ */
+
+/* Wrapper card */
+#entryModal .trade-form-section {
+  background: var(--card-surface);
+  border: 1px solid var(--card-border-soft);
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-tile-shadow);
+  margin-top: 14px;
+  overflow: hidden;
+  animation: tradeFormLightIn 0.32s cubic-bezier(.16,1,.3,1);
+}
+
+@keyframes tradeFormLightIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Focus state */
+#entryModal.modal-trade-focus .trade-form-section {
+  border-color: var(--card-border);
+  box-shadow: var(--card-tile-shadow), 0 0 0 1px rgba(8,9,12,0.06);
+}
+
+/* Trade form header */
+#entryModal .trade-form-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--card-strip);
+  background: var(--card-bg);
+}
+
+#entryModal .trade-form-title {
+  font-size: 15px;
+  font-weight: 820;
+  letter-spacing: -0.3px;
+  flex: 1;
+  color: var(--card-text);
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
+}
+
+/* ============================================================
+   TRADE FORM INNER — blocks
+   ============================================================ */
+
+#entryModal .trade-form-inner {
+  padding: 18px 20px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--card-surface);
+}
+
+/* Individual blocks — cards */
+#entryModal #tradeFormSection .block,
+.wiz .wiz-panel .block {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--card-radius-inner);
+  padding: 18px 20px 16px;
+  margin-bottom: 0;
+  position: relative;
+  overflow: hidden;
+  box-shadow: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Remove the dark radial overlay */
+#entryModal #tradeFormSection .block::after,
+.wiz .wiz-panel .block::after {
+  display: none;
+}
+
+/* Per-block color tints — pastel version */
+#entryModal #tradeFormSection .block:has(.block-h.magenta),
+.wiz .wiz-panel .block:has(.block-h.magenta) {
+  background: linear-gradient(145deg, rgba(255,46,196,0.025), var(--card-bg));
+}
+#entryModal #tradeFormSection .block:has(.block-h.lime),
+.wiz .wiz-panel .block:has(.block-h.lime) {
+  background: linear-gradient(145deg, rgba(136,255,90,0.025), var(--card-bg));
+}
+#entryModal #tradeFormSection .block:has(.block-h.amber),
+.wiz .wiz-panel .block:has(.block-h.amber) {
+  background: linear-gradient(145deg, rgba(255,170,0,0.025), var(--card-bg));
+}
+
+/* Focus-within — subtle */
+#entryModal #tradeFormSection .block:focus-within,
+.wiz .wiz-panel .block:focus-within {
+  border-color: #c0c6d4;
+  box-shadow: 0 2px 12px rgba(8,9,12,0.06);
+}
+
+#entryModal #tradeFormSection .block:has(.block-h.magenta):focus-within,
+.wiz .wiz-panel .block:has(.block-h.magenta):focus-within {
+  border-color: rgba(255,46,196,0.35);
+  box-shadow: 0 2px 12px rgba(255,46,196,0.10);
+}
+#entryModal #tradeFormSection .block:has(.block-h.lime):focus-within,
+.wiz .wiz-panel .block:has(.block-h.lime):focus-within {
+  border-color: rgba(136,255,90,0.35);
+  box-shadow: 0 2px 12px rgba(136,255,90,0.10);
+}
+#entryModal #tradeFormSection .block:has(.block-h.amber):focus-within,
+.wiz .wiz-panel .block:has(.block-h.amber):focus-within {
+  border-color: rgba(255,170,0,0.35);
+  box-shadow: 0 2px 12px rgba(255,170,0,0.10);
+}
+
+/* Block header */
+#entryModal #tradeFormSection .block-h,
+.wiz .wiz-panel .block-h {
+  border-bottom-color: var(--card-strip);
+  color: var(--card-text);
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+}
+
+/* Block header icon */
+#entryModal #tradeFormSection .block-h .icon,
+.wiz .wiz-panel .block-h .icon {
+  background: var(--card-strip);
+  color: var(--card-text-muted);
+  box-shadow: none;
+}
+
+#entryModal #tradeFormSection .block-h.magenta .icon,
+.wiz .wiz-panel .block-h.magenta .icon {
+  background: rgba(255,46,196,0.08);
+  color: #c92a8a;
+  box-shadow: none;
+}
+
+#entryModal #tradeFormSection .block-h.lime .icon,
+.wiz .wiz-panel .block-h.lime .icon {
+  background: rgba(136,255,90,0.08);
+  color: #2d7a0e;
+  box-shadow: none;
+}
+
+#entryModal #tradeFormSection .block-h.amber .icon,
+.wiz .wiz-panel .block-h.amber .icon {
+  background: rgba(255,170,0,0.08);
+  color: #a86a00;
+  box-shadow: none;
+}
+
+/* Chevron */
+#entryModal #tradeFormSection .block-h .chevron,
+.wiz .wiz-panel .block-h .chevron {
+  border-color: var(--card-border);
+  background: var(--card-surface);
+  color: var(--card-text-muted);
+}
+
+#entryModal #tradeFormSection .block-h .chevron:hover,
+.wiz .wiz-panel .block-h .chevron:hover {
+  background: var(--card-strip);
+  border-color: var(--card-border-soft);
+  color: var(--card-text);
+}
+
+#entryModal #tradeFormSection .block.collapsed .block-h .chevron,
+.wiz .wiz-panel .block.collapsed .block-h .chevron {
+  background: rgba(8,9,12,0.04);
+  border-color: var(--card-border);
+  color: var(--card-text-muted);
+}
+
+#entryModal #tradeFormSection .block.collapsed .block-h .chevron:hover,
+.wiz .wiz-panel .block.collapsed .block-h .chevron:hover {
+  background: rgba(8,9,12,0.08);
+  border-color: var(--card-border-soft);
+}
+
+/* ============================================================
+   FIELDS, LABELS, INPUTS
+   ============================================================ */
+
+#entryModal #tradeFormSection .field label,
+.wiz .wiz-panel .field label {
+  color: var(--card-text-muted);
+}
+
+#entryModal #tradeFormSection input[type="text"],
+#entryModal #tradeFormSection input[type="number"],
+#entryModal #tradeFormSection input[type="date"],
+#entryModal #tradeFormSection textarea,
+#entryModal #tradeFormSection select,
+.wiz .wiz-panel input[type="text"],
+.wiz .wiz-panel input[type="number"],
+.wiz .wiz-panel textarea,
+.wiz .wiz-panel select {
+  background: var(--card-input-bg);
+  border-color: var(--card-border);
+  color: var(--card-text);
+  border-radius: var(--card-radius-dtl);
+}
+
+#entryModal #tradeFormSection input:focus,
+#entryModal #tradeFormSection textarea:focus,
+#entryModal #tradeFormSection select:focus,
+.wiz .wiz-panel input:focus,
+.wiz .wiz-panel textarea:focus,
+.wiz .wiz-panel select:focus {
+  border-color: #8b94a3;
+  box-shadow: 0 0 0 3px rgba(8,9,12,0.06);
+}
+
+#entryModal #tradeFormSection input::placeholder,
+#entryModal #tradeFormSection textarea::placeholder,
+.wiz .wiz-panel input::placeholder,
+.wiz .wiz-panel textarea::placeholder {
+  color: var(--card-text-faint);
+}
+
+/* ============================================================
+   PILL CHOICES
+   ============================================================ */
+
+#entryModal #tradeFormSection .pill-choice,
+.wiz .wiz-panel .pill-choice {
+  background: var(--card-input-bg);
+  border-color: var(--card-border);
+  color: var(--card-text-muted);
+  border-radius: var(--card-radius-pill);
+  min-height: 36px;
+  padding: 0 16px;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: none;
+  transition: color, background, border-color 0.18s ease;
+}
+
+#entryModal #tradeFormSection .pill-choice:hover,
+.wiz .wiz-panel .pill-choice:hover {
+  border-color: #c0c6d4;
+  color: var(--card-text);
+  background: var(--card-strip);
+  transform: none;
+}
+
+#entryModal #tradeFormSection .pill-choice.active,
+.wiz .wiz-panel .pill-choice.active {
+  background: #e8ebf0;
+  border-color: #c0c6d4;
+  color: var(--card-text);
+  box-shadow: none;
+  transform: none;
+}
+
+/* Win pill */
+#entryModal #tradeFormSection .pill-choice.lime.active,
+.wiz .wiz-panel .pill-choice.lime.active {
+  background: var(--card-win-bg);
+  border-color: #8fd47a;
+  color: var(--card-win-text);
+  box-shadow: none;
+  transform: none;
+}
+
+/* Loss pill */
+#entryModal #tradeFormSection .pill-choice.rose.active,
+.wiz .wiz-panel .pill-choice.rose.active {
+  background: var(--card-loss-bg);
+  border-color: #eea7b5;
+  color: var(--card-loss-text);
+  box-shadow: none;
+  transform: none;
+}
+
+/* ============================================================
+   SELECT WRAPPER inside trade form
+   ============================================================ */
+
+#entryModal #tradeFormSection .select-wrapper select,
+.wiz .wiz-panel .select-wrapper select {
+  background: var(--card-input-bg);
+  border-color: var(--card-border);
+  color: var(--card-text);
+  border-radius: var(--card-radius-dtl);
+}
+
+#entryModal #tradeFormSection .select-arrow,
+.wiz .wiz-panel .select-arrow {
+  color: var(--card-text-faint);
+}
+
+/* ============================================================
+   PLAN DECISION CARD
+   ============================================================ */
+
+#entryModal #tradeFormSection .plan-decision-card,
+.wiz .wiz-panel .plan-decision-card {
+  background: var(--card-strip);
+  border-color: var(--card-border);
+  border-radius: var(--card-radius-dtl);
+}
+
+#entryModal #tradeFormSection .plan-decision-label,
+.wiz .wiz-panel .plan-decision-label {
+  color: var(--card-text-muted);
+}
+
+#entryModal #tradeFormSection .plan-decision-main strong,
+.wiz .wiz-panel .plan-decision-main strong {
+  color: var(--card-text);
+}
+
+#entryModal #tradeFormSection .plan-alignment-pill,
+.wiz .wiz-panel .plan-alignment-pill {
+  background: rgba(8,9,12,0.04);
+  color: var(--card-text-muted);
+  border-radius: var(--card-radius-pill);
+}
+
+/* ============================================================
+   RR PREVIEW
+   ============================================================ */
+
+#entryModal #tradeFormSection .rr-preview,
+.wiz .wiz-panel .rr-preview {
+  background: var(--card-strip);
+  border-color: var(--card-border);
+  border-radius: var(--card-radius-dtl);
+  color: var(--card-text-muted);
+}
+
+#entryModal #tradeFormSection .rr-preview.rr-good,
+.wiz .wiz-panel .rr-preview.rr-good {
+  background: var(--card-win-bg);
+  border-color: #8fd47a;
+}
+
+#entryModal #tradeFormSection .rr-preview.rr-ok,
+.wiz .wiz-panel .rr-preview.rr-ok {
+  background: rgba(200,220,255,0.40);
+  border-color: #a0bce0;
+}
+
+#entryModal #tradeFormSection .rr-preview.rr-bad,
+.wiz .wiz-panel .rr-preview.rr-bad {
+  background: var(--card-loss-bg);
+  border-color: #eea7b5;
+}
+
+#entryModal #tradeFormSection .rr-preview-value,
+.wiz .wiz-panel .rr-preview-value {
+  color: var(--card-text);
+}
+
+#entryModal #tradeFormSection .rr-preview.rr-good .rr-preview-value,
+.wiz .wiz-panel .rr-preview.rr-good .rr-preview-value {
+  color: var(--card-win-text);
+}
+
+#entryModal #tradeFormSection .rr-preview.rr-ok .rr-preview-value,
+.wiz .wiz-panel .rr-preview.rr-ok .rr-preview-value {
+  color: #1a4a8a;
+}
+
+#entryModal #tradeFormSection .rr-preview.rr-bad .rr-preview-value,
+.wiz .wiz-panel .rr-preview.rr-bad .rr-preview-value {
+  color: var(--card-loss-text);
+}
+
+/* ============================================================
+   QUALITY RATING (stars)
+   ============================================================ */
+
+#entryModal #tradeFormSection .quality button,
+.wiz .wiz-panel .quality button {
+  color: var(--card-text-faint);
+}
+
+#entryModal #tradeFormSection .quality button.active,
+#entryModal #tradeFormSection .quality button:hover,
+.wiz .wiz-panel .quality button.active,
+.wiz .wiz-panel .quality button:hover {
+  color: #f59e0b;
+}
+
+/* ============================================================
+   TAGS INPUT
+   ============================================================ */
+
+#entryModal #tradeFormSection .tags-input,
+.wiz .wiz-panel .tags-input {
+  background: var(--card-input-bg);
+  border-color: var(--card-border);
+  border-radius: var(--card-radius-dtl);
+}
+
+#entryModal #tradeFormSection .tags-input input,
+.wiz .wiz-panel .tags-input input {
+  background: transparent;
+  border: none;
+  color: var(--card-text);
+}
+
+#entryModal #tradeFormSection .tag,
+.wiz .wiz-panel .tag {
+  background: #e0e4ea;
+  color: var(--card-text);
+  border-radius: var(--card-radius-pill);
+}
+
+/* ============================================================
+   MIDNIGHT COACH
+   ============================================================ */
+
+#entryModal #tradeFormSection .midnight-coach,
+.wiz .wiz-panel .midnight-coach {
+  border-color: var(--card-border);
+  background: var(--card-bg);
+  border-radius: var(--card-radius-inner);
+}
+
+#entryModal #tradeFormSection .midnight-coach-intro,
+.wiz .wiz-panel .midnight-coach-intro {
+  color: var(--card-text-muted);
+}
+
+#entryModal #tradeFormSection .midnight-coach-status,
+.wiz .wiz-panel .midnight-coach-status {
+  background: var(--card-strip);
+  border-color: var(--card-border);
+  border-radius: var(--card-radius-dtl);
+  color: var(--card-text-muted);
+}
+
+#entryModal #tradeFormSection .midnight-coach-status.good,
+.wiz .wiz-panel .midnight-coach-status.good {
+  background: var(--card-win-bg);
+  border-color: #8fd47a;
+}
+
+#entryModal #tradeFormSection .midnight-coach-status.warn,
+.wiz .wiz-panel .midnight-coach-status.warn {
+  background: rgba(255,243,205,0.80);
+  border-color: #f5c842;
+}
+
+#entryModal #tradeFormSection .midnight-coach-status.bad,
+.wiz .wiz-panel .midnight-coach-status.bad {
+  background: var(--card-loss-bg);
+  border-color: #eea7b5;
+}
+
+#entryModal #tradeFormSection .midnight-coach-score,
+.wiz .wiz-panel .midnight-coach-score {
+  color: var(--card-text);
+  border-color: var(--card-border);
+}
+
+#entryModal #tradeFormSection .midnight-coach-next,
+.wiz .wiz-panel .midnight-coach-next {
+  border-color: var(--card-border);
+  color: var(--card-text-muted);
+}
+
+#entryModal #tradeFormSection .midnight-coach-next strong,
+.wiz .wiz-panel .midnight-coach-next strong {
+  color: var(--card-text);
+}
+
+#entryModal #tradeFormSection .midnight-coach-list li,
+.wiz .wiz-panel .midnight-coach-list li {
+  color: var(--card-text-muted);
+}
+
+#entryModal #tradeFormSection .midnight-coach-bullet,
+.wiz .wiz-panel .midnight-coach-bullet {
+  background: var(--card-text-faint);
+}
+
+#entryModal #tradeFormSection .midnight-coach-list li.ok .midnight-coach-bullet,
+.wiz .wiz-panel .midnight-coach-list li.ok .midnight-coach-bullet {
+  background: #2d7a0e;
+}
+
+#entryModal #tradeFormSection .midnight-coach-list li.warn .midnight-coach-bullet,
+.wiz .wiz-panel .midnight-coach-list li.warn .midnight-coach-bullet {
+  background: #a86a00;
+}
+
+#entryModal #tradeFormSection .midnight-coach-list li.bad .midnight-coach-bullet,
+.wiz .wiz-panel .midnight-coach-list li.bad .midnight-coach-bullet {
+  background: var(--card-loss-text);
+}
+
+/* ============================================================
+   SHOTS / UPLOAD ZONE
+   ============================================================ */
+
+#entryModal #tradeFormSection .upload-zone,
+.wiz .wiz-panel .upload-zone {
+  border-color: var(--card-border);
+  background: var(--card-input-bg);
+  border-radius: var(--card-radius-dtl);
+  color: var(--card-text-muted);
+}
+
+#entryModal #tradeFormSection .upload-zone svg,
+.wiz .wiz-panel .upload-zone svg {
+  color: var(--card-text-faint);
+}
+
+#entryModal #tradeFormSection .upload-zone.dragover,
+.wiz .wiz-panel .upload-zone.dragover {
+  border-color: var(--card-text-muted);
+  background: var(--card-strip);
+}
+
+#entryModal #tradeFormSection .shots-list .shot-thumb,
+.wiz .wiz-panel .shots-list .shot-thumb {
+  border-radius: var(--card-radius-dtl);
+  border-color: var(--card-border);
+}
+
+/* ============================================================
+   CUSTOM BLOCKS
+   ============================================================ */
+
+#entryModal #tradeFormSection .custom-block .block-h .icon,
+.wiz .wiz-panel .custom-block .block-h .icon {
+  background: rgba(255,170,0,0.08);
+  color: #a86a00;
+}
+
+#entryModal #tradeFormSection .custom-block-title,
+.wiz .wiz-panel .custom-block-title {
+  color: var(--card-text);
+}
+
+#entryModal #tradeFormSection .custom-block-title::placeholder,
+.wiz .wiz-panel .custom-block-title::placeholder {
+  color: var(--card-text-faint);
+}
+
+#entryModal #tradeFormSection .custom-block-delete,
+.wiz .wiz-panel .custom-block-delete {
+  color: var(--card-text-muted);
+}
+
+#entryModal #tradeFormSection .custom-block-delete:hover,
+.wiz .wiz-panel .custom-block-delete:hover {
+  color: var(--card-loss-text);
+  background: var(--card-loss-bg);
+}
+
+#entryModal #tradeFormSection .add-block-btn,
+.wiz .wiz-panel .add-block-btn {
+  border-color: var(--card-border);
+  color: var(--card-text-muted);
+  border-radius: var(--card-radius-dtl);
+}
+
+#entryModal #tradeFormSection .add-block-btn:hover,
+.wiz .wiz-panel .add-block-btn:hover {
+  border-color: var(--card-text-muted);
+  color: var(--card-text);
+  background: var(--card-strip);
+}
+
+/* ============================================================
+   TRADE FORM ACTIONS (bottom bar)
+   ============================================================ */
+
+#entryModal .trade-form-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 14px 22px 18px;
+  border-top: 1px solid var(--card-strip);
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  background: var(--card-bg);
+  backdrop-filter: none;
+}
+
+/* ============================================================
+   BUTTONS — CTA style per card design
+   ============================================================ */
+
+#entryModal .trade-form-actions .btn-primary,
+.wiz .wiz-panel .btn-primary {
+  background: var(--card-cta-bg);
+  color: var(--card-cta-text);
+  border: none;
+  border-radius: var(--card-radius-pill);
+  min-height: 38px;
+  padding: 0 22px;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: opacity, transform 0.18s ease;
+}
+
+#entryModal .trade-form-actions .btn-primary:hover,
+.wiz .wiz-panel .btn-primary:hover {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+#entryModal .trade-form-actions .btn-primary:active,
+.wiz .wiz-panel .btn-primary:active {
+  transform: translateY(0);
+  opacity: 0.80;
+}
+
+/* Ghost button */
+#entryModal .trade-form-actions .btn-ghost,
+.wiz .wiz-panel .btn-ghost {
+  background: transparent;
+  border: 1px solid var(--card-border);
+  color: var(--card-text-muted);
+  border-radius: var(--card-radius-pill);
+  min-height: 38px;
+  padding: 0 18px;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: color, background, border-color 0.18s ease;
+}
+
+#entryModal .trade-form-actions .btn-ghost:hover,
+.wiz .wiz-panel .btn-ghost:hover {
+  background: var(--card-strip);
+  border-color: var(--card-border-soft);
+  color: var(--card-text);
+}
+
+/* Danger button */
+#entryModal .trade-form-actions .btn-danger,
+.wiz .wiz-panel .btn-danger {
+  background: transparent;
+  border: 1px solid rgba(138,20,41,0.20);
+  color: var(--card-loss-text);
+  border-radius: var(--card-radius-pill);
+  min-height: 38px;
+  padding: 0 16px;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: color, background, border-color 0.18s ease;
+}
+
+#entryModal .trade-form-actions .btn-danger:hover,
+.wiz .wiz-panel .btn-danger:hover {
+  background: var(--card-loss-bg);
+  border-color: var(--card-loss-text);
+}
+
+/* ============================================================
+   SECTION HEADER — "Trades du jour" + "Ajouter un trade"
+   ============================================================ */
+
+#entryModal .trades-section-header {
+  margin: 16px 0 14px;
+  padding: 0 2px;
+}
+
+#entryModal .trades-section-header h3 {
+  color: var(--card-text);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 780;
+}
+
+#entryModal .btn-add-trade {
+  border-radius: var(--card-radius-pill);
+  border: 1px solid var(--card-border);
+  background: var(--card-surface);
+  color: var(--card-text);
+  min-height: 36px;
+  padding: 0 18px;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: color, background, border-color 0.18s ease;
+}
+
+#entryModal .btn-add-trade:hover {
+  background: var(--card-strip);
+  border-color: var(--card-border-soft);
+}
+
+/* ============================================================
+   EMPTY TRADES STATE
+   ============================================================ */
+
+#entryModal .trades-empty {
+  padding: 22px 16px;
+  text-align: center;
+  color: var(--card-text-muted);
+  font-size: 12.5px;
+  border: 1px dashed var(--card-border);
+  border-radius: var(--card-radius-dtl);
+  line-height: 1.6;
+  background: var(--card-bg);
+}
+
+#entryModal .trades-empty strong {
+  color: var(--card-text);
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* ============================================================
+   TRADE FOCUS — subdued inactive cards
+   ============================================================ */
+
+#entryModal.modal-trade-focus #tradesList .trade-card:not(.active) {
+  opacity: 0.52;
+  filter: saturate(0.75);
+}
+
+#entryModal.modal-trade-focus #tradesList .trade-card.active {
+  opacity: 1;
+  border-color: var(--card-border-soft);
+  box-shadow: 0 0 0 1px rgba(8,9,12,0.04), 0 8px 20px rgba(8,9,12,0.04);
+}
+
+/* ============================================================
+   WIZARD MODAL (full-screen)
+   ============================================================ */
+
+/* Backdrop */
+.wiz {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Panel — card */
+.wiz-panel {
+  width: min(860px, 94vw);
+  max-width: 860px;
+  max-height: 75vh;
+  height: 75vh;
+  border-radius: var(--card-radius);
+  background: var(--card-surface);
+  border: 1px solid var(--card-border-soft);
+  box-shadow: var(--card-shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Progress bar */
+.wiz-progress {
+  width: 100%;
+  height: 3px;
+  background: var(--card-strip);
+  flex-shrink: 0;
+}
+.wiz-progress-fill {
+  height: 100%;
+  background: #8b94a3;
+  transition: transform 0.4s cubic-bezier(.16,1,.3,1);
+  transform-origin: left;
+  border-radius: 0 2px 2px 0;
+  min-width: 4px;
+}
+
+/* Header */
+.wiz-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px 14px;
+  border-bottom: 1px solid var(--card-strip);
+  flex-shrink: 0;
+  gap: 12px;
+  background: var(--card-bg);
+}
+
+.wiz-btn-icon {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--card-border);
+  background: var(--card-surface);
+  color: var(--card-text-muted);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: color, background, border-color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.wiz-btn-icon:hover {
+  border-color: var(--card-border-soft);
+  color: var(--card-text);
+  background: var(--card-strip);
+}
+
+.wiz-btn-icon svg { width: 16px; height: 16px; }
+.wiz-btn-icon.invisible { visibility: hidden; pointer-events: none; }
+
+.wiz-step-indicator {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--card-text-faint);
+  letter-spacing: 0.08em;
+  font-family: "JetBrains Mono", monospace;
+}
+
+/* Mode bar */
+.wiz-mode-bar { display: flex; gap: 6px; }
+
+.wiz-mode-btn {
+  padding: 4px 14px;
+  border-radius: var(--card-radius-pill);
+  border: 1px solid var(--card-border);
+  background: transparent;
+  color: var(--card-text-muted);
+  font-size: 0.75rem; font-weight: 600;
+  cursor: pointer;
+  display: flex; align-items: center; gap: 4px;
+  transition: color, background, border-color 0.18s ease;
+}
+
+.wiz-mode-btn svg { width: 12px; height: 12px; }
+
+.wiz-mode-btn.active,
+.wiz-mode-btn:hover {
+  background: #e8ebf0;
+  border-color: #c0c6d4;
+  color: var(--card-text);
+}
+
+/* Scrollable body */
+.wiz-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 26px 30px 12px;
+  min-height: 0;
+  background: var(--card-surface);
+}
+
+/* Step transitions — keep existing but smooth */
+.wiz-step { animation: wizEnter 0.22s cubic-bezier(.16,1,.3,1) both; }
+.wiz-step.wiz-exiting { animation: wizExit 0.13s cubic-bezier(.16,1,.3,1) both; }
+
+/* Question & hint */
+.wiz-question {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--card-text);
+  line-height: 1.25;
+  margin-bottom: 6px;
+  letter-spacing: -0.01em;
+}
+
+.wiz-hint {
+  font-size: 0.85rem;
+  color: var(--card-text-muted);
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+/* Strategy / instrument cards */
+.wiz-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.wiz-cards-3 { grid-template-columns: repeat(3, 1fr); }
+
+@media (max-width: 500px) { .wiz-cards-3 { grid-template-columns: 1fr 1fr; } }
+
+.wiz-card {
+  padding: 18px 14px 14px;
+  border-radius: var(--card-radius-dtl);
+  border: 2px solid var(--card-border);
+  background: var(--card-bg);
+  cursor: pointer;
+  text-align: center;
+  transition: color, background, border-color 0.16s ease;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  color: var(--card-text-muted);
+}
+
+.wiz-card:hover {
+  border-color: #c0c6d4;
+  background: var(--card-strip);
+  color: var(--card-text);
+}
+
+.wiz-card.selected {
+  border-color: var(--card-text);
+  background: var(--card-surface);
+  color: var(--card-text);
+  box-shadow: 0 0 0 1px rgba(8,9,12,0.04);
+}
+
+/* ============================================================
+   SCROLL PERFORMANCE (light no-blur)
+   ============================================================ */
+
+#entryModal.is-scrolling .trades-section-header,
+#entryModal.is-scrolling .trade-form-actions {
+  backdrop-filter: none;
+}
+
+#entryModal.is-scrolling #tradesList .trade-card:not(.active) {
+  filter: none;
+}
+
+#entryModal.is-scrolling .trade-form-section,
+#entryModal.is-scrolling.modal-trade-focus .trade-form-section {
+  box-shadow: none;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 760px) {
+  #entryModal .trade-form-section {
+    border-radius: var(--card-radius-dtl);
+  }
+  #entryModal .trade-form-inner {
+    padding: 12px 14px 4px;
+  }
+  #entryModal #tradeFormSection .block {
+    border-radius: var(--card-radius-dtl);
+    padding: 14px 16px 12px;
+  }
+  .wiz-panel {
+    max-width: 95vw;
+    border-radius: var(--card-radius-dtl);
+  }
+  .wiz-header {
+    padding: 14px 16px 12px;
+  }
+  .wiz-body {
+    padding: 16px 16px 8px;
+  }
+}

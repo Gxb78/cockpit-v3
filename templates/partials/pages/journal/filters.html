@@ -1,0 +1,89 @@
+      <div class="journal-filters" id="journalFilters">
+        <div class="journal-filter-row">
+          <div class="jfilter-group jfilter-period">
+            <span class="jfilter-label">Periode</span>
+            <button type="button" class="journal-range-trigger" id="journalRangePickerBtn" aria-haspopup="dialog">
+              <span id="journalRangeLabel">Ce mois</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="17" rx="3"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+              </svg>
+            </button>
+            <input type="date" id="jFilterFrom" class="visually-hidden-date" tabindex="-1" aria-hidden="true" />
+            <input type="date" id="jFilterTo" class="visually-hidden-date" tabindex="-1" aria-hidden="true" />
+          </div>
+          <div class="jfilter-group">
+            <label for="jFilterInstrument">Instrument</label>
+            <select id="jFilterInstrument">
+              <option value="ALL">Tous</option>
+              <option value="BTC">BTC</option>
+              <option value="ETH">ETH</option>
+              <option value="NQ">NQ</option>
+              <option value="ES">ES</option>
+            </select>
+          </div>
+          <div class="jfilter-group calendar-metric-toggle" id="calendarMetricToggle" aria-label="Affichage du calendrier">
+            <button type="button" class="calendar-metric-btn active" data-mode="pnl">PnL</button>
+            <button type="button" class="calendar-metric-btn" data-mode="trades">Tr</button>
+            <button type="button" class="calendar-metric-btn" data-mode="both">Mix</button>
+          </div>
+          <div class="jfilter-quick" id="jFilterQuick" hidden></div>
+          <div class="jfilter-group jfilter-layout">
+            <button type="button" class="jfilter-layout-btn active" data-mode="calendar">Calendrier</button>
+            <button type="button" class="jfilter-layout-btn" data-mode="table">Table</button>
+          </div>
+        </div>
+
+        <div class="jfilter-stats-row" id="jfilterStatsRow">
+          <div class="jfilter-stats-arrows">
+            <button type="button" class="jfilter-stats-arrow" data-dir="-1" aria-label="Statistique precedente">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+          </div>
+          <div class="jfilter-stats-display">
+            <span class="jfilter-stats-value" id="jfilterStatsValue">--</span>
+            <span class="jfilter-stats-label" id="jfilterStatsLabel">Winrate</span>
+          </div>
+          <div class="jfilter-stats-arrows">
+            <button type="button" class="jfilter-stats-arrow" data-dir="1" aria-label="Statistique suivante">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <details class="journal-advanced-filters">
+          <summary>Filtres trades</summary>
+          <div class="journal-trade-filters" aria-label="Filtres des trades">
+            <div class="journal-filter-field">
+              <label for="journalFilterStrategy">Strategie</label>
+              <div class="select-wrapper">
+                <select id="journalFilterStrategy">
+                  <option value="ALL">Toutes</option>
+                </select>
+                <svg class="select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+              </div>
+            </div>
+            <div class="journal-filter-field">
+              <label for="journalFilterResult">Resultat</label>
+              <div class="select-wrapper">
+                <select id="journalFilterResult">
+                  <option value="ALL">Tous</option>
+                  <option value="WIN">Win</option>
+                  <option value="LOSS">Loss</option>
+                  <option value="OPEN">Open</option>
+                </select>
+                <svg class="select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+              </div>
+            </div>
+            <div class="journal-filter-field">
+              <label for="journalFilterTag">Tag</label>
+              <div class="select-wrapper">
+                <select id="journalFilterTag">
+                  <option value="ALL">Tous</option>
+                </select>
+                <svg class="select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+              </div>
+            </div>
+            <button type="button" class="btn-ghost journal-filter-reset" id="journalFilterReset">Reset</button>
+          </div>
+        </details>
+      </div>

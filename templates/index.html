@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="fr">
+{% include "partials/layout/head.html" %}
+<body>
+{% include "partials/layout/aurora.html" %}
+
+<div id="loadingBar" class="loading-bar"></div>
+
+<div class="cockpit">
+{% include "partials/layout/rail.html" %}
+
+  <main class="main">
+{% include "partials/pages/today.html" %}
+{% include "partials/pages/journal.html" %}
+{% include "partials/pages/stats.html" %}
+{% include "partials/pages/settings.html" %}
+{% include "partials/pages/insights.html" %}
+  </main>
+
+{% include "partials/layout/right_panel.html" %}
+</div>
+
+{% include "partials/overlays/cmdk.html" %}
+{% include "partials/overlays/entry_modal.html" %}
+{% include "partials/overlays/lightbox.html" %}
+{% include "partials/overlays/wizard.html" %}
+{% include "partials/overlays/toast.html" %}
+{% include "partials/overlays/scripts.html" %}
+</body>
+</html>

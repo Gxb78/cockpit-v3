@@ -1,0 +1,41 @@
+            <!-- SCÉNARIO -->
+            <div class="block block-scenario" data-bid="scenario">
+              <div class="block-h magenta">
+                <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+                <span>Scénario</span>
+                <span class="block-h-spacer"></span>
+                <span class="block-summary" id="scenarioSummary"></span>
+                <span class="chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+              </div>
+              <div class="block-body">
+                <div class="scenario-grid">
+                  <div class="field">
+                    <label>Pourquoi ce trade ?</label>
+                    <textarea id="whyTrade" rows="2" placeholder="Biais HTF, PO3 en cours, contexte de la session, narrative…"></textarea>
+                  </div>
+                  <div class="field">
+                    <label>Pourquoi cette entrée ?</label>
+                    <textarea id="whyEntry" rows="2" placeholder="Niveau STDV, niveau HTF, confluence, structure, FVG, OB…"></textarea>
+                  </div>
+                  <div class="field">
+                    <label>Qu'a fait le prix hier ?</label>
+                    <textarea id="scenario" rows="2" placeholder="Range, sweep, direction dominante, niveaux défendus…"></textarea>
+                  </div>
+                  <div class="field">
+                    <label>Pourquoi ce stop loss ?</label>
+                    <textarea id="whyStop" rows="2" placeholder="Critère d'invalidation, au-dessus/dessous de quel niveau…"></textarea>
+                  </div>
+                  <div class="field">
+                    <label>Pourquoi ce take profit ?</label>
+                    <textarea id="whyTp" rows="2" placeholder="Objectif, niveau de liquidité visé, invalidation de la thèse…"></textarea>
+                  </div>
+                  <div class="field">
+                    <label>Niveau STDV <span class="label-tag">1 — 5</span></label>
+                    <div class="stdv-input-wrap">
+                      <input type="range" id="stdvSlider" min="1" max="5" step="0.5" value="3" />
+                      <input type="number" step="0.5" min="1" max="5" id="stdvLevel" value="3" class="mono stdv-value" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>

@@ -1,0 +1,31 @@
+            <!-- NIVEAUX DE PRIX -->
+            <div class="block" data-bid="levels">
+              <div class="block-h">
+                <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></span>
+                <span>Niveaux de prix</span>
+                <span class="block-h-spacer"></span>
+                <span class="block-summary" id="levelsSummary"></span>
+                <span class="chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+              </div>
+              <div class="block-body">
+                <div class="grid-4">
+                  <div class="field">
+                    <label>Entree</label>
+                    <input type="number" step="any" id="entryPrice" placeholder="ex. 98500" class="mono" />
+                  </div>
+                  <div class="field">
+                    <label>Stop Loss</label>
+                    <input type="number" step="any" id="stopLoss" placeholder="ex. 97200" class="mono" />
+                  </div>
+                  <div class="field">
+                    <label>Take Profit</label>
+                    <input type="number" step="any" id="takeProfit" placeholder="ex. 101000" class="mono" />
+                  </div>
+                  <div class="field">
+                    <label>Contrats</label>
+                    <input type="number" step="any" min="0.01" id="positionSize" value="1" placeholder="1" class="mono" />
+                  </div>
+                </div>
+                <div class="rr-preview" id="rrPreview"></div>
+              </div>
+            </div>

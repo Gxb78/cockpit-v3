@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+.venv/
+venv/
+
+# DB
+data/journal.db
+data/screenshots/
+data/_pending/
+data/backups/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Git
+*.orig
+
+# Agent state
+.omc/
+.venv/
+
+# Local config
+.claude/
+.env

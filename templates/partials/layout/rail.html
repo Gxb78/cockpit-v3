@@ -1,0 +1,77 @@
+  <aside class="rail" role="navigation" aria-label="Navigation principale">
+    <div class="brand" aria-hidden="true">
+      <div class="brand-mark">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 17 9 11 13 15 21 7"/>
+          <polyline points="14 7 21 7 21 14"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">JOURNAL</div>
+        <div class="brand-tag">v3 · multi-trades</div>
+      </div>
+    </div>
+
+    <div class="rail-section">
+      <button class="rail-new-trade" id="railNewTradeBtn" aria-label="Nouveau trade" title="Nouveau trade">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>Nouveau trade</span>
+      </button>
+    </div>
+
+    <nav class="nav" id="nav" aria-label="Pages">
+      <button class="nav-item active" data-page="today" aria-current="page" aria-label="Tableau de bord Dashboard (raccourci T)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span>Dashboard</span>
+        <span class="kbd">T</span>
+      </button>
+      <button class="nav-item" data-page="journal" aria-label="Journal des trades (raccourci J)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span>Journal</span>
+        <span class="kbd">J</span>
+      </button>
+      <button class="nav-item" data-page="stats" aria-label="Statistiques (raccourci S)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        <span>Stats</span>
+        <span class="kbd">S</span>
+      </button>
+      <button class="nav-item" data-page="settings" aria-label="Parametres (raccourci G)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .33 1.76l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.6 1.6 0 0 0 15 19.4a1.6 1.6 0 0 0-1 .6 1.6 1.6 0 0 1-2 0 1.6 1.6 0 0 0-1-.6 1.6 1.6 0 0 0-1.76.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.6 1.6 0 0 0 4.6 15a1.6 1.6 0 0 0-.6-1 1.6 1.6 0 0 1 0-2 1.6 1.6 0 0 0 .6-1 1.6 1.6 0 0 0-.33-1.76l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.6 1.6 0 0 0 9 4.6a1.6 1.6 0 0 0 1-.6 1.6 1.6 0 0 1 2 0 1.6 1.6 0 0 0 1 .6 1.6 1.6 0 0 0 1.76-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.6 1.6 0 0 0 19.4 9a1.6 1.6 0 0 0 .6 1 1.6 1.6 0 0 1 0 2 1.6 1.6 0 0 0-.6 1z"/></svg>
+        <span>Settings</span>
+        <span class="kbd">G</span>
+      </button>
+      <button class="nav-item" data-page="insights" aria-label="Profil et Insights ML (raccourci I)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        <span>Insights</span>
+        <span class="kbd">I</span>
+      </button>
+    </nav>
+
+    <div class="rail-section" role="group" aria-label="Filtre par instrument">
+      <div class="rail-label">Filtre</div>
+      <div class="instr-list" id="instrList" role="tablist" aria-label="Instruments">
+        <button class="instr-chip active" data-instr="ALL" role="tab" aria-selected="true"><span class="dot" aria-hidden="true"></span>Tous</button>
+        <button class="instr-chip" data-instr="BTC" role="tab" aria-selected="false"><span class="dot" aria-hidden="true"></span>BTC</button>
+        <button class="instr-chip" data-instr="ETH" role="tab" aria-selected="false"><span class="dot" aria-hidden="true"></span>ETH</button>
+        <button class="instr-chip" data-instr="NQ" role="tab" aria-selected="false"><span class="dot" aria-hidden="true"></span>NQ</button>
+        <button class="instr-chip" data-instr="ES" role="tab" aria-selected="false"><span class="dot" aria-hidden="true"></span>ES</button>
+      </div>
+    </div>
+
+    <div class="rail-foot" id="openCmdk" role="button" tabindex="0" aria-label="Ouvrir la commande palette (Cmd+K)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      Recherche · Commandes
+      <div class="kbd-row" aria-hidden="true">
+        <span class="kbd-key">⌘</span>
+        <span class="kbd-key">K</span>
+      </div>
+    </div>
+    <button class="theme-toggle" id="themeToggle" aria-label="Basculer le theme clair/sombre" title="Basculer le theme">
+      <svg class="theme-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      <svg class="theme-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+    <button class="dev-restart" id="devRestart" aria-label="Redemarrer le serveur" title="Redemarrer le serveur (dev)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      <span>Restart</span>
+    </button>
+  </aside>

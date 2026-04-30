@@ -1,0 +1,43 @@
+﻿<script>
+// Global error handlers — actifs avant tout split file
+(function () {
+  function _showError(msg, url, line, col, error) {
+    var detail = msg || "Erreur inconnue";
+    if (url) detail += " (" + url + ":" + line + ")";
+    console.error("[cockpit] " + detail, error || "");
+    // Si la fonction toast est deja chargee, l utiliser
+    try {
+      if (typeof toast === "function") {
+        toast(detail, "error");
+      }
+    } catch (_) {}
+  }
+  window.onerror = function (msg, url, line, col, error) {
+    _showError(msg, url, line, col, error);
+    return true; // supprime le message console par defaut
+  };
+  window.addEventListener("unhandledrejection", function (e) {
+    var reason = e.reason;
+    var msg = reason && reason.message ? reason.message : String(reason || "Promise rejetee");
+    _showError(msg);
+  });
+})();
+
+document.addEventListener("DOMContentLoaded", function () {
+  try {
+    var pages = document.querySelectorAll(".main .page");
+    var hasActive = false;
+    for (var i = 0; i < pages.length; i++) {
+      if (pages[i].classList.contains("active")) {
+        hasActive = true;
+        break;
+      }
+    }
+    if (!hasActive) {
+      var today = document.querySelector('.main .page[data-page="today"]');
+      if (today) today.classList.add("active");
+    }
+  } catch (_) {}
+});
+</script>
+<script src="/static/app.js?v=8588d1af415fdf062dcd637c"></script>

@@ -1,0 +1,28 @@
+#!/usr/bin/env sh
+set -eu
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$REPO_ROOT"
+
+if [ -x ".venv/Scripts/python.exe" ]; then
+  PYTHON_BIN=".venv/Scripts/python.exe"
+elif [ -x ".venv/bin/python" ]; then
+  PYTHON_BIN=".venv/bin/python"
+elif command -v python3 >/dev/null 2>&1; then
+  PYTHON_BIN="python3"
+elif command -v python >/dev/null 2>&1; then
+  PYTHON_BIN="python"
+else
+  echo "[pre-commit] Python introuvable. Commit bloque."
+  exit 1
+fi
+
+echo "[pre-commit] Guardrails: encoding + lessons..."
+"$PYTHON_BIN" -m unittest tests.test_encoding_guardrails tests.test_playbook_lessons_guardrails -v
+
+if [ "${PRECOMMIT_FULL:-0}" = "1" ]; then
+  echo "[pre-commit] PRECOMMIT_FULL=1 -> running full test suite..."
+  "$PYTHON_BIN" -m unittest discover -s tests -v
+fi
+
+echo "[pre-commit] OK"

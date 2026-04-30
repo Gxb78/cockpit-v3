@@ -1,0 +1,13 @@
+        <div class="panel settings-panel">
+          <div class="panel-h"><h3>Cle IA API</h3></div>
+          <p class="settings-help">Source: fichier .env a la racine du projet.</p>
+          <div class="settings-meta-row">
+            <span id="settingsApiStatus" class="settings-badge">Chargement...</span>
+            <span class="settings-env mono" id="settingsApiEnv">ANTHROPIC_API_KEY</span>
+          </div>
+          <div class="settings-inline">
+            <input type="text" id="settingsApiKeyMasked" class="settings-input mono" value="" readonly />
+            <button type="button" class="btn-ghost" id="settingsRefreshApiBtn">Rafraichir</button>
+          </div>
+          <p id="settingsApiHint" class="settings-help" style="color:var(--amber);display:none"></p>
+        </div>

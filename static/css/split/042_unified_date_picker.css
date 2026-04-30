@@ -1,0 +1,307 @@
+/* ---- 042_unified_date_picker.css ---- */
+
+.visually-hidden-date {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.udp-bound-input {
+  cursor: pointer;
+}
+
+.journal-filters {
+  display: block;
+  border-color: #e3e7ee;
+  background: #fff;
+}
+
+.jfilter-period { min-width: min(360px, 100%); }
+.jfilter-label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: #98a1af;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.journal-range-trigger {
+  min-height: 36px;
+  min-width: 250px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #e3e7ee;
+  border-radius: 999px;
+  background: #fff;
+  color: #111827;
+  padding: 0 11px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+
+.journal-range-trigger svg {
+  width: 15px;
+  height: 15px;
+  color: #98a1af;
+}
+
+.journal-range-trigger:hover {
+  border-color: rgba(15, 23, 42, 0.16);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.12);
+}
+
+.journal-advanced-filters { margin-top: 10px; }
+.journal-advanced-filters summary {
+  width: max-content;
+  cursor: pointer;
+  color: #98a1af;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  list-style: none;
+}
+.journal-advanced-filters summary::-webkit-details-marker { display: none; }
+.journal-advanced-filters summary::before {
+  content: "+";
+  margin-right: 7px;
+  color: #626b7a;
+}
+.journal-advanced-filters[open] summary::before { content: "-"; }
+.journal-advanced-filters .journal-trade-filters {
+  margin-top: 10px;
+  margin-bottom: 0;
+}
+
+.udp.hidden { display: none; }
+.udp {
+  position: fixed;
+  inset: 0;
+  z-index: 320;
+  display: grid;
+  place-items: center;
+}
+.udp-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(6px);
+}
+.udp-panel {
+  position: relative;
+  width: min(780px, calc(100vw - 28px));
+  max-height: min(680px, calc(100vh - 28px));
+  display: grid;
+  grid-template-columns: 156px 1fr;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  border-radius: 27px;
+  background: #f7f8fb;
+  box-shadow:
+    0 38px 84px rgba(0, 0, 0, 0.44),
+    0 16px 34px rgba(10, 18, 28, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+.udp-side {
+  padding: 16px 14px;
+  border-right: 1px solid #e7eaf0;
+  background: #fff;
+  overflow-y: auto;
+}
+.udp-side-title {
+  color: #98a1af;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 10px;
+}
+.udp-month-title { margin-top: 18px; }
+.udp-side button,
+.udp-month-shortcuts button {
+  width: 100%;
+  min-height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #626b7a;
+  text-align: left;
+  padding: 5px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.udp-side button:hover,
+.udp-month-shortcuts button:hover {
+  color: #111827;
+  background: #eef1f6;
+}
+.udp-month-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+.udp-main {
+  padding: 18px 20px 16px;
+  overflow-y: auto;
+}
+.udp-inputs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 14px;
+}
+.udp-inputs label {
+  display: grid;
+  gap: 6px;
+  color: #98a1af;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 850;
+}
+.udp-inputs label span {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  border: 1px solid #e7eaf0;
+  border-radius: 999px;
+  background: #fff;
+  color: #111827;
+  padding: 0 12px;
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.udp-arrow {
+  color: #98a1af;
+  padding-bottom: 11px;
+}
+.udp-cal-head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: -30px;
+  pointer-events: none;
+}
+.udp-nav {
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #e3e7ee;
+  border-radius: 999px;
+  background: #fff;
+  color: #626b7a;
+  cursor: pointer;
+}
+.udp-nav:hover {
+  color: #111827;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.08);
+}
+.udp-calendars {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 26px;
+}
+.udp-month h3 {
+  margin: 0 0 14px;
+  color: #111827;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 850;
+}
+.udp-weekdays,
+.udp-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+.udp-weekdays { margin-bottom: 8px; }
+.udp-weekdays span {
+  color: #98a1af;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  text-align: center;
+  font-weight: 850;
+}
+.udp-day {
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: #626b7a;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.udp-day:hover {
+  color: #111827;
+  border-color: rgba(15, 23, 42, 0.16);
+  background: #eef1f6;
+}
+.udp-day.is-other { opacity: 0.28; }
+.udp-day.is-range {
+  color: #111827;
+  background: rgba(0, 197, 220, 0.10);
+}
+.udp-day.is-edge {
+  color: #fff;
+  border-color: #08090c;
+  background: #08090c;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+.udp-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #e7eaf0;
+}
+.udp-cancel,
+.udp-apply {
+  min-height: 34px;
+  border-radius: 999px;
+  padding: 0 16px;
+  font-weight: 850;
+  cursor: pointer;
+}
+.udp-cancel {
+  border: 1px solid #e3e7ee;
+  background: #eef1f6;
+  color: #626b7a;
+}
+.udp-cancel:hover {
+  color: #111827;
+  background: #fff;
+}
+.udp-apply {
+  border: none;
+  background: #08090c;
+  color: #fff;
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.26);
+}
+
+@media (max-width: 760px) {
+  .udp-panel { grid-template-columns: 1fr; }
+  .udp-side {
+    max-height: 170px;
+    border-right: 0;
+    border-bottom: 1px solid #e7eaf0;
+  }
+  .udp-calendars,
+  .udp-inputs { grid-template-columns: 1fr; }
+  .udp-arrow { display: none; }
+}

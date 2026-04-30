@@ -1,0 +1,23 @@
+/* ---- 043_dashboard_pnl_motion_fix.css ---- */
+
+.page[data-page="today"] .widget[data-widget-key="kpi_total_pnl"] {
+  overflow: visible;
+}
+
+.page[data-page="today"] .widget[data-widget-key="kpi_total_pnl"] .kpi-spark-wrap {
+  position: relative;
+  z-index: 1;
+}
+
+.page[data-page="today"] .widget[data-widget-key="kpi_total_pnl"] .kpi-spark {
+  contain: paint;
+}
+
+.pretext-head {
+  min-height: 118px;
+  border-radius: var(--r);
+}
+
+.pretext-greeting-canvas {
+  opacity: 0.95;
+}

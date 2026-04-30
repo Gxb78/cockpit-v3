@@ -1,0 +1,27 @@
+          <form id="tradeForm">
+            <input type="hidden" id="tradeId" />
+
+            <div id="tradesList" class="trades-list"></div>
+
+            <div id="tradeFormSection" class="trade-form-section hidden">
+              <div class="trade-form-header">
+                <span id="tradeFormTitle" class="trade-form-title">Nouveau trade</span>
+                <button type="button" class="btn-icon-sm" id="closeTradeFormBtn" title="Fermer le formulaire">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+              <div class="trade-form-inner">
+{% include "partials/overlays/modal/trade_form/block_strategy.html" %}
+{% include "partials/overlays/modal/trade_form/block_midnight_challenge.html" %}
+{% include "partials/overlays/modal/trade_form/block_direction.html" %}
+{% include "partials/overlays/modal/trade_form/block_scenario.html" %}
+{% include "partials/overlays/modal/trade_form/block_levels.html" %}
+{% include "partials/overlays/modal/trade_form/block_result.html" %}
+{% include "partials/overlays/modal/trade_form/block_postmortem.html" %}
+{% include "partials/overlays/modal/trade_form/custom_blocks.html" %}
+{% include "partials/overlays/modal/trade_form/block_screenshots.html" %}
+{% include "partials/overlays/modal/trade_form/actions.html" %}
+              </div>
+            </div>
+          </form>
+        </div>

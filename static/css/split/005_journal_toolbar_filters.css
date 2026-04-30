@@ -1,0 +1,544 @@
+/* ---------- Unified journal header ---------- */
+
+.journal-page-head {
+  margin-bottom: 8px !important;
+}
+
+.journal-top-bar.unified {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 18px;
+  border: 1px solid #e3e7ee;
+  background: #fff;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+}
+
+/* Left: Period stats */
+.journal-head-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.journal-head-stats .stat {
+  font-size: 13px;
+  font-weight: 850;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eef1f6;
+  color: #626b7a;
+  font-family: "JetBrains Mono", monospace;
+}
+
+.journal-head-stats .stat.pos {
+  color: #20570b;
+  background: rgba(232, 255, 222, 0.90);
+}
+
+.journal-head-stats .stat.neg {
+  color: #8a1429;
+  background: rgba(255, 229, 234, 0.92);
+}
+
+/* Today button */
+.journal-today-btn {
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.4px;
+  background: #08090c;
+  color: #fff;
+  border: none;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+  cursor: pointer;
+  transition: background 0.18s, box-shadow 0.18s, transform 0.18s;
+}
+
+.journal-today-btn:hover {
+  background: #1d1e23;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.22);
+  transform: translateY(-1px);
+}
+
+.journal-today-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.14);
+}
+
+/* ---------- Inline nav in filters bar ---------- */
+
+.journal-nav-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.journal-nav-inline .btn-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #eef1f6;
+  color: #626b7a;
+  border: 1px solid #e3e7ee;
+  display: grid;
+  place-items: center;
+  transition: color 0.18s var(--ease), border-color 0.18s var(--ease), background 0.18s var(--ease);
+}
+
+.journal-nav-inline .btn-icon:hover {
+  color: #111827;
+  border-color: rgba(15, 23, 42, 0.16);
+  background: #fff;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.08);
+}
+
+.journal-nav-inline .btn-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.journal-nav-inline .journal-month-control {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+}
+
+.journal-nav-inline #journalMonthInput {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.journal-nav-inline .journal-month-caption {
+  font-size: 13px;
+  font-weight: 850;
+  letter-spacing: -0.02em;
+  color: #111827;
+  padding: 0 6px;
+  min-width: 88px;
+  text-align: center;
+  cursor: pointer;
+  transition: color 0.18s var(--ease);
+}
+
+.journal-nav-inline .journal-month-caption:hover {
+  color: #626b7a;
+}
+
+/* Separator between nav and toggles */
+.journal-filters-sep {
+  width: 1px;
+  height: 18px;
+  background: #e3e7ee;
+  flex-shrink: 0;
+}
+
+/* ---------- Stat chips in the trade-filter row ---------- */
+
+.journal-filter-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-self: stretch;
+  justify-content: flex-end;
+  min-width: 88px;
+}
+
+.journal-filter-stat-label {
+  display: block;
+  font-size: 9px;
+  font-weight: 850;
+  color: #98a1af;
+  margin-bottom: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-family: "JetBrains Mono", monospace;
+}
+
+.journal-filter-stat-value {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #eef1f6;
+  border: 1px solid #e3e7ee;
+  font-size: 13px;
+  font-weight: 850;
+  letter-spacing: -0.01em;
+  color: #626b7a;
+  white-space: nowrap;
+  font-family: "JetBrains Mono", monospace;
+}
+
+.journal-filter-stat-value.pos {
+  color: #20570b;
+  background: rgba(232, 255, 222, 0.90);
+  border-color: rgba(45, 122, 19, 0.18);
+}
+.journal-filter-stat-value.neg {
+  color: #8a1429;
+  background: rgba(255, 229, 234, 0.92);
+  border-color: rgba(180, 35, 60, 0.18);
+}
+
+/* Right: Metric toggle (inline version) */
+.journal-top-bar.unified .calendar-metric-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid #e3e7ee;
+  background: #eef1f6;
+  flex-shrink: 0;
+}
+
+.journal-top-bar.unified .calendar-metric-btn {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #626b7a;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 5px 11px;
+  border-radius: 999px;
+  transition: color, background 0.18s var(--ease);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.journal-top-bar.unified .calendar-metric-btn:hover {
+  color: #111827;
+  background: #fff;
+}
+
+.journal-top-bar.unified .calendar-metric-btn.active {
+  color: #fff;
+  background: #08090c;
+  border-color: #08090c;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+}
+
+/* Journal page compact body */
+.journal-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ============================================================
+   JOURNAL — calendar (legacy, keeping for ref)
+   ============================================================ */
+
+.journal-page-head {
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) auto minmax(210px, 1fr);
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.journal-head-copy {
+  justify-self: start;
+}
+.journal-page-head .page-title {
+  margin-bottom: 1px;
+}
+.journal-page-actions {
+  justify-self: center;
+  gap: 10px;
+}
+
+.calendar-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border-radius: 999px;
+  border: 1px solid #e3e7ee;
+  background: #fff;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+}
+.journal-today-btn {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.6px;
+}
+
+.calendar-month-picker {
+  position: relative;
+}
+.month-label-btn {
+  border: 1px solid #e3e7ee;
+  background: #fff;
+  color: #111827;
+  min-width: 182px;
+  height: 38px;
+  border-radius: 999px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-transform: capitalize;
+  cursor: pointer;
+  transition: border-color 0.18s var(--ease), box-shadow 0.18s var(--ease), transform 0.18s var(--ease);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+}
+.month-label-btn:hover {
+  border-color: rgba(15, 23, 42, 0.16);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
+}
+.month-label-btn h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 850;
+  letter-spacing: -0.25px;
+  line-height: 1;
+  color: #111827;
+}
+.month-label-chev {
+  width: 14px;
+  height: 14px;
+  color: #98a1af;
+  transition: transform 0.2s var(--ease), color 0.2s var(--ease);
+}
+.calendar-month-picker.open .month-label-chev {
+  transform: rotate(180deg);
+  color: #111827;
+}
+
+.month-pop {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 246px;
+  padding: 10px;
+  border-radius: 18px;
+  border: 1px solid #e3e7ee;
+  background: #fff;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.18);
+  z-index: 15;
+}
+.month-pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.month-pop-year {
+  font-size: 14px;
+  font-weight: 850;
+  letter-spacing: -0.2px;
+  color: #111827;
+}
+.month-year-btn {
+  width: 28px;
+  height: 28px;
+}
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.month-btn {
+  border: 1px solid #e3e7ee;
+  background: #eef1f6;
+  color: #626b7a;
+  border-radius: 999px;
+  padding: 7px 0;
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.55px;
+  transition: color, border-color, background 0.18s var(--ease);
+}
+.month-btn:hover {
+  color: #111827;
+  border-color: rgba(15, 23, 42, 0.16);
+  background: #fff;
+}
+.month-btn.current {
+  border-color: rgba(15, 23, 42, 0.16);
+  color: #111827;
+}
+.month-btn.active {
+  color: #fff;
+  background: #08090c;
+  border-color: #08090c;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+}
+
+.calendar-metric-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid #e3e7ee;
+  background: #eef1f6;
+  box-shadow: none;
+  position: relative;
+  z-index: 5;
+}
+.calendar-metric-btn {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #626b7a;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  padding: 7px 13px;
+  border-radius: 999px;
+  transition: color, background 0.18s var(--ease);
+  cursor: pointer;
+}
+.calendar-metric-btn:hover {
+  color: #111827;
+  background: #fff;
+}
+.calendar-metric-btn.active {
+  color: #fff;
+  background: #08090c;
+  border-color: #08090c;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+}
+
+.calendar-view-toggle,
+.calendar-layout-toggle,
+.calendar-range-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid #e3e7ee;
+  background: #eef1f6;
+  box-shadow: none;
+}
+
+.calendar-view-btn,
+.calendar-layout-btn,
+.calendar-range-btn {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #626b7a;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  padding: 7px 13px;
+  border-radius: 999px;
+  transition: color, background 0.18s var(--ease);
+  cursor: pointer;
+}
+.calendar-view-btn:hover,
+.calendar-layout-btn:hover,
+.calendar-range-btn:hover {
+  color: #111827;
+  background: #fff;
+}
+.calendar-view-btn.active,
+.calendar-layout-btn.active,
+.calendar-range-btn.active {
+  color: #fff;
+  background: #08090c;
+  border-color: #08090c;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+}
+
+.journal-filters {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+.journal-trade-filters {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr auto auto auto;
+  gap: 10px;
+  align-items: end;
+  margin: 0 0 12px;
+}
+.journal-filter-field {
+  margin: 0;
+}
+.journal-filter-field label {
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #98a1af;
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 850;
+}
+.journal-filter-reset {
+  height: 36px;
+  padding: 0 12px;
+  white-space: nowrap;
+  border-radius: 999px;
+  background: #eef1f6;
+  border: 1px solid #e3e7ee;
+  color: #626b7a;
+  font-weight: 850;
+}
+.calendar-custom-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.calendar-custom-range input[type="date"] {
+  border: 1px solid #dde2ea;
+  background: #f4f6fa;
+  color: #111827;
+  border-radius: 999px;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 12px;
+  color-scheme: light;
+}
+.calendar-custom-sep {
+  font-family: "JetBrains Mono", monospace;
+  color: #98a1af;
+}
+
+.btn-icon {
+  background: #eef1f6;
+  color: #626b7a;
+  border: 1px solid #e3e7ee;
+  width: 34px; height: 34px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  transition: color, border-color, background, transform, box-shadow 0.2s var(--ease);
+}
+
+.btn-icon:hover {
+  color: #111827;
+  background: #fff;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.08);
+}

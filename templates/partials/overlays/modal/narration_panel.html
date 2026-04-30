@@ -1,0 +1,30 @@
+      <!-- Narration Auto-fill -->
+      <div id="narrationPanel" data-name="Narration" class="narration-panel hidden">
+        <div class="narration-header">
+          <div class="narration-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+          </div>
+          <div>
+            <div class="narration-title">Narration automatique</div>
+            <div class="narration-subtitle">Flow Midnight Model: je remplis la fiche, puis je te lance un challenge rapide sur les infos manquantes</div>
+          </div>
+          <button type="button" class="narration-close" id="narrationClose">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <textarea id="narrationText" class="narration-textarea" rows="4"
+          placeholder="Ex : Le prix a monte avant l open, la veille on a fortement drop. Touche OB daily bullish en OTE, scenario PO3. A l open le prix descend, je trace le STDV et je vise le niveau 2. Trigger IFVG + breaker en 15m, en zone Discount pour achat, avec SMT haussiere au contact. TP sur la liquidite au-dessus."></textarea>
+        <div class="narration-footer">
+          <button type="button" id="narrationParseBtn" class="narration-parse-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <span id="narrationBtnLabel">Analyser & remplir</span>
+          </button>
+          <span class="narration-source" id="narrationSource"></span>
+          <button type="button" class="btn-ghost hidden" id="narrationRetryBtn">Retry</button>
+          <button type="button" class="btn-ghost" style="margin-left:auto" id="narrationBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+            Auto-fill IA
+          </button>
+        </div>
+        <div id="narrationPreview" class="narration-preview hidden"></div>
+      </div>

@@ -1,0 +1,19 @@
+      <div class="journal-table-wrap hidden" id="journalTableWrap">
+        <div class="journal-table-head">
+          <h3>Tableau des trades</h3>
+          <div class="journal-table-meta mono" id="journalTableCount">0 trade</div>
+        </div>
+        <div class="journal-table-scroll">
+          <table class="journal-trades-table">
+            <thead>
+              <tr>
+                <th><button type="button" class="journal-sort-btn" data-sort-key="instrument">Instrument</button></th>
+                <th><button type="button" class="journal-sort-btn" data-sort-key="direction">Direction</button></th>
+                <th><button type="button" class="journal-sort-btn" data-sort-key="pnl">P&amp;L</button></th>
+              </tr>
+            </thead>
+            <tbody id="journalTradesTbody"></tbody>
+          </table>
+        </div>
+        <div class="journal-table-empty hidden" id="journalTableEmpty">Aucun trade avec ces filtres.</div>
+      </div>

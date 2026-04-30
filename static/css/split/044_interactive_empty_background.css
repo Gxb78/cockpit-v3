@@ -1,0 +1,58 @@
+/* ---- 044_interactive_empty_background.css ---- */
+
+.interactive-bg-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.72;
+}
+
+.aurora .blob {
+  opacity: 0.08;
+}
+
+.page[data-page="today"]::after,
+.page[data-page="journal"]::after {
+  display: none;
+}
+
+.page[data-page="today"] .kpi::after,
+.page[data-page="today"] .panel::before,
+.page[data-page="today"] .panel::after,
+.page[data-page="journal"] .panel::before,
+.page[data-page="journal"] .panel::after,
+.page[data-page="journal"] .journal-filters::before,
+.page[data-page="journal"] .journal-filters::after,
+.page[data-page="journal"] .journal-table-wrap::before,
+.page[data-page="journal"] .journal-table-wrap::after {
+  display: none;
+}
+
+.pretext-greeting-canvas {
+  display: none;
+}
+
+.pretext-head .page-title,
+.pretext-head .page-subtitle {
+  display: block;
+}
+
+.cockpit {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.012), transparent 220px),
+    rgba(9, 10, 15, 0.70);
+}
+
+.main {
+  background:
+    linear-gradient(180deg, rgba(48, 82, 255, 0.022), transparent 34%),
+    rgba(9, 10, 15, 0.22);
+}
+
+body.light-mode .cockpit,
+body.light-mode .main {
+  background: rgba(246, 247, 251, 0.78);
+}

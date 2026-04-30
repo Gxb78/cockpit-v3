@@ -1,0 +1,30 @@
+            <!-- DIRECTION PRISE -->
+            <div class="block" data-bid="direction">
+              <div class="block-h rose">
+                <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg></span>
+                <span>Direction prise</span>
+                <span class="block-h-spacer"></span>
+                <span class="block-summary" id="directionSummary"></span>
+                <span class="chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+              </div>
+              <div class="block-body">
+                <div class="plan-decision-card" id="planDecisionCard">
+                  <div class="plan-decision-main">
+                    <span class="plan-decision-label">Direction attendue</span>
+                    <strong id="planDirectionHint">A definir par le Plan PO3</strong>
+                  </div>
+                  <span class="plan-alignment-pill" id="planAlignmentPill">Plan incomplet</span>
+                </div>
+                <div class="field">
+                  <label>Direction executee</label>
+                  <div class="pills" data-pills="direction">
+                    <button type="button" class="pill-choice lime" data-value="long">Long</button>
+                    <button type="button" class="pill-choice rose" data-value="short">Short</button>
+                  </div>
+                </div>
+                <div class="field plan-override-field hidden" id="planOverrideField">
+                  <label>Pourquoi prendre ce trade hors plan ?</label>
+                  <textarea id="planOverrideReason" rows="2" placeholder="Explique le signal qui justifie l'override du plan PO3."></textarea>
+                </div>
+              </div>
+            </div>

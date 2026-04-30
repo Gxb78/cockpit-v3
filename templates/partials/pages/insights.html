@@ -1,0 +1,48 @@
+<!-- ============ INSIGHTS / PROFIL ============ -->
+<section class="page" data-page="insights">
+  <div class="page-head insights-page-head">
+    <div>
+      <h1 class="page-title">Profil &amp; Insights</h1>
+      <p class="page-subtitle">Forces, faiblesses et patterns detectes par le Trader's Brain.</p>
+    </div>
+    <div class="page-actions">
+      <button class="btn-ghost" id="insightsRefreshBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        Rafraichir
+      </button>
+    </div>
+  </div>
+
+  <!-- Filtres periode -->
+  <div class="insights-filters" id="insightsFilters">
+    <label for="filterFrom">Du</label>
+    <input type="date" id="filterFrom" />
+    <label for="filterTo">Au</label>
+    <input type="date" id="filterTo" />
+    <label for="filterInstrument">Instrument</label>
+    <select id="filterInstrument">
+      <option value="ALL">Tous</option>
+      <option value="BTC">BTC</option>
+      <option value="ETH">ETH</option>
+      <option value="NQ">NQ</option>
+      <option value="ES">ES</option>
+    </select>
+    <div class="filter-quick" id="filterQuick"></div>
+  </div>
+
+  <!-- Loading -->
+  <div class="insights-loading" id="insightsLoading">
+    <div class="loading-spinner"></div>
+    <p>Analyse en cours...</p>
+  </div>
+
+  <!-- Contenu injecte par JS -->
+  <div id="insightsContent" style="display:none"></div>
+
+  <!-- Toast insight -->
+  <div class="toast-insight" id="toastInsight">
+    <button class="toast-insight__close" id="toastInsightClose">&times;</button>
+    <div class="toast-insight__title" id="toastInsightTitle"></div>
+    <div class="toast-insight__body" id="toastInsightBody"></div>
+  </div>
+</section>

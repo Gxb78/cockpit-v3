@@ -1,0 +1,61 @@
+      <!-- FORMULAIRE DU JOUR -->
+      <form id="dayForm">
+        <input type="hidden" id="dayId" />
+
+        <!-- CONTEXTE DU JOUR compact -->
+        <div class="day-context-card">
+          <div class="day-context-header">
+            <div class="day-context-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+              </svg>
+              <span>Contexte du Jour</span>
+            </div>
+            <div class="day-context-command" aria-hidden="true">
+              <span>Session brief</span>
+              <strong>Plan avant execution</strong>
+            </div>
+            <div class="day-context-inline">
+              <div class="day-inline-field day-inline-date">
+                <input type="date" id="entryDate" required />
+              </div>
+              <div class="day-inline-field day-inline-instrument">
+                <div class="select-wrapper">
+                  <select id="entryInstrument" required>
+                    <option value="BTC">BTC</option>
+                    <option value="ETH">ETH</option>
+                    <option value="NQ">NQ</option>
+                    <option value="ES">ES</option>
+                  </select>
+                  <svg class="select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="day-context-rail" aria-hidden="true">
+            <span class="day-context-rail-node is-active">Date</span>
+            <span class="day-context-rail-node">Instrument</span>
+            <span class="day-context-rail-node">Biais</span>
+            <span class="day-context-rail-node">Notes</span>
+          </div>
+          <div class="day-context-grid">
+            <div class="day-context-field day-context-field-wide">
+              <label>Biais HTF</label>
+              <div class="pills" data-pills="htf_bias">
+                <button type="button" class="pill-choice lime" data-value="bullish">Bullish</button>
+                <button type="button" class="pill-choice rose" data-value="bearish">Bearish</button>
+                <button type="button" class="pill-choice" data-value="neutral">Neutral</button>
+              </div>
+            </div>
+            <div class="day-context-field day-context-field-wide">
+              <label>Analyse HTF</label>
+              <textarea id="htfContext" rows="2" placeholder="Structure W/D/4H, niveaux cles, biais..."></textarea>
+            </div>
+            <div class="day-context-field day-context-field-wide">
+              <label>Notes du jour</label>
+              <textarea id="dailyNotes" rows="1" placeholder="News macro, contexte particulier, preparation mentale..."></textarea>
+            </div>
+          </div>
+        </div>
+      </form>

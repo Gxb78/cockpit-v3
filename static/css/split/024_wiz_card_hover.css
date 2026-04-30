@@ -1,0 +1,141 @@
+.wiz-card:hover { border-color: var(--border-strong); background: var(--surface-2); transform: translateY(-2px); }
+.wiz-card.active { border-color: var(--cyan); background: rgba(0, 229, 255, 0.07); box-shadow: var(--glow-cyan); }
+.wiz-card-icon { font-size: 1.4rem; line-height: 1; }
+.wiz-card-main { font-size: 1rem; font-weight: 700; color: var(--text); }
+.wiz-card-sub  { font-size: 0.7rem; color: var(--text-muted); line-height: 1.35; }
+
+/* Date shortcuts */
+.wiz-input {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 1.1rem;
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 600;
+  background: var(--surface-2);
+  border: 2px solid var(--border-strong);
+  border-radius: var(--r);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.2s var(--ease);
+}
+.wiz-input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(0,229,255,0.10); }
+.wiz-date-shortcuts { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.wiz-date-btn {
+  padding: 5px 12px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-soft);
+  font-size: 0.8rem; font-weight: 600;
+  cursor: pointer;
+  transition: color, background, border-color 0.16s var(--ease);
+}
+.wiz-date-btn:hover,
+.wiz-date-btn.active { border-color: var(--cyan); color: var(--cyan); background: rgba(0,229,255,0.07); }
+
+/* Fields */
+.wiz-field { margin-bottom: 16px; }
+.wiz-label {
+  display: block;
+  font-size: 0.74rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.wiz-textarea {
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 0.95rem;
+  background: var(--surface-2);
+  border: 2px solid var(--border-strong);
+  border-radius: var(--r);
+  color: var(--text);
+  resize: vertical;
+  outline: none;
+  line-height: 1.55;
+  transition: border-color 0.2s var(--ease);
+  font-family: inherit;
+  min-height: 80px;
+}
+.wiz-textarea:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(0,229,255,0.10); }
+.wiz-textarea.lg { min-height: 110px; font-size: 1rem; }
+
+/* Pills */
+.wiz-pills { display: flex; gap: 7px; flex-wrap: wrap; }
+.wiz-pill {
+  padding: 7px 16px;
+  border-radius: 99px;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  color: var(--text-soft);
+  font-size: 0.84rem; font-weight: 600;
+  cursor: pointer;
+  transition: color, background, border-color 0.16s var(--ease);
+}
+.wiz-pill:hover { border-color: var(--border-strong); }
+.wiz-pill.active          { border-color: var(--cyan);    color: var(--cyan);    background: rgba(0,229,255,0.08); }
+.wiz-pill.active.lime     { border-color: var(--lime);    color: var(--lime);    background: rgba(136,255,90,0.08); }
+.wiz-pill.active.rose     { border-color: var(--rose);    color: var(--rose);    background: rgba(255,78,107,0.08); }
+.wiz-pill.active.amber    { border-color: var(--amber);   color: var(--amber);   background: rgba(255,170,0,0.08); }
+
+/* Day context banner (existing context) */
+.wiz-ctx-banner {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--r);
+  background: rgba(0,229,255,0.05);
+  border: 1px solid rgba(0,229,255,0.18);
+  margin-bottom: 16px;
+}
+.wiz-ctx-banner-icon { color: var(--cyan); flex-shrink: 0; margin-top: 1px; }
+.wiz-ctx-banner-icon svg { width: 16px; height: 16px; }
+.wiz-ctx-banner-text { font-size: 0.84rem; color: var(--text-soft); line-height: 1.5; }
+.wiz-ctx-banner-text strong { color: var(--text); }
+.wiz-choice-row { display: flex; gap: 8px; margin-bottom: 16px; }
+.wiz-choice-btn {
+  flex: 1; padding: 10px;
+  border-radius: var(--r-sm);
+  border: 2px solid var(--border);
+  background: var(--surface);
+  color: var(--text-soft); font-weight: 600; font-size: 0.84rem;
+  cursor: pointer;
+  transition: color, background, border-color 0.16s var(--ease);
+}
+.wiz-choice-btn:hover { border-color: var(--border-strong); }
+.wiz-choice-btn.active { border-color: var(--cyan); color: var(--cyan); background: rgba(0,229,255,0.06); }
+
+/* Strategy chip on scenario steps */
+.wiz-strategy-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 0.74rem; font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+.wiz-strategy-chip-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); }
+
+/* STDV row */
+.wiz-stdv-row {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 14px;
+  padding: 11px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+.wiz-stdv-row label { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); flex-shrink: 0; }
+.wiz-stdv-input {
+  width: 82px; padding: 7px 10px;
+  font-size: 0.95rem; font-family: "JetBrains Mono", monospace; font-weight: 600;
+  background: var(--surface-2);
+  border: 2px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  color: var(--text); outline: none;
+  transition: border-color 0.18s var(--ease);
+}
+.wiz-stdv-input:focus { border-color: var(--cyan); }
+.wiz-stdv-hint { font-size: 0.74rem; color: var(--text-faint); }
+

@@ -1,0 +1,269 @@
+function addCustomTagFromSettings() {
+  const input = $("#settingsTagInput");
+  if (!input || !state.settings) return;
+  const label = input.value.trim();
+  if (!label) return;
+  const exists = (state.settings.custom_tags || []).some(function(t) {
+    return t.toLowerCase() === label.toLowerCase();
+  });
+  if (exists) {
+    toast("Ce tag existe déjà", "error");
+    return;
+  }
+  state.settings.custom_tags.push(label);
+  input.value = "";
+  saveSettingsState();
+  renderSettingsTags();
+  toast("Tag custom ajouté ✓", "success");
+}
+
+function removeCustomTag(value) {
+  if (!value || !state.settings) return;
+  state.settings.custom_tags = (state.settings.custom_tags || []).filter(function(t) {
+    return t !== value;
+  });
+  saveSettingsState();
+  renderSettingsTags();
+  toast("Tag supprimé", "success");
+}
+
+function addCustomStrategyFromSettings() {
+  const input = $("#settingsStrategyInput");
+  if (!input || !state.settings) return;
+  const label = input.value.trim();
+  if (!label) return;
+  const existsLabel = (state.settings.custom_strategies || [])
+    .some(s => s.label.toLowerCase() === label.toLowerCase());
+  if (existsLabel) {
+    toast("Cette stratégie existe déjà", "error");
+    return;
+  }
+  const taken = new Set([
+    ...DEFAULT_STRATEGY_VALUES,
+    ...(state.settings.custom_strategies || []).map(s => s.value),
+  ]);
+  const value = uniqueStrategyValue(label, taken);
+  state.settings.custom_strategies.push({ value, label });
+  input.value = "";
+  saveSettingsState();
+  applySettingsState();
+  renderSettingsPage();
+  if (state.currentPage === "stats") renderPerformance();
+  toast("Stratégie custom ajoutée ✓", "success");
+}
+
+function removeCustomStrategy(value) {
+  if (!value || !state.settings) return;
+  const current = getPill("strategy");
+  state.settings.custom_strategies = (state.settings.custom_strategies || [])
+    .filter(s => s.value !== value);
+  saveSettingsState();
+  applySettingsState();
+  renderSettingsPage();
+  if (current === value) setPill("strategy", null);
+  if (state.currentPage === "stats") renderPerformance();
+  toast("Stratégie supprimée", "success");
+}
+
+function savePreferenceSettings() {
+  if (!state.settings) return;
+  state.settings.preferences.animations = !!$("#prefAnimations")?.checked;
+  state.settings.preferences.dark_mode = !!$("#prefDarkMode")?.checked;
+  saveSettingsState();
+  applySettingsState();
+  if (state.currentPage === "stats") renderPerformance();
+  toast("Préférences appliquées ✓", "success");
+}
+
+async function refreshApiKeyStatus() {
+  const status = $("#settingsApiStatus");
+  const masked = $("#settingsApiKeyMasked");
+  const env = $("#settingsApiEnv");
+  const hint = $("#settingsApiHint");
+  if (!status || !masked || !env) return;
+  status.textContent = "Chargement...";
+  status.className = "settings-badge";
+  masked.value = "";
+  if (hint) hint.style.display = "none";
+  try {
+    const s = await api("/api/settings");
+    const isSet = !!s.ai_api_key_present;
+    status.textContent = isSet ? "Configurée" : "Non configurée";
+    status.className = `settings-badge ${isSet ? "ok" : "warn"}`;
+    masked.value = s.ai_api_key_masked || "";
+    env.textContent = s.ai_api_key_env || "ANTHROPIC_API_KEY";
+    if (!isSet && hint && s.ai_config_hint) {
+      hint.textContent = s.ai_config_hint;
+      hint.style.display = "block";
+    }
+  } catch {
+    status.textContent = "Indisponible";
+    status.className = "settings-badge error";
+    masked.value = "";
+  }
+}
+
+function openSettingsPage() {
+  renderSettingsPage();
+  refreshApiKeyStatus();
+}
+
+function bindSettings() {
+  $("#settingsSaveProfileBtn")?.addEventListener("click", saveProfileSettings);
+  $("#settingsPseudo")?.addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); saveProfileSettings(); }
+  });
+
+  // Quick theme toggle in rail
+  $("#themeToggle")?.addEventListener("click", function () {
+    if (!state.settings) return;
+    state.settings.preferences.dark_mode = !state.settings.preferences.dark_mode;
+    saveSettingsState();
+    applySettingsState();
+  });
+
+  // Dev restart (rail) — rebuild + polling: attendre la mort puis le retour du serveur
+  $("#devRestart")?.addEventListener("click", async function () {
+    const btn = this;
+    btn.classList.add("restarting");
+    btn.querySelector("span").textContent = "Rebuild + redémarrage...";
+    // 1. Envoyer la demande de redémarrage
+    try { await api("/api/dev/restart", { method: "POST" }); } catch (_) {}
+    // 2. Polling : attendre que le serveur MEURE, puis qu'il REVIENNE
+    var url = window.location.href;
+    var base = url.split("?")[0].replace(/\/$/, "");
+    var retries = 0;
+    var maxRetries = 45;
+    var wasDown = false;
+    function poll() {
+      retries++;
+      fetch(base, { method: "HEAD", cache: "no-store" })
+        .then(function (r) {
+          if (wasDown) {
+            // Server was down, now back up → on reload
+            window.location.reload();
+            return;
+          }
+          // Old server still alive → keep waiting
+          if (retries < maxRetries) setTimeout(poll, 1000);
+          else btn.querySelector("span").textContent = "Redémarrage: timeout";
+        })
+        .catch(function () {
+          if (!wasDown) {
+            wasDown = true; // First time server goes down
+            btn.querySelector("span").textContent = "Redémarrage... attente serveur";
+          }
+          if (retries < maxRetries) setTimeout(poll, 1000);
+          else btn.querySelector("span").textContent = "Redémarrage: timeout";
+        });
+    }
+    setTimeout(poll, 1000);
+  });
+
+  $("#settingsAddStrategyBtn")?.addEventListener("click", addCustomStrategyFromSettings);
+  $("#settingsStrategyInput")?.addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); addCustomStrategyFromSettings(); }
+  });
+  $("#settingsStrategiesList")?.addEventListener("click", e => {
+    const btn = e.target.closest("[data-remove-strategy]");
+    if (!btn) return;
+    removeCustomStrategy(btn.dataset.removeStrategy);
+  });
+
+  // Custom tags
+  $("#settingsAddTagBtn")?.addEventListener("click", addCustomTagFromSettings);
+  $("#settingsTagInput")?.addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); addCustomTagFromSettings(); }
+  });
+  $("#settingsTagsList")?.addEventListener("click", e => {
+    const btn = e.target.closest("[data-remove-tag]");
+    if (!btn) return;
+    removeCustomTag(btn.dataset.removeTag);
+  });
+
+  $("#settingsSavePrefsBtn")?.addEventListener("click", savePreferenceSettings);
+  $("#settingsRefreshApiBtn")?.addEventListener("click", refreshApiKeyStatus);
+}
+
+function loadCalendarMetricMode() {
+  try {
+    const raw = localStorage.getItem(CALENDAR_METRIC_MODE_KEY);
+    return CALENDAR_METRIC_MODES.has(raw) ? raw : "pnl";
+  } catch {
+    return "pnl";
+  }
+}
+
+function updateCalendarMetricToggleUI() {
+  $$("#calendarMetricToggle .calendar-metric-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.mode === state.calendarMetricMode);
+  });
+}
+
+function setCalendarMetricMode(mode, opts = {}) {
+  const { persist = true, rerender = true } = opts;
+  if (!CALENDAR_METRIC_MODES.has(mode)) return;
+  state.calendarMetricMode = mode;
+  updateCalendarMetricToggleUI();
+  if (persist) localStorage.setItem(CALENDAR_METRIC_MODE_KEY, mode);
+  if (rerender && state.currentPage === "journal") renderCalendar();
+}
+
+function bindCalendarMetricToggle() {
+  const wrap = $("#calendarMetricToggle");
+  if (!wrap) return;
+  wrap.addEventListener("click", e => {
+    const btn = e.target.closest(".calendar-metric-btn");
+    if (!btn) return;
+    setCalendarMetricMode(btn.dataset.mode, { persist: true, rerender: true });
+  });
+}
+
+function loadJournalViewMode() {
+  try {
+    const raw = localStorage.getItem(JOURNAL_VIEW_MODE_KEY);
+    return JOURNAL_VIEW_MODES.has(raw) ? raw : "month";
+  } catch {
+    return "month";
+  }
+}
+
+function loadJournalLayoutMode() {
+  try {
+    const raw = localStorage.getItem(JOURNAL_LAYOUT_MODE_KEY);
+    return JOURNAL_LAYOUT_MODES.has(raw) ? raw : "calendar";
+  } catch {
+    return "calendar";
+  }
+}
+
+function defaultJournalTradeFilters() {
+  return {
+    strategy: "ALL",
+    result: "ALL",
+    tag: "ALL",
+    pnlMin: "",
+    pnlMax: "",
+  };
+}
+
+function sanitizeJournalTradeFilters(raw) {
+  const d = defaultJournalTradeFilters();
+  const out = { ...d };
+  if (typeof raw?.strategy === "string" && raw.strategy) out.strategy = raw.strategy;
+  if (typeof raw?.result === "string" && ["ALL", "WIN", "LOSS", "OPEN"].includes(raw.result)) out.result = raw.result;
+  if (typeof raw?.tag === "string" && raw.tag) out.tag = raw.tag;
+  if (raw?.pnlMin != null && raw.pnlMin !== "") out.pnlMin = String(raw.pnlMin);
+  if (raw?.pnlMax != null && raw.pnlMax !== "") out.pnlMax = String(raw.pnlMax);
+  return out;
+}
+
+function loadJournalTradeFilters() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(JOURNAL_TRADE_FILTERS_KEY) || "{}");
+    return sanitizeJournalTradeFilters(raw);
+  } catch {
+    return defaultJournalTradeFilters();
+  }
+}
+

@@ -1,0 +1,15 @@
+{
+  "instruments": ["BTC", "ETH", "NQ", "ES"],
+  "instrument_aliases": {"NAS": "NQ"},
+  "strategies": ["midnight_model", "london_model", "ny_model"],
+  "strategy_aliases": {
+    "midnight": "midnight_model",
+    "london": "london_model",
+    "ny": "ny_model"
+  },
+  "strategy_labels": {
+    "midnight_model": "Midnight Model",
+    "london_model": "London Model",
+    "ny_model": "NY Model"
+  }
+}

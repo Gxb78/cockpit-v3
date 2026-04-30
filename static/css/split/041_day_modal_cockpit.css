@@ -1,0 +1,348 @@
+/* ---- 041_day_modal_cockpit.css ---- */
+/* Light cockpit shell for the day modal — card aesthetic. */
+
+#entryModal .modal-backdrop {
+  background: rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(8px);
+}
+
+#entryModal .modal-content {
+  width: min(860px, 94vw);
+  border-radius: 27px;
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  background: #f7f8fb;
+  box-shadow:
+    0 38px 84px rgba(0, 0, 0, 0.44),
+    0 16px 34px rgba(10, 18, 28, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+#entryModal .modal-content::before {
+  display: none;
+}
+
+#entryModal .modal-header {
+  padding: 15px 18px 14px;
+  border-bottom: 1px solid #e7eaf0;
+  background: #fff;
+  border-radius: 27px 27px 0 0;
+}
+
+#entryModal .modal-header::after {
+  display: none;
+}
+
+#entryModal .modal-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #111827;
+  font-size: 15px;
+  font-weight: 860;
+  letter-spacing: 0;
+}
+
+#entryModal .modal-header h2::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #f59e0b;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.35);
+}
+
+#entryModal .modal-header .badge {
+  border-radius: 999px;
+  border: 1px solid #e3e7ee;
+  background: #eef1f6;
+  color: #626b7a;
+  font-weight: 850;
+}
+
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+#entryModal .autosave {
+  border: 1px solid #e3e7ee;
+  border-radius: 999px;
+  background: #eef1f6;
+  padding: 7px 10px;
+  color: #626b7a;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+#entryModal .btn-icon-sm {
+  border-radius: 999px;
+  background: #eef1f6;
+  border: 1px solid #e3e7ee;
+  color: #626b7a;
+}
+
+#entryModal .btn-icon-sm:hover {
+  color: #111827;
+  background: #fff;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.08);
+}
+
+#entryModal .modal-body {
+  max-height: calc(96vh - 66px);
+}
+
+#entryModal .modal-sticky {
+  padding: 12px 18px;
+  border-bottom: 1px solid #e7eaf0;
+  background: #fff;
+}
+
+#entryModal .modal-scroll {
+  padding: 18px;
+}
+
+#entryModal .day-context-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  border-color: #e7eaf0;
+  background: #fff;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+}
+
+#entryModal .day-context-card::before {
+  display: none;
+}
+
+#entryModal .day-context-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+#entryModal .day-context-header {
+  align-items: stretch;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom-color: #e7eaf0;
+}
+
+#entryModal .day-context-title {
+  color: #111827;
+  letter-spacing: 0.04em;
+}
+
+#entryModal .day-context-title svg {
+  color: #111827;
+  filter: none;
+}
+
+.day-context-command {
+  flex: 1;
+  min-width: 170px;
+  border-left: 1px solid #e3e7ee;
+  padding-left: 14px;
+}
+
+.day-context-command span,
+.day-context-rail-node {
+  display: block;
+  color: #98a1af;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 850;
+}
+
+.day-context-command strong {
+  display: block;
+  margin-top: 4px;
+  color: #111827;
+  font-size: 13px;
+}
+
+#entryModal .day-context-inline {
+  align-self: center;
+}
+
+#entryModal .day-inline-field input,
+#entryModal .day-inline-field select,
+#entryModal .day-context-field textarea {
+  border-radius: 10px;
+  border-color: #dde2ea;
+  background: #f4f6fa;
+  color: #111827;
+}
+
+#entryModal .day-inline-field input,
+#entryModal .day-inline-field select {
+  height: 36px;
+  color: #111827;
+}
+
+#entryModal .day-inline-field input:focus,
+#entryModal .day-inline-field select:focus,
+#entryModal .day-context-field textarea:focus {
+  border-color: rgba(0, 197, 220, 0.6);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(0, 197, 220, 0.12);
+}
+
+.day-context-rail {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.day-context-rail-node {
+  position: relative;
+  min-height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #e3e7ee;
+  border-radius: 999px;
+  background: #eef1f6;
+  color: #626b7a;
+}
+
+.day-context-rail-node::before {
+  content: "";
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  width: 1px;
+  height: 12px;
+  background: linear-gradient(180deg, transparent, rgba(0, 197, 220, 0.45));
+}
+
+.day-context-rail-node.is-active {
+  color: #fff;
+  border-color: #08090c;
+  background: #08090c;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+}
+
+#entryModal .day-context-grid {
+  grid-template-columns: minmax(160px, 0.8fr) minmax(0, 1.2fr);
+  gap: 10px;
+}
+
+#entryModal .day-context-field:first-child {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+#entryModal .day-context-field:nth-child(2),
+#entryModal .day-context-field:nth-child(3) {
+  grid-column: 2;
+}
+
+#entryModal .day-context-field label {
+  color: #98a1af;
+  letter-spacing: 0.08em;
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 850;
+}
+
+#entryModal .day-context-field .pills {
+  display: grid;
+  gap: 8px;
+}
+
+#entryModal .day-context-field .pill-choice {
+  min-height: 38px;
+  justify-content: center;
+  border-radius: 999px;
+  background: #f4f6fa;
+  border: 1px solid #dde2ea;
+  color: #626b7a;
+}
+
+#entryModal .day-context-field .pill-choice:hover {
+  background: #fff;
+  color: #111827;
+}
+
+#entryModal .day-context-field .pill-choice.active {
+  color: #fff;
+  border-color: #08090c;
+  background: #08090c;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+}
+
+#entryModal .day-context-field .pill-choice.lime.active {
+  color: #20570b;
+  border-color: rgba(45, 122, 19, 0.18);
+  background: rgba(232, 255, 222, 0.90);
+  box-shadow: none;
+}
+
+#entryModal .day-context-field .pill-choice.rose.active {
+  color: #8a1429;
+  border-color: rgba(180, 35, 60, 0.18);
+  background: rgba(255, 229, 234, 0.92);
+  box-shadow: none;
+}
+
+#entryModal .trades-section-header {
+  margin: 8px 0 12px;
+  padding: 0 2px;
+}
+
+#entryModal .trades-section-header h3 {
+  color: #111827;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+#entryModal .btn-add-trade {
+  border-radius: 999px;
+  border: 1px solid #e3e7ee;
+  background: #fff;
+  color: #111827;
+  font-weight: 850;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+}
+
+#entryModal .btn-add-trade:hover {
+  background: #08090c;
+  color: #fff;
+  border-color: #08090c;
+}
+
+@media (max-width: 760px) {
+  #entryModal .modal-content {
+    width: 96vw;
+    border-radius: 18px;
+  }
+
+  #entryModal .modal-header {
+    align-items: flex-start;
+    flex-direction: column;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .modal-header-actions,
+  #entryModal .day-context-inline {
+    width: 100%;
+  }
+
+  #entryModal .day-context-grid,
+  .day-context-rail {
+    grid-template-columns: 1fr;
+  }
+
+  #entryModal .day-context-field:first-child,
+  #entryModal .day-context-field:nth-child(2),
+  #entryModal .day-context-field:nth-child(3) {
+    grid-column: 1;
+    grid-row: auto;
+  }
+}

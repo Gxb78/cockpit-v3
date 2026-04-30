@@ -1,0 +1,379 @@
+/* ============================================================
+   KPI UPGRADE — version premium pour la page Today
+   ============================================================ */
+
+/* ---------- Carte KPI premium ---------- */
+.page[data-page="today"] .kpi {
+  padding: 16px 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: linear-gradient(165deg, rgba(13,14,22,0.95), rgba(10,12,20,0.92));
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--r);
+  transition: border-color 0.3s, transform 0.3s, box-shadow 0.3s;
+}
+
+.page[data-page="today"] .kpi:hover {
+  border-color: rgba(0,229,255,0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.25), 0 0 0 1px rgba(0,229,255,0.06) inset;
+}
+
+/* ---------- Label ligne supérieure ---------- */
+.page[data-page="today"] .kpi-label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.page[data-page="today"] .kpi-label svg {
+  width: 10px;
+  height: 10px;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+/* ---------- Valeur principale ---------- */
+.page[data-page="today"] .kpi-value {
+  font-family: "Instrument Serif", serif;
+  font-size: 28px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+
+/* Valeurs colorées (PnL) */
+.page[data-page="today"] .kpi-value[style*="var(--win)"] {
+  text-shadow: 0 0 20px rgba(52,211,153,0.12);
+}
+.page[data-page="today"] .kpi-value[style*="var(--loss)"] {
+  text-shadow: 0 0 20px rgba(248,113,113,0.12);
+}
+
+/* ---------- Sous-titre ---------- */
+.page[data-page="today"] .kpi-sub {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10.5px;
+  color: var(--text-dim);
+  letter-spacing: 0.02em;
+  margin-bottom: 0;
+  line-height: 1.4;
+}
+
+/* ---------- Winrate pills ---------- */
+.page[data-page="today"] .pill {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.page[data-page="today"] .pill-win {
+  color: var(--win, #34d399);
+  background: rgba(52,211,153,0.08);
+  border: 1px solid rgba(52,211,153,0.15);
+}
+
+.page[data-page="today"] .pill-loss {
+  color: var(--loss, #f87171);
+  background: rgba(248,113,113,0.08);
+  border: 1px solid rgba(248,113,113,0.15);
+}
+
+/* ---------- Winrate bar ---------- */
+.page[data-page="today"] .kpi-bar {
+  margin-top: 10px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.04);
+  overflow: hidden;
+}
+
+.page[data-page="today"] .kpi-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #34d399, #60a5fa);
+  transform-origin: left;
+  transition: transform 0.6s var(--ease);
+}
+
+/* ---------- RR bar ---------- */
+.page[data-page="today"] #kpiRRBar {
+  background: linear-gradient(90deg, #f87171, #fbbf24, #34d399);
+}
+
+/* ---------- Sparkline ---------- */
+.page[data-page="today"] .kpi-spark-wrap {
+  margin-top: 10px;
+  height: 42px;
+  min-height: 42px;
+  overflow: visible;
+}
+
+.page[data-page="today"] .kpi-spark {
+  width: 100%;
+  height: 42px;
+  display: block;
+  border-radius: 6px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+  overflow: visible;
+}
+
+.page[data-page="today"] .kpi-spark .spark-line {
+  stroke-width: 2.1;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.page[data-page="today"] .kpi-spark .spark-line.pos {
+  stroke: var(--win, #34d399);
+  filter: drop-shadow(0 0 4px rgba(52,211,153,0.3));
+}
+
+.page[data-page="today"] .kpi-spark .spark-line.neg {
+  stroke: var(--loss, #f87171);
+  filter: drop-shadow(0 0 4px rgba(248,113,113,0.3));
+}
+
+.page[data-page="today"] .kpi-spark .spark-line.flat {
+  stroke: var(--text-faint);
+}
+
+.page[data-page="today"] .kpi-spark-empty {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  color: var(--text-faint);
+}
+
+/* ---------- Winrate value inline ---------- */
+.page[data-page="today"] .kpi-value.wr-inline {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.page[data-page="today"] .kpi-value.wr-inline .wr-pct {
+  font-family: "Instrument Serif", serif;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+}
+
+/* ---------- Trades sub inline avec valeur ---------- */
+.page[data-page="today"] .kpi-trades-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+
+.page[data-page="today"] .kpi-trades-footer .kpi-sub {
+  margin: 0;
+}
+
+/* ============================================================
+   TODAY — panels bas : remplir l'espace disponible
+   ============================================================ */
+
+.page[data-page="today"].active {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  overflow: hidden;
+}
+
+.page[data-page="today"] .page-head {
+  flex-shrink: 0;
+}
+
+.page[data-page="today"] .kpi-row {
+  flex-shrink: 0;
+}
+
+.page[data-page="today"] .today-grid {
+  flex: 1;
+  min-height: 0;
+  grid-template-columns: minmax(200px, 1fr) minmax(300px, 3fr);
+}
+
+.page[data-page="today"] .today-grid .panel,
+.page[data-page="today"] .today-grid .today-calendar-wrap {
+  min-height: 0;
+}
+
+.page[data-page="today"] .today-calendar-wrap .calendar-grid {
+  flex: 1;
+  align-content: start;
+}
+
+/* Entry list scrollable */
+.page[data-page="today"] .entry-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Cohérence : tous les panels Today ont le même border-radius que les KPIs */
+.page[data-page="today"] .today-grid .panel,
+.page[data-page="today"] .today-grid .today-calendar-wrap {
+  border-radius: var(--r);
+}
+
+.page[data-page="today"] .today-log-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 280px;
+}
+
+.page[data-page="today"] .today-log-panel .panel-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  margin-bottom: 12px;
+}
+
+.page[data-page="today"] .today-log-panel .panel-h h3 {
+  font-family: "Instrument Serif", serif;
+  font-style: italic;
+  font-size: 20px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--text);
+}
+
+.page[data-page="today"] .today-log-panel .cta-add {
+  width: auto;
+  margin: 0;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: transparent;
+  color: var(--text-dim);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 5px 12px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+}
+
+.page[data-page="today"] .today-log-panel .cta-add:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: rgba(255,255,255,0.04);
+}
+
+.page[data-page="today"] .today-log-panel .cta-add svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* ============================================================
+   TODAY — Calendrier du mois
+   ============================================================ */
+
+.today-calendar-wrap {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 16px 16px 8px;
+}
+
+.page[data-page="today"] .today-calendar-wrap {
+  position: relative;
+  overflow: hidden;
+}
+
+.today-calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.today-calendar-title {
+  font-family: "Instrument Serif", serif;
+  font-style: italic;
+  font-size: 20px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.today-calendar-month {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  color: var(--text-dim);
+  letter-spacing: 0.02em;
+}
+
+/* Today calendar inherits .calendar-head and .calendar-grid from journal styles */
+.page[data-page="today"] .today-calendar-wrap .calendar-head {
+  padding: 0 2px 6px;
+}
+
+.page[data-page="today"] .today-calendar-wrap .calendar-head div {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.page[data-page="today"] .today-calendar-wrap .calendar-grid {
+  gap: 3px;
+}
+
+/* Slimmer day cells in the Today calendar */
+.page[data-page="today"] .today-calendar-wrap .day {
+  min-height: 44px;
+  padding: 4px 3px;
+  border-radius: 8px;
+}
+
+.page[data-page="today"] .today-calendar-wrap .day-num {
+  font-size: 10px;
+}
+
+.page[data-page="today"] .today-calendar-wrap .day-metric-pnl {
+  font-size: clamp(11px, 1vw, 14px);
+}
+
+.page[data-page="today"] .today-calendar-wrap .day-metric-trades {
+  font-size: 16px;
+}
+
+.page[data-page="today"] .today-calendar-wrap .day-dots {
+  gap: 2px;
+  margin-top: 1px;
+}
+
+.page[data-page="today"] .today-calendar-wrap .day-dot {
+  width: 3px;
+  height: 3px;
+}

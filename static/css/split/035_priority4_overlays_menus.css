@@ -1,0 +1,334 @@
+/* ============================================================
+   PRIORITY 4 OVERLAYS + MENUS
+   Command palette, assistant drawer, toasts, lightbox and pickers.
+   ============================================================ */
+
+.cmdk {
+  background: rgba(4, 7, 12, 0.62);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.cmdk-box {
+  width: min(680px, calc(100vw - 28px));
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-solid);
+  box-shadow: 0 28px 80px rgba(0,0,0,0.58);
+}
+
+.cmdk-input-wrap {
+  min-height: 58px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255,255,255,0.018);
+}
+
+.cmdk-input-wrap svg {
+  width: 17px;
+  height: 17px;
+  color: var(--cyan);
+}
+
+.cmdk-input {
+  height: 58px;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.cmdk-section {
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-dim);
+}
+
+.cmdk-item {
+  min-height: 44px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+}
+
+.cmdk-item .icon {
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.cmdk-item:hover,
+.cmdk-item.active {
+  background: rgba(56, 211, 238, 0.08);
+  border-color: rgba(56, 211, 238, 0.22);
+}
+
+.cmdk-item.active .icon {
+  color: #061016;
+  background: var(--cyan);
+}
+
+.cmdk-foot {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  background: rgba(255,255,255,0.018);
+}
+
+.cmdk-empty {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  margin: 8px;
+}
+
+.toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(520px, calc(100vw - 28px));
+  border-radius: 12px;
+  padding: 12px 14px 12px 16px;
+  box-shadow: 0 22px 58px rgba(0,0,0,0.48);
+}
+
+.toast.success {
+  background: rgba(12, 32, 24, 0.98);
+}
+
+.toast.error {
+  background: rgba(38, 15, 21, 0.98);
+}
+
+.toast-close {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 7px;
+}
+
+.toast-close:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.lightbox {
+  background: rgba(4, 7, 12, 0.92);
+}
+
+.lightbox img {
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: 0 34px 90px rgba(0,0,0,0.6);
+}
+
+.lightbox-close {
+  top: 18px;
+  right: 18px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-solid);
+  color: var(--text);
+}
+
+.day-picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 760;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.day-picker-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 7, 12, 0.64);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.day-picker-panel {
+  position: relative;
+  z-index: 1;
+  width: min(420px, 100%);
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  background: var(--surface-solid);
+  box-shadow: 0 28px 80px rgba(0,0,0,0.58);
+}
+
+.day-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.day-picker-title {
+  color: var(--text);
+  font-weight: 780;
+}
+
+.day-picker-close {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.day-picker-close:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.day-picker-list {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+}
+
+.day-picker-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.day-picker-item:hover {
+  background: rgba(56, 211, 238, 0.08);
+  border-color: rgba(56, 211, 238, 0.22);
+}
+
+.day-picker-main {
+  font-weight: 760;
+}
+
+.day-picker-sub {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.side-right {
+  background: var(--surface-solid);
+  border-left-color: var(--border-strong);
+  box-shadow: -24px 0 58px rgba(0,0,0,0.38);
+}
+
+.side-right-head {
+  min-height: 42px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.side-right-head h3 {
+  color: var(--text);
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 14px;
+}
+
+.ai-panel-handle {
+  width: 34px;
+  height: 64px;
+  border-color: rgba(56, 211, 238, 0.34);
+  background: var(--surface-solid);
+  box-shadow: 0 16px 34px rgba(0,0,0,0.30);
+}
+
+.ai-chat-msg {
+  max-width: 96%;
+}
+
+.ai-chat-msg-bubble {
+  border-radius: 11px;
+  box-shadow: none;
+}
+
+.ai-chat-msg-user .ai-chat-msg-bubble {
+  color: #061016;
+  background: var(--cyan);
+  border-color: rgba(56, 211, 238, 0.55);
+}
+
+.ai-chat-msg-assistant .ai-chat-msg-bubble {
+  background: var(--surface-2);
+}
+
+.ai-chat-input-area {
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.ai-chat-input {
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.ai-chat-send,
+.ai-chat-clear-btn {
+  border-radius: 9px;
+}
+
+.tpl-prompt-box,
+.templates-menu {
+  border-radius: 12px;
+  box-shadow: 0 24px 68px rgba(0,0,0,0.48);
+}
+
+.tpl-item {
+  min-height: 38px;
+  border-radius: 9px;
+}
+
+@media (max-width: 760px) {
+  .cmdk {
+    align-items: flex-start;
+    padding-top: 12px;
+  }
+
+  .cmdk-box {
+    width: calc(100vw - 20px);
+    max-height: calc(100dvh - 24px);
+  }
+
+  .cmdk-results {
+    max-height: calc(100dvh - 146px);
+  }
+
+  .cmdk-foot {
+    gap: 8px;
+    padding: 9px 12px;
+  }
+
+  .toast {
+    left: 10px;
+    right: 10px;
+    bottom: calc(84px + env(safe-area-inset-bottom));
+    transform: none;
+    max-width: none;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(24px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  @keyframes slideDown {
+    to { transform: translateY(20px); opacity: 0; }
+  }
+
+  .side-right {
+    width: min(360px, 92vw);
+  }
+
+  body.ai-panel-open .ai-panel-handle {
+    right: min(360px, 92vw);
+  }
+}

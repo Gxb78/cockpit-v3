@@ -1,0 +1,149 @@
+.wiz.hidden { display: none !important; }
+
+/* Panel — the actual modal box */
+.wiz-panel {
+  width: 100%;
+  max-width: 700px;
+  max-height: 100vh;
+  border-radius: var(--r-lg);
+  background: var(--bg-2);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(0,229,255,0.08);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Progress bar at top of panel */
+.wiz-progress {
+  width: 100%;
+  height: 3px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.wiz-progress-fill {
+  height: 100%;
+  background: var(--grad-aurora);
+  transition: transform 0.4s var(--ease);
+  transform-origin: left;
+  border-radius: 0 2px 2px 0;
+  min-width: 4px;
+}
+
+/* Header */
+.wiz-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 12px;
+}
+.wiz-header-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+.wiz-btn-icon {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: color, background, border-color, transform 0.2s var(--ease);
+  flex-shrink: 0;
+}
+.wiz-btn-icon:hover { border-color: var(--border-strong); color: var(--text); }
+.wiz-btn-icon svg { width: 16px; height: 16px; }
+.wiz-btn-icon.invisible { visibility: hidden; pointer-events: none; }
+
+.wiz-step-indicator {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  font-family: "JetBrains Mono", monospace;
+}
+
+/* Mode bar */
+.wiz-mode-bar { display: flex; gap: 6px; }
+.wiz-mode-btn {
+  padding: 4px 12px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.75rem; font-weight: 600;
+  cursor: pointer;
+  display: flex; align-items: center; gap: 4px;
+  transition: color, background, border-color 0.18s var(--ease);
+}
+.wiz-mode-btn svg { width: 12px; height: 12px; }
+.wiz-mode-btn.active,
+.wiz-mode-btn:hover {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+/* Scrollable body */
+.wiz-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 28px 8px;
+  min-height: 0;
+}
+
+/* Step transitions */
+@keyframes wizEnter {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes wizExit {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-12px); }
+}
+.wiz-step { animation: wizEnter 0.22s var(--ease) both; }
+.wiz-step.wiz-exiting { animation: wizExit 0.13s var(--ease) both; }
+
+/* Question & hint */
+.wiz-question {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.25;
+  margin-bottom: 6px;
+  letter-spacing: -0.01em;
+}
+.wiz-hint {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+/* Cards (instrument / strategy) */
+.wiz-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.wiz-cards-3 { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 500px) { .wiz-cards-3 { grid-template-columns: 1fr 1fr; } }
+
+.wiz-card {
+  padding: 18px 14px 14px;
+  border-radius: var(--r);
+  border: 2px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  text-align: center;
+  transition: color, background, border-color 0.16s var(--ease);
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+}

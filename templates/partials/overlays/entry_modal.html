@@ -1,0 +1,15 @@
+{% include "partials/overlays/modal/shell_start.html" %}
+<div class="modal-sticky">
+  {% include "partials/overlays/modal/narration_panel.html" %}
+  <div class="trades-section-header" id="tradesSectionHeader">
+    <h3>Trades du jour</h3>
+    <button type="button" class="btn-add-trade" id="addTradeBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Ajouter un trade
+    </button>
+  </div>
+</div>
+<div class="modal-scroll">
+  {% include "partials/overlays/modal/trades_form.html" %}
+</div>
+{% include "partials/overlays/modal/shell_end.html" %}

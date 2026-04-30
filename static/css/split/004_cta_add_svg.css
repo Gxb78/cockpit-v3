@@ -1,0 +1,154 @@
+.cta-add svg { width: 18px; height: 18px; color: var(--cyan); transition: transform 0.25s var(--ease-bouncy); }
+.cta-add:hover svg { transform: scale(1.1) rotate(-5deg); }
+
+.entry-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.entry-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color, transform, box-shadow 0.22s var(--ease);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 14px;
+  align-items: center;
+}
+.entry-card:hover {
+  border-color: var(--border-glow);
+  transform: translateY(-1px);
+  box-shadow: var(--glow-cyan);
+}
+.entry-instr {
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+  background: rgba(255,255,255,0.05);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.entry-card[data-instr="BTC"] .entry-instr { color: #f7931a; border-color: rgba(247,147,26,0.3); background: rgba(247,147,26,0.05); }
+.entry-card[data-instr="ETH"] .entry-instr { color: #8aa8ff; border-color: rgba(138,168,255,0.3); background: rgba(138,168,255,0.05); }
+.entry-card[data-instr="NAS"] .entry-instr { color: #00E5FF; border-color: rgba(0,229,255,0.3); background: rgba(0,229,255,0.05); }
+.entry-card[data-instr="ES"]  .entry-instr { color: #FF2EC4; border-color: rgba(255,46,196,0.3); background: rgba(255,46,196,0.05); }
+.entry-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.entry-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.entry-tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.tag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text-soft);
+  border: 1px solid var(--border);
+  letter-spacing: 0.2px;
+}
+.entry-pnl {
+  font-family: "JetBrains Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: -0.3px;
+}
+.entry-pnl.pos { color: var(--win); }
+.entry-pnl.neg { color: var(--loss); }
+.entry-outcome {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+}
+.entry-result-chip {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.05);
+  color: var(--text-soft);
+}
+.entry-result-chip.win {
+  color: var(--win);
+  background: var(--win-bg);
+  border-color: var(--win-border);
+}
+.entry-result-chip.loss {
+  color: var(--loss);
+  background: var(--loss-bg);
+  border-color: var(--loss-border);
+}
+.entry-result-chip.mixed {
+  color: #ffd37b;
+  background: rgba(255,211,123,0.12);
+  border-color: rgba(255,211,123,0.3);
+}
+
+.empty-state {
+  padding: 30px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.empty-state svg { width: 28px; height: 28px; opacity: 0.4; margin-bottom: 10px; }
+
+/* Streak card */
+.streak {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  background: linear-gradient(135deg, rgba(255,46,196,0.10), rgba(180,0,255,0.06));
+  border: 1px solid rgba(255,46,196,0.25);
+  border-radius: var(--r-sm);
+  margin-bottom: 14px;
+}
+.streak-icon {
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  background: var(--grad-magenta);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(255,46,196,0.4);
+}
+.streak-icon svg { width: 20px; height: 20px; }
+.streak-count {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+.streak-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 4px;
+}
+

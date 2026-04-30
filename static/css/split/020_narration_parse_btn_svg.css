@@ -1,0 +1,186 @@
+.narration-parse-btn svg { width: 14px; height: 14px; }
+
+.narration-source {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  font-style: italic;
+  margin-left: auto;
+}
+
+/* Preview chips */
+.narration-preview {
+  padding: 14px 20px 16px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+.narration-preview.hidden { display: none; }
+.narration-preview-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text-faint);
+  margin-bottom: 10px;
+}
+.narration-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 14px;
+}
+.nc {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+  border: 1px solid;
+  animation: chipIn 0.2s var(--ease-bouncy) both;
+}
+@keyframes chipIn {
+  from { opacity: 0; transform: scale(0.85) translateY(4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.nc-label { color: inherit; opacity: 0.65; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+.nc.cyan    { background: rgba(0,229,255,0.10);   border-color: rgba(0,229,255,0.30);   color: var(--cyan); }
+.nc.lime    { background: rgba(136,255,90,0.10);  border-color: rgba(136,255,90,0.30);  color: var(--win); }
+.nc.rose    { background: rgba(255,78,107,0.10);  border-color: rgba(255,78,107,0.30);  color: var(--loss); }
+.nc.amber   { background: rgba(255,170,0,0.10);   border-color: rgba(255,170,0,0.30);   color: var(--amber); }
+.nc.violet  { background: rgba(180,0,255,0.10);   border-color: rgba(180,0,255,0.30);   color: #c070ff; }
+.nc.magenta { background: rgba(255,46,196,0.10);  border-color: rgba(255,46,196,0.30);  color: var(--magenta); }
+
+.narration-apply-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 4px;
+}
+.narration-apply-btn {
+  padding: 8px 20px;
+  border-radius: 999px;
+  border: 1px solid rgba(136,255,90,0.35);
+  background: rgba(136,255,90,0.10);
+  color: var(--win);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color, background, border-color, transform 0.18s var(--ease);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.narration-apply-btn:hover {
+  background: rgba(136,255,90,0.18);
+  border-color: rgba(136,255,90,0.55);
+  box-shadow: 0 4px 16px rgba(136,255,90,0.12);
+  transform: translateY(-1px);
+}
+.narration-apply-btn svg { width: 13px; height: 13px; }
+.narration-none {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.narration-chat-list {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 10px 0;
+}
+
+.narration-chat-item {
+  border: 1px solid rgba(0, 229, 255, 0.18);
+  background: rgba(0, 229, 255, 0.08);
+  border-radius: 10px;
+  padding: 8px 10px;
+  animation: chipIn 0.2s var(--ease-bouncy) both;
+}
+
+.narration-chat-role {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--cyan);
+  margin-bottom: 3px;
+}
+
+.narration-chat-q {
+  font-size: 12.5px;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.narration-chat-help {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 4px 0 8px 0;
+}
+
+.narration-followup-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+/* ============================================================
+   v3 — TRADES SECTION (inside day modal)
+   ============================================================ */
+
+.trades-section {
+  margin-bottom: 14px;
+}
+
+.trades-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 0 2px;
+}
+
+.trades-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.trades-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(0, 229, 255, 0.12);
+  color: var(--cyan);
+  font-size: 11px;
+  font-weight: 800;
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  font-family: "JetBrains Mono", monospace;
+}
+
+.btn-add-trade {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  background: rgba(0, 229, 255, 0.08);
+  color: var(--cyan);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  transition: color, background, border-color 0.2s var(--ease);
+}

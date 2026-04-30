@@ -1,0 +1,132 @@
+/* ---- Plan PO3 guided trade flow ---- */
+
+.plan-rule-card,
+.plan-decision-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 14px;
+  border: 1px solid rgba(98, 211, 255, 0.24);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(98, 211, 255, 0.10), rgba(255,255,255,0.035));
+  margin-bottom: 14px;
+}
+
+.plan-rule-card span,
+.plan-decision-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.plan-rule-card strong,
+.plan-decision-main strong {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.plan-decision-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.plan-alignment-pill {
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.04);
+}
+
+.plan-alignment-pill.in_plan {
+  color: var(--win);
+  border-color: rgba(136,255,90,0.38);
+  background: rgba(136,255,90,0.08);
+}
+
+.plan-alignment-pill.out_of_plan {
+  color: var(--loss);
+  border-color: rgba(255,78,107,0.38);
+  background: rgba(255,78,107,0.08);
+}
+
+.plan-alignment-pill.incomplete {
+  color: var(--amber);
+  border-color: rgba(255,170,0,0.36);
+  background: rgba(255,170,0,0.08);
+}
+
+.plan-override-field textarea {
+  border-color: rgba(255,78,107,0.36);
+  background: rgba(255,78,107,0.055);
+}
+
+.plan-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.plan-summary-strip div,
+.plan-matrix-cell {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 11px 12px;
+  background: rgba(255,255,255,0.035);
+}
+
+.plan-summary-strip span,
+.plan-matrix-cell span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.plan-summary-strip strong,
+.plan-matrix-cell strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--text);
+  font-size: 20px;
+}
+
+.plan-matrix-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.plan-matrix-cell.ok { border-color: rgba(136,255,90,0.24); }
+.plan-matrix-cell.warn { border-color: rgba(255,78,107,0.24); }
+.plan-matrix-cell.muted { opacity: 0.78; }
+.plan-matrix-cell em {
+  display: block;
+  margin-top: 3px;
+  font-style: normal;
+  color: var(--text-muted);
+}
+.plan-matrix-cell em.pos { color: var(--win); }
+.plan-matrix-cell em.neg { color: var(--loss); }
+
+@media (max-width: 760px) {
+  .plan-rule-card,
+  .plan-decision-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .plan-summary-strip,
+  .plan-matrix-grid {
+    grid-template-columns: 1fr;
+  }
+}

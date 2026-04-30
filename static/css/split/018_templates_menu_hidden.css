@@ -1,0 +1,214 @@
+.templates-menu.hidden { display: none; }
+.templates-menu-section {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  padding: 8px 10px 4px;
+}
+.tpl-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  color: var(--text-soft);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.12s;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+}
+.tpl-item:hover { background: rgba(0,229,255,0.06); color: var(--text); }
+.tpl-item:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+.tpl-item .tpl-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tpl-item .tpl-x {
+  width: 18px; height: 18px;
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+  border-radius: 4px;
+  font-size: 10px;
+  transition: color, background, border-color 0.15s;
+}
+.tpl-item .tpl-x:hover { color: var(--loss); background: var(--loss-bg); }
+.tpl-item .tpl-icon {
+  width: 18px; height: 18px;
+  color: var(--cyan);
+  display: grid;
+  place-items: center;
+}
+.tpl-item .tpl-icon svg { width: 12px; height: 12px; }
+.tpl-empty {
+  padding: 12px 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.tpl-divider { height: 1px; background: var(--border); margin: 6px 4px; }
+
+/* Save-template prompt (inline modal) */
+.tpl-prompt {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 700;
+  background: rgba(7,7,13,0.7);
+  backdrop-filter: blur(8px);
+  animation: fadeIn 0.15s;
+}
+.tpl-prompt.hidden { display: none; }
+.tpl-prompt-box {
+  background: var(--surface-solid);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r);
+  padding: 22px 24px;
+  width: min(420px, 92vw);
+  box-shadow: var(--shadow-lg);
+  animation: popIn 0.22s var(--ease-bouncy);
+}
+.tpl-prompt-box h3 { margin: 0 0 14px; font-size: 15px; font-weight: 700; }
+.tpl-prompt-box input {
+  width: 100%;
+  background: rgba(0,0,0,0.3);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  padding: 10px 12px;
+  font-size: 13px;
+  outline: none;
+  margin-bottom: 16px;
+}
+.tpl-prompt-box input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(0,229,255,0.12); }
+.tpl-prompt-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* Desktop workspace refinement:
+   reduce vertical footprint and keep scroll mainly inside center column. */
+@media (min-width: 761px) {
+  .main {
+    padding: 18px 24px 24px;
+    overflow-y: auto;
+    min-height: 0;
+  }
+  .page-head { margin-bottom: 16px; }
+  .kpi-row { margin-bottom: 14px; gap: 12px; }
+  .kpi { padding: 14px 16px; }
+  .today-grid { gap: 14px; }
+  .panel { padding: 16px 18px; }
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 1100px) {
+  .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .today-grid, .perf-grid { grid-template-columns: 1fr; }
+  .settings-grid { grid-template-columns: 1fr; }
+  .journal-page-head {
+    grid-template-columns: 1fr;
+    justify-items: start;
+    gap: 10px;
+  }
+  .journal-page-actions {
+    justify-self: start;
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+  .month-label-btn { min-width: 166px; }
+  .journal-filters {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .journal-trade-filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  /* focus panel removed — styles moved to header */
+
+}
+@media (max-width: 760px) {
+  .cockpit { grid-template-columns: 1fr; }
+  .rail {
+    position: static;
+    height: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 14px 12px;
+    gap: 12px;
+  }
+  .brand { padding: 0; gap: 10px; }
+  .brand-mark { width: 30px; height: 30px; border-radius: 8px; }
+  .brand-name { font-size: 13px; }
+  .brand-tag { font-size: 9px; letter-spacing: 1.2px; }
+  .rail-section, .rail-foot, .rail-settings-quick { display: none; }
+  .nav {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+  }
+  .nav-item {
+    width: auto;
+    flex: 0 0 auto;
+    padding: 7px 10px;
+    gap: 8px;
+  }
+  .nav-item .kbd { display: none; }
+  .main { padding: 20px 18px 60px; }
+  .page-actions { width: 100%; justify-content: space-between; }
+  .journal-page-actions { justify-content: flex-start; gap: 8px; }
+  .calendar-view-toggle,
+  .calendar-layout-toggle,
+  .calendar-range-toggle { gap: 3px; padding: 3px; }
+  .calendar-view-btn,
+  .calendar-layout-btn,
+  .calendar-range-btn { font-size: 9.5px; padding: 4px 8px; }
+  .calendar-nav { margin-bottom: 0; padding: 4px 6px; gap: 6px; }
+  .journal-today-btn { font-size: 9.5px; padding: 0 10px; }
+  .month-label-btn { min-width: 152px; height: 34px; padding: 0 11px; }
+  .month-label-btn h2 { font-size: 15px; }
+  .month-pop { width: 220px; }
+  .month-btn { font-size: 10px; }
+  .calendar-metric-toggle { gap: 3px; padding: 3px; }
+  .calendar-metric-btn { font-size: 9.5px; padding: 4px 8px; }
+  .journal-filters { gap: 8px; }
+  .calendar-custom-range { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+  .calendar-custom-range input[type="date"] { font-size: 11px; }
+  .journal-trade-filters {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .journal-filter-reset {
+    width: 100%;
+  }
+  /* focus panel removed */
+
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .calendar-grid { grid-auto-rows: 94px; gap: 6px; }
+  .calendar-grid[data-view-mode="week"] { grid-auto-rows: 118px; }
+  .day { padding: 6px 8px; }
+  .day-num { top: 6px; left: 7px; font-size: 11px; }
+  .day-center { padding: 8px 2px 12px; gap: 3px; }
+  .day-metric-pnl { font-size: 16px; }
+  .mode-trades .day-metric-trades { font-size: 28px; }
+  .mode-both .day-mix-inline { max-width: 106px; gap: 6px; padding: 4px 8px; }
+  .mode-both .day-mix-slash { font-size: 14px; }
+  .mode-both .day-metric-pnl,
+  .mode-both .day-metric-trades { font-size: 17px; }
+  .day-metric-sub { font-size: 9px; letter-spacing: 0.6px; }
+  .day-mode-both .day-metric-sub { font-size: 9.8px; }
+}
+
