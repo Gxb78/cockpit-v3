@@ -66,6 +66,33 @@
   transform: translateX(40px) scale(0.94);
 }
 
+/* ---- Section reveal stagger — blocks apparaissent en séquence ---- */
+/* Chaque .jedit-block est masqué initialement pendant le reveal */
+.jedit-scroll.is-revealing .jedit-block {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+/* Animation quand motion OK */
+body:not(.reduce-motion) .jedit-scroll.is-revealing .jedit-block {
+  animation: sectionFadeIn 0.4s cubic-bezier(.2,.9,.1,1) forwards;
+}
+body:not(.reduce-motion) .jedit-scroll.is-revealing .jedit-block:nth-child(2) { animation-delay: 40ms; }
+body:not(.reduce-motion) .jedit-scroll.is-revealing .jedit-block:nth-child(3) { animation-delay: 80ms; }
+body:not(.reduce-motion) .jedit-scroll.is-revealing .jedit-block:nth-child(4) { animation-delay: 120ms; }
+body:not(.reduce-motion) .jedit-scroll.is-revealing .jedit-block:nth-child(5) { animation-delay: 160ms; }
+
+/* Show immediately when reduce-motion */
+body.reduce-motion .jedit-scroll.is-revealing .jedit-block {
+  opacity: 1;
+  transform: none;
+}
+
+@keyframes sectionFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* ---- Field glow — feedback sauvegarde directement sur le champ ---- */
 
 /* Succès — respiration douce : monte → pic → redescend */

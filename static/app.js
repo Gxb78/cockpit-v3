@@ -10678,6 +10678,9 @@ TradeEditorController.open = function (tid) {
   // Laisser le DOM s'afficher, puis animer l'éditeur
   requestAnimationFrame(function () {
     editor.classList.add('is-visible');
+    // Stagger reveal des sections
+    var scroll = editor.querySelector('.jedit-scroll');
+    if (scroll) scroll.classList.add('is-revealing');
   });
 
   setTimeout(function () {
