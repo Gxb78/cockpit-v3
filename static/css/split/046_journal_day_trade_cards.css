@@ -864,6 +864,7 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   background: #08090c;
   color: #fff;
   padding: 0 22px;
+  min-width: 130px;
   font-size: 12px;
   font-weight: 850;
   box-shadow: 0 2px 6px rgba(0,0,0,0.06);

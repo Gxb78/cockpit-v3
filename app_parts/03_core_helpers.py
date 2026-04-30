@@ -195,20 +195,20 @@ def _validate_trade_semantics(payload):
 
     if direction == "long":
         if entry is not None and stop is not None and not (stop < entry):
-            errors.append("niveaux invalides: en long, stop_loss doit etre inferieur a entry_price")
+            errors.append("Stop plus haut que l'entree")
         if entry is not None and target is not None and not (target > entry):
-            errors.append("niveaux invalides: en long, take_profit doit etre superieur a entry_price")
+            errors.append("TP plus bas que l'entree")
     elif direction == "short":
         if entry is not None and stop is not None and not (stop > entry):
-            errors.append("niveaux invalides: en short, stop_loss doit etre superieur a entry_price")
+            errors.append("Stop plus bas que l'entree")
         if entry is not None and target is not None and not (target < entry):
-            errors.append("niveaux invalides: en short, take_profit doit etre inferieur a entry_price")
+            errors.append("TP plus haut que l'entree")
 
     if direction and entry is not None and stop is not None and target is not None:
         if direction == "long" and not (target > entry > stop):
-            errors.append("niveaux invalides: en long, take_profit > entry_price > stop_loss")
+            errors.append("TP < entree ou Stop > entree")
         if direction == "short" and not (target < entry < stop):
-            errors.append("niveaux invalides: en short, take_profit < entry_price < stop_loss")
+            errors.append("TP > entree ou Stop < entree")
 
     pnl = _as_float(payload.get("pnl"))
     is_win = payload.get("is_win")

@@ -203,10 +203,22 @@ function _journalCardScheduleSave(tid) {
 // ---- card-style editor drawer ----
 
 function _journalEditorSetStatus(editor, state, text) {
-  var status = editor && editor.querySelector('.jedit-status');
-  if (!status) return;
-  status.dataset.state = state || '';
-  status.textContent = text || '';
+  // Use the save button text to show status (avoids layout shift + overflow)
+  var saveBtn = editor && editor.querySelector('.jedit-save');
+  if (!saveBtn) return;
+  if (state === 'saving') {
+    saveBtn.textContent = text || 'Sauvegarde...';
+    saveBtn.disabled = true;
+  } else if (state === 'saved') {
+    saveBtn.textContent = text || 'Sauvegarde';
+    setTimeout(function () { saveBtn.textContent = 'Sauver'; saveBtn.disabled = false; }, 2200);
+  } else if (state === 'error') {
+    saveBtn.textContent = text && text.length > 20 ? text.slice(0, 18) + '…' : (text || 'Erreur');
+    setTimeout(function () { saveBtn.textContent = 'Sauver'; saveBtn.disabled = false; }, 4000);
+  } else {
+    saveBtn.textContent = 'Sauver';
+    saveBtn.disabled = false;
+  }
 }
 
 function _journalEditorCollectPayload(tid) {
@@ -329,9 +341,6 @@ function _journalEditorSave(tid) {
       _journalEditorRefreshUI(editor, updated);
       _journalSyncStateAfterSave(tidStr, updated);
       _journalEditorSetStatus(editor, 'saved', 'Sauvegarde');
-      setTimeout(function () {
-        if (document.body.contains(editor)) _journalEditorSetStatus(editor, '', '');
-      }, 1800);
     })
     .catch(function (err) {
       _journalEditorSetStatus(editor, 'error', (err && err.message) ? err.message : 'Erreur');
