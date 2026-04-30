@@ -305,3 +305,17 @@ Format obligatoire d'une lesson:
 - Note UX: les cards de revue ne doivent pas etre collees sous la grille calendrier. Elles doivent rester separees visuellement, en layer centre dans le panel principal, sans backdrop de modale.
 - Test de non-regression: verifier dans `static/js/split/015_calendar.js` que `renderJournalDayTrades(key, info.days)` est appele avant `openExistingDay()`/`openPickerForDate()`, puis lancer `python build.py && node --check static/app.js && python -m unittest discover -s tests -v`.
 - Fichiers a surveiller: `static/js/split/015_calendar.js`, `static/js/split/056_journal_day_trade_cards.js`, `templates/partials/pages/journal/calendar_focus.html`, `static/css/split/046_journal_day_trade_cards.css`.
+
+### BUG-20260501-01 - leverage jamais persiste en DB (payload.pop detruit la cle)
+- Symptome: le champ `leverage` (colonne DB creee par migration v6) reste toujours NULL en base, meme apres creation/mise a jour d'un trade avec un levier.
+- Cause racine: `_auto_calc_pnl()` dans `03_core_helpers.py` utilisait `payload.pop("leverage", None)` aux 3 branches (pnl manuel, infos manquantes, calcul auto). `pop()` SUPPRIME la cle du payload, donc l'INSERT/UPDATE SQL ne recoit jamais la valeur. Le calcul utilisait bien le levier (ligne 252, branche calcul auto) mais il etait perdu apres.
+- Regle de prevention: TOUJOURS utiliser `payload.get("leverage")` pas `payload.pop("leverage")` dans `_auto_calc_pnl()`. Le pop detruit la donnee. Si tu veux lire sans supprimer, c'est `get()`. Si tu dois pop (par ex. pour eviter de passer un champ calcule a SQL), remets-le dans le payload apres usage.
+- Test de non-regression: verifier que `grep -n 'pop.*leverage' app_parts/03_core_helpers.py` retourne 0. Creer un trade avec `leverage=3` via API, lire le trade, verifier que `leverage==3` retourne.
+- Fichiers a surveiller: `app_parts/03_core_helpers.py` (fonction `_auto_calc_pnl`), `app_parts/10_routes_trades.py` (routes create/update).
+
+### BUG-20260501-02 - Orphelins dans app_parts/__archive__ jamais nettoies + header.html vide
+- Symptome: 18 fichiers orphelins dans `app_parts/__archive__/` (anciennes versions non chargees) + `templates/partials/pages/journal/header.html` vide (1 ligne commentaire) cassant 22 IDs DOM.
+- Cause racine: accumulation d'archives sans cleanup. Le header a ete vide pendant un refactoring sans restaurer les IDs (prevMonth, nextMonth, stats, month picker, focus toggle).
+- Regle de prevention: apres chaque refactoring, verifier `git ls-files app_parts/__archive__/` = 0. Verifier que les IDs DOM references par les JS existent dans les templates HTML (`rg -rn '#prevMonth\|#nextMonth\|#monthLabel' templates/ --type html`).
+- Test de non-regression: `python -m unittest tests.test_template_render -v` (verifie que les templates rendent correctement). Apres build, verifier que les IDs sont presents dans le template rendu.
+- Fichiers a surveiller: `app_parts/__archive__/*`, `templates/partials/pages/journal/header.html`, tous les JS qui referencent des IDs de navigation/stats header.

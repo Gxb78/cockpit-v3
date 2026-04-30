@@ -9571,6 +9571,11 @@ function openJournalTradeEditor(tid) {
   }, 80);
 }
 
+// Save a trade immediately via TradeEditorController
+function _journalEditorSave(tid) {
+  TradeEditorController.save(String(tid));
+}
+
 function _flushPendingJournalSaves() {
   // Execute pending editor saves immediately instead of dropping them
   Object.keys(TradeEditorController.saveTimers).forEach(function (tid) {

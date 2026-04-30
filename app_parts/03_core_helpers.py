@@ -239,17 +239,17 @@ _CONTRACT_MULTIPLIERS = {
 def _auto_calc_pnl(payload, day_id, db, existing=None):
     """Calcule le PnL depuis entry/exit/size avec la direction pour le signe."""
     if payload.get("pnl") is not None:
-        payload.pop("leverage", None)
+        payload.get("leverage")
         return
 
     entry = payload.get("entry_price")
     exit_ = payload.get("exit_price")
     size = payload.get("position_size")
     if entry is None or exit_ is None or size is None:
-        payload.pop("leverage", None)
+        payload.get("leverage")
         return
 
-    leverage = payload.pop("leverage", None) or 1
+    leverage = payload.get("leverage") or 1
     instr = None
     day = db.execute("SELECT instrument FROM days WHERE id=?", (day_id,)).fetchone()
     if day:
