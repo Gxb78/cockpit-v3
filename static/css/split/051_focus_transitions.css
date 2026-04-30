@@ -65,3 +65,69 @@
   opacity: 0;
   transform: translateX(40px) scale(0.94);
 }
+
+/* ---- Field glow — feedback sauvegarde directement sur le champ ---- */
+
+/* Succès — respiration douce : monte → pic → redescend */
+.jedit-field.jedit-field-glow,
+textarea.jedit-field-glow,
+select.jedit-field-glow,
+.jedit-pills.jedit-field-glow,
+.jedit-stars.jedit-field-glow {
+  animation: fieldGlowBreath 0.4s linear forwards;
+}
+
+@keyframes fieldGlowBreath {
+  0%, 1% {
+    border-color: transparent;
+    box-shadow: none;
+  }
+  1%, 98% {
+    border-color: #34d399;
+    box-shadow: 0 0 0 2.5px rgba(52, 211, 153, 0.30), 0 0 14px rgba(52, 211, 153, 0.08);
+  }
+  99%, 100% {
+    border-color: transparent;
+    box-shadow: none;
+  }
+}
+
+/* Erreur — rouge persistant sur le champ et son label */
+.jedit-field.jedit-field-error,
+textarea.jedit-field-error,
+select.jedit-field-error {
+  border-color: #f87171 !important;
+  box-shadow: 0 0 0 2.5px rgba(248, 113, 113, 0.28), 0 0 14px rgba(248, 113, 113, 0.08);
+  color: #dc2626 !important;
+}
+
+.jedit-field-wrap:has(.jedit-field-error) > span {
+  color: #dc2626 !important;
+}
+
+/* Pills/stars en erreur — bordure rouge sans changer le texte */
+.jedit-pills.jedit-field-error,
+.jedit-stars.jedit-field-error {
+  border-color: #f87171 !important;
+  box-shadow: 0 0 0 2.5px rgba(248, 113, 113, 0.28), 0 0 14px rgba(248, 113, 113, 0.08);
+}
+
+/* ---- Day context field glow ---- */
+.day-inline-date.day-field-glow,
+.day-inline-instrument.day-field-glow,
+.today-context-bias .pills.day-field-glow,
+#htfContext.day-field-glow,
+#dailyNotes.day-field-glow {
+  animation: fieldGlowBreath 0.4s linear forwards;
+}
+
+/* Day context error */
+.day-inline-date.day-field-error,
+.day-inline-instrument.day-field-error,
+.today-context-bias .pills.day-field-error,
+#htfContext.day-field-error,
+#dailyNotes.day-field-error {
+  border-color: #f87171 !important;
+  box-shadow: 0 0 0 2.5px rgba(248, 113, 113, 0.28), 0 0 14px rgba(248, 113, 113, 0.08);
+  color: #dc2626 !important;
+}

@@ -42,6 +42,25 @@ function activeDayFormId() {
   return state.currentDayId || $("#dayId")?.value || null;
 }
 
+function _dayFieldGlow(fields) {
+  if (!fields || !Object.keys(fields).length) return;
+  var map = {
+    date:        '.day-inline-date',
+    instrument:  '.day-inline-instrument',
+    htf_bias:    '.today-context-bias .pills',
+    htf_context: '#htfContext',
+    daily_notes: '#dailyNotes',
+  };
+  Object.keys(fields).forEach(function (key) {
+    var sel = map[key];
+    if (!sel) return;
+    var el = document.querySelector(sel);
+    if (!el) return;
+    el.classList.add('day-field-glow');
+    setTimeout(function () { el.classList.remove('day-field-glow'); }, 1000);
+  });
+}
+
 async function saveDayContext(isNew) {
   if (state.isSavingDay) return null;
   state.isSavingDay = true;
@@ -50,8 +69,10 @@ async function saveDayContext(isNew) {
   const activeId = activeDayFormId();
   const isCreate = isNew || !activeId;
   let payload = fullPayload;
+  let changedFields = null;
   if (!isCreate) {
     payload = dayPayloadDiff(state.initialDayPayload, fullPayload);
+    changedFields = Object.keys(payload);
     if (Object.keys(payload).length === 0) {
       setAutosaveState("idle");
       return null;
@@ -67,10 +88,11 @@ async function saveDayContext(isNew) {
       var _ab = $("#addTradeBtn");
       if (_ab) { _ab.disabled = false; _ab.title = ""; }
       $("#modalTitle").textContent = `${saved.instrument} - ${saved.date}`;
+      // Pour une création, tous les champs sont "changés"
+      changedFields = Object.keys(fullPayload).filter(function(k) { return fullPayload[k] != null && fullPayload[k] !== ''; });
     } else {
       saved = await api(`/api/days/${activeId}`,
         { method: "PUT", body: JSON.stringify(payload) });
-      // Mettre a jour le titre de la modale en direct (instrument ou date changed)
       if (payload.date || payload.instrument) {
         const curDate = $("#entryDate").value;
         const curInstr = $("#entryInstrument").value;
@@ -84,10 +106,27 @@ async function saveDayContext(isNew) {
     state.initialDayPayload = buildDayPayload();
     state.initialDayState = snapshotDayForm();
     setAutosaveState("saved");
+    // Glow sur les champs modifiés
+    if (changedFields && changedFields.length) {
+      var glowFields = {};
+      changedFields.forEach(function(k) { glowFields[k] = true; });
+      _dayFieldGlow(glowFields);
+    }
     setTimeout(() => { if (_autosaveState === "saved") setAutosaveState("idle"); }, 2200);
     return saved;
   } catch (err) {
     setAutosaveState("error", err.message?.slice(0,30) || "Erreur");
+    // Rouge persistant sur les champs modifiés
+    if (changedFields && changedFields.length) {
+      var errFields = {};
+      changedFields.forEach(function(k) { errFields[k] = true; });
+      Object.keys(errFields).forEach(function (key) {
+        var sel = {date:'.day-inline-date',instrument:'.day-inline-instrument',htf_bias:'.today-context-bias .pills',htf_context:'#htfContext',daily_notes:'#dailyNotes'}[key];
+        if (!sel) return;
+        var el = document.querySelector(sel);
+        if (el) el.classList.add('day-field-error');
+      });
+    }
     toast(err.message, "error");
     return null;
   } finally {

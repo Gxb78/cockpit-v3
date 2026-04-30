@@ -1,8 +1,6 @@
 // ---------- Autosave du jour ----------
 
-let _autosaveTimer = null;
 let _autosaveState = "idle";
-const AUTOSAVE_DELAY = 1800;
 
 function _nowHHMM() {
   var d = new Date();
@@ -35,8 +33,8 @@ function setAutosaveState(s, msg) {
 }
 
 function bindAutosave() {
-  // On écoute uniquement les champs du formulaire du jour
-  $("#dayForm")?.addEventListener("input", triggerDayAutosave);
+  // Sauvegarde à la sortie d'un champ (focusout) comme dans l'éditeur
+  $("#dayForm")?.addEventListener("focusout", triggerDayAutosave);
   $("#dayForm")?.addEventListener("click", e => {
     if (e.target.closest(".pill-choice")) setTimeout(triggerDayAutosave, 50);
   });
@@ -45,14 +43,11 @@ function bindAutosave() {
 function triggerDayAutosave() {
   if (!dayFormChanged()) return;
   setAutosaveState("dirty");
-  clearTimeout(_autosaveTimer);
-  _autosaveTimer = setTimeout(() => {
-    if (activeDayFormId()) {
-      saveDayContext(false);
-    } else if (dayFormHasMeaningfulContent()) {
-      saveDayContext(true);
-    }
-  }, AUTOSAVE_DELAY);
+  if (activeDayFormId()) {
+    saveDayContext(false);
+  } else if (dayFormHasMeaningfulContent()) {
+    saveDayContext(true);
+  }
 }
 
 function dayFormHasMeaningfulContent() {

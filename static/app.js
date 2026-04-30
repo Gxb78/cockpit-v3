@@ -2845,9 +2845,6 @@ function bindModal() {
   $("#entryModal")?.addEventListener("click", function(e) {
     if (e.target.closest("[data-close]")) closeModal();
   });
-  // Day form autosave on date/instrument change
-  $("#entryDate")?.addEventListener("change", triggerDayAutosave);
-  $("#entryInstrument")?.addEventListener("change", triggerDayAutosave);
   // Delete day
   $("#deleteBtn")?.addEventListener("click", deleteDay);
   // Add trade button
@@ -3021,6 +3018,25 @@ function activeDayFormId() {
   return state.currentDayId || $("#dayId")?.value || null;
 }
 
+function _dayFieldGlow(fields) {
+  if (!fields || !Object.keys(fields).length) return;
+  var map = {
+    date:        '.day-inline-date',
+    instrument:  '.day-inline-instrument',
+    htf_bias:    '.today-context-bias .pills',
+    htf_context: '#htfContext',
+    daily_notes: '#dailyNotes',
+  };
+  Object.keys(fields).forEach(function (key) {
+    var sel = map[key];
+    if (!sel) return;
+    var el = document.querySelector(sel);
+    if (!el) return;
+    el.classList.add('day-field-glow');
+    setTimeout(function () { el.classList.remove('day-field-glow'); }, 1000);
+  });
+}
+
 async function saveDayContext(isNew) {
   if (state.isSavingDay) return null;
   state.isSavingDay = true;
@@ -3029,8 +3045,10 @@ async function saveDayContext(isNew) {
   const activeId = activeDayFormId();
   const isCreate = isNew || !activeId;
   let payload = fullPayload;
+  let changedFields = null;
   if (!isCreate) {
     payload = dayPayloadDiff(state.initialDayPayload, fullPayload);
+    changedFields = Object.keys(payload);
     if (Object.keys(payload).length === 0) {
       setAutosaveState("idle");
       return null;
@@ -3046,10 +3064,11 @@ async function saveDayContext(isNew) {
       var _ab = $("#addTradeBtn");
       if (_ab) { _ab.disabled = false; _ab.title = ""; }
       $("#modalTitle").textContent = `${saved.instrument} - ${saved.date}`;
+      // Pour une création, tous les champs sont "changés"
+      changedFields = Object.keys(fullPayload).filter(function(k) { return fullPayload[k] != null && fullPayload[k] !== ''; });
     } else {
       saved = await api(`/api/days/${activeId}`,
         { method: "PUT", body: JSON.stringify(payload) });
-      // Mettre a jour le titre de la modale en direct (instrument ou date changed)
       if (payload.date || payload.instrument) {
         const curDate = $("#entryDate").value;
         const curInstr = $("#entryInstrument").value;
@@ -3063,10 +3082,27 @@ async function saveDayContext(isNew) {
     state.initialDayPayload = buildDayPayload();
     state.initialDayState = snapshotDayForm();
     setAutosaveState("saved");
+    // Glow sur les champs modifiés
+    if (changedFields && changedFields.length) {
+      var glowFields = {};
+      changedFields.forEach(function(k) { glowFields[k] = true; });
+      _dayFieldGlow(glowFields);
+    }
     setTimeout(() => { if (_autosaveState === "saved") setAutosaveState("idle"); }, 2200);
     return saved;
   } catch (err) {
     setAutosaveState("error", err.message?.slice(0,30) || "Erreur");
+    // Rouge persistant sur les champs modifiés
+    if (changedFields && changedFields.length) {
+      var errFields = {};
+      changedFields.forEach(function(k) { errFields[k] = true; });
+      Object.keys(errFields).forEach(function (key) {
+        var sel = {date:'.day-inline-date',instrument:'.day-inline-instrument',htf_bias:'.today-context-bias .pills',htf_context:'#htfContext',daily_notes:'#dailyNotes'}[key];
+        if (!sel) return;
+        var el = document.querySelector(sel);
+        if (el) el.classList.add('day-field-error');
+      });
+    }
     toast(err.message, "error");
     return null;
   } finally {
@@ -4458,9 +4494,7 @@ function openLightbox(src) {
 // ---- 026_autosave_du_jour.js ----
 // ---------- Autosave du jour ----------
 
-let _autosaveTimer = null;
 let _autosaveState = "idle";
-const AUTOSAVE_DELAY = 1800;
 
 function _nowHHMM() {
   var d = new Date();
@@ -4493,8 +4527,8 @@ function setAutosaveState(s, msg) {
 }
 
 function bindAutosave() {
-  // On écoute uniquement les champs du formulaire du jour
-  $("#dayForm")?.addEventListener("input", triggerDayAutosave);
+  // Sauvegarde à la sortie d'un champ (focusout) comme dans l'éditeur
+  $("#dayForm")?.addEventListener("focusout", triggerDayAutosave);
   $("#dayForm")?.addEventListener("click", e => {
     if (e.target.closest(".pill-choice")) setTimeout(triggerDayAutosave, 50);
   });
@@ -4503,14 +4537,11 @@ function bindAutosave() {
 function triggerDayAutosave() {
   if (!dayFormChanged()) return;
   setAutosaveState("dirty");
-  clearTimeout(_autosaveTimer);
-  _autosaveTimer = setTimeout(() => {
-    if (activeDayFormId()) {
-      saveDayContext(false);
-    } else if (dayFormHasMeaningfulContent()) {
-      saveDayContext(true);
-    }
-  }, AUTOSAVE_DELAY);
+  if (activeDayFormId()) {
+    saveDayContext(false);
+  } else if (dayFormHasMeaningfulContent()) {
+    saveDayContext(true);
+  }
 }
 
 function dayFormHasMeaningfulContent() {
@@ -9505,11 +9536,7 @@ function _journalSyncStateAfterSave(tid, updated) {
 }
 
 function _journalCardScheduleSave(tid) {
-  var tidStr = String(tid);
-  clearTimeout(_journalCardSaveTimers[tidStr]);
-  _journalCardSaveTimers[tidStr] = setTimeout(function () {
-    _journalCardSave(tidStr);
-  }, 700);
+  _journalCardSave(tid);
 }
 
 // ---- card-style editor drawer ----
@@ -9759,7 +9786,6 @@ function bindJournalDayTrades() {
     if (!editorField) return;
     var editor = editorField.closest('.journal-trade-editor');
     var editorTid = editor && editor.dataset.tradeId;
-    if (editorTid) TradeEditorController.scheduleSave(editorTid);
     // Live preview: update strategy title on select change
     if (editorField.tagName === 'SELECT' && editorField.dataset.field === 'strategy') {
       var title = editor && editor.querySelector('.jedit-hero-copy h3');
@@ -9800,9 +9826,9 @@ function bindJournalDayTrades() {
     card.classList.toggle("is-flipped");
   });
 
-  // Auto-compute position_size from Marge + Levier + Entry
+  // Auto-compute position_size from Marge + Levier + Entry (verso flip card uniquement)
   wrap.addEventListener("input", function (e) {
-    var field = e.target.closest('.jcard-margin-input, .jcard-field[data-field="leverage"], .jcard-field[data-field="entry_price"]');
+    var field = e.target.closest('.journal-flip-back-scroll .jcard-margin-input, .journal-flip-back-scroll .jcard-field[data-field="leverage"], .journal-flip-back-scroll .jcard-field[data-field="entry_price"]');
     if (!field) return;
     var scroll = field.closest('.journal-flip-back-scroll');
     if (!scroll) return;
@@ -10461,9 +10487,8 @@ TradeEditorController.refreshUI = function (editor, trade) {
     if (badges.length >= 3) badges[2].textContent = dir;
   }
 
-  // Update scenario/why text
-  var summary = editor.querySelector('.jedit-hero-copy p');
-  if (summary) summary.textContent = TradeEditorController.shortText(trade.why_trade, trade.scenario, trade.why_entry);
+  // Le résumé (p) n'est plus refresh ici — le textarea contient déjà la donnée correcte.
+  // L'ancienne version pouvait faire clignoter un texte d'un autre champ.
 };
 
 // ---- Inline warnings ----
@@ -10504,14 +10529,82 @@ TradeEditorController.clearWarnings = function (editor) {
   editor.querySelectorAll('.jedit-block-msg').forEach(function (el) { el.remove(); });
 };
 
+// ---- Field glow — feedback visuel par champ ---- //
+
+// Mapping champ → section (utilisé par _changedFields pour filtrer les champs metier)
+TradeEditorController._fieldToSection = {
+  strategy: 0, direction: 0, stdv_level: 0, is_win: 0,
+  entry_price: 1, stop_loss: 1, take_profit: 1, exit_price: 1,
+  position_size: 1, leverage: 1, pnl: 1, rr: 1,
+  why_trade: 2, why_entry: 2, scenario: 2, why_stop: 2, why_tp: 2,
+  thesis_validated: 3, execution_quality: 3, tags: 3, lessons_learned: 3,
+  plan_model: 4, plan_direction: 4, plan_alignment: 4, plan_score: 4,
+  plan_errors: 4, plan_warnings: 4, plan_override_reason: 4, plan_snapshot: 4,
+};
+
+TradeEditorController._changedFields = function (payload, original) {
+  var fields = {};
+  if (!original) return fields;
+  Object.keys(payload).forEach(function (key) {
+    if (TradeEditorController._fieldToSection[key] === undefined) return;
+    // Ignorer les champs qui seront recalculés par recalcMetrics
+    // (leur diff est artifact du calcul, pas une modif volontaire)
+    if (key === 'rr' || key === 'pnl' || key === 'is_win') return;
+    if (String(payload[key] ?? '').trim() !== String(original[key] ?? '').trim()) {
+      fields[key] = true;
+    }
+  });
+  return fields;
+};
+
+TradeEditorController._findFieldEl = function (editor, fieldName) {
+  if (!editor) return null;
+  // Chercher l'élément du champ directement (input, textarea, select, pills, stars)
+  return editor.querySelector(
+    'input[data-field="' + fieldName + '"], ' +
+    'textarea[data-field="' + fieldName + '"], ' +
+    'select[data-field="' + fieldName + '"], ' +
+    '.jedit-pills[data-field="' + fieldName + '"], ' +
+    '.jedit-stars[data-field="' + fieldName + '"]'
+  ) || null;
+};
+
+TradeEditorController._glowFields = function (editor, fields, type) {
+  if (!editor) return;
+  // Nettoyer les glows précédents du même type
+  editor.querySelectorAll('.jedit-field-glow, .jedit-field-error').forEach(function (el) {
+    el.classList.remove('jedit-field-glow', 'jedit-field-error');
+  });
+  if (type === '') return;
+  Object.keys(fields).forEach(function (fieldName) {
+    var wrap = TradeEditorController._findFieldEl(editor, fieldName);
+    if (!wrap) return;
+    if (type === 'success') {
+      wrap.classList.add('jedit-field-glow');
+    } else if (type === 'error') {
+      wrap.classList.add('jedit-field-error');
+    }
+  });
+};
+
 // ---- Save ----
 TradeEditorController.save = function (tid) {
   var tidStr  = String(tid);
-  var payload = TradeEditorController.collectPayload(tidStr);
-  var editor  = document.querySelector('.journal-trade-editor[data-trade-id="' + tidStr + '"]');
+  // Nettoyer tout timer en attente pour éviter une double sauvegarde
+  clearTimeout(TradeEditorController.saveTimers[tidStr]);
+  
+  var original = _journalDayTradeCache[tidStr];
+  var payload  = TradeEditorController.collectPayload(tidStr);
+  var editor   = document.querySelector('.journal-trade-editor[data-trade-id="' + tidStr + '"]');
   if (!payload || !editor) return;
 
-  TradeEditorController.recalcMetrics(payload, _journalDayTradeCache[tidStr]);
+  // Détecter les champs modifiés
+  var changedFields = TradeEditorController._changedFields(payload, original);
+
+  TradeEditorController.recalcMetrics(payload, original);
+
+  // Nettoyer les glows précédents
+  TradeEditorController._glowFields(editor, {}, '');
   TradeEditorController.setStatus(editor, 'saving', 'Sauvegarde...');
 
   api('/api/trades/' + tidStr, { method: 'PUT', body: JSON.stringify(payload) })
@@ -10523,19 +10616,22 @@ TradeEditorController.save = function (tid) {
       TradeEditorController.refreshUI(editor, updated);
       _journalSyncStateAfterSave(tidStr, updated);
       TradeEditorController.clearWarnings(editor);
+      TradeEditorController._glowFields(editor, changedFields, 'success');
       TradeEditorController.setStatus(editor, 'saved', 'Sauvegarde');
+      // Retirer le glow après 1s
+      setTimeout(function () {
+        TradeEditorController._glowFields(editor, changedFields, '');
+      }, 1000);
     })
     .catch(function (err) {
       TradeEditorController.showWarnings(editor, (err && err.message) ? err.message : null);
+      TradeEditorController._glowFields(editor, changedFields, 'error');
     });
 };
 
 TradeEditorController.scheduleSave = function (tid) {
-  var tidStr = String(tid);
-  clearTimeout(TradeEditorController.saveTimers[tidStr]);
-  TradeEditorController.saveTimers[tidStr] = setTimeout(function () {
-    TradeEditorController.save(tidStr);
-  }, 650);
+  // Sauvegarde immédiate à la sortie du champ, pas de debounce
+  TradeEditorController.save(tid);
 };
 
 TradeEditorController.flushPending = function () {

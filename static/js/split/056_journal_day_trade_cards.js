@@ -212,11 +212,7 @@ function _journalSyncStateAfterSave(tid, updated) {
 }
 
 function _journalCardScheduleSave(tid) {
-  var tidStr = String(tid);
-  clearTimeout(_journalCardSaveTimers[tidStr]);
-  _journalCardSaveTimers[tidStr] = setTimeout(function () {
-    _journalCardSave(tidStr);
-  }, 700);
+  _journalCardSave(tid);
 }
 
 // ---- card-style editor drawer ----
@@ -466,7 +462,6 @@ function bindJournalDayTrades() {
     if (!editorField) return;
     var editor = editorField.closest('.journal-trade-editor');
     var editorTid = editor && editor.dataset.tradeId;
-    if (editorTid) TradeEditorController.scheduleSave(editorTid);
     // Live preview: update strategy title on select change
     if (editorField.tagName === 'SELECT' && editorField.dataset.field === 'strategy') {
       var title = editor && editor.querySelector('.jedit-hero-copy h3');
@@ -507,9 +502,9 @@ function bindJournalDayTrades() {
     card.classList.toggle("is-flipped");
   });
 
-  // Auto-compute position_size from Marge + Levier + Entry
+  // Auto-compute position_size from Marge + Levier + Entry (verso flip card uniquement)
   wrap.addEventListener("input", function (e) {
-    var field = e.target.closest('.jcard-margin-input, .jcard-field[data-field="leverage"], .jcard-field[data-field="entry_price"]');
+    var field = e.target.closest('.journal-flip-back-scroll .jcard-margin-input, .journal-flip-back-scroll .jcard-field[data-field="leverage"], .journal-flip-back-scroll .jcard-field[data-field="entry_price"]');
     if (!field) return;
     var scroll = field.closest('.journal-flip-back-scroll');
     if (!scroll) return;

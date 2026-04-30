@@ -123,9 +123,8 @@ TradeEditorController.refreshUI = function (editor, trade) {
     if (badges.length >= 3) badges[2].textContent = dir;
   }
 
-  // Update scenario/why text
-  var summary = editor.querySelector('.jedit-hero-copy p');
-  if (summary) summary.textContent = TradeEditorController.shortText(trade.why_trade, trade.scenario, trade.why_entry);
+  // Le résumé (p) n'est plus refresh ici — le textarea contient déjà la donnée correcte.
+  // L'ancienne version pouvait faire clignoter un texte d'un autre champ.
 };
 
 // ---- Inline warnings ----
@@ -166,14 +165,82 @@ TradeEditorController.clearWarnings = function (editor) {
   editor.querySelectorAll('.jedit-block-msg').forEach(function (el) { el.remove(); });
 };
 
+// ---- Field glow — feedback visuel par champ ---- //
+
+// Mapping champ → section (utilisé par _changedFields pour filtrer les champs metier)
+TradeEditorController._fieldToSection = {
+  strategy: 0, direction: 0, stdv_level: 0, is_win: 0,
+  entry_price: 1, stop_loss: 1, take_profit: 1, exit_price: 1,
+  position_size: 1, leverage: 1, pnl: 1, rr: 1,
+  why_trade: 2, why_entry: 2, scenario: 2, why_stop: 2, why_tp: 2,
+  thesis_validated: 3, execution_quality: 3, tags: 3, lessons_learned: 3,
+  plan_model: 4, plan_direction: 4, plan_alignment: 4, plan_score: 4,
+  plan_errors: 4, plan_warnings: 4, plan_override_reason: 4, plan_snapshot: 4,
+};
+
+TradeEditorController._changedFields = function (payload, original) {
+  var fields = {};
+  if (!original) return fields;
+  Object.keys(payload).forEach(function (key) {
+    if (TradeEditorController._fieldToSection[key] === undefined) return;
+    // Ignorer les champs qui seront recalculés par recalcMetrics
+    // (leur diff est artifact du calcul, pas une modif volontaire)
+    if (key === 'rr' || key === 'pnl' || key === 'is_win') return;
+    if (String(payload[key] ?? '').trim() !== String(original[key] ?? '').trim()) {
+      fields[key] = true;
+    }
+  });
+  return fields;
+};
+
+TradeEditorController._findFieldEl = function (editor, fieldName) {
+  if (!editor) return null;
+  // Chercher l'élément du champ directement (input, textarea, select, pills, stars)
+  return editor.querySelector(
+    'input[data-field="' + fieldName + '"], ' +
+    'textarea[data-field="' + fieldName + '"], ' +
+    'select[data-field="' + fieldName + '"], ' +
+    '.jedit-pills[data-field="' + fieldName + '"], ' +
+    '.jedit-stars[data-field="' + fieldName + '"]'
+  ) || null;
+};
+
+TradeEditorController._glowFields = function (editor, fields, type) {
+  if (!editor) return;
+  // Nettoyer les glows précédents du même type
+  editor.querySelectorAll('.jedit-field-glow, .jedit-field-error').forEach(function (el) {
+    el.classList.remove('jedit-field-glow', 'jedit-field-error');
+  });
+  if (type === '') return;
+  Object.keys(fields).forEach(function (fieldName) {
+    var wrap = TradeEditorController._findFieldEl(editor, fieldName);
+    if (!wrap) return;
+    if (type === 'success') {
+      wrap.classList.add('jedit-field-glow');
+    } else if (type === 'error') {
+      wrap.classList.add('jedit-field-error');
+    }
+  });
+};
+
 // ---- Save ----
 TradeEditorController.save = function (tid) {
   var tidStr  = String(tid);
-  var payload = TradeEditorController.collectPayload(tidStr);
-  var editor  = document.querySelector('.journal-trade-editor[data-trade-id="' + tidStr + '"]');
+  // Nettoyer tout timer en attente pour éviter une double sauvegarde
+  clearTimeout(TradeEditorController.saveTimers[tidStr]);
+  
+  var original = _journalDayTradeCache[tidStr];
+  var payload  = TradeEditorController.collectPayload(tidStr);
+  var editor   = document.querySelector('.journal-trade-editor[data-trade-id="' + tidStr + '"]');
   if (!payload || !editor) return;
 
-  TradeEditorController.recalcMetrics(payload, _journalDayTradeCache[tidStr]);
+  // Détecter les champs modifiés
+  var changedFields = TradeEditorController._changedFields(payload, original);
+
+  TradeEditorController.recalcMetrics(payload, original);
+
+  // Nettoyer les glows précédents
+  TradeEditorController._glowFields(editor, {}, '');
   TradeEditorController.setStatus(editor, 'saving', 'Sauvegarde...');
 
   api('/api/trades/' + tidStr, { method: 'PUT', body: JSON.stringify(payload) })
@@ -185,19 +252,22 @@ TradeEditorController.save = function (tid) {
       TradeEditorController.refreshUI(editor, updated);
       _journalSyncStateAfterSave(tidStr, updated);
       TradeEditorController.clearWarnings(editor);
+      TradeEditorController._glowFields(editor, changedFields, 'success');
       TradeEditorController.setStatus(editor, 'saved', 'Sauvegarde');
+      // Retirer le glow après 1s
+      setTimeout(function () {
+        TradeEditorController._glowFields(editor, changedFields, '');
+      }, 1000);
     })
     .catch(function (err) {
       TradeEditorController.showWarnings(editor, (err && err.message) ? err.message : null);
+      TradeEditorController._glowFields(editor, changedFields, 'error');
     });
 };
 
 TradeEditorController.scheduleSave = function (tid) {
-  var tidStr = String(tid);
-  clearTimeout(TradeEditorController.saveTimers[tidStr]);
-  TradeEditorController.saveTimers[tidStr] = setTimeout(function () {
-    TradeEditorController.save(tidStr);
-  }, 650);
+  // Sauvegarde immédiate à la sortie du champ, pas de debounce
+  TradeEditorController.save(tid);
 };
 
 TradeEditorController.flushPending = function () {

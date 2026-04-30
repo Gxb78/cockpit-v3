@@ -107,9 +107,6 @@ function bindModal() {
   $("#entryModal")?.addEventListener("click", function(e) {
     if (e.target.closest("[data-close]")) closeModal();
   });
-  // Day form autosave on date/instrument change
-  $("#entryDate")?.addEventListener("change", triggerDayAutosave);
-  $("#entryInstrument")?.addEventListener("change", triggerDayAutosave);
   // Delete day
   $("#deleteBtn")?.addEventListener("click", deleteDay);
   // Add trade button
