@@ -938,65 +938,7 @@ def _tool_get_trades(db, args):
 
 
 # Multiplicateurs de contrat par instrument (futures)
-_CONTRACT_MULTIPLIERS = {
-    "ES": 50.0,   # 1 point = $50
-    "NQ": 20.0,   # 1 point = $20
-    "NAS": 20.0,  # 1 point = $20 (NQ alternative)
-    "BTC": 1.0,   # 1 contrat = 1 BTC
-    "ETH": 1.0,   # 1 contrat = 1 ETH
-}
-
-
-def _auto_calc_pnl(payload, day_id, db, existing=None):
-    """Calcule automatiquement le PnL si entry_price, exit_price et position_size sont fournis.
-
-    Formule :
-    - ES/NQ futures : PnL = (exit - entry) × contracts × contract_multiplier
-    - BTC/ETH futures : PnL = (exit - entry) × contracts × leverage
-    - Fallback : PnL = (exit - entry) × position_size × (leverage or 1)
-
-    Nettoie aussi les champs leverage (non stockes en DB) du payload.
-    """
-    # Ne pas ecraser un PnL deja fourni
-    if payload.get("pnl") is not None:
-        payload.pop("leverage", None)  # pas stocke en DB
-        return
-
-    entry = payload.get("entry_price")
-    exit_ = payload.get("exit_price")
-    size = payload.get("position_size")
-
-    if entry is None or exit_ is None or size is None:
-        payload.pop("leverage", None)
-        return  # impossible de calculer
-
-    leverage = payload.pop("leverage", None) or 1
-
-    # Determiner l'instrument
-    instr = None
-    day = db.execute("SELECT instrument FROM days WHERE id=?", (day_id,)).fetchone()
-    if day:
-        instr = day[0]
-
-    multiplier = _CONTRACT_MULTIPLIERS.get(instr, 1.0)
-
-    # Calcul PnL
-    if instr in ("ES", "NQ", "NAS"):
-        # Futures indice : multiplier fixe (points × $50/$20)
-        pnl = (exit_ - entry) * size * multiplier
-    else:
-        # Crypto ou fallback : levier multiplie l'exposition
-        pnl = (exit_ - entry) * size * multiplier * leverage
-
-    # Arrondir et assigner
-    payload["pnl"] = round(pnl, 2)
-
-    # Inferer is_win si pas fourni
-    if payload.get("is_win") is None:
-        if pnl > 0:
-            payload["is_win"] = 1
-        elif pnl < 0:
-            payload["is_win"] = 0
+# ---------- Tools : creer / modifier trades via chat ----------
 
 
 def _tool_create_trade(db, args):

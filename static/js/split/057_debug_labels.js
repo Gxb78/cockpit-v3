@@ -1,7 +1,9 @@
 // ---- 057_debug_labels.js ----
 // Affiche des labels sur chaque composant avec data-name.
-// A supprimer plus tard : supprime ce fichier + sa ligne dans scripts.html
+// Activer: localStorage.DEBUG_LABELS = "1" puis reload.
+// Desactiver: localStorage.removeItem("DEBUG_LABELS") puis reload.
 
+if (localStorage.DEBUG_LABELS === "1") {
 document.addEventListener("DOMContentLoaded", function () {
   var labels = document.querySelectorAll("[data-name]");
   labels.forEach(function (el) {
@@ -22,3 +24,4 @@ document.addEventListener("DOMContentLoaded", function () {
     el.addEventListener("mouseleave", function () { badge.style.opacity = "0"; });
   });
 });
+}

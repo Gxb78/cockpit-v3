@@ -225,3 +225,49 @@ def _validate_trade_semantics(payload):
     return errors
 
 
+# ---------- Auto-calc PnL (utilise par routes trades + AI chat) ----------
+
+_CONTRACT_MULTIPLIERS = {
+    "ES": 50.0,
+    "NQ": 20.0,
+    "NAS": 20.0,
+    "BTC": 1.0,
+    "ETH": 1.0,
+}
+
+
+def _auto_calc_pnl(payload, day_id, db, existing=None):
+    """Calcule le PnL depuis entry/exit/size avec la direction pour le signe."""
+    if payload.get("pnl") is not None:
+        payload.pop("leverage", None)
+        return
+
+    entry = payload.get("entry_price")
+    exit_ = payload.get("exit_price")
+    size = payload.get("position_size")
+    if entry is None or exit_ is None or size is None:
+        payload.pop("leverage", None)
+        return
+
+    leverage = payload.pop("leverage", None) or 1
+    instr = None
+    day = db.execute("SELECT instrument FROM days WHERE id=?", (day_id,)).fetchone()
+    if day:
+        instr = day[0]
+
+    direction = str(payload.get("direction", "") or "").strip().lower()
+    if not direction:
+        direction = "long" if exit_ > entry else "short" if exit_ < entry else ""
+
+    raw_diff = exit_ - entry
+    if direction == "short":
+        raw_diff = -raw_diff  # short: profit si exit < entry
+
+    mult = _CONTRACT_MULTIPLIERS.get(instr, 1.0)
+    pnl = raw_diff * size * mult * (leverage if instr not in ("ES", "NQ", "NAS") else 1)
+    payload["pnl"] = round(pnl, 2)
+
+    if payload.get("is_win") is None:
+        payload["is_win"] = 1 if pnl > 0 else (0 if pnl < 0 else None)
+
+

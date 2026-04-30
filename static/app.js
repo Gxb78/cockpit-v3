@@ -7206,14 +7206,17 @@ function renderTodayCalendar() {
   grid.dataset.metricMode = state.calendarMetricMode || "pnl";
   grid.dataset.viewMode = "month";
 
-  // Clic sur un jour → ouvre le wizard de création de trade
-  grid.addEventListener("click", function _todayCalClick(e) {
-    var dayEl = e.target.closest(".day");
-    if (!dayEl || dayEl.dataset.otherMonth === "1") return;
-    var key = dayEl.dataset.date;
-    if (!key) return;
-    if (typeof wizOpen === "function") wizOpen({ date: key });
-  });
+  // Clic sur un jour → ouvre le wizard (bind une seule fois)
+  if (!grid.dataset.bound) {
+    grid.dataset.bound = "1";
+    grid.addEventListener("click", function _todayCalClick(e) {
+      var dayEl = e.target.closest(".day");
+      if (!dayEl || dayEl.dataset.otherMonth === "1") return;
+      var key = dayEl.dataset.date;
+      if (!key) return;
+      if (typeof wizOpen === "function") wizOpen({ date: key });
+    });
+  }
 }
 
 // ---- 048_ai_chat.js ----
@@ -9332,6 +9335,7 @@ var _journalDayTradeDays = {};
 var _journalCardSaveTimers = {};
 var _journalEditorSaveTimers = {};
 var _journalEditorActiveTradeId = null;
+var _journalRefreshTimer = null;
 
 // ---- collect / summarize helpers ----
 
@@ -9383,7 +9387,10 @@ function _journalCardCollectPayload(tid) {
   // star rating — stored on the wrapper's data-value
   scroll.querySelectorAll('.jcard-stars').forEach(function (group) {
     var field = group.dataset.field;
-    if (field) patch[field] = group.dataset.value || '';
+    if (field) {
+      var starVal = group.dataset.value;
+      if (starVal && starVal !== '0') patch[field] = starVal;
+    }
   });
 
   return Object.assign({}, trade, patch);
@@ -9403,6 +9410,8 @@ function _journalCardSave(tid) {
       var updated = (res && res.trade) ? res.trade : payload;
       _journalDayTradeCache[tidStr] = updated;
       _journalCardRefreshMetrics(tidStr, updated);
+      _journalCardRefreshFull(tidStr, updated);
+      _journalRefreshStateDebounced();
       if (ind) {
         ind.textContent = 'Sauvegardé ✓';
         ind.dataset.state = 'saved';
@@ -9459,6 +9468,59 @@ function _journalCardRefreshMetrics(tid, trade) {
   }
 }
 
+// ---- Full card DOM refresh + state sync after save ----
+
+function _journalCardRefreshFull(tid, trade) {
+  var tidStr = String(tid);
+  var card = document.querySelector('.journal-flip-card[data-trade-id="' + tidStr + '"]');
+  var day = _journalDayTradeDays[tidStr];
+  if (!card || !day) return;
+
+  // Preserve flip state
+  var isFlipped = card.classList.contains('is-flipped');
+
+  // Find card index within grid
+  var grid = card.closest('.journal-day-trades-grid');
+  var idx = 1;
+  if (grid) {
+    var allCards = grid.querySelectorAll('.journal-flip-card');
+    for (var i = 0; i < allCards.length; i++) {
+      if (allCards[i] === card) { idx = i + 1; break; }
+    }
+  }
+
+  var newHtml = journalTradeFlipCardHtml(day, trade, idx, {});
+  var temp = document.createElement('div');
+  temp.innerHTML = newHtml;
+  var newCard = temp.firstElementChild;
+  if (isFlipped) newCard.classList.add('is-flipped');
+  card.parentNode.replaceChild(newCard, card);
+}
+
+// Debounced state refresh for calendar, stats, filters
+function _journalRefreshStateDebounced() {
+  clearTimeout(_journalRefreshTimer);
+  _journalRefreshTimer = setTimeout(function () {
+    if (typeof loadMonth === 'function') loadMonth();
+    if (typeof loadStats === 'function') loadStats({ refreshDays: false, skipRender: false });
+  }, 400);
+}
+
+// Lightweight state sync after editor save - updates state.days in place
+function _journalSyncStateAfterSave(tid, updated) {
+  if (!state || !state.days) return;
+  var targetId = Number(tid);
+  state.days.forEach(function (day) {
+    if (day.trades) {
+      day.trades.forEach(function (trade, i) {
+        if (Number(trade.id) === targetId) {
+          day.trades[i] = updated;
+        }
+      });
+    }
+  });
+}
+
 function _journalCardScheduleSave(tid) {
   var tidStr = String(tid);
   clearTimeout(_journalCardSaveTimers[tidStr]);
@@ -9512,10 +9574,69 @@ function _journalEditorCollectPayload(tid) {
 
   editor.querySelectorAll('.jedit-stars').forEach(function (group) {
     var field = group.dataset.field;
-    if (field) patch[field] = group.dataset.value || '';
+    if (field) {
+      var starVal = group.dataset.value;
+      if (starVal && starVal !== '0') patch[field] = starVal;
+    }
   });
 
   return Object.assign({}, trade, patch);
+}
+
+// ---- Live recalc PnL/RR/is_win for editor before save ----
+
+function _journalEditorRecalcMetrics(collected, originalTrade) {
+  var entry = collected.entry_price != null ? Number(collected.entry_price) : null;
+  var exit_ = collected.exit_price != null ? Number(collected.exit_price) : null;
+  var stop = collected.stop_loss != null ? Number(collected.stop_loss) : null;
+  var target = collected.take_profit != null ? Number(collected.take_profit) : null;
+  var qtyRaw = collected.position_size != null ? Number(collected.position_size) : null;
+  var qty = qtyRaw && qtyRaw > 0 ? qtyRaw : 1;
+  var dir = (collected.direction || '').toLowerCase();
+  if (!dir && entry != null && stop != null && stop !== entry) {
+    dir = stop < entry ? 'long' : 'short';
+  }
+
+  // Recalc RR if entry + stop + target available
+  if (entry != null && stop != null && target != null && stop !== entry) {
+    collected.rr = Number((Math.abs(target - entry) / Math.abs(entry - stop)).toFixed(4));
+  }
+
+  // Recalc PnL from exit if pnl was not explicitly changed by user
+  var pnlExplicit = collected.hasOwnProperty('pnl') && collected.pnl !== (originalTrade && originalTrade.pnl);
+  if (!pnlExplicit && dir && entry != null && exit_ != null) {
+    collected.pnl = dir === 'long' ? (exit_ - entry) * qty : (entry - exit_) * qty;
+  }
+
+  // Infer is_win from pnl if not explicit
+  if (collected.is_win == null || collected.is_win === '') {
+    var pnlNum = collected.pnl != null ? Number(collected.pnl) : null;
+    if (pnlNum != null) {
+      collected.is_win = pnlNum > 0 ? '1' : pnlNum < 0 ? '0' : '';
+    }
+  }
+}
+
+// ---- Live editor UI refresh after save ----
+
+function _journalEditorRefreshUI(editor, trade) {
+  if (!editor || !trade) return;
+
+  // Update strategy title
+  var title = editor.querySelector('.jedit-hero-copy h3');
+  if (title) title.textContent = trade.strategy ? prettify(trade.strategy) : 'Strategie inconnue';
+
+  // Update direction badge in topline
+  var topline = editor.querySelector('.jedit-topline');
+  if (topline) {
+    var badges = topline.querySelectorAll('span');
+    var dir = (trade.direction || '-').toUpperCase();
+    if (badges.length >= 3) badges[2].textContent = dir;
+  }
+
+  // Update scenario/why text
+  var summary = editor.querySelector('.jedit-hero-copy p');
+  if (summary) summary.textContent = journalShortText(trade.why_trade, trade.scenario, trade.why_entry);
 }
 
 function _journalEditorSave(tid) {
@@ -9523,6 +9644,8 @@ function _journalEditorSave(tid) {
   var payload = _journalEditorCollectPayload(tidStr);
   var editor = document.querySelector('.journal-trade-editor[data-trade-id="' + tidStr + '"]');
   if (!payload || !editor) return;
+  // Recalc PnL/RR/is_win from levels before sending
+  _journalEditorRecalcMetrics(payload, _journalDayTradeCache[tidStr]);
 
   _journalEditorSetStatus(editor, 'saving', 'Sauvegarde...');
 
@@ -9532,6 +9655,8 @@ function _journalEditorSave(tid) {
       updated = updated && updated.id ? updated : payload;
       _journalDayTradeCache[tidStr] = updated;
       _journalCardRefreshMetrics(tidStr, updated);
+      _journalEditorRefreshUI(editor, updated);
+      _journalSyncStateAfterSave(tidStr, updated);
       _journalEditorSetStatus(editor, 'saved', 'Sauvegarde');
       setTimeout(function () {
         if (document.body.contains(editor)) _journalEditorSetStatus(editor, '', '');
@@ -9571,14 +9696,29 @@ function openJournalTradeEditor(tid) {
   }, 80);
 }
 
+function _flushPendingJournalSaves() {
+  // Execute pending editor saves immediately instead of dropping them
+  Object.keys(_journalEditorSaveTimers).forEach(function (tid) {
+    clearTimeout(_journalEditorSaveTimers[tid]);
+    _journalEditorSave(tid);
+  });
+  _journalEditorSaveTimers = {};
+
+  // Execute pending card saves immediately
+  Object.keys(_journalCardSaveTimers).forEach(function (tid) {
+    clearTimeout(_journalCardSaveTimers[tid]);
+    _journalCardSave(tid);
+  });
+  _journalCardSaveTimers = {};
+}
+
 function closeJournalTradeEditor(opts) {
   var wrap = $("#journalDayTrades");
   var editor = wrap && wrap.querySelector('.journal-trade-editor');
   if (!wrap || !editor) return;
-  Object.keys(_journalEditorSaveTimers).forEach(function (tid) {
-    clearTimeout(_journalEditorSaveTimers[tid]);
-  });
-  _journalEditorSaveTimers = {};
+  // Refresh the edited card before closing
+  var closingTid = _journalEditorActiveTradeId;
+  _flushPendingJournalSaves();
   _journalEditorActiveTradeId = null;
   wrap.classList.remove('is-editing');
 
@@ -9589,6 +9729,8 @@ function closeJournalTradeEditor(opts) {
   editor.classList.remove('is-visible');
   setTimeout(function () {
     if (editor.parentNode) editor.remove();
+    // Refresh card after editor animation completes
+    if (closingTid) _journalCardRefreshFull(closingTid, _journalDayTradeCache[String(closingTid)]);
   }, 180);
 }
 
@@ -9812,15 +9954,8 @@ function renderJournalDayTrades(dateKey, days) {
 function closeJournalDayTrades() {
   var wrap = $("#journalDayTrades");
   if (!wrap) return;
-  // Flush any pending saves
-  Object.keys(_journalCardSaveTimers).forEach(function (tid) {
-    clearTimeout(_journalCardSaveTimers[tid]);
-  });
-  _journalCardSaveTimers = {};
-  Object.keys(_journalEditorSaveTimers).forEach(function (tid) {
-    clearTimeout(_journalEditorSaveTimers[tid]);
-  });
-  _journalEditorSaveTimers = {};
+  // Flush any pending saves before destroying
+  _flushPendingJournalSaves();
   _journalEditorActiveTradeId = null;
   wrap.classList.add("hidden");
   wrap.classList.remove("is-editing");
@@ -10166,8 +10301,10 @@ function journalTradeFlipCardHtml(day, trade, idx, deck) {
 // ---- 057_debug_labels.js ----
 // ---- 057_debug_labels.js ----
 // Affiche des labels sur chaque composant avec data-name.
-// A supprimer plus tard : supprime ce fichier + sa ligne dans scripts.html
+// Activer: localStorage.DEBUG_LABELS = "1" puis reload.
+// Desactiver: localStorage.removeItem("DEBUG_LABELS") puis reload.
 
+if (localStorage.DEBUG_LABELS === "1") {
 document.addEventListener("DOMContentLoaded", function () {
   var labels = document.querySelectorAll("[data-name]");
   labels.forEach(function (el) {
@@ -10188,3 +10325,4 @@ document.addEventListener("DOMContentLoaded", function () {
     el.addEventListener("mouseleave", function () { badge.style.opacity = "0"; });
   });
 });
+}

@@ -95,12 +95,15 @@ function renderTodayCalendar() {
   grid.dataset.metricMode = state.calendarMetricMode || "pnl";
   grid.dataset.viewMode = "month";
 
-  // Clic sur un jour → ouvre le wizard de création de trade
-  grid.addEventListener("click", function _todayCalClick(e) {
-    var dayEl = e.target.closest(".day");
-    if (!dayEl || dayEl.dataset.otherMonth === "1") return;
-    var key = dayEl.dataset.date;
-    if (!key) return;
-    if (typeof wizOpen === "function") wizOpen({ date: key });
-  });
+  // Clic sur un jour → ouvre le wizard (bind une seule fois)
+  if (!grid.dataset.bound) {
+    grid.dataset.bound = "1";
+    grid.addEventListener("click", function _todayCalClick(e) {
+      var dayEl = e.target.closest(".day");
+      if (!dayEl || dayEl.dataset.otherMonth === "1") return;
+      var key = dayEl.dataset.date;
+      if (!key) return;
+      if (typeof wizOpen === "function") wizOpen({ date: key });
+    });
+  }
 }
