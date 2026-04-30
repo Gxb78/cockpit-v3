@@ -824,7 +824,10 @@ function setCalendarMetricMode(mode, opts = {}) {
   state.calendarMetricMode = mode;
   updateCalendarMetricToggleUI();
   if (persist) localStorage.setItem(CALENDAR_METRIC_MODE_KEY, mode);
-  if (rerender && state.currentPage === "journal") renderCalendar();
+  if (rerender && state.currentPage === "journal") {
+    if (typeof closeJournalDayTrades === "function") closeJournalDayTrades();
+    renderCalendar();
+  }
 }
 
 function bindCalendarMetricToggle() {
@@ -1209,7 +1212,10 @@ function setJournalLayoutMode(mode, opts = {}) {
   updateJournalLayoutToggleUI();
   updateJournalControlsVisibility();
   if (persist) localStorage.setItem(JOURNAL_LAYOUT_MODE_KEY, mode);
-  if (rerender && state.currentPage === "journal") renderCalendar();
+  if (rerender && state.currentPage === "journal") {
+    if (typeof closeJournalDayTrades === "function") closeJournalDayTrades();
+    renderCalendar();
+  }
 }
 
 function bindJournalLayoutToggle() {
@@ -1335,7 +1341,10 @@ function scheduleJournalCalendarRender() {
   if (_journalRenderRaf) return;
   _journalRenderRaf = requestAnimationFrame(() => {
     _journalRenderRaf = 0;
-    if (state.currentPage === "journal") renderCalendar();
+    if (state.currentPage === "journal") {
+      if (typeof closeJournalDayTrades === "function") closeJournalDayTrades();
+      renderCalendar();
+    }
   });
 }
 
@@ -1569,7 +1578,10 @@ function setCalendarMonthFocusMode(mode, opts = {}) {
   state.calendarMonthFocusMode = mode;
   updateCalendarMonthFocusToggleUI();
   if (persist) localStorage.setItem(CALENDAR_MONTH_FOCUS_MODE_KEY, mode);
-  if (rerender && state.currentPage === "journal") renderCalendar();
+  if (rerender && state.currentPage === "journal") {
+    if (typeof closeJournalDayTrades === "function") closeJournalDayTrades();
+    renderCalendar();
+  }
 }
 
 function bindCalendarMonthFocusToggle() {
@@ -2490,7 +2502,6 @@ function renderCalendar(windowDef = null) {
   grid.style.setProperty("--journal-rows", String(rows));
 
   renderCalendarMonthFocus(byDay, win);
-  if (typeof closeJournalDayTrades === "function") closeJournalDayTrades();
   renderJournalTable();
 }
 
@@ -9410,7 +9421,7 @@ function _journalCardSave(tid) {
       var updated = (res && res.trade) ? res.trade : payload;
       _journalDayTradeCache[tidStr] = updated;
       _journalCardRefreshMetrics(tidStr, updated);
-      _journalCardRefreshFull(tidStr, updated);
+      _journalSyncStateAfterSave(tidStr, updated);
       _journalRefreshStateDebounced();
       if (ind) {
         ind.textContent = 'Sauvegardé ✓';
@@ -9955,8 +9966,8 @@ function bindJournalDayTrades() {
     document.addEventListener("click", function _closeOnOutside(e) {
       var w = $("#journalDayTrades");
       if (!w || w.classList.contains("hidden")) return;
-      // Ne pas fermer si le clic va ouvrir une card (case calendrier, ligne tableau, bouton editer)
-      if (e.target.closest(".day, #journalTradesTbody, [data-journal-trade-edit]")) return;
+      // Ne pas fermer si le clic est sur une card, un input verso, le tableau, ou un bouton editer
+      if (e.target.closest(".journal-flip-card, #journalDayTrades, .day, #journalTradesTbody, [data-journal-trade-edit]")) return;
       if (!w.contains(e.target)) {
         closeJournalDayTrades();
       }

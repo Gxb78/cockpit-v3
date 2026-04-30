@@ -206,7 +206,10 @@ function setCalendarMetricMode(mode, opts = {}) {
   state.calendarMetricMode = mode;
   updateCalendarMetricToggleUI();
   if (persist) localStorage.setItem(CALENDAR_METRIC_MODE_KEY, mode);
-  if (rerender && state.currentPage === "journal") renderCalendar();
+  if (rerender && state.currentPage === "journal") {
+    if (typeof closeJournalDayTrades === "function") closeJournalDayTrades();
+    renderCalendar();
+  }
 }
 
 function bindCalendarMetricToggle() {

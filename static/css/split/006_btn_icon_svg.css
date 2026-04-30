@@ -73,9 +73,6 @@ input[type="date"]:hover {
 
 .journal-table-wrap {
   margin-top: 14px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
   overflow: hidden;
 }
 .journal-table-head {

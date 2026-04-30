@@ -10,7 +10,10 @@ function scheduleJournalCalendarRender() {
   if (_journalRenderRaf) return;
   _journalRenderRaf = requestAnimationFrame(() => {
     _journalRenderRaf = 0;
-    if (state.currentPage === "journal") renderCalendar();
+    if (state.currentPage === "journal") {
+      if (typeof closeJournalDayTrades === "function") closeJournalDayTrades();
+      renderCalendar();
+    }
   });
 }
 

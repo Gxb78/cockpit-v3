@@ -1,0 +1,64 @@
+/* ---- 048_card_surface.css ---- */
+/* CardSurface primitive — centralise radius, shadow, border, fond, hover, focus, entree animation.
+   Utilisation: ajouter les classes CSS au HTML, supprimer les duplications dans les autres fichiers. */
+
+/* ============================================================
+   BASE — dark theme standard (fond surface, bordure fine)
+   ============================================================ */
+
+.card-surface {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  position: relative;
+  overflow: hidden;
+  transition: border-color var(--duration-normal) var(--ease),
+              box-shadow var(--duration-normal) var(--ease),
+              transform var(--duration-normal) var(--ease);
+}
+
+/* Radius scale */
+.card-surface--xs  { border-radius: var(--r-xs); }  /* 8px */
+.card-surface--sm  { border-radius: var(--r-sm); }  /* 12px */
+.card-surface--lg  { border-radius: var(--r-lg); }  /* 22px */
+
+/* Subtle inset top edge (KPI, panels) */
+.card-surface--inset {
+  box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset;
+}
+
+/* Ghost / empty state (dashed border, transparent bg) */
+.card-surface--ghost {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--border-strong);
+}
+
+/* ============================================================
+   INTERACTIVE STATES
+   ============================================================ */
+
+/* Hover — lift + border highlight */
+.card-surface--hoverable:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+}
+
+/* Focus-within — cyan accent ring */
+.card-surface--focusable:focus-within {
+  border-color: rgba(0, 229, 255, 0.5);
+  box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.08);
+}
+
+/* ============================================================
+   ENTRY ANIMATION
+   ============================================================ */
+
+.card-surface--enter {
+  animation: cardSurfaceIn 0.35s var(--ease);
+}
+
+@keyframes cardSurfaceIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}

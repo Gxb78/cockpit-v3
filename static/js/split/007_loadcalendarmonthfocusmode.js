@@ -21,7 +21,10 @@ function setCalendarMonthFocusMode(mode, opts = {}) {
   state.calendarMonthFocusMode = mode;
   updateCalendarMonthFocusToggleUI();
   if (persist) localStorage.setItem(CALENDAR_MONTH_FOCUS_MODE_KEY, mode);
-  if (rerender && state.currentPage === "journal") renderCalendar();
+  if (rerender && state.currentPage === "journal") {
+    if (typeof closeJournalDayTrades === "function") closeJournalDayTrades();
+    renderCalendar();
+  }
 }
 
 function bindCalendarMonthFocusToggle() {

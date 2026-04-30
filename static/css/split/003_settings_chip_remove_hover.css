@@ -39,16 +39,9 @@
   margin-bottom: 26px;
 }
 .kpi {
-  background: var(--surface);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  border: 1px solid var(--border);
-  border-radius: var(--r);
   padding: 18px 20px;
-  position: relative;
-  overflow: hidden;
-  transition: border-color, transform var(--duration-normal) var(--ease);
-  box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset;
 }
 .kpi::before {
   content: "";
@@ -57,10 +50,7 @@
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--border-strong), transparent);
 }
-.kpi:hover {
-  border-color: var(--border-strong);
-  transform: translateY(-2px);
-}
+/* KPI hover supprime — gere par .card-surface--hoverable */
 .kpi-label {
   font-size: 10.5px;
   font-weight: 700;
@@ -196,15 +186,9 @@
 }
 
 .panel {
-  background: var(--surface);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  border: 1px solid var(--border);
-  border-radius: var(--r);
   padding: 22px 24px;
-  position: relative;
-  overflow: hidden;
-  box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset;
 }
 .panel-h {
   display: flex;

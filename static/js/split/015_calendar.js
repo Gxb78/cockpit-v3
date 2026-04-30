@@ -118,7 +118,6 @@ function renderCalendar(windowDef = null) {
   grid.style.setProperty("--journal-rows", String(rows));
 
   renderCalendarMonthFocus(byDay, win);
-  if (typeof closeJournalDayTrades === "function") closeJournalDayTrades();
   renderJournalTable();
 }
 

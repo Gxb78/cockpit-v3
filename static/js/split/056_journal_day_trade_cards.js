@@ -81,7 +81,7 @@ function _journalCardSave(tid) {
       var updated = (res && res.trade) ? res.trade : payload;
       _journalDayTradeCache[tidStr] = updated;
       _journalCardRefreshMetrics(tidStr, updated);
-      _journalCardRefreshFull(tidStr, updated);
+      _journalSyncStateAfterSave(tidStr, updated);
       _journalRefreshStateDebounced();
       if (ind) {
         ind.textContent = 'Sauvegardé ✓';
@@ -626,8 +626,8 @@ function bindJournalDayTrades() {
     document.addEventListener("click", function _closeOnOutside(e) {
       var w = $("#journalDayTrades");
       if (!w || w.classList.contains("hidden")) return;
-      // Ne pas fermer si le clic va ouvrir une card (case calendrier, ligne tableau, bouton editer)
-      if (e.target.closest(".day, #journalTradesTbody, [data-journal-trade-edit]")) return;
+      // Ne pas fermer si le clic est sur une card, un input verso, le tableau, ou un bouton editer
+      if (e.target.closest(".journal-flip-card, #journalDayTrades, .day, #journalTradesTbody, [data-journal-trade-edit]")) return;
       if (!w.contains(e.target)) {
         closeJournalDayTrades();
       }

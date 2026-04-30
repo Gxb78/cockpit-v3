@@ -945,16 +945,9 @@ body.light-mode .theme-toggle:hover { border-color: rgba(0,132,255,0.40); backgr
   margin-bottom: 26px;
 }
 .kpi {
-  background: var(--surface);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  border: 1px solid var(--border);
-  border-radius: var(--r);
   padding: 18px 20px;
-  position: relative;
-  overflow: hidden;
-  transition: border-color, transform var(--duration-normal) var(--ease);
-  box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset;
 }
 .kpi::before {
   content: "";
@@ -963,10 +956,7 @@ body.light-mode .theme-toggle:hover { border-color: rgba(0,132,255,0.40); backgr
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--border-strong), transparent);
 }
-.kpi:hover {
-  border-color: var(--border-strong);
-  transform: translateY(-2px);
-}
+/* KPI hover supprime — gere par .card-surface--hoverable */
 .kpi-label {
   font-size: 10.5px;
   font-weight: 700;
@@ -1102,15 +1092,9 @@ body.light-mode .theme-toggle:hover { border-color: rgba(0,132,255,0.40); backgr
 }
 
 .panel {
-  background: var(--surface);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  border: 1px solid var(--border);
-  border-radius: var(--r);
   padding: 22px 24px;
-  position: relative;
-  overflow: hidden;
-  box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset;
 }
 .panel-h {
   display: flex;
@@ -1928,9 +1912,6 @@ input[type="date"]:hover {
 
 .journal-table-wrap {
   margin-top: 14px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
   overflow: hidden;
 }
 .journal-table-head {
@@ -9407,9 +9388,7 @@ body.light-mode .app-topbar {
   min-height: 340px;
   text-align: center;
   color: var(--text-muted);
-  border: 1px dashed var(--border-strong);
-  border-radius: 14px;
-  background: rgba(255,255,255,0.018);
+  border-style: dashed;
 }
 
 .stats-empty-state svg {
@@ -9436,7 +9415,6 @@ body.light-mode .app-topbar {
 
 .period-compare-card {
   min-height: 138px;
-  border-radius: 12px;
   background:
     linear-gradient(135deg, rgba(56, 211, 238, 0.04), rgba(255,255,255,0.012)),
     var(--surface);
@@ -9469,8 +9447,6 @@ body.light-mode .app-topbar {
 .stats-heatmap-panel,
 .stats-chart-grid > .panel,
 .breakdowns-grid > .panel {
-  border-radius: 12px;
-  background: var(--surface);
   border-color: var(--border);
   box-shadow: none;
 }
@@ -9496,8 +9472,6 @@ body.light-mode .app-topbar {
 }
 
 .streak-tile {
-  border-radius: 12px;
-  background: var(--surface);
   border-color: var(--border);
   box-shadow: none;
 }
@@ -9560,9 +9534,7 @@ body.light-mode .app-topbar {
 
 .settings-panel {
   min-height: 170px;
-  border-radius: 12px;
   border-color: var(--border);
-  background: var(--surface);
 }
 
 .settings-panel .panel-h h3 {
@@ -14247,4 +14219,70 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   .wiz-body {
     padding: 16px 16px 8px;
   }
+}
+
+/* ---- 048_card_surface.css ---- */
+/* ---- 048_card_surface.css ---- */
+/* CardSurface primitive — centralise radius, shadow, border, fond, hover, focus, entree animation.
+   Utilisation: ajouter les classes CSS au HTML, supprimer les duplications dans les autres fichiers. */
+
+/* ============================================================
+   BASE — dark theme standard (fond surface, bordure fine)
+   ============================================================ */
+
+.card-surface {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  position: relative;
+  overflow: hidden;
+  transition: border-color var(--duration-normal) var(--ease),
+              box-shadow var(--duration-normal) var(--ease),
+              transform var(--duration-normal) var(--ease);
+}
+
+/* Radius scale */
+.card-surface--xs  { border-radius: var(--r-xs); }  /* 8px */
+.card-surface--sm  { border-radius: var(--r-sm); }  /* 12px */
+.card-surface--lg  { border-radius: var(--r-lg); }  /* 22px */
+
+/* Subtle inset top edge (KPI, panels) */
+.card-surface--inset {
+  box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset;
+}
+
+/* Ghost / empty state (dashed border, transparent bg) */
+.card-surface--ghost {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--border-strong);
+}
+
+/* ============================================================
+   INTERACTIVE STATES
+   ============================================================ */
+
+/* Hover — lift + border highlight */
+.card-surface--hoverable:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+}
+
+/* Focus-within — cyan accent ring */
+.card-surface--focusable:focus-within {
+  border-color: rgba(0, 229, 255, 0.5);
+  box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.08);
+}
+
+/* ============================================================
+   ENTRY ANIMATION
+   ============================================================ */
+
+.card-surface--enter {
+  animation: cardSurfaceIn 0.35s var(--ease);
+}
+
+@keyframes cardSurfaceIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }

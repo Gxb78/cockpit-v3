@@ -29,9 +29,7 @@
   min-height: 340px;
   text-align: center;
   color: var(--text-muted);
-  border: 1px dashed var(--border-strong);
-  border-radius: 14px;
-  background: rgba(255,255,255,0.018);
+  border-style: dashed;
 }
 
 .stats-empty-state svg {
@@ -58,7 +56,6 @@
 
 .period-compare-card {
   min-height: 138px;
-  border-radius: 12px;
   background:
     linear-gradient(135deg, rgba(56, 211, 238, 0.04), rgba(255,255,255,0.012)),
     var(--surface);
@@ -91,8 +88,6 @@
 .stats-heatmap-panel,
 .stats-chart-grid > .panel,
 .breakdowns-grid > .panel {
-  border-radius: 12px;
-  background: var(--surface);
   border-color: var(--border);
   box-shadow: none;
 }
@@ -118,8 +113,6 @@
 }
 
 .streak-tile {
-  border-radius: 12px;
-  background: var(--surface);
   border-color: var(--border);
   box-shadow: none;
 }
@@ -182,9 +175,7 @@
 
 .settings-panel {
   min-height: 170px;
-  border-radius: 12px;
   border-color: var(--border);
-  background: var(--surface);
 }
 
 .settings-panel .panel-h h3 {
