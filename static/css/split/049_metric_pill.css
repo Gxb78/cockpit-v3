@@ -1,0 +1,104 @@
+/* ---- 049_metric_pill.css ---- */
+/* MetricPill primitive — PnL, RR, WIN/LOSS, instrument, direction.
+   Variantes: neutral (default), win, loss, cyan, muted.
+   Utilisation: <span class="metric-pill metric-pill--win">+245.00</span> */
+
+/* ============================================================
+   BASE
+   ============================================================ */
+
+.metric-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--mp-border, var(--border));
+  background: var(--mp-bg, var(--surface-2));
+  color: var(--mp-color, var(--text-soft));
+  font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+/* ============================================================
+   COLOR VARIANTS
+   ============================================================ */
+
+.metric-pill--win {
+  --mp-bg: var(--win-bg);
+  --mp-border: var(--win-border);
+  --mp-color: var(--win);
+}
+
+.metric-pill--loss {
+  --mp-bg: var(--loss-bg);
+  --mp-border: var(--loss-border);
+  --mp-color: var(--loss);
+}
+
+.metric-pill--cyan {
+  --mp-bg: rgba(0, 229, 255, 0.08);
+  --mp-border: rgba(0, 229, 255, 0.25);
+  --mp-color: var(--cyan);
+}
+
+.metric-pill--muted {
+  --mp-bg: transparent;
+  --mp-border: var(--border);
+  --mp-color: var(--text-faint);
+}
+
+/* ============================================================
+   SIZE MODIFIER
+   ============================================================ */
+
+.metric-pill--sm {
+  min-height: 26px;
+  padding: 0 8px;
+  font-size: 9px;
+}
+
+/* ============================================================
+   APPLE LIGHT OVERRIDE (scoped to trade cards / flip cards)
+   ============================================================ */
+
+.journal-flip-face .metric-pill,
+.trade-card .metric-pill {
+  --mp-bg: #eef1f6;
+  --mp-border: #e3e7ee;
+  --mp-color: #626b7a;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+
+.journal-flip-face .metric-pill--win,
+.trade-card .metric-pill--win {
+  --mp-bg: rgba(232, 255, 222, 0.90);
+  --mp-border: rgba(52, 199, 89, 0.35);
+  --mp-color: #20570b;
+}
+
+.journal-flip-face .metric-pill--loss,
+.trade-card .metric-pill--loss {
+  --mp-bg: rgba(255, 229, 234, 0.92);
+  --mp-border: rgba(255, 69, 58, 0.30);
+  --mp-color: #8a1429;
+}
+
+.journal-flip-face .metric-pill--cyan,
+.trade-card .metric-pill--cyan {
+  --mp-bg: rgba(217, 252, 255, 0.90);
+  --mp-border: rgba(0, 197, 220, 0.38);
+  --mp-color: #05313a;
+}
+
+.journal-flip-face .metric-pill--muted,
+.trade-card .metric-pill--muted {
+  --mp-bg: transparent;
+  --mp-border: #e3e7ee;
+  --mp-color: #98a1af;
+}

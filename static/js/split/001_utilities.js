@@ -191,6 +191,37 @@ function deriveTradeMetrics(trade) {
 }
 
 /**
+ * Calcule la position_size en unites depuis la marge, le levier et le prix d entree.
+ * Ex: marginUsd=100, leverage=10, entry=23900 -> positionSize=0.04184 BTC
+ * @param {number} marginUsd - Marge en dollars
+ * @param {number} leverage  - Levier (ex: 10)
+ * @param {number} entryPrice - Prix d entree
+ * @returns {number|null}
+ */
+function computePositionSize(marginUsd, leverage, entryPrice) {
+  var m = Number(marginUsd);
+  var l = Number(leverage);
+  var e = Number(entryPrice);
+  if (!m || !l || !e || m <= 0 || l <= 0 || e <= 0) return null;
+  return Number(((m * l) / e).toFixed(8));
+}
+
+/**
+ * Calcule la marge en dollars depuis la position_size, le levier et le prix d entree.
+ * @param {number} positionSize - Taille en unites (BTC, ETH...)
+ * @param {number} leverage - Levier
+ * @param {number} entryPrice - Prix d entree
+ * @returns {number|null}
+ */
+function computeMarginUsd(positionSize, leverage, entryPrice) {
+  var p = Number(positionSize);
+  var l = Number(leverage);
+  var e = Number(entryPrice);
+  if (!p || !l || !e || p <= 0 || l <= 0 || e <= 0) return null;
+  return Number(((p * e) / l).toFixed(2));
+}
+
+/**
  * Echappe les caracteres HTML dans une chaine.
  * @param {string} s
  * @returns {string}

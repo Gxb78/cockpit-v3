@@ -95,18 +95,8 @@
 .trade-card-media-bottom { bottom: 12px; }
 
 .trade-chip {
-  display: inline-flex;
-  align-items: center;
   max-width: 100%;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: rgba(6, 9, 18, 0.62);
-  color: var(--text);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.45px;
   text-transform: uppercase;
-  white-space: nowrap;
 }
 .trade-chip-num { padding: 4px 9px; color: var(--text-soft); }
 .trade-chip-strategy {
@@ -129,15 +119,8 @@
 }
 
 .trade-direction {
-  font-size: 10px;
-  font-weight: 800;
-  padding: 4px 10px;
-  border-radius: 999px;
   letter-spacing: 0.7px;
   text-transform: uppercase;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  color: var(--text-soft);
-  background: rgba(6, 9, 18, 0.62);
 }
 .trade-direction.long {
   color: var(--win);
@@ -297,14 +280,9 @@
 /* ---------- Trade PnL badge (on media hero) ---------- */
 
 .trade-pnl-badge {
-  font-family: "JetBrains Mono", monospace;
   font-size: 13px;
   font-weight: 800;
-  padding: 4px 10px;
-  border-radius: 999px;
   letter-spacing: -0.3px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: rgba(6, 9, 18, 0.82);
 }
 .trade-pnl-badge.pos { color: var(--win); border-color: rgba(136,255,90,0.5); }
 .trade-pnl-badge.neg { color: var(--loss); border-color: rgba(255,78,107,0.5); }

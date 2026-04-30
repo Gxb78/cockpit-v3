@@ -50,7 +50,7 @@ STRATEGY_LABELS    = _CONFIG_DATA.get("strategy_labels", {
     "london_model": "London Model",
     "ny_model": "NY Model",
 })
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 MAX_BACKUPS    = 50
 
 # Limites de taille pour les champs textes
@@ -68,7 +68,7 @@ TRADE_TEXT_FIELDS = [
     "plan_model", "plan_direction", "plan_alignment",
     "plan_override_reason", "plan_snapshot",
 ]
-TRADE_NUMERIC_FIELDS = ["pnl", "rr", "entry_price", "stop_loss", "take_profit", "exit_price", "position_size"]
+TRADE_NUMERIC_FIELDS = ["pnl", "rr", "entry_price", "stop_loss", "take_profit", "exit_price", "position_size", "leverage"]
 TRADE_INT_FIELDS     = ["execution_quality", "plan_score"]
 
 

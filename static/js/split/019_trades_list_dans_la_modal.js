@@ -112,8 +112,8 @@ function tradeCardEl(trade, num) {
   var mediaHtml, noteHtml;
   var topBar = '<div class="trade-card-topbar">' +
       '<div class="trade-card-pillline">' +
-        '<span class="trade-chip trade-chip-num">#' + num + '</span>' +
-        '<span class="trade-chip trade-chip-strategy' + (stratKey ? " " + stratKey : "") + '">' + escapeHtml(strategy) + '</span>' +
+        '<span class="metric-pill trade-chip trade-chip-num">#' + num + '</span>' +
+        '<span class="metric-pill trade-chip trade-chip-strategy' + (stratKey ? " " + stratKey : "") + '">' + escapeHtml(strategy) + '</span>' +
       '</div>' +
       '<div class="trade-card-score ' + pnlClass + '">' +
         '<strong>' + fmtMoney(pnlValue) + '</strong>' +
@@ -121,8 +121,8 @@ function tradeCardEl(trade, num) {
       '</div>' +
     '</div>';
   var statusStrip = '<div class="trade-card-status">' +
-      (direction ? '<span class="trade-direction ' + trade.direction + '">' + direction + '</span>' : '<span class="trade-direction">-</span>') +
-      '<span class="trade-result ' + winClass + '">' + winLabel + '</span>' +
+      (direction ? '<span class="metric-pill trade-direction ' + trade.direction + '">' + direction + '</span>' : '<span class="metric-pill trade-direction">-</span>') +
+      '<span class="metric-pill trade-result ' + winClass + '">' + winLabel + '</span>' +
       rrBar +
     '</div>';
 

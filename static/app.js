@@ -316,6 +316,37 @@ function deriveTradeMetrics(trade) {
 }
 
 /**
+ * Calcule la position_size en unites depuis la marge, le levier et le prix d entree.
+ * Ex: marginUsd=100, leverage=10, entry=23900 -> positionSize=0.04184 BTC
+ * @param {number} marginUsd - Marge en dollars
+ * @param {number} leverage  - Levier (ex: 10)
+ * @param {number} entryPrice - Prix d entree
+ * @returns {number|null}
+ */
+function computePositionSize(marginUsd, leverage, entryPrice) {
+  var m = Number(marginUsd);
+  var l = Number(leverage);
+  var e = Number(entryPrice);
+  if (!m || !l || !e || m <= 0 || l <= 0 || e <= 0) return null;
+  return Number(((m * l) / e).toFixed(8));
+}
+
+/**
+ * Calcule la marge en dollars depuis la position_size, le levier et le prix d entree.
+ * @param {number} positionSize - Taille en unites (BTC, ETH...)
+ * @param {number} leverage - Levier
+ * @param {number} entryPrice - Prix d entree
+ * @returns {number|null}
+ */
+function computeMarginUsd(positionSize, leverage, entryPrice) {
+  var p = Number(positionSize);
+  var l = Number(leverage);
+  var e = Number(entryPrice);
+  if (!p || !l || !e || p <= 0 || l <= 0 || e <= 0) return null;
+  return Number(((p * e) / l).toFixed(2));
+}
+
+/**
  * Echappe les caracteres HTML dans une chaine.
  * @param {string} s
  * @returns {string}
@@ -3264,8 +3295,8 @@ function tradeCardEl(trade, num) {
   var mediaHtml, noteHtml;
   var topBar = '<div class="trade-card-topbar">' +
       '<div class="trade-card-pillline">' +
-        '<span class="trade-chip trade-chip-num">#' + num + '</span>' +
-        '<span class="trade-chip trade-chip-strategy' + (stratKey ? " " + stratKey : "") + '">' + escapeHtml(strategy) + '</span>' +
+        '<span class="metric-pill trade-chip trade-chip-num">#' + num + '</span>' +
+        '<span class="metric-pill trade-chip trade-chip-strategy' + (stratKey ? " " + stratKey : "") + '">' + escapeHtml(strategy) + '</span>' +
       '</div>' +
       '<div class="trade-card-score ' + pnlClass + '">' +
         '<strong>' + fmtMoney(pnlValue) + '</strong>' +
@@ -3273,8 +3304,8 @@ function tradeCardEl(trade, num) {
       '</div>' +
     '</div>';
   var statusStrip = '<div class="trade-card-status">' +
-      (direction ? '<span class="trade-direction ' + trade.direction + '">' + direction + '</span>' : '<span class="trade-direction">-</span>') +
-      '<span class="trade-result ' + winClass + '">' + winLabel + '</span>' +
+      (direction ? '<span class="metric-pill trade-direction ' + trade.direction + '">' + direction + '</span>' : '<span class="metric-pill trade-direction">-</span>') +
+      '<span class="metric-pill trade-result ' + winClass + '">' + winLabel + '</span>' +
       rrBar +
     '</div>';
 
@@ -9958,6 +9989,87 @@ function bindJournalDayTrades() {
     card.classList.toggle("is-flipped");
   });
 
+  // Auto-compute position_size from Marge + Levier + Entry
+  wrap.addEventListener("input", function (e) {
+    var field = e.target.closest('.jcard-margin-input, .jcard-field[data-field="leverage"], .jcard-field[data-field="entry_price"]');
+    if (!field) return;
+    var scroll = field.closest('.journal-flip-back-scroll');
+    if (!scroll) return;
+    var tid = scroll.dataset.tradeId;
+    if (!tid) return;
+
+    var marginInput = scroll.querySelector('.jcard-margin-input');
+    var levInput = scroll.querySelector('.jcard-field[data-field="leverage"]');
+    var entryInput = scroll.querySelector('.jcard-field[data-field="entry_price"]');
+    var posInput = scroll.querySelector('.jcard-field[data-field="position_size"]');
+    if (!marginInput || !levInput || !entryInput || !posInput) return;
+
+    if (field === marginInput || field.dataset.field === 'leverage') {
+      var margin = Number(marginInput.value);
+      var lev = Number(levInput.value);
+      var entry = Number(entryInput.value);
+      if (margin > 0 && lev > 0 && entry > 0) {
+        var computed = computePositionSize(margin, lev, entry);
+        if (computed != null) {
+          posInput.value = String(computed);
+          // Trigger save indicator
+          _journalCardScheduleSave(tid);
+        }
+      }
+    }
+
+    // If user changed position_size, update margin display
+    if (field === posInput) {
+      var pos = Number(posInput.value);
+      var lev2 = Number(levInput.value);
+      var entry2 = Number(entryInput.value);
+      if (pos > 0 && lev2 > 0 && entry2 > 0) {
+        var computedMargin = computeMarginUsd(pos, lev2, entry2);
+        if (computedMargin != null) marginInput.value = String(computedMargin);
+      }
+    }
+  });
+
+  // Screenshot upload on card back face
+  wrap.addEventListener("click", function (e) {
+    var shotEl = e.target.closest(".journal-back-shot");
+    if (!shotEl) return;
+    var input = shotEl.querySelector(".journal-shot-input");
+    if (!input) return;
+    input.click();
+  });
+
+  wrap.addEventListener("change", function (e) {
+    var input = e.target.closest(".journal-shot-input");
+    if (!input || !input.files || !input.files[0]) return;
+    var file = input.files[0];
+    var scroll = input.closest(".journal-flip-back-scroll");
+    if (!scroll) return;
+    var tid = scroll.dataset.tradeId;
+    if (!tid) return;
+
+    var fd = new FormData();
+    fd.append("file", file);
+    fetch("/api/trades/" + tid + "/screenshots", { method: "POST", body: fd })
+      .then(function (r) {
+        if (!r.ok) throw new Error("Upload echoue");
+        return r.json();
+      })
+      .then(function () {
+        // Recharge le trade pour mettre a jour la capture
+        return api("/api/trades/" + tid);
+      })
+      .then(function (updated) {
+        _journalDayTradeCache[String(tid)] = updated;
+        _journalCardRefreshFull(String(tid), updated);
+        _journalRefreshStateDebounced();
+      })
+      .catch(function (err) {
+        toast(err.message || "Erreur upload screenshot", "error");
+      });
+    input.value = "";
+  });
+
   _journalDayTradeCardsBound = true;
 
   // Close on click outside — registered once globally
@@ -10155,6 +10267,7 @@ function journalTradeEditorHtml(day, trade) {
               ${journalEditorField('Target', 'take_profit', trade.take_profit, 'number', { step: '0.01' })}
               ${journalEditorField('Sortie', 'exit_price', trade.exit_price, 'number', { step: '0.01' })}
               ${journalEditorField('Size', 'position_size', trade.position_size, 'number', { step: '0.01' })}
+              ${journalEditorField('Levier', 'leverage', trade.leverage, 'number', { step: '1', placeholder: '1x' })}
               ${journalEditorField('PnL', 'pnl', trade.pnl, 'number', { step: '0.01' })}
               ${journalEditorField('RR', 'rr', trade.rr, 'number', { step: '0.01' })}
             </div>
@@ -10209,10 +10322,6 @@ function journalTradeFlipCardHtml(day, trade, idx, deck) {
   var direction   = (m.direction || trade.direction || "-").toUpperCase();
   var strategy    = trade.strategy ? prettify(trade.strategy) : "Strategie inconnue";
   var rr          = m.rr == null ? "-" : Number(m.rr).toFixed(2) + "R";
-  var thesisLabel = trade.thesis_validated === "yes" ? "These validee"
-                  : trade.thesis_validated === "no"  ? "These rejetee"
-                  : "These a qualifier";
-  var thesisVal   = trade.thesis_validated || "";
   var summary     = journalShortText(trade.why_trade, trade.scenario, trade.why_entry);
   var lessonsRaw  = String(trade.lessons_learned || "");
   var qualityRaw  = Number(trade.execution_quality) || 0;
@@ -10234,10 +10343,10 @@ function journalTradeFlipCardHtml(day, trade, idx, deck) {
         <!-- ── FRONT ── -->
         <div class="journal-flip-face journal-flip-front">
           <div class="journal-flip-top">
-            <span class="journal-trade-index">#${idx}</span>
-            <span class="journal-trade-instrument">${escapeHtml(day.instrument || "-")}</span>
-            <span class="journal-trade-top-pnl ${pnlClass}">${fmtMoney(pnl)}</span>
-            <span class="journal-trade-result ${resultClass}">${resultLabel}</span>
+            <span class="metric-pill metric-pill--muted journal-trade-index">#${idx}</span>
+            <span class="metric-pill metric-pill--cyan journal-trade-instrument">${escapeHtml(day.instrument || "-")}</span>
+            <span class="metric-pill metric-pill--${pnlClass === 'pos' ? 'win' : pnlClass === 'neg' ? 'loss' : 'muted'} journal-trade-top-pnl ${pnlClass}">${fmtMoney(pnl)}</span>
+            <span class="metric-pill metric-pill--${resultClass === 'win' ? 'win' : resultClass === 'loss' ? 'loss' : 'muted'} journal-trade-result ${resultClass}">${resultLabel}</span>
             <button type="button" class="journal-card-close" data-journal-day-close aria-label="Fermer">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
@@ -10254,9 +10363,9 @@ function journalTradeFlipCardHtml(day, trade, idx, deck) {
               <strong class="journal-trade-pnl ${pnlClass}">${fmtMoney(pnl)}</strong>
             </div>
             <div class="journal-trade-strip">
-              <span>${escapeHtml(direction)}</span>
-              <span>${escapeHtml(rr)}</span>
-              <span>${escapeHtml(thesisLabel)}</span>
+              <span class="metric-pill">${escapeHtml(direction)}</span>
+              <span class="metric-pill">${escapeHtml(rr)}</span>
+              <span class="metric-pill metric-pill--${resultClass === 'win' ? 'win' : resultClass === 'loss' ? 'loss' : 'muted'}">${escapeHtml(resultLabel)}</span>
             </div>
             <div class="journal-trade-card-actions">
               <span>${escapeHtml(resultLabel)}</span>
@@ -10292,30 +10401,49 @@ function journalTradeFlipCardHtml(day, trade, idx, deck) {
 
             <h5>Niveaux</h5>
             <div class="journal-trade-detail-grid">
-              <div>
+              <div style="grid-column:1/-1">
                 <span>Entree</span>
                 <input class="jcard-field" type="number" step="0.01" data-field="entry_price"
                   value="${trade.entry_price != null ? escapeHtml(String(trade.entry_price)) : ''}" placeholder="—"/>
               </div>
               <div>
-                <span>Sortie</span>
-                <input class="jcard-field" type="number" step="0.01" data-field="exit_price"
-                  value="${trade.exit_price != null ? escapeHtml(String(trade.exit_price)) : ''}" placeholder="—"/>
-              </div>
-              <div>
-                <span>Stop</span>
+                <span>SL</span>
                 <input class="jcard-field" type="number" step="0.01" data-field="stop_loss"
                   value="${trade.stop_loss != null ? escapeHtml(String(trade.stop_loss)) : ''}" placeholder="—"/>
               </div>
               <div>
-                <span>Target</span>
-                <input class="jcard-field" type="number" step="0.01" data-field="take_profit"
-                  value="${trade.take_profit != null ? escapeHtml(String(trade.take_profit)) : ''}" placeholder="—"/>
+                <span>TP</span>
+                <input class="jcard-field" type="number" step="0.01" data-field="exit_price"
+                  value="${trade.exit_price != null ? escapeHtml(String(trade.exit_price)) : ''}" placeholder="—"/>
               </div>
+            </div>
+
+            <h5>Capture</h5>
+            <div class="journal-back-shot" data-trade-shot="${tid}">
+              ${shot
+                ? `<img class="journal-back-shot-img" src="/screenshots/${escapeHtml(shot.filename)}" alt="Screenshot" />`
+                : '<div class="journal-back-shot-empty"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg><span>Ajouter une photo</span></div>'}
+              <input type="file" accept="image/*" class="journal-shot-input hidden" data-trade-shot-input="${tid}" />
             </div>
 
             <h5>Execution</h5>
             <div class="journal-trade-detail-grid jcard-exec-grid">
+              <div>
+                <span>Resultat</span>
+                <strong class="jcard-result-display ${resultClass}">${escapeHtml(resultLabel)}</strong>
+              </div>
+              <div>
+                <span>Marge $</span>
+                <input class="jcard-field jcard-margin-input" type="number" step="0.01" min="0" data-margin-input="1"
+                  value="${trade.position_size != null && trade.leverage != null && trade.entry_price != null
+                    ? escapeHtml(String(computeMarginUsd(trade.position_size, trade.leverage, trade.entry_price)))
+                    : ''}" placeholder="0.00"/>
+              </div>
+              <div>
+                <span>Levier</span>
+                <input class="jcard-field" type="number" step="1" min="1" data-field="leverage"
+                  value="${trade.leverage != null ? escapeHtml(String(trade.leverage)) : ''}" placeholder="1x"/>
+              </div>
               <div>
                 <span>Position</span>
                 <input class="jcard-field" type="number" step="0.01" data-field="position_size"
@@ -10324,18 +10452,6 @@ function journalTradeFlipCardHtml(day, trade, idx, deck) {
               <div>
                 <span>Qualite</span>
                 <div class="jcard-stars" data-field="execution_quality" data-value="${qualityRaw}">${starsHtml}</div>
-              </div>
-              <div class="jcard-thesis-cell">
-                <span>These</span>
-                <div class="jcard-pills" data-field="thesis_validated">
-                  <button type="button" class="jcard-pill${thesisVal === 'yes' ? ' is-active' : ''}" data-value="yes">Oui</button>
-                  <button type="button" class="jcard-pill${thesisVal === 'no'  ? ' is-active' : ''}" data-value="no">Non</button>
-                  <button type="button" class="jcard-pill${thesisVal !== 'yes' && thesisVal !== 'no' ? ' is-active' : ''}" data-value="">?</button>
-                </div>
-              </div>
-              <div>
-                <span>Resultat</span>
-                <strong class="jcard-result-display ${resultClass}">${escapeHtml(resultLabel)}</strong>
               </div>
             </div>
 

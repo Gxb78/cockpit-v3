@@ -122,6 +122,7 @@ def init_db():
     _ensure_column(con, "trades", "plan_warnings", "TEXT")
     _ensure_column(con, "trades", "plan_override_reason", "TEXT")
     _ensure_column(con, "trades", "plan_snapshot", "TEXT")
+    _ensure_column(con, "trades", "leverage", "REAL")
     con.commit()
 
     _run_migrations(con)
@@ -156,6 +157,7 @@ def _run_migrations(con):
         3: _migrate_v2_to_v3,
         4: _migrate_v3_to_v4,
         5: _migrate_v4_to_v5,
+        6: _migrate_v5_to_v6,
     }
 
     for target in sorted(_MIGRATIONS):
@@ -320,5 +322,11 @@ def _migrate_v4_to_v5(con):
     _ensure_column(con, "trades", "plan_override_reason", "TEXT")
     _ensure_column(con, "trades", "plan_snapshot", "TEXT")
     log.info("Migration v5 OK - champs plan PO3 ajoutes.")
+
+
+def _migrate_v5_to_v6(con):
+    """Migration v6: ajoute le champ leverage sur les trades."""
+    _ensure_column(con, "trades", "leverage", "REAL")
+    log.info("Migration v6 OK - champ leverage ajoute.")
 
 

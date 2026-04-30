@@ -189,16 +189,6 @@
   text-transform: none;
 }
 
-.trade-chip,
-.trade-direction,
-.trade-result,
-.trade-meta-pill {
-  border-radius: 999px;
-  background: #eef1f6;
-  border: 1px solid #e3e7ee;
-  backdrop-filter: none;
-}
-
 .trade-chip-num {
   color: #111827;
   border-color: #e3e7ee;

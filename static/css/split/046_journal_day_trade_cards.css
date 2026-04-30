@@ -150,10 +150,14 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   gap: 8px;
 }
 
+/* MetricPill base — handled by .metric-pill in 049 */
 .journal-trade-index,
 .journal-trade-instrument,
 .journal-trade-top-pnl,
-.journal-trade-result,
+.journal-trade-result {
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+
 .journal-card-close {
   min-height: 32px;
   display: inline-flex;
@@ -163,32 +167,10 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   border: 1px solid rgba(255,255,255,0.78);
   background: rgba(255,255,255,0.82);
   color: #4b5563;
-  padding: 0 12px;
   font-family: "JetBrains Mono", monospace;
   font-size: 10px;
   font-weight: 850;
   box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-}
-
-.journal-trade-instrument {
-  color: #05313a;
-  background: rgba(217, 252, 255, 0.90);
-  border-color: rgba(0, 197, 220, 0.38);
-}
-
-.journal-trade-top-pnl.pos,
-.journal-trade-result.win {
-  color: #20570b;
-  background: rgba(232, 255, 222, 0.90);
-}
-
-.journal-trade-top-pnl.neg,
-.journal-trade-result.loss {
-  color: #8a1429;
-  background: rgba(255, 229, 234, 0.92);
-}
-
-.journal-card-close {
   width: 34px;
   padding: 0;
   margin-left: auto;
@@ -287,18 +269,10 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   gap: 9px;
 }
 
-.journal-trade-strip span {
+.journal-trade-strip .metric-pill {
   min-height: 37px;
-  font-weight: 850;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  border: 1px solid #e3e7ee;
-  background: #eef1f6;
-  color: #626b7a;
   font-size: 11px;
-  font-weight: 800;
-  text-align: center;
+  flex: 1;
 }
 
 .journal-trade-card-actions {
@@ -399,6 +373,45 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   padding: 0 24px;
   font-size: 12px;
   font-weight: 850;
+}
+
+/* ---- Capture screenshot sur le verso ---- */
+.journal-back-shot {
+  border-radius: 18px;
+  border: 1px solid #e7eaf0;
+  background: #f7f8fb;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.16s, box-shadow 0.16s;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.journal-back-shot:hover {
+  border-color: #c0c6d4;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.journal-back-shot-img {
+  width: 100%;
+  height: auto;
+  max-height: 200px;
+  object-fit: cover;
+  display: block;
+}
+.journal-back-shot-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #98a1af;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 850;
+  padding: 20px;
+}
+.journal-back-shot-empty svg {
+  flex-shrink: 0;
+  color: #b0b8c6;
 }
 
 .journal-flip-back h4 {
