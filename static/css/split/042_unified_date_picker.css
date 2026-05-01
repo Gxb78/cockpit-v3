@@ -69,6 +69,11 @@
   letter-spacing: 0.08em;
   list-style: none;
 }
+.journal-advanced-filters summary .filter-badge {
+  color: var(--cyan, #00e5ff);
+  font-weight: 700;
+  margin-left: 4px;
+}
 .journal-advanced-filters summary::-webkit-details-marker { display: none; }
 .journal-advanced-filters summary::before {
   content: "+";

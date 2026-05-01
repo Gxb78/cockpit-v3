@@ -74,6 +74,26 @@ function updateJournalTradeFiltersUI() {
   strategySel.value = f.strategy || "ALL";
   if (resultSel) resultSel.value = f.result || "ALL";
   if (tagSel) tagSel.value = f.tag || "ALL";
+
+  // Badge actif sur le summary
+  var count = 0;
+  if (f.strategy && f.strategy !== "ALL") count++;
+  if (f.result && f.result !== "ALL") count++;
+  if (f.tag && f.tag !== "ALL") count++;
+  var summary = document.querySelector(".journal-advanced-filters > summary");
+  if (summary) {
+    var badge = summary.querySelector(".filter-badge");
+    if (count > 0) {
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "filter-badge";
+        summary.appendChild(badge);
+      }
+      badge.textContent = "(" + count + ")";
+    } else if (badge) {
+      badge.remove();
+    }
+  }
 }
 
 function updateJournalTradeFilterOptions(days = state.days) {
