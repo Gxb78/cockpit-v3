@@ -362,6 +362,30 @@ Format obligatoire d'une lesson:
 - Test de non-regression: ouvrir Settings → la cle est masquee (dots).
 - Fichiers a surveiller: `templates/partials/pages/settings/api_card.html`, `static/js/split/003_addcustomstrategyfromsettings.js`, `static/css/split/034_priority3_stats_settings_insights.css`.
 
+### BUG-20260501-09 - Stats page template jamais rendu → page blanche
+- Symptome: navigation vers Stats → ecran vide. Les elements `#statStreakCur` etc. n'existaient pas dans le DOM.
+- Cause racine: le contenu de la page etait dans un `<template id="statsTemplate">` mais aucun JS ne le clonait dans la section. `renderPerformance()` essayait de setter `textContent` sur des elements null.
+- Regle de prevention: quand une page utilise `content.cloneNode(true)` pour render un template, verifier que `openPage()` appelle cette fonction avant `renderPerformance()`. Pattern: `section.appendChild(tmpl.content.cloneNode(true)); section._rendered = true;` avec flag _rendered pour eviter les doubles clones.
+- Fichiers a surveiller: `static/js/split/009_navigation.js`, `templates/partials/pages/stats.html`.
+
+### BUG-20260501-10 - Widget drag drop intercepte les clics sur les cellules calendrier
+- Symptome: calendrier Today non clickable. Curseur pointer montre bien l'interactivite mais aucun evenement click ne se declenche.
+- Cause racine: `initWidgetDragDrop()` dans `047_today_widget_board.js` attache un `pointerdown` sur chaque widget. L'exclusion listait `button` (elements HTML) mais pas `[role="button"]`. Les cellules `.day` sont des `<div role="button">` → le drag les capturait et le click ne passait jamais.
+- Regle de prevention: la liste d'exclusion du drag drop doit toujours inclure `[role="button"]` a cote de `button`. Les elements avec `role="button"` sont interactifs et ne doivent pas initier le drag.
+- Test de non-regression: cliquer sur une case du calendrier Today → navigation vers le Journal.
+- Fichiers a surveiller: `static/js/split/047_today_widget_board.js`.
+
+### BUG-20260501-11 - Autosave day context ecrase les textareas (state.allDays pas patche)
+- Symptome: taper un texte dans Analyse HTF → click hors champ → autosave → le texte revient a l'ancienne valeur.
+- Cause racine: `saveDayContext()` patchait `state.days` apres sauvegarde mais pas `state.allDays`. `findTodayContextDay()` cherche dans `state.allDays` en priorite → trouvait l'ancienne donnee → `renderTodayContextWidget()` re-ecrivait la textarea.
+- Regle de prevention: TOUJOURS patcher les DEUX stores (`state.days` ET `state.allDays`) apres une sauvegarde local. Meme pattern: boucle for identique sur les deux tableaux.
+- Test de non-regression: ecrire dans une textarea du contexte jour → focusout → rafraichir → le texte est preserve.
+|- Fichiers a surveiller: `static/js/split/018_day_form.js`.
+
+### CONVENTION-20260502 - Mode par defaut = light (white), upgrade design
+- Regle: Le theme par defaut est le light mode (`dark_mode: false` dans les defaults). Les ombres light utilisent le pattern 3 couches de Steep. Les border-radius ont ete augmentes (cards 16px, small 12px) inspires de Legend. Les accents warm (--surface-warm, --accent-warm) sont disponibles. Le rail et la topbar ont des overrides light-mode. Le widget contexte jour a ete redesign pour ressembler aux entry-cards (compact, badge instr, hover glow). Les badges resultat (WIN/LOSS) sont minimalistes en light mode (transparents).
+- Fichiers a surveiller: `static/js/split/002_prettify.js`, `static/css/split/000_theme_tokens_base.css`, `static/css/split/032_priority1_app_shell.css`, `static/css/split/048_card_surface.css`, `static/css/split/045_today_context_widget.css`.
+
 ### CONVENTION-20260501 - exit_price = TP (consolidation champs)
 - Regle: Dans Cockpit v3, exit_price et take_profit designent la meme chose (le prix de sortie = take-profit). Le backend normalise `exit_price` → `take_profit` dans `05_payload_normalizers.py`. Le frontend affiche le champ `exit_price` sous le label "TP" partout (editeur inline section Niveaux, tableau journal, card back). Le champ `take_profit` / "Target" est supprime de l'editeur pour eviter la confusion. La DB conserve les deux colonnes pour retrocompatibilite.
 - Fichiers a surveiller: `app_parts/05_payload_normalizers.py`, `static/js/split/059_trade_editor_controller.js`, `templates/partials/pages/journal/table.html`, `static/js/split/056_journal_day_trade_cards.js`.
