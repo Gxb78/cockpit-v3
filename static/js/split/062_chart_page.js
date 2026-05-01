@@ -9,6 +9,7 @@
   var countdownTimer = null;
   var lastCandleTime = 0;
   var resizeObserver = null;
+  var refreshTimer = null;
 
   var INTERVAL_MS = {
     '1m': 60000, '3m': 180000, '5m': 300000, '15m': 900000,
@@ -160,6 +161,7 @@
         var last = candles[candles.length - 1];
         lastCandleTime = last.time * 1000;
         _startCountdown();
+        _startAutoRefresh();
         _updateStats(candles);
 
         candlestickSeries.setData(candles);
@@ -210,14 +212,32 @@
       var now = Date.now();
       var ms = _getIntervalMs(currentInterval);
       var remaining = ms - (now - lastCandleTime);
-      if (remaining <= 0) { el.textContent = '0:00'; return; }
+      if (remaining <= 0) {
+        el.textContent = '0:00';
+        _fetchAndRender();
+        return;
+      }
       var totalSec = Math.ceil(remaining / 1000);
       var m = Math.floor(totalSec / 60);
       var s = totalSec % 60;
       el.textContent = m + ':' + (s < 10 ? '0' : '') + s;
     }
     tick();
-    countdownTimer = setInterval(tick, 1000);
+    countdownTimer = setInterval(tick, 500);
+  }
+
+  function _startAutoRefresh() {
+    if (refreshTimer) clearInterval(refreshTimer);
+    var ms = _getIntervalMs(currentInterval);
+    var interval = ms < 3600000 ? 15000 : ms < 14400000 ? 30000 : 60000;
+    refreshTimer = setInterval(function () {
+      if (!lastCandleTime) return;
+      var now = Date.now();
+      var elapsed = now - lastCandleTime;
+      if (elapsed < _getIntervalMs(currentInterval) * 0.95) {
+        _fetchAndRender();
+      }
+    }, interval);
   }
 
   // Init

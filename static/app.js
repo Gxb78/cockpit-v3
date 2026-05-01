@@ -10928,7 +10928,12 @@ TradeEditorController.renderHtml = function (day, trade) {
       var ms = _getIntervalMs(currentInterval);
       var elapsed = now - lastCandleTime;
       var remaining = ms - elapsed;
-      if (remaining <= 0) { el.textContent = '0:00'; return; }
+      if (remaining <= 0) {
+        el.textContent = '0:00';
+        // Nouvelle bougie → refresh auto
+        _fetchAndRender();
+        return;
+      }
       var totalSec = Math.ceil(remaining / 1000);
       var m = Math.floor(totalSec / 60);
       var s = totalSec % 60;
@@ -10936,7 +10941,26 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
 
     tick();
-    countdownTimer = setInterval(tick, 1000);
+    countdownTimer = setInterval(tick, 500);
+  }
+
+  // Auto-refresh periodique : toutes les 15s (petits TF) a 60s (grands TF)
+  var refreshTimer = null;
+
+  function _startAutoRefresh() {
+    if (refreshTimer) clearInterval(refreshTimer);
+    var ms = _getIntervalMs(currentInterval);
+    // Rafraichir toutes les 15s pour les TF < 1h, 30s pour 1-4h, 60s pour > 4h
+    var interval = ms < 3600000 ? 15000 : ms < 14400000 ? 30000 : 60000;
+    refreshTimer = setInterval(function () {
+      // Ne pas refresh si le countdown est en train de le faire
+      if (!lastCandleTime) return;
+      var now = Date.now();
+      var elapsed = now - lastCandleTime;
+      if (elapsed < _getIntervalMs(currentInterval) * 0.95) {
+        _fetchAndRender();
+      }
+    }, interval);
   }
 
   function initBtcChart() {
@@ -11094,6 +11118,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         // Sauvegarder le timestamp de la derniere bougie pour le countdown
         lastCandleTime = last.time * 1000;
         _startCountdown();
+        _startAutoRefresh();
         var priceEl = document.getElementById('btcChartPrice');
         if (priceEl) priceEl.textContent = '$' + Number(last.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
         series.setData(candles);
@@ -11139,6 +11164,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   var countdownTimer = null;
   var lastCandleTime = 0;
   var resizeObserver = null;
+  var refreshTimer = null;
 
   var INTERVAL_MS = {
     '1m': 60000, '3m': 180000, '5m': 300000, '15m': 900000,
@@ -11290,6 +11316,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         var last = candles[candles.length - 1];
         lastCandleTime = last.time * 1000;
         _startCountdown();
+        _startAutoRefresh();
         _updateStats(candles);
 
         candlestickSeries.setData(candles);
@@ -11340,14 +11367,32 @@ TradeEditorController.renderHtml = function (day, trade) {
       var now = Date.now();
       var ms = _getIntervalMs(currentInterval);
       var remaining = ms - (now - lastCandleTime);
-      if (remaining <= 0) { el.textContent = '0:00'; return; }
+      if (remaining <= 0) {
+        el.textContent = '0:00';
+        _fetchAndRender();
+        return;
+      }
       var totalSec = Math.ceil(remaining / 1000);
       var m = Math.floor(totalSec / 60);
       var s = totalSec % 60;
       el.textContent = m + ':' + (s < 10 ? '0' : '') + s;
     }
     tick();
-    countdownTimer = setInterval(tick, 1000);
+    countdownTimer = setInterval(tick, 500);
+  }
+
+  function _startAutoRefresh() {
+    if (refreshTimer) clearInterval(refreshTimer);
+    var ms = _getIntervalMs(currentInterval);
+    var interval = ms < 3600000 ? 15000 : ms < 14400000 ? 30000 : 60000;
+    refreshTimer = setInterval(function () {
+      if (!lastCandleTime) return;
+      var now = Date.now();
+      var elapsed = now - lastCandleTime;
+      if (elapsed < _getIntervalMs(currentInterval) * 0.95) {
+        _fetchAndRender();
+      }
+    }, interval);
   }
 
   // Init
