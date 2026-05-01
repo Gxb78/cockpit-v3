@@ -7065,177 +7065,233 @@ body.is-dragging {
 }
 
 /* ---- 031_day_context.css ---- */
-/* ---------- Day context card (compact modal layout) — light theme ---------- */
+/* =============================================================
+   DAY CONTEXT CARD — Modern · Compact · Dark + Light theme
+   ============================================================= */
 
+/* ── Card shell ── */
 .day-context-card {
-  background: #fff;
-  border: 1px solid #e7eaf0;
-  border-radius: 18px;
-  padding: 12px 14px;
-  margin-top: 10px;
-  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+  margin-top: 8px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  overflow: hidden;
 }
 
+/* ── Header ── */
 .day-context-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
-  margin-bottom: 10px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #e7eaf0;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
 }
 
 .day-context-title {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-width: 0;
-  font-size: 12px;
-  font-weight: 850;
-  letter-spacing: 0.5px;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: #111827;
-}
-
-.day-context-title svg {
-  opacity: 0.85;
-  color: #111827;
+  color: var(--text-muted);
+  white-space: nowrap;
   flex-shrink: 0;
 }
 
+.day-context-title svg {
+  color: var(--cyan);
+  opacity: 0.80;
+  flex-shrink: 0;
+}
+
+.day-context-command {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-left: 6px;
+  border-left: 2px solid var(--border);
+}
+
+.day-context-command span {
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.day-context-command strong {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-soft);
+  letter-spacing: 0;
+  line-height: 1.3;
+}
+
+/* Inline fields (date + instrument) */
 .day-context-inline {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 6px;
   margin-left: auto;
-}
-
-.day-inline-field {
-  min-width: 0;
+  flex-shrink: 0;
 }
 
 .day-inline-field input,
 .day-inline-field select {
-  height: 34px;
-  padding: 6px 11px;
+  height: 30px;
+  padding: 0 10px;
   border-radius: 999px;
-  border: 1px solid #dde2ea;
-  background: #f4f6fa;
-  color: #111827;
-  font-size: 12px;
-  font-weight: 700;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-3);
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 600;
   font-family: inherit;
   outline: none;
-  transition: color, background, border-color 0.16s var(--ease);
+  transition: border-color 0.14s var(--ease), box-shadow 0.14s var(--ease);
 }
 
-.day-inline-date input {
-  width: 140px;
-}
+.day-inline-date input  { width: 130px; }
 
+.day-inline-instrument {
+  min-width: 80px;
+}
 .day-inline-instrument .select-wrapper {
   position: relative;
-  min-width: 88px;
 }
-.day-inline-instrument {
-  min-width: 88px;
-}
-
 .day-inline-instrument select {
-  width: 88px;
-  padding-right: 26px;
+  width: 80px;
+  padding-right: 24px;
   appearance: none;
   cursor: pointer;
 }
-
 .day-inline-instrument .select-arrow {
   position: absolute;
-  right: 9px;
+  right: 8px;
   top: 50%;
-  width: 11px;
-  height: 11px;
   transform: translateY(-50%);
-  color: #98a1af;
+  width: 10px;
+  height: 10px;
+  color: var(--text-muted);
   pointer-events: none;
 }
 
 .day-inline-field input:hover,
 .day-inline-field select:hover {
-  border-color: rgba(15, 23, 42, 0.16);
-  background: #fff;
+  border-color: var(--border-glow);
 }
-
 .day-inline-field input:focus,
 .day-inline-field select:focus {
-  border-color: rgba(0, 197, 220, 0.6);
-  box-shadow: 0 0 0 3px rgba(0, 197, 220, 0.12);
-  background: #fff;
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.12);
 }
 
+/* ── Rail (progress bar, discret) ── */
+.day-context-rail {
+  display: flex;
+  gap: 0;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.day-context-rail-node {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 6px 10px 5px;
+  border-bottom: 2px solid transparent;
+  transition: color 0.14s, border-color 0.14s;
+  white-space: nowrap;
+}
+
+.day-context-rail-node.is-active {
+  color: var(--cyan);
+  border-bottom-color: var(--cyan);
+}
+
+/* ── Body grid ── */
 .day-context-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 10px;
+  gap: 0;
+}
+
+.day-context-field {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.day-context-field:last-child {
+  border-bottom: none;
 }
 
 .day-context-field-wide {
   grid-column: 1 / -1;
 }
 
+/* Field label */
 .day-context-field label {
   display: block;
   font-size: 9px;
-  font-weight: 850;
-  letter-spacing: 0.06em;
+  font-weight: 800;
+  letter-spacing: 0.20em;
   text-transform: uppercase;
-  color: #98a1af;
-  margin-bottom: 6px;
-  font-family: "JetBrains Mono", monospace;
+  color: var(--text-dim);
+  margin-bottom: 7px;
 }
 
+/* Inputs + textareas in grid */
 .day-context-field input,
 .day-context-field select,
 .day-context-field textarea {
   width: 100%;
-  background: #f4f6fa;
-  color: #111827;
-  border: 1px solid #dde2ea;
-  border-radius: 10px;
-  padding: 9px 12px;
-  font-size: 13px;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12.5px;
   font-family: inherit;
   outline: none;
-  transition: color, background, border-color 0.18s var(--ease);
-  box-shadow: none;
+  transition: border-color 0.14s var(--ease), background 0.14s var(--ease), box-shadow 0.14s var(--ease);
 }
 
 .day-context-field input:hover,
 .day-context-field select:hover,
 .day-context-field textarea:hover {
-  border-color: rgba(15, 23, 42, 0.16);
-  background: #fff;
+  background: var(--surface-3);
+  border-color: var(--border-glow);
 }
 
 .day-context-field input:focus,
 .day-context-field select:focus,
 .day-context-field textarea:focus {
-  border-color: rgba(0, 197, 220, 0.6);
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(0, 197, 220, 0.12);
+  background: var(--surface-3);
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.10);
 }
 
 .day-context-field textarea {
-  resize: vertical;
-  min-height: 46px;
-  line-height: 1.5;
+  resize: none;
+  min-height: 52px;
+  line-height: 1.55;
+  field-sizing: content; /* auto-grow if supported */
 }
 
 .day-context-field textarea::placeholder {
-  color: #98a1af;
+  color: var(--text-dim);
   font-style: italic;
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 .day-context-field .select-wrapper {
@@ -7243,105 +7299,199 @@ body.is-dragging {
   display: flex;
   align-items: center;
 }
-
 .day-context-field .select-wrapper select {
   appearance: none;
-  padding-right: 32px;
+  padding-right: 30px;
   cursor: pointer;
 }
-
 .day-context-field .select-arrow {
   position: absolute;
-  right: 12px;
-  width: 12px;
-  height: 12px;
-  color: #98a1af;
+  right: 10px;
+  width: 11px;
+  height: 11px;
+  color: var(--text-muted);
   pointer-events: none;
 }
 
-/* Pills in day context */
+/* ── Pills (Bullish / Bearish / Neutral) ── */
 .day-context-field .pills {
   display: flex;
-  gap: 6px;
+  gap: 5px;
   flex-wrap: wrap;
 }
 
 .day-context-field .pill-choice {
-  padding: 6px 14px;
+  padding: 5px 13px;
   border-radius: 999px;
-  border: 1px solid #dde2ea;
-  background: #f4f6fa;
-  color: #626b7a;
-  font-size: 12px;
-  font-weight: 850;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   cursor: pointer;
-  transition: color, background, border-color 0.15s var(--ease);
+  transition: color 0.13s, background 0.13s, border-color 0.13s, box-shadow 0.13s;
   font-family: inherit;
 }
 
 .day-context-field .pill-choice:hover {
-  border-color: rgba(15, 23, 42, 0.16);
-  background: #fff;
-  color: #111827;
+  color: var(--text);
+  border-color: var(--border-glow);
+  background: var(--surface-3);
 }
 
 .day-context-field .pill-choice.active {
-  color: #fff;
-  border-color: #08090c;
-  background: #08090c;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--surface-solid);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
 }
 
 .day-context-field .pill-choice.lime.active {
-  color: #20570b;
-  border-color: rgba(45, 122, 19, 0.18);
-  background: rgba(232, 255, 222, 0.90);
+  color: var(--win);
+  border-color: var(--win-border);
+  background: var(--win-bg);
   box-shadow: none;
 }
 
 .day-context-field .pill-choice.rose.active {
-  color: #8a1429;
-  border-color: rgba(180, 35, 60, 0.18);
-  background: rgba(255, 229, 234, 0.92);
+  color: var(--loss);
+  border-color: var(--loss-border);
+  background: var(--loss-bg);
   box-shadow: none;
 }
 
-/* Trades section header in modal */
-.trades-section {
-  margin-bottom: 0;
-}
+/* ── Trades section ── */
+.trades-section { margin-bottom: 0; }
 
 .trades-section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .trades-section-header h3 {
   margin: 0;
-  font-size: 12px;
-  font-weight: 850;
-  letter-spacing: 0.06em;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: #111827;
+  color: var(--text-muted);
 }
 
 .trades-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 4px;
 }
 
+/* ── Light mode overrides ── */
+body.light-mode .day-context-card {
+  background: #ffffff;
+  border-color: rgba(16, 24, 40, 0.10);
+}
+
+body.light-mode .day-context-header {
+  background: #f7f9fc;
+  border-bottom-color: rgba(16, 24, 40, 0.08);
+}
+
+body.light-mode .day-context-command {
+  border-left-color: rgba(16, 24, 40, 0.10);
+}
+
+body.light-mode .day-context-rail {
+  background: #f7f9fc;
+  border-bottom-color: rgba(16, 24, 40, 0.08);
+}
+
+body.light-mode .day-context-rail-node { color: #b0b8c8; }
+body.light-mode .day-context-rail-node.is-active { color: #0097b2; border-bottom-color: #0097b2; }
+
+body.light-mode .day-context-field {
+  border-bottom-color: rgba(16, 24, 40, 0.07);
+}
+
+body.light-mode .day-context-field input,
+body.light-mode .day-context-field select,
+body.light-mode .day-context-field textarea {
+  border-color: rgba(16, 24, 40, 0.12);
+  color: #111827;
+}
+
+body.light-mode .day-context-field input:hover,
+body.light-mode .day-context-field select:hover,
+body.light-mode .day-context-field textarea:hover {
+  background: #f4f7fc;
+  border-color: rgba(0, 132, 200, 0.35);
+}
+
+body.light-mode .day-context-field input:focus,
+body.light-mode .day-context-field select:focus,
+body.light-mode .day-context-field textarea:focus {
+  background: #ffffff;
+  border-color: #00b4d8;
+  box-shadow: 0 0 0 3px rgba(0, 180, 216, 0.12);
+}
+
+body.light-mode .day-context-field textarea::placeholder { color: #b0b8c8; }
+
+body.light-mode .day-context-field .pill-choice {
+  border-color: rgba(16, 24, 40, 0.12);
+  color: #5f6c84;
+}
+body.light-mode .day-context-field .pill-choice:hover {
+  background: #f0f4fc;
+  border-color: rgba(0, 132, 200, 0.25);
+  color: #111827;
+}
+body.light-mode .day-context-field .pill-choice.active {
+  background: #111827;
+  border-color: #111827;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.14);
+}
+body.light-mode .day-context-field .pill-choice.lime.active {
+  color: #20570b;
+  background: rgba(232, 255, 222, 0.90);
+  border-color: rgba(45, 122, 19, 0.20);
+  box-shadow: none;
+}
+body.light-mode .day-context-field .pill-choice.rose.active {
+  color: #8a1429;
+  background: rgba(255, 229, 234, 0.92);
+  border-color: rgba(180, 35, 60, 0.20);
+  box-shadow: none;
+}
+
+body.light-mode .day-inline-field input,
+body.light-mode .day-inline-field select {
+  background: #f4f7fc;
+  border-color: rgba(16, 24, 40, 0.14);
+  color: #111827;
+}
+body.light-mode .day-inline-field input:hover,
+body.light-mode .day-inline-field select:hover {
+  border-color: rgba(0, 132, 200, 0.40);
+}
+body.light-mode .day-inline-field input:focus,
+body.light-mode .day-inline-field select:focus {
+  border-color: #00b4d8;
+  box-shadow: 0 0 0 3px rgba(0, 180, 216, 0.12);
+  background: #fff;
+}
+
+/* ── Responsive ── */
 @media (max-width: 880px) {
   .day-context-header {
-    align-items: flex-start;
-    flex-direction: column;
+    flex-wrap: wrap;
+    gap: 8px;
   }
   .day-context-inline {
     width: 100%;
-    justify-content: flex-start;
+    margin-left: 0;
   }
 }
 
