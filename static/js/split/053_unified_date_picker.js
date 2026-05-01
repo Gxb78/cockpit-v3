@@ -31,7 +31,16 @@ function _udpRangeForShortcut(kind) {
       to: _udpDateKey(new Date(today.getFullYear(), today.getMonth() + 1, 0)),
     };
   } else if (kind === "all") {
-    return { from: "2020-01-01", to: _udpDateKey(today) };
+    // Calculer dynamiquement la date la plus ancienne depuis state.days
+    var earliest = null;
+    if (Array.isArray(state.days)) {
+      for (var i = 0; i < state.days.length; i++) {
+        if (state.days[i] && state.days[i].date && (!earliest || state.days[i].date < earliest)) {
+          earliest = state.days[i].date;
+        }
+      }
+    }
+    return { from: earliest || "2020-01-01", to: _udpDateKey(today) };
   }
   return { from: _udpDateKey(start), to: _udpDateKey(today) };
 }

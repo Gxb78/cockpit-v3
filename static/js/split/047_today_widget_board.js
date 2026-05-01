@@ -629,5 +629,12 @@ function renderTodayCalendar() {
       if (!key) return;
       if (typeof wizOpen === "function") wizOpen({ date: key });
     });
+    grid.addEventListener("keydown", function(e) {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      var dayEl = e.target.closest(".day");
+      if (!dayEl || dayEl.dataset.otherMonth === "1") return;
+      e.preventDefault();
+      dayEl.click();
+    });
   }
 }

@@ -72,7 +72,7 @@ function _applyJournalFilter() {
     toDate = new Date(to.value + "T00:00:00");
   }
 
-  state.currentMonth = new Date((fromDate.getTime() + toDate.getTime()) / 2);
+  state.currentMonth = new Date(toDate.getFullYear(), toDate.getMonth(), 1);
   state.statsInstrument = instr.value || "ALL";
   state.journalCustomFrom = from.value;
   state.journalCustomTo = to.value;

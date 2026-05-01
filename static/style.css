@@ -2252,10 +2252,10 @@ input[type="date"]:hover {
   }
 
   .day-stack-indicator {
-    top: 8px;
-    right: 8px;
-    font-size: 9px;
-    padding: 1px 7px;
+    top: 5px;
+    right: 5px;
+    font-size: 8px;
+    padding: 1px 5px;
   }
 
   .day-center {
@@ -2365,19 +2365,24 @@ input[type="date"]:hover {
 }
 .day-stack-indicator {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 6px;
+  right: 6px;
   z-index: 2;
   font-family: "JetBrains Mono", monospace;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.2px;
   color: #031017;
   background: linear-gradient(145deg, rgba(0,229,255,0.95), rgba(0,188,255,0.82));
   border: 1px solid rgba(0,229,255,0.95);
   border-radius: 999px;
-  padding: 2px 8px;
+  padding: 1px 6px;
   box-shadow: 0 0 12px rgba(0,229,255,0.32);
+  max-width: calc(100% - 12px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.4;
 }
 .day-stack-indicator.trades {
   color: #201106;
@@ -2394,7 +2399,8 @@ input[type="date"]:hover {
   align-items: center;
   text-align: center;
   gap: 6px;
-  padding: 14px 8px 12px;
+  padding: 22px 8px 12px;
+  overflow: hidden;
 }
 .day-center-empty {
   color: var(--text-faint);
@@ -8548,6 +8554,10 @@ body.light-mode .app-topbar {
   color: #626b7a;
   border: 1px solid #e3e7ee;
   box-shadow: none;
+  max-width: calc(100% - 12px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .day-stack-indicator.trades {

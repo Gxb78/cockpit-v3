@@ -244,6 +244,10 @@
   color: #626b7a;
   border: 1px solid #e3e7ee;
   box-shadow: none;
+  max-width: calc(100% - 12px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .day-stack-indicator.trades {

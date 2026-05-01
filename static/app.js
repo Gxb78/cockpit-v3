@@ -2588,6 +2588,13 @@ function bindCalendarGridActions(grid) {
     if (typeof closeJournalDayTrades === "function") closeJournalDayTrades();
     openPickerForDate(key, info.days);
   });
+  grid.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const dayEl = e.target.closest(".day");
+    if (!dayEl || dayEl.dataset.otherMonth === "1") return;
+    e.preventDefault();
+    dayEl.click();
+  });
   _calendarGridBound = true;
 }
 
@@ -2826,6 +2833,8 @@ function dayCell(dt, byDay, otherMonth, today) {
   el.dataset.otherMonth = otherMonth ? "1" : "0";
   el.dataset.weekday = String(dt.getDay());
   el.className = "day" + (otherMonth ? " other-month" : "") + (key === today ? " today" : "");
+  el.setAttribute("role", "button");
+  el.setAttribute("tabindex", otherMonth ? "-1" : "0");
   if (dt.getDay() === 0 || dt.getDay() === 6) el.classList.add("is-weekend");
   el.classList.add(`day-mode-${mode}`);
   const band = _pnlBand(info?.pnl, _calPnLThresholds);
@@ -7958,6 +7967,13 @@ function renderTodayCalendar() {
       if (!key) return;
       if (typeof wizOpen === "function") wizOpen({ date: key });
     });
+    grid.addEventListener("keydown", function(e) {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      var dayEl = e.target.closest(".day");
+      if (!dayEl || dayEl.dataset.otherMonth === "1") return;
+      e.preventDefault();
+      dayEl.click();
+    });
   }
 }
 
@@ -9535,7 +9551,16 @@ function _udpRangeForShortcut(kind) {
       to: _udpDateKey(new Date(today.getFullYear(), today.getMonth() + 1, 0)),
     };
   } else if (kind === "all") {
-    return { from: "2020-01-01", to: _udpDateKey(today) };
+    // Calculer dynamiquement la date la plus ancienne depuis state.days
+    var earliest = null;
+    if (Array.isArray(state.days)) {
+      for (var i = 0; i < state.days.length; i++) {
+        if (state.days[i] && state.days[i].date && (!earliest || state.days[i].date < earliest)) {
+          earliest = state.days[i].date;
+        }
+      }
+    }
+    return { from: earliest || "2020-01-01", to: _udpDateKey(today) };
   }
   return { from: _udpDateKey(start), to: _udpDateKey(today) };
 }
@@ -9854,7 +9879,7 @@ function _applyJournalFilter() {
     toDate = new Date(to.value + "T00:00:00");
   }
 
-  state.currentMonth = new Date((fromDate.getTime() + toDate.getTime()) / 2);
+  state.currentMonth = new Date(toDate.getFullYear(), toDate.getMonth(), 1);
   state.statsInstrument = instr.value || "ALL";
   state.journalCustomFrom = from.value;
   state.journalCustomTo = to.value;
