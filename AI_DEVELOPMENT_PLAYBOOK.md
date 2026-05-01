@@ -340,3 +340,24 @@ Format obligatoire d'une lesson:
 - Regle de prevention: pour afficher un hint en presence d'une valeur, utiliser un `<span>` en absolute overlay, pas le placeholder de l'input. Placer le span en `position: absolute; right: 8px; top: 50%; transform: translateY(-50%); pointer-events: none;` avec `padding-right` sur l'input pour eviter le chevauchement.
 - Test de non-regression: saisir "a" → le hint "2 car. min" est visible a droite du "a".
 - Fichiers a surveiller: `static/js/split/006_comparetext.js`, `static/css/split/033_priority2_journal_trade.css`.
+
+### BUG-20260501-06 - Template stats jamais rendu → page blanche
+- Symptome: navigation vers Stats → ecran vide, aucune erreur JS hormis `Cannot set properties of null (setting 'textContent')` sur `#statStreakCur`.
+- Cause racine: le contenu de la page Stats etait dans un `<template id="statsTemplate">` mais aucun code JS ne le clonait dans `<section class="page" data-page="stats">`. Les elements attendus par `renderPerformance()` n'existaient pas dans le DOM.
+- Regle de prevention: quand un template HTML est utilise pour une page, verifier que le JS appelle `template.content.cloneNode(true)` dans `openPage()` avant tout render. Pattern: `if (section && tmpl && !section._rendered) { section.appendChild(tmpl.content.cloneNode(true)); section._rendered = true; }`.
+- Test de non-regression: naviguer vers Stats → le contenu apparait (pas de page blanche).
+- Fichiers a surveiller: `static/js/split/009_navigation.js`, `templates/partials/pages/stats.html`.
+
+### BUG-20260501-07 - applyVisualSettings() ne sync pas la checkbox dark mode
+- Symptome: toggler le theme depuis le rail (`#themeToggle`) changeait l'apparence mais la checkbox `#prefDarkMode` dans Settings restait sur l'ancienne valeur.
+- Cause racine: `applyVisualSettings()` mettait a jour `body.light-mode` mais pas la checkbox.
+- Regle de prevention: toute fonction `apply*Settings()` doit sync les controles UI correspondants s'ils existent dans le DOM. Ajouter `var cb = document.getElementById("prefDarkMode"); if (cb) cb.checked = prefersDark;` dans `applyVisualSettings()`.
+- Test de non-regression: toggler theme depuis le rail → ouvrir Settings → checkbox en phase.
+- Fichiers a surveiller: `static/js/split/002_prettify.js`.
+
+### BUG-20260501-08 - Champs API key en type=text exposé en partage d'ecran
+- Symptome: le champ `#settingsApiKeyMasked` etait en `type="text"`, visible en partage d'ecran.
+- Cause racine: pas de mesure de securite sur un champ sensible.
+- Regle de prevention: toujours utiliser `type="password"` pour les cles API, avec un bouton toggle œil pour afficher/masquer. Pattern: `<input type="password">` + bouton `#settingsApiToggle` qui switch entre `type="password"` et `type="text"`.
+- Test de non-regression: ouvrir Settings → la cle est masquee (dots).
+- Fichiers a surveiller: `templates/partials/pages/settings/api_card.html`, `static/js/split/003_addcustomstrategyfromsettings.js`, `static/css/split/034_priority3_stats_settings_insights.css`.
