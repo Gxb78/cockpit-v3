@@ -29,15 +29,6 @@ function bindNav() {
   $("#openCmdk")?.addEventListener("click", function () { openCmdk(); });
 }
 
-function _lazyLoadPage(pageName) {
-  var target = document.querySelector('.page[data-page="' + pageName + '"]');
-  if (!target || target.children.length > 0) return; // deja charge
-  var template = document.getElementById(pageName + "Template");
-  if (!template) return;
-  var clone = template.content.cloneNode(true);
-  target.appendChild(clone);
-}
-
 function goPage(pageName) {
   var targetPage = document.querySelector('.page[data-page="' + pageName + '"]');
   if (!targetPage || state.currentPage === pageName) return;
@@ -49,8 +40,6 @@ function goPage(pageName) {
   $$(".page").forEach(function (p) {
     p.classList.toggle("active", p.dataset.page === pageName);
   });
-  // Lazy-load les pages a la demande
-  _lazyLoadPage(pageName);
   _updateTitle(pageName);
   if (pageName === "journal") {
     updateCalendarMetricToggleUI();
@@ -76,16 +65,4 @@ function setTodayHeader() {
 }
 
 
-// ---------- Theme toggle dark/light ----------
-(function () {
-  var btn = document.getElementById("themeToggle");
-  if (!btn) return;
-  btn.addEventListener("click", function () {
-    document.body.classList.toggle("light-mode");
-    try { localStorage.setItem("theme",
-      document.body.classList.contains("light-mode") ? "light" : "dark"); } catch (_) {}
-  });
-  try {
-    if (localStorage.getItem("theme") === "light") document.body.classList.add("light-mode");
-  } catch (_) {}
-})();
+// ---------- Fin navigation (theme toggle supprime — voir 003 pour la source unique) ----------

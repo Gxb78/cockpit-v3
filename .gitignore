@@ -21,6 +21,13 @@ Thumbs.db
 
 # Git
 *.orig
+*.pre-*
+
+# Scanning / debug scripts
+_debug_*.py
+_scan_*.py
+_test_*.bat
+_test_start.bat
 
 # Agent state
 .omc/

@@ -116,7 +116,7 @@ async function _wizSubmit() {
   var d = wizState.data;
   if (!d.date) d.date = todayKey();
   var instrument = wizCanonicalInstrument(d.instrument) || wizDefaultInstrument();
-  if (!WIZ_INSTRUMENTS.includes(instrument)) {
+  if (!INSTRUMENTS.includes(instrument)) {
     instrument = wizDefaultInstrument();
   }
   d.instrument = instrument;

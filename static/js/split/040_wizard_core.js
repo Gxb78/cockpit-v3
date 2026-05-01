@@ -6,7 +6,7 @@ const WIZ_DRAFT_KEY = 'cockpit:wizard_draft:v3';
 
 let wizState = null;
 
-const WIZ_INSTRUMENTS = ["BTC", "ETH", "NQ", "ES"];
+// WIZ_INSTRUMENTS supprime — utiliser INSTRUMENTS depuis 001_utilities.js
 const STEPS_TRADE = ['date','instrument','strategy','day_context','why_trade','why_entry','why_stop_tp','levels','screenshots','recap'];
 const STEPS_PM = ['pm_exit','pm_quality','pm_lessons'];
 
@@ -51,10 +51,10 @@ function wizInstrumentLabel(value) {
 
 function wizDefaultInstrument() {
   const fromFilter = wizCanonicalInstrument(state?.statsInstrument || "");
-  if (WIZ_INSTRUMENTS.includes(fromFilter)) return fromFilter;
+  if (INSTRUMENTS.includes(fromFilter)) return fromFilter;
   if (typeof _lastInstrument === "function") {
     const last = wizCanonicalInstrument(_lastInstrument());
-    if (WIZ_INSTRUMENTS.includes(last)) return last;
+    if (INSTRUMENTS.includes(last)) return last;
   }
   return "BTC";
 }

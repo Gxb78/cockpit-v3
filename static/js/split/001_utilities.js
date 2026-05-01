@@ -13,6 +13,30 @@ var STRATEGY_LABELS = {
 };
 var DEFAULT_STRATEGY_VALUES = Object.keys(STRATEGY_LABELS);
 var INSTRUMENTS = ["BTC", "ETH", "NQ", "ES"];
+
+function renderInstruments() {
+  // Rail buttons
+  var rail = document.getElementById("instrList");
+  if (rail) {
+    rail.innerHTML = '<button class="instr-chip active" data-instr="ALL" role="tab" aria-selected="true"><span class="dot" aria-hidden="true"></span>Tous</button>' +
+      INSTRUMENTS.map(function (i) {
+        return '<button class="instr-chip" data-instr="' + i + '" role="tab" aria-selected="false"><span class="dot" aria-hidden="true"></span>' + i + "</button>";
+      }).join("");
+  }
+  // Day context select
+  var ctx = document.getElementById("entryInstrument");
+  if (ctx) {
+    ctx.innerHTML = '<option value="">Instrument</option>' +
+      INSTRUMENTS.map(function (i) { return '<option value="' + i + '">' + i + "</option>"; }).join("");
+  }
+  // Journal filter select
+  var jf = document.getElementById("jFilterInstrument");
+  if (jf) {
+    jf.innerHTML = '<option value="ALL">Tous</option>' +
+      INSTRUMENTS.map(function (i) { return '<option value="' + i + '">' + i + "</option>"; }).join("");
+  }
+}
+
 const SETTINGS_STORAGE_KEY = "cockpit:settings:v1";
 const CALENDAR_METRIC_MODE_KEY = "cockpit:calendarMetricMode:v1";
 const CALENDAR_METRIC_MODES = new Set(["pnl", "trades", "both"]);

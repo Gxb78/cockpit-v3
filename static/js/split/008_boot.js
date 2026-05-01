@@ -7,6 +7,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (cfg && cfg.instruments) INSTRUMENTS = cfg.instruments;
     if (cfg && cfg.strategies) DEFAULT_STRATEGY_VALUES = cfg.strategies;
     if (cfg && cfg.strategy_labels) STRATEGY_LABELS = cfg.strategy_labels;
+    renderInstruments();
   } catch (_) { /* fallback silencieux sur les valeurs hardcodees */ }
 
   document.body.setAttribute("data-current-page", state.currentPage || "today");

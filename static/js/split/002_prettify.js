@@ -66,6 +66,14 @@ function sanitizeSettings(raw) {
 function loadSettingsState() {
   try {
     const raw = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || "{}");
+    // Migration: ancien localStorage["theme"] -> preferences.dark_mode
+    if (raw.preferences?.dark_mode === undefined) {
+      try {
+        const legacyTheme = localStorage.getItem("theme");
+        if (legacyTheme === "light") raw.preferences = raw.preferences || {};
+        if (legacyTheme === "light") raw.preferences.dark_mode = false;
+      } catch (_) {}
+    }
     return sanitizeSettings(raw);
   } catch {
     return defaultSettingsState();

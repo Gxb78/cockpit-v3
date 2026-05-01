@@ -173,6 +173,133 @@
   display: none !important;
 }
 
+/* ---- Base widget position for drag handles & drop indicators ---- */
+.widget[data-widget-key] {
+  position: relative;
+}
+
+/* ---- Drag handle (grip icon on hover) ---- */
+.widget-drag-handle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  background: rgba(255,255,255,0.08);
+  color: var(--text-faint);
+  cursor: grab;
+  transition: opacity 0.2s, background 0.16s, color 0.16s, transform 0.16s;
+  touch-action: none;
+}
+
+.widget-drag-handle svg {
+  width: 16px;
+  height: 16px;
+}
+
+.widget:hover .widget-drag-handle,
+.widget-drag-handle:active {
+  opacity: 1;
+}
+
+.widget-drag-handle:hover {
+  background: rgba(0,229,255,0.12);
+  color: var(--cyan);
+  transform: scale(1.08);
+}
+
+.widget-drag-handle:active {
+  cursor: grabbing;
+  background: rgba(0,229,255,0.18);
+}
+
+/* ---- Dragging state ---- */
+.widget[data-widget-dragging="1"] {
+  opacity: 0 !important;
+  position: absolute !important;
+  pointer-events: none !important;
+  height: 0 !important;
+  overflow: hidden !important;
+}
+
+.widget-drag-ghost {
+  border-radius: var(--r, 16px);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.45), 0 0 0 2px rgba(0,229,255,0.25);
+  transform: scale(1.02) rotate(0.5deg);
+  opacity: 0.92;
+  z-index: 10000;
+  pointer-events: none;
+}
+
+.widget-drag-placeholder {
+  border-radius: var(--r, 16px);
+  border: 2px dashed rgba(0,229,255,0.3);
+  background: rgba(0,229,255,0.04);
+  transition: width 0.28s cubic-bezier(.22,.92,.32,1),
+              height 0.28s cubic-bezier(.22,.92,.32,1);
+  flex-shrink: 0;
+}
+
+/* Drop indicator: before (left/top) */
+.widget[data-widget-drop-before="1"] {
+  position: relative;
+}
+
+.widget[data-widget-drop-before="1"]::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--cyan, #00E5FF);
+  box-shadow: 0 0 10px rgba(0,229,255,0.4);
+  z-index: 10;
+}
+
+/* Drop indicator: after (right/bottom) */
+.widget[data-widget-drop-after="1"] {
+  position: relative;
+}
+
+.widget[data-widget-drop-after="1"]::after {
+  content: "";
+  position: absolute;
+  right: -6px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--cyan, #00E5FF);
+  box-shadow: 0 0 10px rgba(0,229,255,0.4);
+  z-index: 10;
+}
+
+/* Smooth reorder transitions for siblings */
+.widget-board[data-widget-ready="1"] .widget:not([data-widget-dragging="1"]):not(.widget-drag-placeholder) {
+  transition: transform 0.28s cubic-bezier(.22,.92,.32,1),
+              opacity 0.22s ease;
+}
+
+/* KPI drag handle: slightly smaller */
+.page[data-page="today"] .kpi .widget-drag-handle {
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+}
+
+.page[data-page="today"] .kpi .widget-drag-handle svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* ---- Adaptive KPI row: 2-3-4-5-6 columns ---- */
 .kpi-row[data-visible-count="1"] {
   grid-template-columns: 1fr;
