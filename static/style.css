@@ -16583,6 +16583,30 @@ select.jedit-field-error {
   background: rgba(56, 211, 238, 0.08);
 }
 
+.btc-chart-custom {
+  width: 56px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  font-family: inherit;
+  text-align: center;
+  padding: 0 4px;
+  outline: none;
+  transition: color 0.15s, border-color 0.15s;
+}
+.btc-chart-custom:focus {
+  color: var(--text);
+  border-color: var(--cyan);
+}
+.btc-chart-custom::placeholder {
+  color: var(--text-faint);
+  font-size: 9px;
+}
+
 .btc-chart-container {
   flex: 1;
   min-height: 360px;
@@ -16602,4 +16626,8 @@ body.light-mode .btc-chart-controls .btn-icon.active {
   border-color: rgba(14, 165, 233, 0.30);
   background: rgba(14, 165, 233, 0.08);
   color: #0ea5e9;
+}
+
+body.light-mode .btc-chart-custom {
+  border-color: rgba(15, 23, 42, 0.12);
 }

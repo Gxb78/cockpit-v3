@@ -122,6 +122,21 @@
         });
       });
 
+      // Custom interval input
+      var customInput = document.getElementById('btcChartCustom');
+      if (customInput) {
+        customInput.addEventListener('change', function () {
+          var val = this.value.trim();
+          if (!val) return;
+          document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
+          currentInterval = val;
+          _fetchAndRender();
+        });
+        customInput.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') { this.blur(); }
+        });
+      }
+
     } catch (e) {
       console.error('[btc-chart] createChart error:', e);
     }
