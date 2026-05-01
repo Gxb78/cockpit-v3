@@ -6076,12 +6076,12 @@ body.light-mode .day-dots { gap: 3px; }
 
 /* ---- 025_wizard_steps_ui.css ---- */
 /* ============================================================
-   WIZARD — Refonte taille fixe 560×620
+   WIZARD — Taille reduite 440×560
    ============================================================ */
 .wiz { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); }
 .wiz-panel {
-  width: min(560px, 94vw);
-  height: 620px;
+  width: min(460px, 94vw);
+  height: 560px;
   max-height: 92dvh;
   display: flex;
   flex-direction: column;
