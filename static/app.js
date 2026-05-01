@@ -1028,12 +1028,18 @@ function updateJournalTradeFiltersUI() {
   strategySel.value = f.strategy || "ALL";
   if (resultSel) resultSel.value = f.result || "ALL";
   if (tagSel) tagSel.value = f.tag || "ALL";
+  var pnlMin = $("#journalFilterPnlMin");
+  var pnlMax = $("#journalFilterPnlMax");
+  if (pnlMin) pnlMin.value = parseFilterNumber(f.pnlMin) != null ? f.pnlMin : "";
+  if (pnlMax) pnlMax.value = parseFilterNumber(f.pnlMax) != null ? f.pnlMax : "";
 
   // Badge actif sur le summary
   var count = 0;
   if (f.strategy && f.strategy !== "ALL") count++;
   if (f.result && f.result !== "ALL") count++;
   if (f.tag && f.tag !== "ALL") count++;
+  if (parseFilterNumber(f.pnlMin) != null) count++;
+  if (parseFilterNumber(f.pnlMax) != null) count++;
   var summary = document.querySelector(".journal-advanced-filters > summary");
   if (summary) {
     var badge = summary.querySelector(".filter-badge");
