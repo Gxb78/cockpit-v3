@@ -2,7 +2,7 @@
 <h1 class="page-title sr-only">Journal</h1>
 <div class="journal-page-head">
   <div class="journal-top-bar unified">
-    <!-- Left: Period stats (set by renderJournalHeaderStats) -->
+    <!-- Left: Period stats + month nav inline -->
     <div class="journal-head-stats">
       <span class="stat" id="jhsWr">WR --</span>
       <span class="stat" id="jhsPnl">PnL --</span>
@@ -10,7 +10,7 @@
       <span class="stat" id="jhsAvg">Moy --</span>
     </div>
 
-    <!-- Center: Navigation (prev / month label / next / today) -->
+    <!-- Center: Navigation compacte (prev / month input / next / today) -->
     <div class="journal-nav-inline">
       <button type="button" class="btn-icon" id="prevMonth" aria-label="Mois pr&eacute;c&eacute;dent">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -21,15 +21,15 @@
       <button type="button" class="btn-icon" id="nextMonth" aria-label="Mois suivant">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
       </button>
-      <button type="button" class="journal-today-btn" id="todayJumpBtn">Aujourd'hui</button>
+      <button type="button" class="journal-today-btn" id="todayJumpBtn">Aujourd&rsquo;hui</button>
     </div>
 
-    <!-- Right: Toggles + inline stats -->
-    <div class="journal-head-right" style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <!-- Right: Toggles compacts (focus / view / layout / range) -->
+    <div class="journal-head-right">
 
-      <!-- Calendar focus mode toggle (winrate / pnl / trades) -->
+      <!-- Calendar focus mode (WR/PnL/Tr) -->
       <div id="calendarMonthFocus" data-mode="winrate">
-        <div id="calendarMonthFocusToggle" style="display:inline-flex;gap:2px;">
+        <div id="calendarMonthFocusToggle">
           <button type="button" class="calendar-month-focus-btn" data-mode="winrate">WR</button>
           <button type="button" class="calendar-month-focus-btn" data-mode="pnl">PnL</button>
           <button type="button" class="calendar-month-focus-btn" data-mode="trades">Tr</button>
@@ -38,50 +38,38 @@
 
       <span class="journal-filters-sep"></span>
 
-      <!-- View toggle (month / week) -->
+      <!-- View / Layout / Range compacts -->
       <div class="calendar-view-toggle" id="calendarViewToggle">
         <button type="button" class="calendar-view-btn active" data-mode="month">Mois</button>
         <button type="button" class="calendar-view-btn" data-mode="week">Semaine</button>
       </div>
 
-      <span class="journal-filters-sep"></span>
-
-      <!-- Layout toggle (calendar / table) -->
       <div class="calendar-layout-toggle" id="calendarLayoutToggle">
         <button type="button" class="calendar-layout-btn active" data-mode="calendar">Calendrier</button>
         <button type="button" class="calendar-layout-btn" data-mode="table">Table</button>
       </div>
 
-      <span class="journal-filters-sep"></span>
-
-      <!-- Range toggle (month / quarter / custom) -->
       <div class="calendar-range-toggle" id="calendarRangeToggle">
         <button type="button" class="calendar-range-btn active" data-mode="month">Mois</button>
         <button type="button" class="calendar-range-btn" data-mode="quarter">Trimestre</button>
         <button type="button" class="calendar-range-btn" data-mode="custom">Custom</button>
       </div>
 
-      <!-- Quick range presets (hidden by default, toggled by JS) -->
+      <!-- Quick range presets -->
       <div id="calendarQuickRange" class="hidden" style="display:none;">
         <button type="button" class="calendar-quick-btn" data-days="7">7j</button>
         <button type="button" class="calendar-quick-btn" data-days="30">30j</button>
         <button type="button" class="calendar-quick-btn" data-days="90">90j</button>
       </div>
 
-      <!-- Custom range label (hidden when not in custom mode) -->
+      <!-- Custom range label -->
       <div id="calendarCustomRange" class="hidden" style="display:none;">
         <span id="calendarCustomLabel">-</span>
       </div>
-
-      <span class="journal-filters-sep"></span>
-
-      <!-- Inline stat chips (set by renderJournalHeaderStats) -->
-      <span class="journal-filter-stat-value" id="jhsWrInline">--</span>
-      <span class="journal-filter-stat-value" id="jhsPnlInline">--</span>
     </div>
   </div>
 
-  <!-- Month picker popover -->
+  <!-- Month picker popover (hidden by default) -->
   <div class="calendar-month-picker" id="calendarMonthPicker">
     <button type="button" class="month-label-btn" id="monthLabelBtn">
       <h2 id="monthLabel">Mois</h2>
