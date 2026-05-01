@@ -4,6 +4,19 @@
    ============================================================= */
 
 * { box-sizing: border-box; }
+
+/* Screen-reader only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
 *::selection { background: rgba(0, 229, 255, 0.25); color: #fff; }
 :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 button:focus-visible:not(:focus-visible),
