@@ -54,7 +54,7 @@ def switch_to_bundles(target_path: str, bundle_js: str, bundle_css: str):
             text,
         )
         # Ajouter le bundle a la fin
-        bundle_tag = f'<script src="/static/app.js?v={TOKEN}"></script>'
+        bundle_tag = f'<script src="/static/app.js?v={{{{ ASSET_VERSION }}}}"></script>'
         text = text.rstrip() + "\n" + bundle_tag + "\n"
 
     if bundle_css:
@@ -70,7 +70,7 @@ def switch_to_bundles(target_path: str, bundle_js: str, bundle_css: str):
             text,
         )
         # Ajouter le bundle en tete
-        bundle_tag = f'<link rel="stylesheet" href="/static/style.css?v={TOKEN}" />'
+        bundle_tag = f'<link rel="stylesheet" href="/static/style.css?v={{{{ ASSET_VERSION }}}}" />'
         if re.search(r'<link[^>]+rel="stylesheet"', text):
             text = re.sub(
                 r'(<link[^>]+rel="stylesheet")',
@@ -103,14 +103,14 @@ def restore_splits(target_path: str, js=True, css=True):
     if js and "static/js/split/" not in text:
         js_dir = ROOT / "static" / "js" / "split"
         js_tags = "\n".join(
-            f'<script src="/static/js/split/{p.name}?v={TOKEN}"></script>'
+            f'<script src="/static/js/split/{p.name}?v={{{{ ASSET_VERSION }}}}"></script>'
             for p in sorted(js_dir.glob("*.js"), key=lambda p: p.name)
         )
         text = text.rstrip() + "\n" + js_tags + "\n"
     if css and "static/css/split/" not in text:
         css_dir = ROOT / "static" / "css" / "split"
         css_tags = "\n".join(
-            f'<link rel="stylesheet" href="/static/css/split/{p.name}?v={TOKEN}" />'
+            f'<link rel="stylesheet" href="/static/css/split/{p.name}?v={{{{ ASSET_VERSION }}}}" />'
             for p in sorted(css_dir.glob("*.css"), key=lambda p: p.name)
         )
         if "<link" in text:

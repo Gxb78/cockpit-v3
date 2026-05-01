@@ -1,5 +1,15 @@
 # ---------- Routes : pages ----------
 
+@app.context_processor
+def _inject_asset_version():
+    """Hash du bundle pour cache-busting — change quand le fichier change."""
+    import hashlib as _h
+    _v = ""
+    for _f in (BASE_DIR / "static" / "app.js", BASE_DIR / "static" / "style.css"):
+        if _f.exists():
+            _v += _h.md5(_f.read_bytes()).hexdigest()[:12]
+    return dict(ASSET_VERSION=_v)
+
 @app.route("/")
 def index():
     return render_template("index.html")
