@@ -12675,7 +12675,6 @@ body.light-mode .main {
   border-radius: var(--r);
   box-shadow: var(--shadow-xs), inset 0 0 0 1px rgba(255,255,255,0.03);
   transition: box-shadow 0.25s var(--ease), border-color 0.25s var(--ease);
-  max-width: 520px;
 }
 
 
@@ -12895,9 +12894,6 @@ body.light-mode .tc-bias-pills .pill-choice.rose.active {
 /* ── Responsive ───────────────────────────── */
 
 @media (max-width: 900px) {
-  .today-context-widget {
-    max-width: none;
-  }
   .tc-header {
     flex-direction: column;
     align-items: flex-start;
