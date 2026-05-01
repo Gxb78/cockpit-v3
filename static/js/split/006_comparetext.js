@@ -118,7 +118,6 @@ function bindJournalTradeFilters() {
   const strategySel = $("#journalFilterStrategy");
   if (!strategySel) return;
   const resultSel = $("#journalFilterResult");
-  const tagSel = $("#journalFilterTag");
   const minInput = $("#journalFilterPnlMin");
   const maxInput = $("#journalFilterPnlMax");
   const resetBtn = $("#journalFilterReset");
@@ -131,10 +130,33 @@ function bindJournalTradeFilters() {
     state.journalTradeFilters.result = resultSel.value || "ALL";
     applyJournalTradeFiltersAndRender();
   });
-  tagSel?.addEventListener("change", () => {
-    state.journalTradeFilters.tag = tagSel.value || "ALL";
-    applyJournalTradeFiltersAndRender();
-  });
+
+  // Tags chips — click toggles selection
+  var tagChips = document.getElementById("journalTagChips");
+  if (tagChips) {
+    tagChips.addEventListener("click", function (e) {
+      var chip = e.target.closest(".tag-chip");
+      if (!chip) return;
+      var val = chip.dataset.tag;
+      var current = Array.isArray(state.journalTradeFilters.tag) ? state.journalTradeFilters.tag.slice() : ["ALL"];
+      if (val === "ALL") {
+        // "Tous" → reset to ALL
+        state.journalTradeFilters.tag = ["ALL"];
+      } else {
+        if (current[0] === "ALL") current = [];
+        var idx = current.indexOf(val);
+        if (idx >= 0) {
+          current.splice(idx, 1); // deselect
+        } else {
+          current.push(val); // select
+        }
+        if (!current.length) current = ["ALL"];
+        state.journalTradeFilters.tag = current;
+      }
+      updateJournalTradeFiltersUI();
+      applyJournalTradeFiltersAndRender();
+    });
+  }
 
   let timer = null;
   const onPnlInput = () => {
@@ -147,6 +169,41 @@ function bindJournalTradeFilters() {
   };
   minInput?.addEventListener("input", onPnlInput);
   maxInput?.addEventListener("input", onPnlInput);
+
+  // Search — debounce 200ms, hint glow si < 2 chars
+  const searchInput = $("#journalFilterSearch");
+  let searchTimer = null;
+  const hideSearchHint = function () {
+    if (searchInput) {
+      searchInput.classList.remove("search-too-short");
+      searchInput.classList.remove("jedit-field-error");
+      var hint = document.getElementById("journalSearchHint");
+      if (hint) hint.classList.add("hidden");
+    }
+  };
+  const onSearchInput = function () {
+    clearTimeout(searchTimer);
+    if (!searchInput) return;
+    searchInput.classList.remove("search-too-short");
+    searchInput.classList.remove("jedit-field-error");
+    var hint = document.getElementById("journalSearchHint");
+    if (hint) hint.classList.add("hidden");
+    var val = (searchInput.value || "").trim();
+    searchTimer = setTimeout(function () {
+      state.journalTradeFilters.search = val;
+      applyJournalTradeFiltersAndRender();
+      // Glow rouge si < 2 chars (sauf vide)
+      if (val.length === 1) {
+        searchInput.classList.add("search-too-short");
+        searchInput.classList.add("jedit-field-error");
+        if (hint) hint.classList.remove("hidden");
+      }
+    }, 200);
+  };
+  if (searchInput) {
+    searchInput.addEventListener("input", onSearchInput);
+    searchInput.addEventListener("blur", hideSearchHint);
+  }
 
   resetBtn?.addEventListener("click", () => {
     state.journalTradeFilters = defaultJournalTradeFilters();

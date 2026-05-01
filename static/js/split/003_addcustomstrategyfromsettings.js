@@ -244,9 +244,10 @@ function defaultJournalTradeFilters() {
   return {
     strategy: "ALL",
     result: "ALL",
-    tag: "ALL",
+    tag: ["ALL"],
     pnlMin: "",
     pnlMax: "",
+    search: "",
   };
 }
 
@@ -255,9 +256,18 @@ function sanitizeJournalTradeFilters(raw) {
   const out = { ...d };
   if (typeof raw?.strategy === "string" && raw.strategy) out.strategy = raw.strategy;
   if (typeof raw?.result === "string" && ["ALL", "WIN", "LOSS", "OPEN"].includes(raw.result)) out.result = raw.result;
-  if (typeof raw?.tag === "string" && raw.tag) out.tag = raw.tag;
-  if (raw?.pnlMin != null && raw.pnlMin !== "") out.pnlMin = String(raw.pnlMin);
-  if (raw?.pnlMax != null && raw.pnlMax !== "") out.pnlMax = String(raw.pnlMax);
+  if (raw?.tag != null) {
+    if (Array.isArray(raw.tag)) {
+      out.tag = raw.tag.filter(function (t) { return typeof t === "string" && t.trim(); });
+      if (!out.tag.length) out.tag = ["ALL"];
+    } else if (typeof raw.tag === "string" && raw.tag) {
+      // Retrocompat: ancien format string unique
+      out.tag = [raw.tag];
+    }
+  }
+  if (typeof raw?.pnlMin != null && raw.pnlMin !== "") out.pnlMin = String(raw.pnlMin);
+  if (typeof raw?.pnlMax != null && raw.pnlMax !== "") out.pnlMax = String(raw.pnlMax);
+  if (typeof raw?.search === "string") out.search = raw.search;
   return out;
 }
 

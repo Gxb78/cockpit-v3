@@ -42,7 +42,7 @@ const _state = {
   journalTradeFilters: {
     strategy: "ALL",
     result: "ALL",
-    tag: "ALL",
+    tag: ["ALL"],
     pnlMin: "",
     pnlMax: "",
   },
@@ -925,9 +925,10 @@ function defaultJournalTradeFilters() {
   return {
     strategy: "ALL",
     result: "ALL",
-    tag: "ALL",
+    tag: ["ALL"],
     pnlMin: "",
     pnlMax: "",
+    search: "",
   };
 }
 
@@ -936,9 +937,18 @@ function sanitizeJournalTradeFilters(raw) {
   const out = { ...d };
   if (typeof raw?.strategy === "string" && raw.strategy) out.strategy = raw.strategy;
   if (typeof raw?.result === "string" && ["ALL", "WIN", "LOSS", "OPEN"].includes(raw.result)) out.result = raw.result;
-  if (typeof raw?.tag === "string" && raw.tag) out.tag = raw.tag;
-  if (raw?.pnlMin != null && raw.pnlMin !== "") out.pnlMin = String(raw.pnlMin);
-  if (raw?.pnlMax != null && raw.pnlMax !== "") out.pnlMax = String(raw.pnlMax);
+  if (raw?.tag != null) {
+    if (Array.isArray(raw.tag)) {
+      out.tag = raw.tag.filter(function (t) { return typeof t === "string" && t.trim(); });
+      if (!out.tag.length) out.tag = ["ALL"];
+    } else if (typeof raw.tag === "string" && raw.tag) {
+      // Retrocompat: ancien format string unique
+      out.tag = [raw.tag];
+    }
+  }
+  if (typeof raw?.pnlMin != null && raw.pnlMin !== "") out.pnlMin = String(raw.pnlMin);
+  if (typeof raw?.pnlMax != null && raw.pnlMax !== "") out.pnlMax = String(raw.pnlMax);
+  if (typeof raw?.search === "string") out.search = raw.search;
   return out;
 }
 
@@ -1024,22 +1034,35 @@ function updateJournalTradeFiltersUI() {
   const strategySel = $("#journalFilterStrategy");
   if (!strategySel) return;
   const resultSel = $("#journalFilterResult");
-  const tagSel = $("#journalFilterTag");
   strategySel.value = f.strategy || "ALL";
   if (resultSel) resultSel.value = f.result || "ALL";
-  if (tagSel) tagSel.value = f.tag || "ALL";
+
+  // Sync chips UI
+  var chipsContainer = $("#journalTagChips");
+  if (chipsContainer) {
+    var chips = chipsContainer.querySelectorAll(".tag-chip");
+    var selected = Array.isArray(f.tag) ? f.tag : ["ALL"];
+    chips.forEach(function (chip) {
+      var val = chip.dataset.tag;
+      var isActive = selected.some(function (s) { return s === val; });
+      chip.classList.toggle("is-active", isActive);
+    });
+  }
   var pnlMin = $("#journalFilterPnlMin");
   var pnlMax = $("#journalFilterPnlMax");
   if (pnlMin) pnlMin.value = parseFilterNumber(f.pnlMin) != null ? f.pnlMin : "";
   if (pnlMax) pnlMax.value = parseFilterNumber(f.pnlMax) != null ? f.pnlMax : "";
+  var searchInput = $("#journalFilterSearch");
+  if (searchInput) searchInput.value = f.search || "";
 
   // Badge actif sur le summary
   var count = 0;
   if (f.strategy && f.strategy !== "ALL") count++;
   if (f.result && f.result !== "ALL") count++;
-  if (f.tag && f.tag !== "ALL") count++;
+  if (Array.isArray(f.tag) && f.tag[0] !== "ALL" && f.tag.length) count += f.tag.length;
   if (parseFilterNumber(f.pnlMin) != null) count++;
   if (parseFilterNumber(f.pnlMax) != null) count++;
+  if (f.search && f.search.trim().length >= 2) count++;
   var summary = document.querySelector(".journal-advanced-filters > summary");
   if (summary) {
     var badge = summary.querySelector(".filter-badge");
@@ -1056,9 +1079,18 @@ function updateJournalTradeFiltersUI() {
   }
 }
 
+var _journalFilterOptionsHash = "";
+
 function updateJournalTradeFilterOptions(days = state.days) {
+  // Memoize: ne pas reconstruire si les donnees n'ont pas change
+  // (evite flash/perte focus navigation, J-23)
+  var hash = (Array.isArray(days) ? days.map(function (d) {
+    return d.date + ":" + (d.trades || []).map(function (t) { return (t.strategy||"") + "|" + (t.tags||[]).join(","); }).join(";");
+  }).join("|") : "") + "|" + (state.settings?.custom_strategies||[]).length + "|" + (state.settings?.custom_tags||[]).length;
+  if (hash === _journalFilterOptionsHash) return;
+  _journalFilterOptionsHash = hash;
+
   const strategySel = $("#journalFilterStrategy");
-  const tagSel = $("#journalFilterTag");
 
   const strategySet = new Set(["ALL"]);
   DEFAULT_STRATEGY_VALUES.forEach(s => strategySet.add(s));
@@ -1089,21 +1121,31 @@ function updateJournalTradeFilterOptions(days = state.days) {
     state.journalTradeFilters.strategy = strategySel.value;
   }
 
-  if (tagSel) {
-    const current = state.journalTradeFilters?.tag || "ALL";
-    tagSel.innerHTML = "";
-    Array.from(tagSet).sort((a, b) => {
+  // Tags → chips cliquables dans #journalTagChips
+  var tagChips = $("#journalTagChips");
+  if (tagChips) {
+    var selectedTags = Array.isArray(state.journalTradeFilters?.tag) ? state.journalTradeFilters.tag : ["ALL"];
+    tagChips.innerHTML = "";
+    // Toujours un chip "Tous" en premier
+    var allChip = document.createElement("button");
+    allChip.type = "button";
+    allChip.className = "tag-chip" + (selectedTags[0] === "ALL" ? " is-active" : "");
+    allChip.dataset.tag = "ALL";
+    allChip.textContent = "Tous";
+    tagChips.appendChild(allChip);
+    Array.from(tagSet).sort(function (a, b) {
       if (a === "ALL") return -1;
       if (b === "ALL") return 1;
       return String(a).localeCompare(String(b));
-    }).forEach(value => {
-      const opt = document.createElement("option");
-      opt.value = value;
-      opt.textContent = value === "ALL" ? "Tous" : `#${value}`;
-      tagSel.appendChild(opt);
+    }).forEach(function (value) {
+      if (value === "ALL") return;
+      var chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "tag-chip" + (selectedTags.indexOf(value) >= 0 ? " is-active" : "");
+      chip.dataset.tag = value;
+      chip.textContent = "#" + value;
+      tagChips.appendChild(chip);
     });
-    tagSel.value = tagSet.has(current) ? current : "ALL";
-    state.journalTradeFilters.tag = tagSel.value;
   }
 }
 
@@ -1296,9 +1338,10 @@ function hasActiveJournalTradeFilters() {
   return !!(
     (f.strategy && f.strategy !== "ALL")
     || (f.result && f.result !== "ALL")
-    || (f.tag && f.tag !== "ALL")
+    || (Array.isArray(f.tag) && f.tag[0] !== "ALL" && f.tag.length)
     || parseFilterNumber(f.pnlMin) != null
     || parseFilterNumber(f.pnlMax) != null
+    || (f.search && f.search.trim().length >= 2)
   );
 }
 
@@ -1342,9 +1385,10 @@ function rowMatchesJournalTradeFilters(row, filters = state.journalTradeFilters)
 
   if (f.strategy && f.strategy !== "ALL" && row.strategy !== f.strategy) return false;
   if (f.result && f.result !== "ALL" && row.result !== f.result) return false;
-  if (f.tag && f.tag !== "ALL") {
-    const wanted = String(f.tag).toLowerCase();
-    const hasTag = (row.tags || []).some(t => String(t).toLowerCase() === wanted);
+  if (f.tag && Array.isArray(f.tag) && f.tag[0] !== "ALL") {
+    var hasTag = (row.tags || []).some(function (t) {
+      return f.tag.some(function (selected) { return String(t).toLowerCase() === String(selected).toLowerCase(); });
+    });
     if (!hasTag) return false;
   }
 
@@ -1353,6 +1397,18 @@ function rowMatchesJournalTradeFilters(row, filters = state.journalTradeFilters)
   const pnl = row.pnl == null ? 0 : Number(row.pnl);
   if (min != null && pnl < min) return false;
   if (max != null && pnl > max) return false;
+
+  // Full-text search — minimum 2 caracteres, cherche dans les textes longs
+  if (f.search && f.search.trim().length >= 2) {
+    var q = f.search.trim().toLowerCase();
+    var haystack = [
+      row.why_trade, row.scenario, row.why_entry,
+      row.why_stop, row.why_tp, row.lessons_learned,
+      row.plan_override_reason, row.plan_snapshot,
+    ].concat(row.tags || []).filter(Boolean).join(" ").toLowerCase();
+    if (haystack.indexOf(q) === -1) return false;
+  }
+
   return true;
 }
 
@@ -1488,7 +1544,6 @@ function bindJournalTradeFilters() {
   const strategySel = $("#journalFilterStrategy");
   if (!strategySel) return;
   const resultSel = $("#journalFilterResult");
-  const tagSel = $("#journalFilterTag");
   const minInput = $("#journalFilterPnlMin");
   const maxInput = $("#journalFilterPnlMax");
   const resetBtn = $("#journalFilterReset");
@@ -1501,10 +1556,33 @@ function bindJournalTradeFilters() {
     state.journalTradeFilters.result = resultSel.value || "ALL";
     applyJournalTradeFiltersAndRender();
   });
-  tagSel?.addEventListener("change", () => {
-    state.journalTradeFilters.tag = tagSel.value || "ALL";
-    applyJournalTradeFiltersAndRender();
-  });
+
+  // Tags chips — click toggles selection
+  var tagChips = document.getElementById("journalTagChips");
+  if (tagChips) {
+    tagChips.addEventListener("click", function (e) {
+      var chip = e.target.closest(".tag-chip");
+      if (!chip) return;
+      var val = chip.dataset.tag;
+      var current = Array.isArray(state.journalTradeFilters.tag) ? state.journalTradeFilters.tag.slice() : ["ALL"];
+      if (val === "ALL") {
+        // "Tous" → reset to ALL
+        state.journalTradeFilters.tag = ["ALL"];
+      } else {
+        if (current[0] === "ALL") current = [];
+        var idx = current.indexOf(val);
+        if (idx >= 0) {
+          current.splice(idx, 1); // deselect
+        } else {
+          current.push(val); // select
+        }
+        if (!current.length) current = ["ALL"];
+        state.journalTradeFilters.tag = current;
+      }
+      updateJournalTradeFiltersUI();
+      applyJournalTradeFiltersAndRender();
+    });
+  }
 
   let timer = null;
   const onPnlInput = () => {
@@ -1517,6 +1595,41 @@ function bindJournalTradeFilters() {
   };
   minInput?.addEventListener("input", onPnlInput);
   maxInput?.addEventListener("input", onPnlInput);
+
+  // Search — debounce 200ms, hint glow si < 2 chars
+  const searchInput = $("#journalFilterSearch");
+  let searchTimer = null;
+  const hideSearchHint = function () {
+    if (searchInput) {
+      searchInput.classList.remove("search-too-short");
+      searchInput.classList.remove("jedit-field-error");
+      var hint = document.getElementById("journalSearchHint");
+      if (hint) hint.classList.add("hidden");
+    }
+  };
+  const onSearchInput = function () {
+    clearTimeout(searchTimer);
+    if (!searchInput) return;
+    searchInput.classList.remove("search-too-short");
+    searchInput.classList.remove("jedit-field-error");
+    var hint = document.getElementById("journalSearchHint");
+    if (hint) hint.classList.add("hidden");
+    var val = (searchInput.value || "").trim();
+    searchTimer = setTimeout(function () {
+      state.journalTradeFilters.search = val;
+      applyJournalTradeFiltersAndRender();
+      // Glow rouge si < 2 chars (sauf vide)
+      if (val.length === 1) {
+        searchInput.classList.add("search-too-short");
+        searchInput.classList.add("jedit-field-error");
+        if (hint) hint.classList.remove("hidden");
+      }
+    }, 200);
+  };
+  if (searchInput) {
+    searchInput.addEventListener("input", onSearchInput);
+    searchInput.addEventListener("blur", hideSearchHint);
+  }
 
   resetBtn?.addEventListener("click", () => {
     state.journalTradeFilters = defaultJournalTradeFilters();
@@ -2556,6 +2669,32 @@ function renderCalendar(windowDef = null) {
   }
   grid.replaceChildren(fragment);
 
+  // Empty state — soit aucun trade sur la periode, soit filtres ont tout vide
+  var totalTrades = 0;
+  Object.keys(byDay).forEach(function (k) { totalTrades += Number(byDay[k].trades || 0); });
+  var hasFilters = hasActiveJournalTradeFilters();
+  var isEmpty = totalTrades === 0;
+  var wrap = document.getElementById("journalCalendarWrap");
+  if (wrap) wrap.classList.toggle("cal-empty", isEmpty);
+  var emptyEl = document.getElementById("calendarEmptyState");
+  if (isEmpty) {
+    if (!emptyEl) {
+      emptyEl = document.createElement("div");
+      emptyEl.id = "calendarEmptyState";
+      emptyEl.className = "calendar-empty-state";
+      emptyEl.innerHTML =
+        '<div class="empty-state">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
+          '<span>' + (hasFilters ? 'Aucun trade ne correspond aux filtres actifs.' : 'Aucun trade pour cette periode.') + '</span>' +
+          (hasFilters ? '' : '<span class="empty-cta">Ajouter un trade dans le tableau de bord Today</span>') +
+        "</div>";
+      grid.parentNode.insertBefore(emptyEl, grid.nextSibling);
+    }
+    emptyEl.classList.remove("hidden");
+  } else if (emptyEl) {
+    emptyEl.classList.add("hidden");
+  }
+
   const totalCells = grid.children.length;
   const rows = Math.max(1, Math.ceil(totalCells / 7));
   grid.style.setProperty("--journal-rows", String(rows));
@@ -2683,7 +2822,9 @@ function dayCell(dt, byDay, otherMonth, today) {
   const el   = document.createElement("div");
   el.dataset.date = key;
   el.dataset.otherMonth = otherMonth ? "1" : "0";
+  el.dataset.weekday = String(dt.getDay());
   el.className = "day" + (otherMonth ? " other-month" : "") + (key === today ? " today" : "");
+  if (dt.getDay() === 0 || dt.getDay() === 6) el.classList.add("is-weekend");
   el.classList.add(`day-mode-${mode}`);
   const band = _pnlBand(info?.pnl, _calPnLThresholds);
   if (band) el.classList.add(band);

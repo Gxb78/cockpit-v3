@@ -22,3 +22,10 @@
 .empty-state .empty-cta {
   margin-top: 4px;
 }
+
+/* Calendar empty state — overlay sur le calendrier */
+.calendar-empty-state {
+  margin: 32px auto;
+  max-width: 320px;
+}
+.calendar-empty-state.hidden { display: none; }

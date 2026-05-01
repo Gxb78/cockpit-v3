@@ -109,9 +109,10 @@ function hasActiveJournalTradeFilters() {
   return !!(
     (f.strategy && f.strategy !== "ALL")
     || (f.result && f.result !== "ALL")
-    || (f.tag && f.tag !== "ALL")
+    || (Array.isArray(f.tag) && f.tag[0] !== "ALL" && f.tag.length)
     || parseFilterNumber(f.pnlMin) != null
     || parseFilterNumber(f.pnlMax) != null
+    || (f.search && f.search.trim().length >= 2)
   );
 }
 
@@ -155,9 +156,10 @@ function rowMatchesJournalTradeFilters(row, filters = state.journalTradeFilters)
 
   if (f.strategy && f.strategy !== "ALL" && row.strategy !== f.strategy) return false;
   if (f.result && f.result !== "ALL" && row.result !== f.result) return false;
-  if (f.tag && f.tag !== "ALL") {
-    const wanted = String(f.tag).toLowerCase();
-    const hasTag = (row.tags || []).some(t => String(t).toLowerCase() === wanted);
+  if (f.tag && Array.isArray(f.tag) && f.tag[0] !== "ALL") {
+    var hasTag = (row.tags || []).some(function (t) {
+      return f.tag.some(function (selected) { return String(t).toLowerCase() === String(selected).toLowerCase(); });
+    });
     if (!hasTag) return false;
   }
 
@@ -166,6 +168,18 @@ function rowMatchesJournalTradeFilters(row, filters = state.journalTradeFilters)
   const pnl = row.pnl == null ? 0 : Number(row.pnl);
   if (min != null && pnl < min) return false;
   if (max != null && pnl > max) return false;
+
+  // Full-text search — minimum 2 caracteres, cherche dans les textes longs
+  if (f.search && f.search.trim().length >= 2) {
+    var q = f.search.trim().toLowerCase();
+    var haystack = [
+      row.why_trade, row.scenario, row.why_entry,
+      row.why_stop, row.why_tp, row.lessons_learned,
+      row.plan_override_reason, row.plan_snapshot,
+    ].concat(row.tags || []).filter(Boolean).join(" ").toLowerCase();
+    if (haystack.indexOf(q) === -1) return false;
+  }
+
   return true;
 }
 

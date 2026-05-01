@@ -42,10 +42,16 @@
             <button type="button" class="jfilter-stats-arrow" data-dir="1" aria-label="Statistique suivante">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
             </button>
-          </div>
         </div>
+      </div>
 
-        <details class="journal-advanced-filters">
+      <div class="jfilter-group jfilter-search">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="search" id="journalFilterSearch" placeholder="Chercher dans les notes…" aria-label="Recherche full-text">
+        <span class="search-hint hidden" id="journalSearchHint">2 car. min</span>
+      </div>
+
+      <details class="journal-advanced-filters">
           <summary>Filtres trades</summary>
           <div class="journal-trade-filters" aria-label="Filtres des trades">
             <div class="journal-filter-field">
@@ -69,15 +75,10 @@
                 <svg class="select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
               </div>
             </div>
-            <div class="journal-filter-field">
-              <label for="journalFilterTag">Tag</label>
-              <div class="select-wrapper">
-                <select id="journalFilterTag">
-                  <option value="ALL">Tous</option>
-                </select>
-                <svg class="select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-              </div>
-            </div>
+            <div class="journal-filter-field journal-filter-tags">
+            <label>Tags</label>
+            <div class="journal-tag-chips" id="journalTagChips"></div>
+          </div>
             <button type="button" class="btn-ghost journal-filter-reset" id="journalFilterReset">Reset filtres</button>
           </div>
           <div class="journal-filter-pnl">

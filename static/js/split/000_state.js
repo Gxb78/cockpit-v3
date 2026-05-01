@@ -41,7 +41,7 @@ const _state = {
   journalTradeFilters: {
     strategy: "ALL",
     result: "ALL",
-    tag: "ALL",
+    tag: ["ALL"],
     pnlMin: "",
     pnlMax: "",
   },

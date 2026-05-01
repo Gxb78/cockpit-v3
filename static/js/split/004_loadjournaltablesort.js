@@ -70,22 +70,35 @@ function updateJournalTradeFiltersUI() {
   const strategySel = $("#journalFilterStrategy");
   if (!strategySel) return;
   const resultSel = $("#journalFilterResult");
-  const tagSel = $("#journalFilterTag");
   strategySel.value = f.strategy || "ALL";
   if (resultSel) resultSel.value = f.result || "ALL";
-  if (tagSel) tagSel.value = f.tag || "ALL";
+
+  // Sync chips UI
+  var chipsContainer = $("#journalTagChips");
+  if (chipsContainer) {
+    var chips = chipsContainer.querySelectorAll(".tag-chip");
+    var selected = Array.isArray(f.tag) ? f.tag : ["ALL"];
+    chips.forEach(function (chip) {
+      var val = chip.dataset.tag;
+      var isActive = selected.some(function (s) { return s === val; });
+      chip.classList.toggle("is-active", isActive);
+    });
+  }
   var pnlMin = $("#journalFilterPnlMin");
   var pnlMax = $("#journalFilterPnlMax");
   if (pnlMin) pnlMin.value = parseFilterNumber(f.pnlMin) != null ? f.pnlMin : "";
   if (pnlMax) pnlMax.value = parseFilterNumber(f.pnlMax) != null ? f.pnlMax : "";
+  var searchInput = $("#journalFilterSearch");
+  if (searchInput) searchInput.value = f.search || "";
 
   // Badge actif sur le summary
   var count = 0;
   if (f.strategy && f.strategy !== "ALL") count++;
   if (f.result && f.result !== "ALL") count++;
-  if (f.tag && f.tag !== "ALL") count++;
+  if (Array.isArray(f.tag) && f.tag[0] !== "ALL" && f.tag.length) count += f.tag.length;
   if (parseFilterNumber(f.pnlMin) != null) count++;
   if (parseFilterNumber(f.pnlMax) != null) count++;
+  if (f.search && f.search.trim().length >= 2) count++;
   var summary = document.querySelector(".journal-advanced-filters > summary");
   if (summary) {
     var badge = summary.querySelector(".filter-badge");
@@ -102,9 +115,18 @@ function updateJournalTradeFiltersUI() {
   }
 }
 
+var _journalFilterOptionsHash = "";
+
 function updateJournalTradeFilterOptions(days = state.days) {
+  // Memoize: ne pas reconstruire si les donnees n'ont pas change
+  // (evite flash/perte focus navigation, J-23)
+  var hash = (Array.isArray(days) ? days.map(function (d) {
+    return d.date + ":" + (d.trades || []).map(function (t) { return (t.strategy||"") + "|" + (t.tags||[]).join(","); }).join(";");
+  }).join("|") : "") + "|" + (state.settings?.custom_strategies||[]).length + "|" + (state.settings?.custom_tags||[]).length;
+  if (hash === _journalFilterOptionsHash) return;
+  _journalFilterOptionsHash = hash;
+
   const strategySel = $("#journalFilterStrategy");
-  const tagSel = $("#journalFilterTag");
 
   const strategySet = new Set(["ALL"]);
   DEFAULT_STRATEGY_VALUES.forEach(s => strategySet.add(s));
@@ -135,21 +157,31 @@ function updateJournalTradeFilterOptions(days = state.days) {
     state.journalTradeFilters.strategy = strategySel.value;
   }
 
-  if (tagSel) {
-    const current = state.journalTradeFilters?.tag || "ALL";
-    tagSel.innerHTML = "";
-    Array.from(tagSet).sort((a, b) => {
+  // Tags → chips cliquables dans #journalTagChips
+  var tagChips = $("#journalTagChips");
+  if (tagChips) {
+    var selectedTags = Array.isArray(state.journalTradeFilters?.tag) ? state.journalTradeFilters.tag : ["ALL"];
+    tagChips.innerHTML = "";
+    // Toujours un chip "Tous" en premier
+    var allChip = document.createElement("button");
+    allChip.type = "button";
+    allChip.className = "tag-chip" + (selectedTags[0] === "ALL" ? " is-active" : "");
+    allChip.dataset.tag = "ALL";
+    allChip.textContent = "Tous";
+    tagChips.appendChild(allChip);
+    Array.from(tagSet).sort(function (a, b) {
       if (a === "ALL") return -1;
       if (b === "ALL") return 1;
       return String(a).localeCompare(String(b));
-    }).forEach(value => {
-      const opt = document.createElement("option");
-      opt.value = value;
-      opt.textContent = value === "ALL" ? "Tous" : `#${value}`;
-      tagSel.appendChild(opt);
+    }).forEach(function (value) {
+      if (value === "ALL") return;
+      var chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "tag-chip" + (selectedTags.indexOf(value) >= 0 ? " is-active" : "");
+      chip.dataset.tag = value;
+      chip.textContent = "#" + value;
+      tagChips.appendChild(chip);
     });
-    tagSel.value = tagSet.has(current) ? current : "ALL";
-    state.journalTradeFilters.tag = tagSel.value;
   }
 }
 

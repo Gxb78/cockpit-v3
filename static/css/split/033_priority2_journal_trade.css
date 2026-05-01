@@ -1151,6 +1151,127 @@
    CALENDAR — additional polish
    ============================================================ */
 
+/* Weekend header: subtle attenuation */
+.calendar-head > div:nth-child(6),
+.calendar-head > div:nth-child(7) {
+  opacity: 0.5;
+}
+
+/* Search input inline */
+.jfilter-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 180px;
+  min-width: 140px;
+  color: var(--text-faint);
+  position: relative;
+}
+.jfilter-search svg {
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 5px;
+}
+.jfilter-search input[type="search"] {
+  border: 1px solid transparent;
+  background: transparent;
+  font-size: 12px;
+  padding: 4px 6px;
+  padding-right: 56px;
+  border-radius: 6px;
+  width: auto;
+  flex: 1;
+  min-width: 80px;
+  outline: none;
+  color: var(--text-color);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.jfilter-search .search-hint {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: #f87171;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 1;
+}
+.jfilter-search .search-hint.hidden { display: none; }
+.jfilter-search input[type="search"]::placeholder {
+  color: var(--text-faint);
+}
+.jfilter-search input.search-too-short {
+  color: var(--text-color);
+}
+.jfilter-search input.search-too-short::placeholder {
+  color: #f87171;
+}
+/* Search field error glow — reuse le meme pattern que l'editeur */
+.jfilter-search input.jedit-field-error {
+  border-color: #f87171 !important;
+  box-shadow: 0 0 0 2.5px rgba(248, 113, 113, 0.28), 0 0 14px rgba(248, 113, 113, 0.08);
+}
+
+/* ---- Tag chips (multi-select) ---- */
+.journal-filter-tags {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.journal-filter-tags > label {
+  font-size: 11px;
+  color: var(--text-dim);
+  min-width: 36px;
+  padding-top: 4px;
+}
+.journal-tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft, #e2e6ed);
+  background: transparent;
+  color: var(--text-dim, #6b7280);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  font-family: inherit;
+  line-height: 1.4;
+}
+.tag-chip:hover {
+  border-color: var(--text-faint, #9ca3af);
+  color: var(--text-color);
+}
+.tag-chip.is-active {
+  background: #e0f2fe;
+  border-color: #7dd3fc;
+  color: #0369a1;
+}
+
+/* Weekend cells: lighter bg, subtler borders */
+.day.is-weekend {
+  background: rgba(0,0,0,0.015);
+  border-color: rgba(0,0,0,0.04);
+  box-shadow: none;
+}
+.day.is-weekend:hover {
+  border-color: rgba(0,0,0,0.08);
+  box-shadow: 0 4px 12px rgba(10, 18, 28, 0.04);
+}
+
+/* Calendar empty state — masquer la grille + header */
+.journal-calendar-wrap.cal-empty .calendar-head,
+.journal-calendar-wrap.cal-empty .calendar-grid {
+  display: none;
+}
+
 /* Other-month cells: slightly more visible on light background */
 .day.other-month {
   opacity: 0.42;
