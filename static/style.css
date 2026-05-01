@@ -1335,7 +1335,7 @@ body.light-mode .theme-toggle:hover { border-color: rgba(0,132,255,0.40); backgr
   padding: 8px 14px;
   margin-bottom: 10px;
   background: var(--surface, #fff);
-  border: 1px solid var(--border, #e3e7ee);
+  border: 1px solid var(--border, #eef1f6);
   border-radius: var(--r, 16px);
 }
 
@@ -1580,8 +1580,8 @@ body.light-mode .theme-toggle:hover { border-color: rgba(0,132,255,0.40); backgr
 .journal-filters {
   margin-bottom: 10px;
   background: var(--surface, #fff);
-  border: 1px solid var(--border, #e3e7ee);
-  border-radius: var(--r, 16px);
+  border: 1px solid var(--border, #eef1f6);
+  border-radius: var(--r-lg, 22px);
   padding: 12px 14px;
 }
 
