@@ -111,7 +111,23 @@ function wizOpen(opts) {
   const el = document.getElementById('wiz');
   if (el) {
     el.classList.remove('hidden');
+    el.classList.toggle('wiz-rail-mode', !!opts.railMode);
     document.body.style.overflow = 'hidden';
+
+    if (opts.railMode) {
+      var btn = document.getElementById('railNewTradeBtn');
+      if (btn) {
+        var rect = btn.getBoundingClientRect();
+        el.style.paddingTop = Math.max(8, rect.top - 8) + 'px';
+        el.style.paddingLeft = (rect.right + 12) + 'px';
+      }
+      // Click outside panel = close
+      el.onclick = function (e) { if (e.target === el) wizClose(); };
+    } else {
+      el.style.paddingTop = '';
+      el.style.paddingLeft = '';
+      el.onclick = null;
+    }
   }
 }
 

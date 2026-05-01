@@ -24,7 +24,7 @@ function bindNav() {
     });
   }
   $("#newEntryBtn")?.addEventListener("click", function () { wizOpen({ date: todayKey() }); });
-  $("#railNewTradeBtn")?.addEventListener("click", function () { wizOpen({ date: todayKey() }); });
+  $("#railNewTradeBtn")?.addEventListener("click", function () { wizOpen({ date: todayKey(), railMode: true }); });
   $("#quickAddBtn")?.addEventListener("click", function () { wizOpen({ date: todayKey() }); });
   $("#openCmdk")?.addEventListener("click", function () { openCmdk(); });
 }
