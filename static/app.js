@@ -7205,7 +7205,7 @@ var WIDGET_REGISTRY = {
   kpi_expectancy:      { label: "Expectancy",        icon: "chart", kind: "kpi",    size: "sm" },
   today_context:       { label: "Contexte du jour",  icon: "globe", kind: "panel",  size: "full" },
   today_log:           { label: "Recap",             icon: "log",   kind: "panel",  size: "md" },
-  today_activity:      { label: "Activite",          icon: "bolt",  kind: "panel",  size: "sm" },
+  today_activity:      { label: "Activite",          icon: "bolt",  kind: "panel",  size: "tall" },
   today_calendar:      { label: "Calendrier",        icon: "cal",   kind: "panel",  size: "md" },
 };
 
@@ -7213,8 +7213,6 @@ var WIDGET_DEFAULTS = {
   "today-kpis": ["kpi_total_pnl", "kpi_winrate", "kpi_average_rr", "kpi_trades", "kpi_profit_factor", "kpi_expectancy"],
   "today-main": ["today_context", "today_log", "today_activity", "today_calendar"],
 };
-
-// ---- Persistence ----
 
 function readWidgetOrder(boardKey) {
   try {
@@ -7640,6 +7638,7 @@ function dndEnd() {
   writeWidgetOrder(board.dataset.widgetBoard, order);
   updateDashboardLayout();
   setTimeout(refreshDragHandles, 300);
+  _dnd = null;
 }
 
 function dndItems(board) {
@@ -7659,31 +7658,40 @@ function dndItemsWithPlaceholder(board, ph) {
 
 function dndHitTest(items, board, cx, cy) {
   var isH = board.dataset.widgetBoard === "today-kpis";
-  var best = -1, bestScore = Infinity;
+  var dragSpan = 1;
+  if (_dnd && _dnd.el) {
+    var cs = window.getComputedStyle(_dnd.el);
+    var gr = cs.gridRow || "";
+    var m = gr.match(/span\s*(\d+)/);
+    if (m) dragSpan = parseInt(m[1]);
+  }
 
   for (var i = 0; i < items.length; i++) {
     var r = items[i].getBoundingClientRect();
-    var centerX = r.left + r.width  / 2;
-    var centerY = r.top  + r.height / 2;
-    var area = Math.max(r.width * r.height, 1);
-    var weight = 1 / Math.sqrt(area);
-    var dx = (cx - centerX) * weight;
-    var dy = (cy - centerY) * weight * (isH ? 0.1 : 1);
-    var score = dx * dx + dy * dy;
-    if (score < bestScore) { bestScore = score; best = i; }
+    if (cx >= r.left - 4 && cx <= r.right + 4 && cy >= r.top - 4 && cy <= r.bottom + 4) {
+      if (isH) {
+        var mX = r.left + r.width / 2;
+        return cx < mX - DND_DEAD_ZONE ? i : (cx > mX + DND_DEAD_ZONE ? i + 1 : i);
+      }
+      var mY = r.top + r.height / 2;
+      var threshold = DND_DEAD_ZONE * dragSpan;
+      return cy < mY - threshold ? i : (cy > mY + threshold ? i + 1 : i);
+    }
   }
 
+  var best = -1, bestScore = Infinity;
+  for (var j = 0; j < items.length; j++) {
+    var rj = items[j].getBoundingClientRect();
+    var d = Math.pow(cx - (rj.left + rj.width / 2), 2) + Math.pow(cy - (rj.top + rj.height / 2), 2);
+    if (d < bestScore) { bestScore = d; best = j; }
+  }
   if (best < 0) return items.length;
 
   var br = items[best].getBoundingClientRect();
   if (isH) {
     return cx < br.left + br.width / 2 ? best : best + 1;
   }
-  var third = br.height / 3;
-  var relY = cy - br.top;
-  if (relY < third)             return best;
-  if (relY > br.height - third) return best + 1;
-  return best;
+  return cy < br.top + br.height / 2 ? best : best + 1;
 }
 
 // ---------- Today calendar (mini vue mois courant) ----------
