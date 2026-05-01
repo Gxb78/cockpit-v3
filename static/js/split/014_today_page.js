@@ -64,22 +64,7 @@ function renderTodayContextWidget(force) {
 }
 
 function syncTodayContextSelectUI() {
-  const select = $("#entryInstrument");
-  if (!select) return;
-  const wrap = select.closest(".select-wrapper");
-  const trigger = wrap?.querySelector(".custom-select-trigger");
-  const dropdown = wrap?.querySelector(".custom-select-dropdown");
-  if (trigger) {
-    const label = trigger.querySelector(".trigger-label");
-    if (label) label.textContent = select.options[select.selectedIndex]?.textContent || select.value || "\u2014";
-  }
-  if (dropdown) {
-    dropdown.querySelectorAll(".custom-select-item").forEach(function (el) {
-      const selected = el.dataset.value === select.value;
-      el.classList.toggle("selected", selected);
-      el.setAttribute("aria-selected", selected ? "true" : "false");
-    });
-  }
+  // No-op: le select est directement stylé comme un badge entry-card
 }
 
 function dayCardEl(day) {
