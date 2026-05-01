@@ -13,7 +13,15 @@ function renderToday() {
     todayEl.innerHTML = `<div class="empty-state">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       <div>Aucune entrée pour aujourd'hui.</div>
-      <div class="empty-cta"><button class="btn-ghost" onclick="wizOpen({date: todayKey()})">Nouvelle entrée</button></div></div>`;
+      <div class="empty-cta" id="emptyTodayCta"></div></div>`;
+    var cta = document.getElementById("emptyTodayCta");
+    if (cta) {
+      var btn = document.createElement("button");
+      btn.className = "btn-ghost";
+      btn.textContent = "Nouvelle entree";
+      btn.addEventListener("click", function () { wizOpen({ date: todayKey() }); });
+      cta.appendChild(btn);
+    }
   } else {
     todayList.forEach(d => todayEl.appendChild(dayCardEl(d)));
   }

@@ -193,8 +193,8 @@
   background: rgba(255,255,255,0.08);
   color: var(--text-faint);
   cursor: grab;
-  transition: opacity 0.2s, background 0.16s, color 0.16s, transform 0.16s;
   touch-action: none;
+  transition: opacity 0.2s, background 0.16s, color 0.16s, transform 0.16s;
 }
 
 .widget-drag-handle svg {
@@ -202,8 +202,7 @@
   height: 16px;
 }
 
-.widget:hover .widget-drag-handle,
-.widget-drag-handle:active {
+.widget:hover .widget-drag-handle {
   opacity: 1;
 }
 
@@ -216,11 +215,14 @@
 .widget-drag-handle:active {
   cursor: grabbing;
   background: rgba(0,229,255,0.18);
+  transform: none !important;
 }
 
 /* ---- Dragging state ---- */
 .widget.widget-dragging {
-  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 100ms ease !important;
 }
 
 body.is-dragging {
@@ -229,32 +231,33 @@ body.is-dragging {
   -webkit-user-select: none !important;
 }
 
-body.is-dragging .widget-drag-handle {
+body.is-dragging .widget:not(.widget-dragging) .widget-drag-handle {
   opacity: 0 !important;
   pointer-events: none !important;
 }
 
 .widget-drag-ghost {
-  border-radius: var(--r, 16px);
-  box-shadow: 0 24px 80px rgba(0,0,0,0.5), 0 0 0 1.5px rgba(0,229,255,0.3);
-  opacity: 0.92;
-  filter: brightness(1.05);
-  overflow: hidden;
+  position: fixed;
+  pointer-events: none;
   will-change: transform;
+  border-radius: var(--r, 16px);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,229,255,0.3);
+  overflow: hidden;
 }
 
 .widget-drag-placeholder {
   border-radius: var(--r, 16px);
-  border: 2px dashed rgba(0,229,255,0.35);
+  border: 1px dashed rgba(0,229,255,0.4);
   background: rgba(0,229,255,0.04);
+  pointer-events: none;
   flex-shrink: 0;
-  animation: placeholder-pulse 1.2s ease-in-out infinite;
   min-height: 40px;
+  animation: placeholder-appear 150ms cubic-bezier(0.34,1.56,0.64,1) forwards;
 }
 
-@keyframes placeholder-pulse {
-  0%, 100% { border-color: rgba(0,229,255,0.35); background: rgba(0,229,255,0.04); }
-  50% { border-color: rgba(0,229,255,0.55); background: rgba(0,229,255,0.08); }
+@keyframes placeholder-appear {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
 /* KPI drag handle: slightly smaller */

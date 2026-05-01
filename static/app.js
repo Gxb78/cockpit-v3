@@ -1792,7 +1792,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 // ---------- Navigation ----------
 
 var PAGE_TITLES = {
-  today:    "Today — COCKPIT Trading Journal",
+  today:    "Dashboard — COCKPIT Trading Journal",
   journal:  "Journal — COCKPIT Trading Journal",
   stats:    "Stats — COCKPIT Trading Journal",
   settings: "Settings — COCKPIT Trading Journal",
@@ -2312,7 +2312,15 @@ function renderToday() {
     todayEl.innerHTML = `<div class="empty-state">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       <div>Aucune entrée pour aujourd'hui.</div>
-      <div class="empty-cta"><button class="btn-ghost" onclick="wizOpen({date: todayKey()})">Nouvelle entrée</button></div></div>`;
+      <div class="empty-cta" id="emptyTodayCta"></div></div>`;
+    var cta = document.getElementById("emptyTodayCta");
+    if (cta) {
+      var btn = document.createElement("button");
+      btn.className = "btn-ghost";
+      btn.textContent = "Nouvelle entree";
+      btn.addEventListener("click", function () { wizOpen({ date: todayKey() }); });
+      cta.appendChild(btn);
+    }
   } else {
     todayList.forEach(d => todayEl.appendChild(dayCardEl(d)));
   }
@@ -7343,11 +7351,10 @@ function bindWidgetConfig() {
   applyWidgetVisibility();
 }
 
-// ---- Drag & Drop (v4 – RAF + gap detection) ----
+// ---- Drag & Drop (v6 – Pointer Events + setPointerCapture) ----
 
 var _dnd = null;
 var _dndRaf = 0;
-var _dndPending = null;
 
 function initWidgetDragDrop() {
   refreshDragHandles();
@@ -7357,11 +7364,11 @@ function initWidgetDragDrop() {
 }
 
 function refreshDragHandles() {
-  if (_dnd && _dnd.active) return;
+  if (_dnd) return;
   document.querySelectorAll(".widget-board[data-widget-board] .widget[data-widget-key]").forEach(function(el) {
+    if (el.classList.contains("widget-hidden")) return;
     var existing = el.querySelector(".widget-drag-handle");
     if (existing) existing.remove();
-    if (el.classList.contains("widget-hidden")) return;
     var handle = document.createElement("div");
     handle.className = "widget-drag-handle";
     handle.setAttribute("aria-label", "Drag to reorder");
@@ -7380,11 +7387,14 @@ function onDndPointerDown(e) {
   var board = widget.closest(".widget-board[data-widget-board]");
   if (!board) return;
   e.preventDefault();
+  handle.setPointerCapture(e.pointerId);
   var rect = widget.getBoundingClientRect();
   _dnd = {
     el: widget,
     board: board,
     key: widget.dataset.widgetKey,
+    ptrId: e.pointerId,
+    handle: handle,
     startX: e.clientX,
     startY: e.clientY,
     offsetX: e.clientX - rect.left,
@@ -7394,7 +7404,7 @@ function onDndPointerDown(e) {
     ghost: null,
     placeholder: null,
     active: false,
-    targetIdx: -1
+    lastIdx: -2
   };
 }
 
@@ -7408,18 +7418,13 @@ function onDndPointerMove(e) {
   }
   if (_dnd.active) {
     e.preventDefault();
-    _dndPending = { cx: e.clientX, cy: e.clientY };
     if (!_dndRaf) {
-      _dndRaf = requestAnimationFrame(dndFrame);
+      _dndRaf = requestAnimationFrame(function() {
+        _dndRaf = 0;
+        if (_dnd && _dnd.active) dndMove(e.clientX, e.clientY);
+      });
     }
   }
-}
-
-function dndFrame() {
-  _dndRaf = 0;
-  if (!_dnd || !_dnd.active || !_dndPending) return;
-  dndMove(_dndPending.cx, _dndPending.cy);
-  _dndPending = null;
 }
 
 function onDndPointerUp() {
@@ -7447,9 +7452,17 @@ function dndStart() {
   ghost.style.willChange = "transform";
   var gx = _dnd.startX - _dnd.offsetX;
   var gy = _dnd.startY - _dnd.offsetY;
-  ghost.style.transform = "translate(" + gx + "px," + gy + "px) scale(1.02)";
+  ghost.style.transform = "translate(" + gx + "px," + gy + "px) scale(0.96)";
+  ghost.style.opacity = "0.6";
   document.body.appendChild(ghost);
   _dnd.ghost = ghost;
+
+  requestAnimationFrame(function() {
+    if (!_dnd || !_dnd.ghost) return;
+    _dnd.ghost.style.transition = "transform 140ms cubic-bezier(0.34,1.56,0.64,1), opacity 120ms ease, box-shadow 140ms ease";
+    _dnd.ghost.style.transform = "translate(" + gx + "px," + gy + "px) scale(1.03)";
+    _dnd.ghost.style.opacity = "0.95";
+  });
 
   var ph = document.createElement("div");
   ph.className = "widget-drag-placeholder";
@@ -7463,31 +7476,58 @@ function dndStart() {
 }
 
 function dndMove(cx, cy) {
+  if (!_dnd) return;
   var gx = cx - _dnd.offsetX;
   var gy = cy - _dnd.offsetY;
-  _dnd.ghost.style.transform = "translate(" + gx + "px," + gy + "px) scale(1.02)";
+  _dnd.ghost.style.transition = "none";
+  _dnd.ghost.style.transform = "translate(" + gx + "px," + gy + "px) scale(1.03)";
 
   var idx = dndInsertionIndex(_dnd.board, cx, cy);
-  if (idx === _dnd.targetIdx) return;
-  _dnd.targetIdx = idx;
+  if (idx === _dnd.lastIdx) return;
+  _dnd.lastIdx = idx;
 
   var ref = idx === -1 ? null : dndSiblingAt(_dnd.board, idx);
-  _dnd.board.insertBefore(_dnd.placeholder, ref);
+  if (ref) {
+    _dnd.board.insertBefore(_dnd.placeholder, ref);
+  } else {
+    _dnd.board.appendChild(_dnd.placeholder);
+  }
 }
 
 function dndEnd() {
-  _dnd.board.insertBefore(_dnd.el, _dnd.placeholder);
+  if (!_dnd) return;
 
-  _dnd.el.classList.remove("widget-dragging");
-  if (_dnd.ghost) _dnd.ghost.remove();
-  if (_dnd.placeholder) _dnd.placeholder.remove();
+  var el = _dnd.el;
+  var board = _dnd.board;
+  var ghost = _dnd.ghost;
+  var placeholder = _dnd.placeholder;
+
+  board.insertBefore(el, placeholder);
+
+  el.classList.remove("widget-dragging");
+
+  el.style.transition = "transform 200ms cubic-bezier(0.34,1.56,0.64,1), opacity 150ms ease";
+  el.style.transform = "scale(1.02)";
+  el.style.opacity = "0.8";
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      el.style.transform = "scale(1)";
+      el.style.opacity = "";
+    });
+  });
+  setTimeout(function() {
+    el.style.transition = "";
+    el.style.transform = "";
+  }, 220);
+
+  if (ghost) ghost.remove();
+  if (placeholder) placeholder.remove();
   document.body.classList.remove("is-dragging");
 
-  var boardKey = _dnd.board.dataset.widgetBoard;
-  var order = Array.from(_dnd.board.children)
-    .map(function(el) { return el.dataset && el.dataset.widgetKey; })
+  var order = Array.from(board.children)
+    .map(function(c) { return c.dataset && c.dataset.widgetKey; })
     .filter(Boolean);
-  writeWidgetOrder(boardKey, order);
+  writeWidgetOrder(board.dataset.widgetBoard, order);
   updateDashboardLayout();
 }
 
@@ -7504,9 +7544,6 @@ function dndSiblingAt(board, idx) {
   return dndSiblings(board)[idx] || null;
 }
 
-// Find best insertion index for cursor position (cx, cy).
-// Returns -1 for "append at end".
-// Works for horizontal rows (KPIs) and 2D grids (panels).
 function dndInsertionIndex(board, cx, cy) {
   var siblings = dndSiblings(board);
   var n = siblings.length;
@@ -7518,16 +7555,12 @@ function dndInsertionIndex(board, cx, cy) {
     rects.push(siblings[i].getBoundingClientRect());
   }
 
-  // For each insertion point i (0..n), compute the "gap midpoint"
-  // between the end of item i-1 and the start of item i.
-  // Then find the closest gap midpoint to (cx, cy).
-  var bestGap = -1;
+  var bestGap = 0;
   var bestDist = Infinity;
 
   for (var i = 0; i <= n; i++) {
     var mx, my;
     if (isH) {
-      // Horizontal: gap midpoints are between right edge of [i-1] and left edge of [i]
       if (i === 0) {
         mx = rects[0].left - 2;
         my = rects[0].top + rects[0].height / 2;
@@ -7536,290 +7569,35 @@ function dndInsertionIndex(board, cx, cy) {
         my = rects[n - 1].top + rects[n - 1].height / 2;
       } else {
         mx = (rects[i - 1].right + rects[i].left) / 2;
-        my = (rects[i - 1].top + rects[i].top) / 2 + Math.max(rects[i - 1].height, rects[i].height) / 4;
+        my = (rects[i - 1].top + rects[i].top) / 2;
       }
-      var ddx = cx - mx;
-      var ddy = cy - my;
-      var dist = ddx * ddx + ddy * ddy;
-      if (dist < bestDist) { bestDist = dist; bestGap = i; }
     } else {
-      // 2D grid: gap midpoint is the geometric center of the space
-      // between item i-1's bottom-right and item i's top-left
-      var gx, gy;
       if (i === 0) {
-        gx = rects[0].left + rects[0].width / 2;
-        gy = rects[0].top - 4;
+        mx = rects[0].left + rects[0].width / 2;
+        my = rects[0].top - 4;
       } else if (i === n) {
-        gx = rects[n - 1].left + rects[n - 1].width / 2;
-        gy = rects[n - 1].bottom + 4;
+        mx = rects[n - 1].left + rects[n - 1].width / 2;
+        my = rects[n - 1].bottom + 4;
       } else {
         var prevR = rects[i - 1];
         var currR = rects[i];
-
-        // Same visual row?
-        var sameRow = currR.top < prevR.bottom - 4;
-
+        var sameRow = Math.abs((currR.top + currR.height / 2) - (prevR.top + prevR.height / 2)) < prevR.height * 0.5;
         if (sameRow) {
-          // Gap is between them horizontally
-          gx = (prevR.right + currR.left) / 2;
-          gy = (prevR.top + prevR.bottom) / 2;
+          mx = (prevR.right + currR.left) / 2;
+          my = (prevR.top + prevR.bottom) / 2;
         } else {
-          // Gap is at end of prev row / start of new row
-          // Prefer the gap at the start of the new row
-          gx = currR.left + currR.width / 2;
-          gy = (prevR.bottom + currR.top) / 2;
+          mx = currR.left + currR.width / 2;
+          my = (prevR.bottom + currR.top) / 2;
         }
       }
-      var ddx = cx - gx;
-      var ddy = cy - gy;
-      var dist = ddx * ddx + ddy * ddy;
-      if (dist < bestDist) { bestDist = dist; bestGap = i; }
     }
+    var dx = cx - mx;
+    var dy = cy - my;
+    var dist = dx * dx + dy * dy;
+    if (dist < bestDist) { bestDist = dist; bestGap = i; }
   }
 
   return bestGap === n ? -1 : bestGap;
-}
-
-function refreshDragHandles() {
-  if (_dnd && _dnd.active) return;
-  document.querySelectorAll(".widget-board[data-widget-board] .widget[data-widget-key]").forEach(function(el) {
-    var existing = el.querySelector(".widget-drag-handle");
-    if (existing) existing.remove();
-    if (el.classList.contains("widget-hidden")) return;
-    var handle = document.createElement("div");
-    handle.className = "widget-drag-handle";
-    handle.setAttribute("aria-label", "Drag to reorder");
-    handle.innerHTML = '<svg viewBox="0 0 20 8" fill="currentColor"><circle cx="4" cy="2" r="1.2"/><circle cx="4" cy="6" r="1.2"/><circle cx="10" cy="2" r="1.2"/><circle cx="10" cy="6" r="1.2"/><circle cx="16" cy="2" r="1.2"/><circle cx="16" cy="6" r="1.2"/></svg>';
-    el.prepend(handle);
-    handle.addEventListener("pointerdown", onDndPointerDown);
-  });
-}
-
-function onDndPointerDown(e) {
-  if (_dnd) return;
-  if (e.button && e.button !== 0) return;
-  var handle = e.currentTarget;
-  var widget = handle.closest(".widget[data-widget-key]");
-  if (!widget) return;
-  var board = widget.closest(".widget-board[data-widget-board]");
-  if (!board) return;
-  e.preventDefault();
-  var rect = widget.getBoundingClientRect();
-  _dnd = {
-    el: widget,
-    board: board,
-    key: widget.dataset.widgetKey,
-    startX: e.clientX,
-    startY: e.clientY,
-    offsetX: e.clientX - rect.left,
-    offsetY: e.clientY - rect.top,
-    width: rect.width,
-    height: rect.height,
-    ghost: null,
-    placeholder: null,
-    active: false,
-    lastTarget: undefined
-  };
-}
-
-function onDndPointerMove(e) {
-  if (!_dnd) return;
-  if (!_dnd.active) {
-    var dx = e.clientX - _dnd.startX;
-    var dy = e.clientY - _dnd.startY;
-    if (dx * dx + dy * dy < 25) return;
-    dndStart();
-  }
-  if (_dnd.active) {
-    e.preventDefault();
-    dndMove(e.clientX, e.clientY);
-  }
-}
-
-function onDndPointerUp() {
-  if (!_dnd) return;
-  if (_dnd.active) dndEnd();
-  _dnd = null;
-}
-
-function dndStart() {
-  _dnd.active = true;
-
-  var ghost = _dnd.el.cloneNode(true);
-  var gh = ghost.querySelector(".widget-drag-handle");
-  if (gh) gh.remove();
-  ghost.classList.add("widget-drag-ghost");
-  ghost.style.position = "fixed";
-  ghost.style.zIndex = "10000";
-  ghost.style.width = _dnd.width + "px";
-  ghost.style.height = _dnd.height + "px";
-  ghost.style.left = "0";
-  ghost.style.top = "0";
-  ghost.style.margin = "0";
-  ghost.style.pointerEvents = "none";
-  ghost.style.willChange = "transform";
-  ghost.style.transform = "translate(" + (_dnd.startX - _dnd.offsetX) + "px," + (_dnd.startY - _dnd.offsetY) + "px) scale(1.02)";
-  document.body.appendChild(ghost);
-  _dnd.ghost = ghost;
-  _dnd.ghostX = _dnd.startX - _dnd.offsetX;
-  _dnd.ghostY = _dnd.startY - _dnd.offsetY;
-
-  var ph = document.createElement("div");
-  ph.className = "widget-drag-placeholder";
-  ph.style.width = _dnd.width + "px";
-  ph.style.height = _dnd.height + "px";
-  _dnd.el.parentNode.insertBefore(ph, _dnd.el);
-  _dnd.placeholder = ph;
-
-  _dnd.el.classList.add("widget-dragging");
-  document.body.classList.add("is-dragging");
-}
-
-function dndMove(cx, cy) {
-  if (!_dnd || !_dnd.active) return;
-
-  _dnd.ghostX = cx - _dnd.offsetX;
-  _dnd.ghostY = cy - _dnd.offsetY;
-  _dnd.ghost.style.transform = "translate(" + _dnd.ghostX + "px," + _dnd.ghostY + "px) scale(1.02)";
-
-  var siblings = dndSiblings(_dnd.board);
-  var target = dndTarget(_dnd.board, siblings, cx, cy);
-
-  if (target === _dnd.lastTarget) return;
-  _dnd.lastTarget = target;
-
-  // Cancel any in-progress FLIP animations
-  var items = dndFlipItems();
-  items.forEach(function(el) {
-    el.getAnimations().forEach(function(a) {
-      if (a.effect && a.effect.target === el) a.cancel();
-    });
-  });
-
-  // Record visual positions before DOM change
-  var rects = new Map();
-  items.forEach(function(el) { rects.set(el, el.getBoundingClientRect()); });
-
-  // Move placeholder
-  if (target) {
-    _dnd.board.insertBefore(_dnd.placeholder, target);
-  } else {
-    _dnd.board.appendChild(_dnd.placeholder);
-  }
-
-  // FLIP: animate from old positions to new
-  items.forEach(function(el) {
-    var oldRect = rects.get(el);
-    if (!oldRect) return;
-    var newRect = el.getBoundingClientRect();
-    var dx = oldRect.left - newRect.left;
-    var dy = oldRect.top - newRect.top;
-    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
-    el.animate([
-      { transform: "translate(" + dx + "px," + dy + "px)" },
-      { transform: "translate(0,0)" }
-    ], {
-      duration: 240,
-      easing: "cubic-bezier(.22,.92,.32,1)"
-    });
-  });
-}
-
-function dndEnd() {
-  if (!_dnd) return;
-
-  // Cancel any FLIP animations so layout snaps cleanly
-  dndFlipItems().forEach(function(el) {
-    el.getAnimations().forEach(function(a) { a.cancel(); });
-  });
-
-  _dnd.board.insertBefore(_dnd.el, _dnd.placeholder);
-
-  _dnd.el.classList.remove("widget-dragging");
-  if (_dnd.ghost) _dnd.ghost.remove();
-  if (_dnd.placeholder) _dnd.placeholder.remove();
-  document.body.classList.remove("is-dragging");
-
-  var boardKey = _dnd.board.dataset.widgetBoard;
-  var order = Array.from(_dnd.board.children)
-    .map(function(el) { return el.dataset && el.dataset.widgetKey; })
-    .filter(Boolean);
-  writeWidgetOrder(boardKey, order);
-  updateDashboardLayout();
-}
-
-function dndFlipItems() {
-  if (!_dnd || !_dnd.board) return [];
-  return Array.from(_dnd.board.children).filter(function(el) {
-    return el && el.dataset && el.dataset.widgetKey
-      && !el.classList.contains("widget-dragging")
-      && !el.classList.contains("widget-drag-placeholder");
-  });
-}
-
-function dndSiblings(board) {
-  return Array.from(board.children).filter(function(el) {
-    return el && el.dataset && el.dataset.widgetKey
-      && !el.classList.contains("widget-hidden")
-      && !el.classList.contains("widget-drag-placeholder")
-      && !el.classList.contains("widget-dragging");
-  });
-}
-
-function dndTarget(board, siblings, cx, cy) {
-  var isH = board.dataset.widgetBoard === "today-kpis";
-  if (!siblings.length) return null;
-
-  if (isH) {
-    for (var i = 0; i < siblings.length; i++) {
-      var r = siblings[i].getBoundingClientRect();
-      if (cx < r.left + r.width / 2) return siblings[i];
-    }
-    return null;
-  }
-
-  // 2D grid: find closest insertion point
-  // For each sibling, compute the point where "insert before" transitions
-  // to "insert after" (i.e. the midpoint between this sibling and the next)
-  var rects = [];
-  for (var i = 0; i < siblings.length; i++) {
-    rects.push(siblings[i].getBoundingClientRect());
-  }
-
-  var bestIdx = -1;
-  var bestDist = Infinity;
-
-  for (var i = 0; i < siblings.length; i++) {
-    var r = rects[i];
-
-    // Check if cursor is inside or near this sibling
-    // Use center-of-mass distance with Y weighted heavier
-    var midX = r.left + r.width / 2;
-    var midY = r.top + r.height / 2;
-    var dx = cx - midX;
-    var dy = cy - midY;
-    var dist = dx * dx + dy * dy * 3;
-
-    if (dist < bestDist) {
-      bestDist = dist;
-      bestIdx = i;
-    }
-  }
-
-  if (bestIdx === -1) return null;
-
-  var r = rects[bestIdx];
-  var midX = r.left + r.width / 2;
-  var midY = r.top + r.height / 2;
-
-  // Determine if cursor is "before" or "after" this sibling
-  // "Before" = above midpoint, or same height and to the left
-  if (cy < midY || (cy < midY + r.height * 0.3 && cx < midX)) {
-    return siblings[bestIdx];
-  }
-
-  // "After" this sibling = insert before the next sibling
-  return bestIdx + 1 < siblings.length ? siblings[bestIdx + 1] : null;
 }
 
 // ---------- Today calendar (mini vue mois courant) ----------
