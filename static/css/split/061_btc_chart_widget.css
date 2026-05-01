@@ -30,6 +30,14 @@
   color: var(--text-muted);
 }
 
+.btc-chart-widget .panel-h h3 .btc-chart-countdown {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-faint);
+  margin-right: 4px;
+}
+
 .btc-chart-controls {
   display: flex;
   gap: 4px;
