@@ -12282,231 +12282,301 @@ body.light-mode .main {
 }
 
 /* ---- 045_today_context_widget.css ---- */
-/* ---- Dashboard day context widget (Apple light card) ---- */
+/* ---- Today context widget — compact, clean, dark + light ---- */
 
-/* Apple-style white card — overrides dark theme completely */
 .today-context-widget {
   grid-column: 1 / -1;
-  position: relative;
-  padding: 20px 24px;
-  background: #ffffff;
-  border: 1px solid #e5e5ea;
-  border-radius: 14px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  transition: box-shadow 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
 }
 
-.today-context-widget:hover {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.10);
-}
-
-/* Head section */
+/* ── Header bande fine ── */
 .today-context-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 16px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid #e5e5ea;
+  gap: 16px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
 }
+
+.today-context-title-group { flex: 1; min-width: 0; }
 
 .today-context-kicker {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-  color: #0066d9;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  gap: 6px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.20em;
   text-transform: uppercase;
+  color: var(--text-muted);
 }
-
-.today-context-kicker svg {
-  color: #0066d9;
-}
-
-.today-context-head h3 {
-  margin: 0;
-  color: #1d1d1f;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
+.today-context-kicker svg { color: var(--cyan); opacity: 0.75; flex-shrink: 0; }
 
 .today-context-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
-/* Inline fields (date / select) */
+/* Date + instrument inputs */
 .today-context-widget .day-inline-field input,
 .today-context-widget .day-inline-field select {
-  height: 34px;
-  border-radius: 10px;
-  border: 1px solid #d2d2d7;
-  background: #f5f5f7;
-  color: #1d1d1f;
-  font-size: 13px;
+  height: 28px;
   padding: 0 10px;
-  transition: border-color 0.2s cubic-bezier(0.25, 0.1, 0.25, 1),
-              box-shadow 0.2s cubic-bezier(0.25, 0.1, 0.25, 1),
-              background 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
-}
-
-.today-context-widget .day-inline-field input::placeholder,
-.today-context-widget .day-inline-field select::placeholder {
-  color: #aeaeb2;
-  font-style: italic;
-}
-
-.today-context-widget .day-inline-date input {
-  width: 146px;
-}
-
-/* Body grid: bias pills (left) / notes (right) */
-.today-context-body {
-  display: grid;
-  grid-template-columns: minmax(140px, 0.25fr) minmax(0, 1fr);
-  gap: 48px;
-}
-
-/* Centrer verticalement le bloc Biais HTF dans la grille */
-.today-context-bias {
-  align-self: center;
-}
-
-/* Bias pills container */
-.today-context-bias .pills {
-  display: grid;
-  gap: 8px;
-}
-
-/* Field labels */
-.today-context-widget .day-context-field label {
-  display: block;
-  margin-bottom: 14px;
-  color: #6e6e73;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-3);
+  color: var(--text);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.14s, box-shadow 0.14s;
 }
-
-/* Textareas */
-.today-context-widget .day-context-field textarea {
-  width: 100%;
-  min-height: 58px;
-  border-radius: 10px;
-  border: 1px solid #d2d2d7;
-  background: #f5f5f7;
-  color: #1d1d1f;
-  font-size: 13px;
-  padding: 10px 12px;
-  resize: vertical;
-  transition: border-color 0.2s cubic-bezier(0.25, 0.1, 0.25, 1),
-              box-shadow 0.2s cubic-bezier(0.25, 0.1, 0.25, 1),
-              background 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+.today-context-widget .day-inline-date input { width: 118px; }
+.today-context-widget .day-inline-instrument { position: relative; min-width: 72px; }
+.today-context-widget .day-inline-instrument .select-wrapper { position: relative; }
+.today-context-widget .day-inline-instrument select {
+  width: 72px;
+  padding-right: 20px;
+  appearance: none;
+  cursor: pointer;
 }
-
-.today-context-widget .day-context-field textarea::placeholder {
-  color: #aeaeb2;
-  font-style: italic;
+.today-context-widget .day-inline-instrument .select-arrow {
+  position: absolute;
+  right: 7px; top: 50%;
+  transform: translateY(-50%);
+  width: 10px; height: 10px;
+  color: var(--text-muted);
+  pointer-events: none;
 }
-
-/* Focus states */
-.today-context-widget .day-context-field textarea:focus,
 .today-context-widget .day-inline-field input:focus,
 .today-context-widget .day-inline-field select:focus {
   outline: none;
-  border-color: rgba(0, 197, 220, 0.6);
-  background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(0, 197, 220, 0.12);
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px rgba(0,229,255,0.10);
 }
 
-/* Pill choice base */
-.today-context-widget .day-context-field .pill-choice {
+/* ── Body : ligne horizontale à 3 sections ── */
+.today-context-body {
+  display: flex;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.today-context-bias {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 14px;
+  border-right: 1px solid var(--border);
+  flex-shrink: 0;
+  min-width: 110px;
+}
+
+.today-context-notes {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.today-context-notes .day-context-field {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-right: 1px solid var(--border);
+}
+.today-context-notes .day-context-field:last-child { border-right: none; }
+
+/* Labels */
+.today-context-widget .day-context-field label {
+  display: block;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 0;
+  flex-shrink: 0;
+}
+
+/* ── Pills biais ── */
+.today-context-bias > label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 2px;
+}
+
+.today-context-bias .pills {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.today-context-widget .pill-choice {
   display: flex;
   align-items: center;
-  min-height: 38px;
   justify-content: center;
-  border-radius: 10px;
-  border: 1px solid #d2d2d7;
-  background: #f5f5f7;
-  color: #86868b;
-  font-size: 13px;
-  font-weight: 500;
-  padding: 6px 14px;
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
   cursor: pointer;
-  transition: border-color 0.2s cubic-bezier(0.25, 0.1, 0.25, 1),
-              background 0.2s cubic-bezier(0.25, 0.1, 0.25, 1),
-              color 0.2s cubic-bezier(0.25, 0.1, 0.25, 1),
-              box-shadow 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+  font-family: inherit;
   user-select: none;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.today-context-widget .pill-choice:hover {
+  background: var(--surface-3);
+  border-color: var(--border-glow);
+  color: var(--text);
+}
+.today-context-widget .pill-choice.active {
+  background: var(--surface-solid);
+  border-color: var(--border-strong);
+  color: var(--text);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.18);
+}
+.today-context-widget .pill-choice.lime:hover,
+.today-context-widget .pill-choice.lime.active {
+  color: var(--win);
+  background: var(--win-bg);
+  border-color: var(--win-border);
+  box-shadow: none;
+}
+.today-context-widget .pill-choice.rose:hover,
+.today-context-widget .pill-choice.rose.active {
+  color: var(--loss);
+  background: var(--loss-bg);
+  border-color: var(--loss-border);
+  box-shadow: none;
 }
 
-.today-context-widget .day-context-field .pill-choice:hover {
-  background: rgba(0, 0, 0, 0.05);
+/* ── Textareas ── */
+.today-context-widget textarea {
+  flex: 1;
+  width: 100%;
+  min-height: 44px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  padding: 6px 9px;
+  resize: none;
+  line-height: 1.55;
+  outline: none;
+  transition: border-color 0.14s, background 0.14s, box-shadow 0.14s;
+}
+.today-context-widget textarea::placeholder {
+  color: var(--text-dim);
+  font-style: italic;
+  font-size: 11.5px;
+}
+.today-context-widget textarea:hover {
+  background: var(--surface-3);
+  border-color: var(--border-glow);
+}
+.today-context-widget textarea:focus {
+  background: var(--surface-3);
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px rgba(0,229,255,0.10);
 }
 
-/* Neutral / default active */
-.today-context-widget .day-context-field .pill-choice.active {
-  color: #0066d9;
-  border-color: rgba(0, 122, 255, 0.25);
-  background: rgba(0, 122, 255, 0.08);
-  box-shadow: inset 0 0 0 1px rgba(0, 122, 255, 0.15);
+/* ── Light mode ── */
+body.light-mode .today-context-widget {
+  background: #fff;
+  border-color: rgba(16,24,40,0.09);
+}
+body.light-mode .today-context-head {
+  background: #f7f9fc;
+  border-bottom-color: rgba(16,24,40,0.08);
+}
+body.light-mode .today-context-kicker { color: #8892a4; }
+body.light-mode .today-context-kicker svg { color: #0097b2; }
+body.light-mode .today-context-bias,
+body.light-mode .today-context-notes .day-context-field {
+  border-color: rgba(16,24,40,0.08);
+}
+body.light-mode .today-context-widget .day-context-field label,
+body.light-mode .today-context-bias > label { color: #b0b8c8; }
+body.light-mode .today-context-widget .day-inline-field input,
+body.light-mode .today-context-widget .day-inline-field select {
+  background: #f0f4fb; border-color: rgba(16,24,40,0.12); color: #111827;
+}
+body.light-mode .today-context-widget .day-inline-field input:focus,
+body.light-mode .today-context-widget .day-inline-field select:focus {
+  border-color: #00b4d8; background: #fff;
+  box-shadow: 0 0 0 3px rgba(0,180,216,0.12);
+}
+body.light-mode .today-context-widget .pill-choice {
+  border-color: rgba(16,24,40,0.12); color: #6b7a94;
+}
+body.light-mode .today-context-widget .pill-choice:hover {
+  background: #f0f4fb; border-color: rgba(0,132,200,0.25); color: #111827;
+}
+body.light-mode .today-context-widget .pill-choice.active {
+  background: #111827; border-color: #111827; color: #fff;
+}
+body.light-mode .today-context-widget .pill-choice.lime:hover,
+body.light-mode .today-context-widget .pill-choice.lime.active {
+  color: #20570b; background: rgba(232,255,222,0.90);
+  border-color: rgba(45,122,19,0.22); box-shadow: none;
+}
+body.light-mode .today-context-widget .pill-choice.rose:hover,
+body.light-mode .today-context-widget .pill-choice.rose.active {
+  color: #8a1429; background: rgba(255,229,234,0.92);
+  border-color: rgba(180,35,60,0.22); box-shadow: none;
+}
+body.light-mode .today-context-widget textarea {
+  border-color: rgba(16,24,40,0.12); color: #111827;
+}
+body.light-mode .today-context-widget textarea::placeholder { color: #b0b8c8; }
+body.light-mode .today-context-widget textarea:hover {
+  background: #f7f9fc; border-color: rgba(0,132,200,0.30);
+}
+body.light-mode .today-context-widget textarea:focus {
+  background: #fff; border-color: #00b4d8;
+  box-shadow: 0 0 0 3px rgba(0,180,216,0.12);
 }
 
-/* Bullish (lime/green) active */
-.today-context-widget .day-context-field .pill-choice.lime.active {
-  color: #1d7a3e;
-  border-color: rgba(52, 199, 89, 0.30);
-  background: rgba(52, 199, 89, 0.10);
-  box-shadow: inset 0 0 0 1px rgba(52, 199, 89, 0.15);
-}
-
-.today-context-widget .day-context-field .pill-choice.lime:hover {
-  background: rgba(52, 199, 89, 0.05);
-}
-
-/* Bearish (rose/red) active */
-.today-context-widget .day-context-field .pill-choice.rose.active {
-  color: #b91c1c;
-  border-color: rgba(255, 69, 58, 0.30);
-  background: rgba(255, 69, 58, 0.10);
-  box-shadow: inset 0 0 0 1px rgba(255, 69, 58, 0.15);
-}
-
-.today-context-widget .day-context-field .pill-choice.rose:hover {
-  background: rgba(255, 69, 58, 0.05);
-}
-
-/* Notes section */
-.today-context-notes {
-  display: grid;
-  gap: 12px;
-}
-
-/* Responsive */
-@media (max-width: 900px) {
-  .today-context-head,
-  .today-context-body {
-    grid-template-columns: 1fr;
+/* ── Responsive ── */
+@media (max-width: 860px) {
+  .today-context-body { flex-direction: column; }
+  .today-context-bias {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
   }
-
-  .today-context-head {
-    align-items: flex-start;
-    flex-direction: column;
+  .today-context-bias .pills { flex-direction: row; gap: 6px; }
+  .today-context-notes { flex-direction: column; }
+  .today-context-notes .day-context-field {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
   }
-
-  .today-context-actions {
-    width: 100%;
-    justify-content: flex-start;
-  }
+  .today-context-notes .day-context-field:last-child { border-bottom: none; }
 }
 
 /* ---- 046_journal_day_trade_cards.css ---- */
