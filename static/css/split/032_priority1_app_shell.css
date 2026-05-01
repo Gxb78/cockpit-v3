@@ -99,6 +99,14 @@ body {
   letter-spacing: 0;
 }
 
+/* ── Rail button highlight quand wizard ouvert depuis Nouveau Trade ── */
+#railNewTradeBtn.wiz-active {
+  background: rgba(56, 211, 238, 0.18);
+  border-color: rgba(56, 211, 238, 0.40);
+  box-shadow: 0 0 24px rgba(56, 211, 238, 0.12), inset 0 0 0 1px rgba(56, 211, 238, 0.20);
+  color: var(--cyan);
+}
+
 .rail-foot,
 .theme-toggle,
 .dev-restart,

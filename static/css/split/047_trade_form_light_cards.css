@@ -790,8 +790,8 @@
 
 /* Panel — card */
 .wiz-panel {
-  width: min(460px, 94vw);
-  max-width: 460px;
+  width: min(420px, 94vw);
+  max-width: 420px;
   max-height: 92dvh;
   border-radius: var(--card-radius);
   background: var(--card-surface);

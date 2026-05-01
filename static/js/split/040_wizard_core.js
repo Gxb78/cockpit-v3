@@ -120,6 +120,7 @@ function wizOpen(opts) {
         var rect = btn.getBoundingClientRect();
         el.style.paddingTop = Math.max(8, rect.top - 8) + 'px';
         el.style.paddingLeft = (rect.right + 12) + 'px';
+        btn.classList.add('wiz-active');
       }
       // Click outside panel = close
       el.onclick = function (e) { if (e.target === el) wizClose(); };
@@ -127,6 +128,9 @@ function wizOpen(opts) {
       el.style.paddingTop = '';
       el.style.paddingLeft = '';
       el.onclick = null;
+      // Clean up rail button highlight if any
+      var oldBtn = document.getElementById('railNewTradeBtn');
+      if (oldBtn) oldBtn.classList.remove('wiz-active');
     }
   }
 }
@@ -136,6 +140,9 @@ function wizClose() {
   if (el) el.classList.add('hidden');
   document.body.style.overflow = '';
   wizState = null;
+  // Clean up rail button highlight
+  var btn = document.getElementById('railNewTradeBtn');
+  if (btn) btn.classList.remove('wiz-active');
   if (_wizLastFocused) { _wizLastFocused.focus(); _wizLastFocused = null; }
 }
 

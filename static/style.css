@@ -6076,12 +6076,12 @@ body.light-mode .day-dots { gap: 3px; }
 
 /* ---- 025_wizard_steps_ui.css ---- */
 /* ============================================================
-   WIZARD — Taille reduite 440×560
+   WIZARD — Taille reduite 420×520
    ============================================================ */
 .wiz { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); }
 .wiz-panel {
-  width: min(460px, 94vw);
-  height: 560px;
+  width: min(420px, 94vw);
+  height: 520px;
   max-height: 92dvh;
   display: flex;
   flex-direction: column;
@@ -6104,8 +6104,8 @@ body.light-mode .day-dots { gap: 3px; }
   padding: 0;
 }
 .wiz-rail-mode .wiz-panel {
-  width: min(620px, calc(100vw - 280px));
-  height: min(480px, 80dvh);
+  width: min(580px, calc(100vw - 280px));
+  height: min(440px, 80dvh);
   box-shadow: 0 18px 48px rgba(0,0,0,0.35);
   margin: 0;
 }
@@ -8387,6 +8387,14 @@ body {
   border-color: var(--border);
   border-radius: 6px;
   letter-spacing: 0;
+}
+
+/* ── Rail button highlight quand wizard ouvert depuis Nouveau Trade ── */
+#railNewTradeBtn.wiz-active {
+  background: rgba(56, 211, 238, 0.18);
+  border-color: rgba(56, 211, 238, 0.40);
+  box-shadow: 0 0 24px rgba(56, 211, 238, 0.12), inset 0 0 0 1px rgba(56, 211, 238, 0.20);
+  color: var(--cyan);
 }
 
 .rail-foot,
@@ -15091,8 +15099,8 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
 
 /* Panel — card */
 .wiz-panel {
-  width: min(460px, 94vw);
-  max-width: 460px;
+  width: min(420px, 94vw);
+  max-width: 420px;
   max-height: 92dvh;
   border-radius: var(--card-radius);
   background: var(--card-surface);

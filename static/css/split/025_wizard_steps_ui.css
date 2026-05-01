@@ -1,10 +1,10 @@
 /* ============================================================
-   WIZARD — Taille reduite 440×560
+   WIZARD — Taille reduite 420×520
    ============================================================ */
 .wiz { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); }
 .wiz-panel {
-  width: min(460px, 94vw);
-  height: 560px;
+  width: min(420px, 94vw);
+  height: 520px;
   max-height: 92dvh;
   display: flex;
   flex-direction: column;
@@ -27,8 +27,8 @@
   padding: 0;
 }
 .wiz-rail-mode .wiz-panel {
-  width: min(620px, calc(100vw - 280px));
-  height: min(480px, 80dvh);
+  width: min(580px, calc(100vw - 280px));
+  height: min(440px, 80dvh);
   box-shadow: 0 18px 48px rgba(0,0,0,0.35);
   margin: 0;
 }
