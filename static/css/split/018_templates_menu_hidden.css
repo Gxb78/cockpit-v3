@@ -96,7 +96,6 @@
     padding: 18px 24px 24px;
   }
   .page-head { margin-bottom: 16px; }
-  .kpi-row { margin-bottom: 14px; gap: 12px; }
   .kpi { padding: 14px 16px; }
   .today-grid { gap: 14px; }
   .panel { padding: 16px 18px; }
@@ -107,7 +106,6 @@
    ============================================================ */
 
 @media (max-width: 1100px) {
-  .kpi-row { grid-template-columns: repeat(2, 1fr); }
   .today-grid, .perf-grid { grid-template-columns: 1fr; }
   .settings-grid { grid-template-columns: 1fr; }
   .journal-page-head {

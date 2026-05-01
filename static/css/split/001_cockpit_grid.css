@@ -215,7 +215,6 @@
     overscroll-behavior: contain;
   }
   .page-head { margin-bottom: 16px; }
-  .kpi-row { margin-bottom: 14px; }
   .today-grid { gap: 14px; }
   .panel { padding: 16px 18px; }
 }

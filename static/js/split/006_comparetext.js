@@ -222,9 +222,15 @@ function renderJournalTable() {
     const pnlTxt = row.pnl == null ? "-" : fmtMoney(row.pnl);
 
     tr.innerHTML = `
+      <td class="mono">${escapeHtml(row.date || "-")}</td>
       <td>${escapeHtml(wizInstrumentLabel(row.instrument))}</td>
+      <td>${escapeHtml(prettify(row.strategy || ""))}</td>
       <td class="mono ${row.direction === 'long' ? 'dir-long' : 'dir-short'}">${escapeHtml(dir)}</td>
+      <td class="mono">${row.entry_price != null ? Number(row.entry_price).toFixed(2) : "-"}</td>
+      <td class="mono">${row.exit_price != null ? Number(row.exit_price).toFixed(2) : "-"}</td>
+      <td class="mono">${row.rr != null ? Number(row.rr).toFixed(2) + "R" : "-"}</td>
       <td class="mono journal-td-pnl ${pnlClass}">${pnlTxt}</td>
+      <td class="mono ${(row.result || "").toLowerCase()}">${escapeHtml(row.result || "-")}</td>
     `;
     fragment.appendChild(tr);
   });

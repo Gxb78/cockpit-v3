@@ -1,5 +1,11 @@
-<!-- Today grid widgets -->
-      <div class="today-grid widget-board" data-widget-board="today-main">
+<!-- Today widgets: unified board -->
+      <div class="today-grid widget-board" data-widget-board="today">
+{% include "partials/pages/today/widgets/001_kpi_total_pnl.html" %}
+{% include "partials/pages/today/widgets/002_kpi_winrate.html" %}
+{% include "partials/pages/today/widgets/003_kpi_average_rr.html" %}
+{% include "partials/pages/today/widgets/004_kpi_trades.html" %}
+{% include "partials/pages/today/widgets/005_kpi_profit_factor.html" %}
+{% include "partials/pages/today/widgets/006_kpi_expectancy.html" %}
 {% include "partials/pages/today/widgets/006_day_context.html" %}
 {% include "partials/pages/today/widgets/007_today_log.html" %}
 {% include "partials/pages/today/widgets/008_today_activity.html" %}

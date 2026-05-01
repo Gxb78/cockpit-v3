@@ -307,7 +307,8 @@ function refreshDragHandles() {
           width: rect.width, height: rect.height,
           ghost: null,
           active: false,
-          dropRef: null
+          dropRef: null,
+          targetBoard: null
         };
         dndStart(pressStartX, pressStartY);
       }, DND_LONG_PRESS);
@@ -382,6 +383,7 @@ function dndStart(cx, cy) {
 
   document.body.classList.add("is-dragging");
   _dnd.dropRef = null;
+  _dnd.targetBoard = null;
 }
 
 function dndMove(cx, cy) {
@@ -390,7 +392,7 @@ function dndMove(cx, cy) {
   _dnd.ghost.style.transition = "none";
   _dnd.ghost.style.transform  = "translate(" + (cx - _dnd.offsetX) + "px," + (cy - _dnd.offsetY) + "px) scale(1.04)";
 
-  var items = dndItems(_dnd.board);
+  var boards = document.querySelectorAll(".widget-board[data-widget-board]");
   var ghostLeft   = cx - _dnd.offsetX;
   var ghostTop    = cy - _dnd.offsetY;
   var ghostRight  = ghostLeft + _dnd.width;
@@ -398,14 +400,34 @@ function dndMove(cx, cy) {
   var ghostCX     = ghostLeft + _dnd.width  / 2;
   var ghostCY     = ghostTop  + _dnd.height / 2;
 
-var dropIdx = dndHitTest(items, _dnd.board, ghostLeft, ghostTop, ghostRight, ghostBottom, ghostCX, ghostCY, _dnd.el);
-  var dropRef = dropIdx >= 0 && dropIdx < items.length ? items[dropIdx] : null;
+  var bestRef = null;
+  var bestBoard = null;
+  var bestScore = 0;
 
-  if (dropRef === _dnd.dropRef) return;
+  for (var b = 0; b < boards.length; b++) {
+    var boardEl = boards[b];
+    var items = dndItems(boardEl);
+    var idx = dndHitTest(items, boardEl, ghostLeft, ghostTop, ghostRight, ghostBottom, ghostCX, ghostCY, _dnd.el);
+    if (idx >= 0) {
+      var r = items[idx].getBoundingClientRect();
+      var rArea = r.width * r.height;
+      var ox = Math.max(0, Math.min(ghostRight, r.right) - Math.max(ghostLeft, r.left));
+      var oy = Math.max(0, Math.min(ghostBottom, r.bottom) - Math.max(ghostTop, r.top));
+      var score = (ox * oy) / rArea;
+      if (score > bestScore) {
+        bestScore = score;
+        bestRef = items[idx];
+        bestBoard = boardEl;
+      }
+    }
+  }
+
+  if (bestRef === _dnd.dropRef) return;
 
   if (_dnd.dropRef) _dnd.dropRef.classList.remove("widget-drop-target");
-  _dnd.dropRef = dropRef;
-  if (dropRef) dropRef.classList.add("widget-drop-target");
+  _dnd.dropRef = bestRef;
+  _dnd.targetBoard = bestBoard;
+  if (bestRef) bestRef.classList.add("widget-drop-target");
 }
 
 function dndEnd() {
@@ -416,11 +438,21 @@ function dndEnd() {
     _dnd.dropRef.classList.remove("widget-drop-target");
 
     var target = _dnd.dropRef;
-    var placeholder = document.createElement("div");
-    board.insertBefore(placeholder, el);
-    board.insertBefore(el, target);
-    board.insertBefore(target, placeholder);
-    placeholder.remove();
+    var targetBoard = _dnd.targetBoard || target.closest(".widget-board[data-widget-board]");
+
+    if (targetBoard === board) {
+      var placeholder = document.createElement("div");
+      board.insertBefore(placeholder, el);
+      board.insertBefore(el, target);
+      board.insertBefore(target, placeholder);
+      placeholder.remove();
+    } else {
+      var ph = document.createComment("swap");
+      board.insertBefore(ph, el);
+      targetBoard.insertBefore(el, target);
+      board.insertBefore(target, ph);
+      ph.remove();
+    }
   }
 
   el.classList.remove("widget-dragging");
@@ -438,38 +470,43 @@ function dndEnd() {
   if (_dnd.ghost) _dnd.ghost.remove();
   document.body.classList.remove("is-dragging");
 
-  var boardKey = board.dataset.widgetBoard;
-  var order = Array.from(board.children)
-    .map(function(c) { return c.dataset && c.dataset.widgetKey; })
-    .filter(Boolean);
-  writeWidgetOrder(boardKey, order);
+  var affectedBoards = [board];
+  if (_dnd.targetBoard && _dnd.targetBoard !== board) {
+    affectedBoards.push(_dnd.targetBoard);
+  }
 
-  Array.from(board.children).forEach(function(child) {
-    var key = child.dataset && child.dataset.widgetKey;
-    if (!key || child.classList.contains("widget-hidden")) return;
-    child.style.gridColumnStart = "";
-    child.style.gridRowStart = "";
-  });
+  affectedBoards.forEach(function(b) {
+    var bKey = b.dataset.widgetBoard;
+    var order = Array.from(b.children).map(function(c) { return c.dataset && c.dataset.widgetKey; }).filter(Boolean);
+    writeWidgetOrder(bKey, order);
 
-  var pos = {};
-  Array.from(board.children).forEach(function(child) {
-    var key = child.dataset && child.dataset.widgetKey;
-    if (!key || child.classList.contains("widget-hidden")) return;
-    var cs = window.getComputedStyle(child);
-    var col = parseInt(cs.gridColumnStart, 10);
-    var row = parseInt(cs.gridRowStart, 10);
-    if (!isNaN(col) && !isNaN(row) && col > 0 && row > 0) {
-      pos[key] = { col: col, row: row };
-    }
-  });
-  writeWidgetPositions(boardKey, pos);
+    Array.from(b.children).forEach(function(child) {
+      var key = child.dataset && child.dataset.widgetKey;
+      if (!key || child.classList.contains("widget-hidden")) return;
+      child.style.gridColumnStart = "";
+      child.style.gridRowStart = "";
+    });
 
-  Object.keys(pos).forEach(function(key) {
-    var child = board.querySelector('[data-widget-key="' + key + '"]');
-    if (child) {
-      child.style.gridColumnStart = pos[key].col;
-      child.style.gridRowStart = pos[key].row;
-    }
+    var pos = {};
+    Array.from(b.children).forEach(function(child) {
+      var key = child.dataset && child.dataset.widgetKey;
+      if (!key || child.classList.contains("widget-hidden")) return;
+      var cs = window.getComputedStyle(child);
+      var col = parseInt(cs.gridColumnStart, 10);
+      var row = parseInt(cs.gridRowStart, 10);
+      if (!isNaN(col) && !isNaN(row) && col > 0 && row > 0) {
+        pos[key] = { col: col, row: row };
+      }
+    });
+    writeWidgetPositions(bKey, pos);
+
+    Object.keys(pos).forEach(function(key) {
+      var child = b.querySelector('[data-widget-key="' + key + '"]');
+      if (child) {
+        child.style.gridColumnStart = pos[key].col;
+        child.style.gridRowStart = pos[key].row;
+      }
+    });
   });
 
   updateDashboardLayout();
