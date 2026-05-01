@@ -324,5 +324,19 @@ Format obligatoire d'une lesson:
 - Symptome: `_auto_calc_pnl()` acceptait `existing=None` mais ne l'utilisait jamais. `19_ai_chat.py` lui passait `existing` pour rien. State.js ligne 79 catch silencieux qui avale les erreurs de listeners.
 - Cause racine: accumulation de code mort et de catch aveugles.
 - Regle de prevention: apres chaque refactoring, chercher les parametres de fonction inutilises (`grep -rn "def.*existing=None" app_parts/`). Les catch doivent toujours logger (`console.warn` minimum).
-- Test de non-regression: `grep -n 'existing=None' app_parts/03_core_helpers.py` doit retourner 0. `grep 'catch.*{}' static/js/split/000_state.js` ne doit pas exister.
-- Fichiers a surveiller: `app_parts/03_core_helpers.py`, `app_parts/19_ai_chat.py`, `static/js/split/000_state.js`.
+|- Test de non-regression: `grep -n 'existing=None' app_parts/03_core_helpers.py` doit retourner 0. `grep 'catch.*{}' static/js/split/000_state.js` ne doit pas exister.
+|- Fichiers a surveiller: `app_parts/03_core_helpers.py`, `app_parts/19_ai_chat.py`, `static/js/split/000_state.js`.
+
+### BUG-20260501-04 - Changement de type d'un champ state (tag string → array) sans retrocompat
+- Symptome: apres migration `tag` de string vers array, les filtres chargeaient depuis localStorage avec `typeof tag === "string"` et plantaient les fonctions qui attendaient un array.
+- Cause racine: le format stocke en localStorage etait `"news_trade"` (string) mais le nouveau code attend `["news_trade"]` (array).
+- Regle de prevention: TOUJOURS gerer la retrocompat dans `sanitizeJournalTradeFilters()` quand un champ change de type. Pattern: `if (Array.isArray(raw.tag)) { ... } else if (typeof raw.tag === "string") { out.tag = [raw.tag]; }`.
+- Test de non-regression: charger un filtre depuis localStorage avec ancien format string → doit retourner un array.
+- Fichiers a surveiller: `static/js/split/003_addcustomstrategyfromsettings.js` (sanitize).
+
+### BUG-20260501-05 - Placeholder invisible quand input a une valeur
+- Symptome: le placeholder "2 car. min" ne s'affichait pas quand le champ contenait deja "a" car les placeholders sont caches par la valeur de l'input.
+- Cause racine: utilisation d'un `placeholder` au lieu d'un element HTML positionne.
+- Regle de prevention: pour afficher un hint en presence d'une valeur, utiliser un `<span>` en absolute overlay, pas le placeholder de l'input. Placer le span en `position: absolute; right: 8px; top: 50%; transform: translateY(-50%); pointer-events: none;` avec `padding-right` sur l'input pour eviter le chevauchement.
+- Test de non-regression: saisir "a" → le hint "2 car. min" est visible a droite du "a".
+- Fichiers a surveiller: `static/js/split/006_comparetext.js`, `static/css/split/033_priority2_journal_trade.css`.
