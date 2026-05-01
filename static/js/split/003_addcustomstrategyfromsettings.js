@@ -69,6 +69,8 @@ function savePreferenceSettings() {
   if (!state.settings) return;
   state.settings.preferences.animations = !!$("#prefAnimations")?.checked;
   state.settings.preferences.dark_mode = !!$("#prefDarkMode")?.checked;
+  var themeVal = $("#prefTheme")?.value || "default";
+  if (["default", "claude"].includes(themeVal)) state.settings.preferences.theme = themeVal;
   saveSettingsState();
   applySettingsState();
   if (state.currentPage === "stats") renderPerformance();

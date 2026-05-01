@@ -11,8 +11,7 @@ function bindGlobalKeys() {
 
     if (e.key === "Escape") {
       if (state.cmdkOpen) { closeCmdk(); return; }
-      if (!$("#tradeFormSection")?.classList.contains("hidden")) { closeTradeForm(); return; }
-      if (!$("#entryModal").classList.contains("hidden")) { closeModal(); return; }
+
       if (!$("#lightbox").classList.contains("hidden")) { $("#lightbox").classList.add("hidden"); return; }
     }
 

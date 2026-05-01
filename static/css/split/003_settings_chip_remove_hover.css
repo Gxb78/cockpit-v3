@@ -146,7 +146,14 @@
     rgba(255,255,255,0.04) 75%
   );
   background-size: 200% 100%;
-  animation: skeletonShimmer 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .widget-board.loading .kpi-value::after {
+    animation: skeletonShimmer 1.6s ease-in-out infinite;
+  }
+  .widget-board.loading .kpi-sub::after {
+    animation: skeletonShimmer 1.6s ease-in-out infinite;
+  }
 }
 .widget-board.loading .kpi-bar { opacity: 0.15; }
 .widget-board.loading .kpi-spark { opacity: 0.12; }
@@ -165,7 +172,6 @@
     rgba(255,255,255,0.03) 75%
   );
   background-size: 200% 100%;
-  animation: skeletonShimmer 1.6s ease-in-out infinite;
   vertical-align: middle;
 }
 

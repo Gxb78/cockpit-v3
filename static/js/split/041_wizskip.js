@@ -25,10 +25,8 @@ function _wizSaveCurrentStep() {
     case 'date':
       d.date = _q('#wizDate')?.value || d.date;
       break;
-    case 'day_context':
-      d.htf_bias      = _wizActivePill('.wiz-bias')         || d.htf_bias;
-      d.htf_context   = _q('#wizHtfContext')?.value         || d.htf_context;
-      d.daily_notes   = _q('#wizDailyNotes')?.value         || d.daily_notes;
+    case 'direction':
+      d.direction = _wizActiveDir() || d.direction;
       break;
     case 'why_trade':
       d.why_trade = _q('#wizWhyTrade')?.value || d.why_trade;
@@ -41,11 +39,13 @@ function _wizSaveCurrentStep() {
       d.why_tp   = _q('#wizWhyTp')?.value   || d.why_tp;
       break;
     case 'levels':
-      d.direction    = _wizActiveDir()               || d.direction;
       d.entry_price  = _q('#wizEntry')?.value        || d.entry_price;
       d.stop_loss    = _q('#wizStop')?.value         || d.stop_loss;
       d.take_profit  = _q('#wizTarget')?.value       || d.take_profit;
       d.stdv_level   = _q('#wizStdv')?.value         || d.stdv_level;
+      break;
+    case 'result':
+      d.exit_price  = _q('#wizExitPrice')?.value     || d.exit_price;
       break;
     case 'pm_exit':
       d.exit_price  = _q('#wizExitPrice')?.value    || d.exit_price;
@@ -87,6 +87,18 @@ function _wizRender() {
   const indicator = document.getElementById('wizStepIndicator');
   if (indicator) indicator.textContent = (idx + 1) + ' / ' + total;
 
+  // Step title
+  var stepTitle = document.getElementById('wizStepTitle');
+  var titles = {
+    date: 'Date', instrument: 'Instrument', strategy: 'Strategie',
+    direction: 'Direction', why_trade: 'Pourquoi ce trade',
+    why_entry: "Pourquoi l'entree", why_stop_tp: 'Stop & TP',
+    levels: 'Niveaux', result: 'Resultat',
+    screenshots: 'Captures', recap: 'Recap',
+    pm_exit: 'Sortie', pm_quality: 'Execution', pm_lessons: 'Lecons',
+  };
+  if (stepTitle) stepTitle.textContent = titles[step] || step;
+
   // Back button
   const backBtn = document.getElementById('wizBackBtn');
   if (backBtn) backBtn.classList.toggle('invisible', idx === 0);
@@ -126,11 +138,12 @@ function _wizStepHtml(step) {
     case 'date':        return _wizStepDate();
     case 'instrument':  return _wizStepInstrument();
     case 'strategy':    return _wizStepStrategy();
-    case 'day_context': return _wizStepDayContext();
+    case 'direction':   return _wizStepDirection();
     case 'why_trade':   return _wizStepWhyTrade();
     case 'why_entry':   return _wizStepWhyEntry();
     case 'why_stop_tp': return _wizStepWhyStopTp();
     case 'levels':      return _wizStepLevels();
+    case 'result':      return _wizStepResult();
     case 'screenshots': return _wizStepScreenshots();
     case 'recap':       return _wizStepRecap();
     case 'pm_exit':     return _wizStepPmExit();

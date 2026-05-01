@@ -5,6 +5,13 @@
   box-shadow: 0 0 0 1px rgba(0,229,255,0.10);
 }
   .day.other-month { opacity: 0.25; }
+  .day.other-month:hover {
+    opacity: 0.30;
+    border-color: transparent;
+    transform: none;
+    box-shadow: none;
+    cursor: pointer;
+  }
   .day.today {
     border-color: rgba(0,229,255,0.55);
     box-shadow: 0 0 0 1px rgba(0,229,255,0.10) inset;

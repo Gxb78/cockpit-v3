@@ -68,7 +68,7 @@ TRADE_TEXT_FIELDS = [
     "plan_model", "plan_direction", "plan_alignment",
     "plan_override_reason", "plan_snapshot",
 ]
-TRADE_NUMERIC_FIELDS = ["pnl", "rr", "entry_price", "stop_loss", "take_profit", "position_size", "leverage"]
+TRADE_NUMERIC_FIELDS = ["pnl", "rr", "entry_price", "exit_price", "stop_loss", "take_profit", "position_size", "leverage"]
 TRADE_INT_FIELDS     = ["execution_quality", "plan_score"]
 
 

@@ -1,7 +1,7 @@
 // ---------- AI Chat — frontend ----------
 // State : window.aiChatHistory (session only, not persisted)
 // Uses : api(), toast()
-// Integration : wizard (wizOpen), day editor (openExistingDay), trade form (openTradeForm)
+// Integration : wizard (wizOpen), day editor (openExistingDay)
 
 /* Markdown rendering helpers (lightweight — no external lib needed) */
 
@@ -122,7 +122,7 @@ function _aiRenderMarkdown(text) {
 
 function _aiParseActions(text) {
   var actions = [];
-  var regex = /\[(wizOpen|openDay|openTradeForm):\s*(\{[^}]+\})\]/g;
+  var regex = /\[(wizOpen|openDay):\s*(\{[^}]+\})\]/g;
   var match;
   while ((match = regex.exec(text)) !== null) {
     try {
@@ -136,7 +136,7 @@ function _aiParseActions(text) {
 /* Strip action markers from display text */
 
 function _aiStripActions(text) {
-  return text.replace(/\[(wizOpen|openDay|openTradeForm):\s*\{[^}]+\}\]/g, '').trim();
+  return text.replace(/\[(wizOpen|openDay):\s*\{[^}]+\}\]/g, '').trim();
 }
 
 /* Render action buttons */
@@ -156,10 +156,6 @@ function _aiRenderActions(actions) {
       case 'openDay':
         label = 'Ouvrir le jour';
         icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
-        break;
-      case 'openTradeForm':
-        label = 'Modifier le trade';
-        icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
         break;
     }
     html += '<button type="button" class="ai-chat-action-btn" data-ai-action="' + a.type + '" data-ai-action-data=\'' + JSON.stringify(a.data) + '\'>' + icon + label + '</button>';
@@ -201,11 +197,6 @@ function _aiHandleActionClick(e) {
         }).catch(function() {
           toast('Impossible de charger ce jour', 'error');
         });
-      }
-      break;
-    case 'openTradeForm':
-      if (typeof openTradeForm === 'function' && data) {
-        openTradeForm(data);
       }
       break;
   }

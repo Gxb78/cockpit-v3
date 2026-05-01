@@ -10,7 +10,7 @@
   --surface: #ffffff;
   --surface-2: #f8fafc;
   --surface-3: #eef1f6;
-  --surface-solid: #f7f8fb;
+  --surface-solid: var(--surface-2);  /* ex #f7f8fb → lie au theme global */
   --text: #111827;
   --text-soft: #263244;
   --text-muted: #64748b;
@@ -356,7 +356,7 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  background: #f7f8fb;
+  background: var(--surface-solid);
   color: #98a1af;
   text-transform: uppercase;
   font-family: "JetBrains Mono", monospace;
@@ -386,7 +386,7 @@
 
 .modal-content {
   width: min(700px, 94vw);
-  background: #f7f8fb;
+  background: var(--surface-solid);
   border-radius: 27px;
   border: 1px solid rgba(255, 255, 255, 0.88);
   box-shadow:
@@ -415,7 +415,7 @@
 
 .modal-sticky {
   padding: 8px 20px;
-  background: #f7f8fb;
+  background: var(--surface-solid);
 }
 
 .day-context-card {
@@ -536,7 +536,7 @@
 
 .trade-form-header {
   padding: 14px 16px;
-  background: #f7f8fb;
+  background: var(--surface-solid);
   border-bottom-color: #e7eaf0;
 }
 
@@ -587,7 +587,7 @@
 
 #tradeFormSection .block {
   border-radius: 18px;
-  background: #f7f8fb;
+  background: var(--surface-solid);
   border-color: #e7eaf0;
 }
 
@@ -633,7 +633,7 @@
 
 .wiz-panel {
   border-radius: 27px;
-  background: #f7f8fb;
+  background: var(--surface-solid);
 }
 
 .wiz-progress-fill {
@@ -657,7 +657,7 @@
 
 @media (min-width: 761px) {
   .page[data-page="journal"].active {
-    height: calc(100vh - 102px);
+    height: calc(100dvh - 102px);
   }
 
   .page[data-page="journal"].active .journal-body {
@@ -983,7 +983,7 @@
 
 /* Kill the glassmorphism / dark gradients on form blocks */
 .block {
-  background: #f7f8fb;
+  background: var(--surface-solid);
   border-color: #e7eaf0;
   box-shadow: none;
 }
@@ -995,7 +995,7 @@
 .block:has(.block-h.magenta),
 .block:has(.block-h.lime),
 .block:has(.block-h.amber) {
-  background: #f7f8fb;
+  background: var(--surface-solid);
 }
 
 .block:focus-within {

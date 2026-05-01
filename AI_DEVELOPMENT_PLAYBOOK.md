@@ -366,6 +366,7 @@ Format obligatoire d'une lesson:
 - Symptome: navigation vers Stats → ecran vide. Les elements `#statStreakCur` etc. n'existaient pas dans le DOM.
 - Cause racine: le contenu de la page etait dans un `<template id="statsTemplate">` mais aucun JS ne le clonait dans la section. `renderPerformance()` essayait de setter `textContent` sur des elements null.
 - Regle de prevention: quand une page utilise `content.cloneNode(true)` pour render un template, verifier que `openPage()` appelle cette fonction avant `renderPerformance()`. Pattern: `section.appendChild(tmpl.content.cloneNode(true)); section._rendered = true;` avec flag _rendered pour eviter les doubles clones.
+- Test de non-regression: naviguer vers Stats → le contenu de la page apparait (pas d'ecran blanc).
 - Fichiers a surveiller: `static/js/split/009_navigation.js`, `templates/partials/pages/stats.html`.
 
 ### BUG-20260501-10 - Widget drag drop intercepte les clics sur les cellules calendrier
@@ -389,3 +390,5 @@ Format obligatoire d'une lesson:
 ### CONVENTION-20260501 - exit_price = TP (consolidation champs)
 - Regle: Dans Cockpit v3, exit_price et take_profit designent la meme chose (le prix de sortie = take-profit). Le backend normalise `exit_price` → `take_profit` dans `05_payload_normalizers.py`. Le frontend affiche le champ `exit_price` sous le label "TP" partout (editeur inline section Niveaux, tableau journal, card back). Le champ `take_profit` / "Target" est supprime de l'editeur pour eviter la confusion. La DB conserve les deux colonnes pour retrocompatibilite.
 - Fichiers a surveiller: `app_parts/05_payload_normalizers.py`, `static/js/split/059_trade_editor_controller.js`, `templates/partials/pages/journal/table.html`, `static/js/split/056_journal_day_trade_cards.js`.
+
+

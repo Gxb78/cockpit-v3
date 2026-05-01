@@ -9,7 +9,7 @@
   left: calc(var(--lpanel-w) + (100vw - var(--lpanel-w) - var(--rpanel-w)) / 2);
   z-index: 70;
   width: min(var(--review-deck-w), calc(100vw - var(--lpanel-w) - var(--rpanel-w) - 48px));
-  max-height: 88vh;
+  max-height: 88dvh;
   overflow: visible;
   transform: translate(-50%, -50%);
   pointer-events: auto;
@@ -33,7 +33,7 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   top: 50%;
   left: 50%;
   width: min(1120px, calc(100vw - 32px));
-  max-height: 92vh;
+  max-height: 92dvh;
 }
 
 .journal-day-trades-grid {
@@ -41,7 +41,7 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   grid-template-columns: repeat(auto-fill, minmax(430px, 1fr));
   justify-content: center;
   gap: 24px;
-  max-height: 88vh;
+  max-height: 88dvh;
   overflow-y: auto;
   padding: 8px 10px 24px;
   perspective: 1500px;
@@ -83,7 +83,7 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
 }
 
 .journal-flip-card {
-  height: min(720px, calc(88vh - 34px));
+  height: min(720px, calc(88dvh - 34px));
   min-height: 620px;
   border: 0;
   background: transparent;
@@ -204,11 +204,11 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
 }
 
 .journal-trade-shot {
-  height: clamp(300px, 43vh, 382px);
+  height: clamp(300px, 43dvh, 382px);
   flex: 0 0 auto;
   border-radius: 27px;
   border: 1px solid rgba(13, 19, 31, 0.08);
-  background-color: #e8edf3;
+  background-color: var(--bg-2);
   background-position: center;
   background-size: cover;
   box-shadow:
@@ -394,7 +394,7 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
 .journal-back-shot {
   border-radius: 18px;
   border: 1px solid #e7eaf0;
-  background: #f7f8fb;
+  background: var(--surface-solid);
   overflow: hidden;
   cursor: pointer;
   transition: border-color 0.16s, box-shadow 0.16s;
@@ -717,14 +717,14 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
 
 .jedit-panel {
   width: 100%;
-  max-height: min(860px, 92vh);
+  max-height: min(860px, 92dvh);
   overflow: hidden;
   border-radius: 38px;
   border: 1px solid rgba(255,255,255,0.92);
   background:
     radial-gradient(circle at 18% 0%, rgba(0,197,220,0.10), transparent 34%),
     radial-gradient(circle at 95% 18%, rgba(17,24,39,0.08), transparent 28%),
-    #f7f8fb;
+    var(--surface-solid);
   box-shadow:
     0 2px 6px rgba(0,0,0,0.06),
     inset 0 1px 0 rgba(255,255,255,0.96);
@@ -744,7 +744,7 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   min-height: 260px;
   border-radius: 28px;
   border: 1px solid rgba(13,19,31,0.08);
-  background-color: #e8edf3;
+  background-color: var(--bg-2);
   background-position: center;
   background-size: cover;
   box-shadow:
@@ -926,7 +926,7 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
 }
 
 .jedit-scroll {
-  max-height: calc(min(860px, 92vh) - 322px);
+  max-height: calc(min(860px, 92dvh) - 322px);
   overflow-y: auto;
   padding: 22px;
   scrollbar-width: thin;
@@ -1154,7 +1154,7 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   }
 
   .jedit-panel {
-    max-height: 92vh;
+    max-height: 92dvh;
     border-radius: 32px;
   }
 
@@ -1195,7 +1195,7 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   }
 
   .jedit-scroll {
-    max-height: calc(92vh - 310px);
+    max-height: calc(92dvh - 310px);
   }
 }
 
@@ -1205,12 +1205,12 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
     --rpanel-w: 0px;
     left: 50%;
     width: min(94vw, 470px);
-    max-height: 88vh;
+    max-height: 88dvh;
   }
 
   .journal-day-trades.is-editing {
     width: min(96vw, 560px);
-    max-height: 92vh;
+    max-height: 92dvh;
   }
 
   .journal-day-trades-grid {
@@ -1218,7 +1218,7 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   }
 
   .journal-flip-card {
-    height: min(690px, calc(88vh - 20px));
+    height: min(690px, calc(88dvh - 20px));
     min-height: 590px;
   }
 
@@ -1229,7 +1229,7 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
 
   .jedit-panel {
     width: 100%;
-    max-height: 92vh;
+    max-height: 92dvh;
     border-radius: 28px;
   }
 
@@ -1255,7 +1255,7 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   }
 
   .jedit-scroll {
-    max-height: max(260px, calc(92vh - 470px));
+    max-height: max(260px, calc(92dvh - 470px));
     padding: 14px;
   }
 

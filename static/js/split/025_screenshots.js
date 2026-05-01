@@ -17,7 +17,6 @@ function getPasteMarkdownTarget(target) {
   const field = target.closest("textarea, input[type='text']");
   if (!field) return null;
   if (field.id === "tagsInputField") return null;
-  if (!field.closest("#entryModal")) return null;
   return field;
 }
 
@@ -60,7 +59,6 @@ async function onClipboardImagePaste(e) {
     return;
   }
 
-  if ($("#entryModal")?.classList.contains("hidden")) return;
   e.preventDefault();
   const targetField = getPasteMarkdownTarget(e.target);
   const shots = await handleFiles(files);
@@ -129,7 +127,8 @@ async function handleFiles(fileList) {
 async function ensureTradeContextForUpload() {
   if (state.currentTradeId) return true;
 
-  const tradeFormOpen = !$("#tradeFormSection")?.classList.contains("hidden");
+  const tradeFormSection = $("#tradeFormSection");
+  const tradeFormOpen = tradeFormSection && !tradeFormSection.classList.contains("hidden");
   if (!tradeFormOpen) {
     toast("Ouvre ou crée un trade pour lui attacher des screenshots", "error");
     return false;
@@ -146,7 +145,7 @@ async function ensureTradeContextForUpload() {
     state.modalDataDirty = true;
     if (typeof loadAll === "function") setTimeout(loadAll, 100);
     const day = await api(`/api/days/${state.currentDayId}`);
-    renderTradesList(day.trades || []);
+    if (typeof renderTradesList === "function") renderTradesList(day.trades || []);
     toast("Trade créé automatiquement pour ajouter le screenshot", "success");
     return true;
   } catch (err) {

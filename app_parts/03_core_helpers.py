@@ -192,30 +192,33 @@ def _validate_trade_semantics(payload):
     stop = _as_float(payload.get("stop_loss"))
     target = _as_float(payload.get("take_profit"))
     direction = _infer_direction_for_validation(payload)
-
-    if direction == "long":
-        if entry is not None and stop is not None and not (stop < entry):
-            errors.append("Stop au-dessus du prix d'entree")
-        if entry is not None and target is not None and not (target > entry):
-            errors.append("TP en dessous du prix d'entree")
-    elif direction == "short":
-        if entry is not None and stop is not None and not (stop > entry):
-            errors.append("Stop en dessous du prix d'entree")
-        if entry is not None and target is not None and not (target < entry):
-            errors.append("TP au-dessus du prix d'entree")
-
-    if direction and entry is not None and stop is not None and target is not None:
-        if direction == "long" and not (target > entry > stop):
-            errors.append("TP sous l'entree ou Stop au-dessus")
-        if direction == "short" and not (target < entry < stop):
-            errors.append("TP au-dessus ou Stop en dessous")
-
-    pnl = _as_float(payload.get("pnl"))
     is_win = payload.get("is_win")
     if isinstance(is_win, bool):
         is_win = 1 if is_win else 0
-    elif isinstance(is_win, str) and is_win.strip() in {"0", "1"}:
+    elif isinstance(is_win, str) and is_win.strip() in ("0", "1"):
         is_win = int(is_win.strip())
+
+    # Si is_win est explicitement fourni, on saute la validation prix
+    # car l'utilisateur nous dit le resultat (ex: short perdant = exit > entry)
+    if is_win not in (0, 1):
+        if direction == "long":
+            if entry is not None and stop is not None and not (stop < entry):
+                errors.append("Stop au-dessus du prix d'entree")
+            if entry is not None and target is not None and not (target > entry):
+                errors.append("TP en dessous du prix d'entree")
+        elif direction == "short":
+            if entry is not None and stop is not None and not (stop > entry):
+                errors.append("Stop en dessous du prix d'entree")
+            if entry is not None and target is not None and not (target < entry):
+                errors.append("TP au-dessus du prix d'entree")
+
+        if direction and entry is not None and stop is not None and target is not None:
+            if direction == "long" and not (target > entry > stop):
+                errors.append("TP sous l'entree ou Stop au-dessus")
+            if direction == "short" and not (target < entry < stop):
+                errors.append("TP au-dessus ou Stop en dessous")
+
+    pnl = _as_float(payload.get("pnl"))
     if is_win in (0, 1) and pnl is not None and pnl != 0:
         if pnl > 0 and is_win == 0:
             errors.append("PnL positif mais marque en perte")
@@ -238,9 +241,16 @@ _CONTRACT_MULTIPLIERS = {
 
 def _auto_calc_pnl(payload, day_id, db):
     """Calcule le PnL depuis entry/exit/size avec la direction pour le signe."""
-    if payload.get("pnl") is not None:
-        payload.get("leverage")
+    pnl = payload.get("pnl")
+    exit_price = payload.get("exit_price")
+    
+    # Si PnL deja calcule ET qu'on a un exit_price, on recalcule quand meme
+    # (pnl=0 est la valeur par defaut, pas un vrai calcul)
+    if pnl is not None and pnl != 0 and exit_price is not None:
+        # PnL deja calcule explicitement - ne pas recalculer
         return
+    if exit_price is None:
+        return  # Pas d'exit_price → impossible de calculer le PnL
 
     entry = payload.get("entry_price")
     exit_ = payload.get("exit_price")

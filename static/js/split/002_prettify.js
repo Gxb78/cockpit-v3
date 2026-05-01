@@ -7,7 +7,7 @@ function defaultSettingsState() {
     profile: { pseudo: "trader" },
     custom_strategies: [],
     custom_tags: [],
-    preferences: { animations: true, dark_mode: false },
+    preferences: { animations: true, dark_mode: false, theme: 'default' },
   };
 }
 
@@ -68,6 +68,7 @@ function sanitizeSettings(raw) {
       dark_mode: typeof raw?.preferences?.dark_mode === "boolean"
         ? raw.preferences.dark_mode
         : defaults.preferences.dark_mode,
+      theme: (["default", "claude"].includes(raw?.preferences?.theme) ? raw.preferences.theme : "default"),
     },
   };
 }
@@ -121,11 +122,17 @@ function applyProfileSetting() {
 function applyVisualSettings() {
   const prefersDark = state.settings?.preferences?.dark_mode !== false;
   const prefersAnimations = state.settings?.preferences?.animations !== false;
+  const theme = state.settings?.preferences?.theme || 'default';
   document.body.classList.toggle("light-mode", !prefersDark);
   document.body.classList.toggle("reduce-motion", !prefersAnimations);
+  // Appliquer le theme (default, claude, etc.)
+  document.body.classList.remove("theme-default", "theme-claude");
+  document.body.classList.add("theme-" + theme);
   // Sync checkbox Settings si visible
   var cb = document.getElementById("prefDarkMode");
   if (cb) cb.checked = prefersDark;
+  var themeSel = document.getElementById("prefTheme");
+  if (themeSel) themeSel.value = theme;
 }
 
 function syncStrategyLabels() {
@@ -215,6 +222,8 @@ function renderSettingsPage() {
   if (pseudo) pseudo.value = state.settings.profile?.pseudo || "";
   if (prefAnimations) prefAnimations.checked = state.settings.preferences?.animations !== false;
   if (prefDarkMode) prefDarkMode.checked = state.settings.preferences?.dark_mode !== false;
+  var themeSel = $("#prefTheme");
+  if (themeSel) themeSel.value = state.settings.preferences?.theme || "default";
   renderSettingsStrategies();
   renderSettingsTags();
 }

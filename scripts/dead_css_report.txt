@@ -1,0 +1,123 @@
+═══════════════════════════════════════════════════════════════
+  DEAD CSS SCANNER — RAPPORT D'ANALYSE
+  Projet: Journal
+  Date: 2026-05-01
+  Fichiers CSS analysés: 52
+  Fichiers HTML/JS parcourus: 123
+═══════════════════════════════════════════════════════════════
+
+🔴 FICHIERS CSS 100% ORPHELINS (suspects prioritaires)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  1. static/css/split/011a_copilot_placeholder.css
+     → 4 classes CSS jamais référencées dans templates/ ni static/js/
+     → .copilot-empty  .copilot-icon  .prompt  .prompt-list
+     → Commentaire: "Copilot page (placeholder)" — page non implémentée ?
+     → PEUT ÊTRE SUPPRIMÉ sans impact
+
+🟡 FICHIERS AVEC SÉLECTEURS PARTIELLEMENT ORPHELINS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  2. static/css/split/040_trade_cockpit_cards.css
+     → 46% des sélecteurs orphelins
+     → .trade-card-body  .trade-card-diagnostics  .trade-card-kpis
+       .trade-card-note  .trade-card-pillline  .trade-card-score
+       .trade-card-shot-empty  .trade-card-status  .trade-card-subtitle
+       .trade-card-title  .trade-card-topbar  .trade-kpi
+     → Ces classes trade-card-* sont introuvables dans templates et JS
+
+  3. static/css/split/021_btn_add_trade_svg.css
+     → 38% des sélecteurs orphelins
+     → .trade-card-body  .trade-card-foot  .trade-card-head
+       .trade-card-kpis  .trade-card-media-bottom  .trade-card-media-top
+       .trade-card-note  .trade-card-shot-empty  .trade-card-title
+       .trade-chip-strategy  .trade-direction  .trade-kpi
+       .trade-pnl-badge  .trade-rr-bar  .fill-track
+     → Même famille trade-card-* — possiblement du code legacy
+
+  4. static/css/split/018_templates_menu_hidden.css
+     → 36% des sélecteurs orphelins
+     → .templates-menu  .templates-menu-section  .tpl-divider
+       .tpl-empty  .tpl-icon  .tpl-item  .tpl-name  .tpl-prompt
+       .tpl-prompt-actions  .tpl-prompt-box  .tpl-x  .month-label-btn
+     → Système de templates menu non utilisé dans les templates actuels
+
+  5. static/css/split/050_trade_hero_card.css
+     → 35% des sélecteurs orphelins
+     → .thc--card  .thc--flip-back  .thc--flip-front  .thc-metrics-row
+     → Les classes "thc--*" ne sont pas référencées
+
+  6. static/css/split/024_wiz_card_hover.css
+     → 32% des sélecteurs orphelins
+     → .wiz-choice-btn  .wiz-choice-row  .wiz-ctx-banner
+       .wiz-ctx-banner-icon  .wiz-ctx-banner-text  .wiz-stdv-hint
+       .wiz-stdv-input  .wiz-stdv-row
+     → Sous-sélecteurs du wizard qui ne sont plus utilisés
+
+  7. static/css/split/032_priority1_app_shell.css
+     → 29% des sélecteurs orphelins
+     → .app-topbar  .app-topbar__actions  .app-topbar__eyebrow
+       .app-topbar__identity  .app-topbar__subtitle  .app-topbar__title
+       .shell-action  .shell-action--icon  .shell-action--primary
+     → Structure d'App Shell non utilisée
+
+  8. static/css/split/017_field_toggle_svg.css
+     → 27% des sélecteurs orphelins
+     → .templates-btn  .templates-menu  .templates-wrap
+     → Même famille "templates" que le fichier 018
+
+🔵 WARNINGS ADDITIONNELS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  9. static/css/split/049_metric_pill.css — metric-pill--sm (42% orphelin)
+ 10. static/css/split/027_ai_panel.css — .side-right-* (42% orphelin)
+ 11. static/css/split/046_journal_day_trade_cards.css — jcard-thesis-cell, is-saving (33%)
+ 12. static/css/split/047_trade_form_light_cards.css — rr-bad/good/ok, wiz-exiting/mode-bar/mode-btn (33%)
+ 13. static/css/split/041_day_modal_cockpit.css — 33% (mais surtout des valeurs numériques)
+ 14. static/css/split/048_card_surface.css — card-surface--enter/focusable/lg/warm (26%)
+ 15. static/css/split/035_priority4_overlays_menus.css — templates-menu, tpl-item, tpl-prompt-box (13%)
+ 16. static/css/split/030_ai_chat.css — .ai-chat-msg-* (10%)
+ 17. static/css/split/026_trade_card_pm_btn_hover.css — .trade-card-pm-btn (50%)
+ 18. static/css/split/009_chart_tt_value_pos.css — .pair-head/item/name/pnl/stats (19%)
+ 19. static/css/split/001_cockpit_grid.css — .tpl-item (3%)
+ 20. static/css/split/002_instr_chip_hover.css — .rail-settings-quick (3%)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RÉSUMÉ
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Niveau    Compteur
+────────────────────────────────────────────────
+🔴 Orphelin (100%)    1 fichier
+🟡 Partiel (30-79%)   7 fichiers
+🔵 Minor (<30%)       ~15 fichiers
+✅ Sains               ~29 fichiers
+
+RECOMMANDATIONS PRIORITAIRES:
+
+1. SUPPRIMER immédiatement: 011a_copilot_placeholder.css
+   → 100% mort, 4 classes jamais utilisées nulle part
+
+2. ANALYSER: 040_trade_cockpit_cards.css, 021_btn_add_trade_svg.css,
+   050_trade_hero_card.css
+   → Gros blocs trade-card-* / thc-* qui semblent être du code legacy
+   → Vérifier si ces composants ont été migrés vers une autre convention
+   → Si oui, le CSS peut être supprimé
+
+3. REVÉRIFIER: 018_templates_menu_hidden.css, 017_field_toggle_svg.css,
+   035_priority4_overlays_menus.css
+   → Système "templates" avec tpl-* visiblement inutilisé
+   → Possiblement du code de fonctionnalité retirée
+
+4. WIZARD: 024_wiz_card_hover.css, 047_trade_form_light_cards.css (partie wiz-*)
+   → Sélecteurs du wizard non référencés
+   → Vérifier si wiz-exiting, wiz-mode-bar, wiz-mode-btn sont encore utilisés
+
+5. APP SHELL: 032_priority1_app_shell.css
+   → Structure .app-topbar / .shell-action non utilisée
+   → Possiblement remplacée par la structure cockpit/rail
+
+⚠️ Note: Ces résultats sont basés sur une recherche textuelle dans les templates .html
+et les fichiers .js. Il est possible que certains sélecteurs soient injectés
+dynamiquement via JavaScript (ex: classList.add()). Vérification manuelle
+recommandée avant suppression.

@@ -1,3 +1,45 @@
+/* ============================================================
+   WIZARD — Refonte taille fixe 560×620
+   ============================================================ */
+.wiz { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); }
+.wiz-panel {
+  width: min(560px, 94vw);
+  height: 620px;
+  max-height: 92dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-radius: 27px;
+  border: 1px solid var(--border);
+  box-shadow: 0 38px 84px rgba(0,0,0,0.44), 0 16px 34px rgba(10,18,28,0.24);
+  overflow: hidden;
+}
+.wiz-progress { height: 3px; background: var(--border); flex-shrink: 0; }
+.wiz-progress-fill { height: 100%; background: var(--cyan); transition: width 0.3s var(--ease); border-radius: 0 2px 2px 0; }
+.wiz-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 18px 10px;
+  flex-shrink: 0;
+}
+.wiz-header-center { flex: 1; text-align: center; }
+.wiz-step-indicator { font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.wiz-step-title { font-size: 1.05rem; font-weight: 700; color: var(--text); margin: 2px 0 0; }
+.wiz-btn-icon { background: transparent; border: none; cursor: pointer; color: var(--text-muted); padding: 6px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: color, background 0.14s var(--ease); }
+.wiz-btn-icon:hover { color: var(--text); background: var(--surface-hover); }
+.wiz-btn-icon svg { width: 18px; height: 18px; }
+.wiz-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 22px 18px;
+  scrollbar-width: thin;
+}
+.wiz-footer {
+  padding: 12px 18px 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+}
+
 /* Direction toggle */
 .wiz-direction-toggle { display: flex; gap: 10px; margin-bottom: 18px; }
 .wiz-dir-btn {
@@ -90,13 +132,13 @@
 .wiz-star:hover { transform: scale(1.2); }
 .wiz-star.on svg { fill: var(--amber); }
 
-/* Footer */
+/* Footer — deja defini dans le bloc taille fixe ci-dessus
 .wiz-footer {
   padding: 14px 20px 18px;
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   flex-shrink: 0;
   border-top: 1px solid var(--border);
-}
+} */
 .wiz-skip-btn {
   background: transparent;
   border: 1px solid var(--border);

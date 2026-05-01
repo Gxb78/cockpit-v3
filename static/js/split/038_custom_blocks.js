@@ -212,9 +212,8 @@ function applyNarrationToForm(data) {
   // Champs du jour
   if (d._htf_bias) setPill("htf_bias", d._htf_bias);
 
-  // Champs du trade (si le formulaire de trade est ouvert)
-  const tradeFormOpen = !$("#tradeFormSection")?.classList.contains("hidden");
-  if (tradeFormOpen) {
+  // Champs du trade (appliqués automatiquement)
+  {
     if (d.strategy)        setPill("strategy",         d.strategy);
     if (d.direction)       setPill("direction",        d.direction);
 

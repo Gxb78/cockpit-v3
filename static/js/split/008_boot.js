@@ -49,7 +49,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindCalendarMonthFocusToggle();
   bindBreakdownSort();
   bindFilter();
-  bindModal();
   bindExport();
   bindGlobalKeys();
   bindCmdk();
@@ -57,8 +56,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindTagsInput();
   bindQuality();
   bindRRPreview();
-  bindMidnightChallenge();
-  initBlocks();
+  if (typeof bindMidnightChallenge === "function") bindMidnightChallenge();
   bindMarkdownToggles();
   bindAutosave();
   bindHashtagSync();

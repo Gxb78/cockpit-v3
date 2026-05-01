@@ -486,7 +486,7 @@ function defaultSettingsState() {
     profile: { pseudo: "trader" },
     custom_strategies: [],
     custom_tags: [],
-    preferences: { animations: true, dark_mode: false },
+    preferences: { animations: true, dark_mode: false, theme: 'default' },
   };
 }
 
@@ -547,6 +547,7 @@ function sanitizeSettings(raw) {
       dark_mode: typeof raw?.preferences?.dark_mode === "boolean"
         ? raw.preferences.dark_mode
         : defaults.preferences.dark_mode,
+      theme: (["default", "claude"].includes(raw?.preferences?.theme) ? raw.preferences.theme : "default"),
     },
   };
 }
@@ -600,11 +601,17 @@ function applyProfileSetting() {
 function applyVisualSettings() {
   const prefersDark = state.settings?.preferences?.dark_mode !== false;
   const prefersAnimations = state.settings?.preferences?.animations !== false;
+  const theme = state.settings?.preferences?.theme || 'default';
   document.body.classList.toggle("light-mode", !prefersDark);
   document.body.classList.toggle("reduce-motion", !prefersAnimations);
+  // Appliquer le theme (default, claude, etc.)
+  document.body.classList.remove("theme-default", "theme-claude");
+  document.body.classList.add("theme-" + theme);
   // Sync checkbox Settings si visible
   var cb = document.getElementById("prefDarkMode");
   if (cb) cb.checked = prefersDark;
+  var themeSel = document.getElementById("prefTheme");
+  if (themeSel) themeSel.value = theme;
 }
 
 function syncStrategyLabels() {
@@ -694,6 +701,8 @@ function renderSettingsPage() {
   if (pseudo) pseudo.value = state.settings.profile?.pseudo || "";
   if (prefAnimations) prefAnimations.checked = state.settings.preferences?.animations !== false;
   if (prefDarkMode) prefDarkMode.checked = state.settings.preferences?.dark_mode !== false;
+  var themeSel = $("#prefTheme");
+  if (themeSel) themeSel.value = state.settings.preferences?.theme || "default";
   renderSettingsStrategies();
   renderSettingsTags();
 }
@@ -780,6 +789,8 @@ function savePreferenceSettings() {
   if (!state.settings) return;
   state.settings.preferences.animations = !!$("#prefAnimations")?.checked;
   state.settings.preferences.dark_mode = !!$("#prefDarkMode")?.checked;
+  var themeVal = $("#prefTheme")?.value || "default";
+  if (["default", "claude"].includes(themeVal)) state.settings.preferences.theme = themeVal;
   saveSettingsState();
   applySettingsState();
   if (state.currentPage === "stats") renderPerformance();
@@ -1922,7 +1933,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindCalendarMonthFocusToggle();
   bindBreakdownSort();
   bindFilter();
-  bindModal();
   bindExport();
   bindGlobalKeys();
   bindCmdk();
@@ -1930,8 +1940,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindTagsInput();
   bindQuality();
   bindRRPreview();
-  bindMidnightChallenge();
-  initBlocks();
+  if (typeof bindMidnightChallenge === "function") bindMidnightChallenge();
   bindMarkdownToggles();
   bindAutosave();
   bindHashtagSync();
@@ -2643,7 +2652,18 @@ function bindCalendarGridActions(grid) {
   grid.addEventListener("click", (e) => {
     const dayEl = e.target.closest(".day");
     if (!dayEl || !grid.contains(dayEl)) return;
-    if (dayEl.dataset.otherMonth === "1") return;
+    if (dayEl.dataset.otherMonth === "1") {
+      // Naviguer vers le mois clique
+      var otherKey = dayEl.dataset.date;
+      if (otherKey) {
+        var parts = otherKey.split("-");
+        if (parts.length >= 2) {
+          state.currentMonth = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1);
+          loadMonth();
+        }
+      }
+      return;
+    }
     const key = dayEl.dataset.date;
     if (!key) return;
     const info = _calendarByDayCache[key];
@@ -3041,241 +3061,43 @@ function closeDayPicker() {
   document.getElementById("dayPickerOverlay")?.remove();
 }
 
-// ---- 017_modal_gestion_globale.js ----
-// ---------- Modal : gestion globale ----------
-
-var _lastFocused = null; // element qui a ouvert la modale (pour restauration)
-var _modalScrollPerfTimer = null;
-
-function bindModalScrollPerf() {
-  const modal = $("#entryModal");
-  const scroller = modal?.querySelector(".modal-scroll");
-  if (!modal || !scroller || scroller.dataset.perfBound === "1") return;
-
-  const markScrolling = () => {
-    modal.classList.add("is-scrolling");
-    if (_modalScrollPerfTimer) clearTimeout(_modalScrollPerfTimer);
-    _modalScrollPerfTimer = setTimeout(() => {
-      modal.classList.remove("is-scrolling");
-      _modalScrollPerfTimer = null;
-    }, 120);
-  };
-
-  scroller.addEventListener("scroll", markScrolling, { passive: true });
-  scroller.addEventListener("wheel", markScrolling, { passive: true });
-  scroller.addEventListener("touchmove", markScrolling, { passive: true });
-  scroller.dataset.perfBound = "1";
-}
-
-function sanitizeEntryModalSticky() {
-  const modal = $("#entryModal");
-  if (!modal) return;
-  const body = modal.querySelector(".modal-body");
-  const scroll = modal.querySelector(".modal-scroll");
-  const sticky = modal.querySelector(".modal-sticky");
-  if (!sticky) return;
-
-  // Ne garder dans la zone sticky que le panel narration et le header des trades.
-  const keep = new Set(["narrationPanel", "tradesSectionHeader"]);
-  [...sticky.children].forEach((node) => {
-    if (!keep.has(node.id)) node.remove();
-  });
-
-  // Defense en profondeur: supprimer toute section trades dupliquee hors zone scroll.
-  const keepFirst = (selector) => {
-    const nodes = [...modal.querySelectorAll(selector)];
-    nodes.slice(1).forEach((n) => n.remove());
-  };
-  keepFirst(".trades-section-header");
-  keepFirst("#tradesList");
-  keepFirst("#tradeFormSection");
-  keepFirst("#addTradeBtn");
-
-  modal.querySelectorAll(".trades-section-header, #tradesList, #tradeFormSection, #addTradeBtn")
-    .forEach((node) => { if (!scroll && !sticky || (scroll && !scroll.contains(node) && sticky && !sticky.contains(node))) node.remove(); });
-
-  // Nettoie aussi les anciens footers (version legacy) si presents.
-  if (body) {
-    body.querySelectorAll("button").forEach((btn) => {
-      const label = (btn.textContent || "").trim().toLowerCase();
-      const isHeaderClose = !!btn.closest(".modal-header");
-      const isTradeFormAction = !!btn.closest("#tradeFormSection");
-      if (isHeaderClose || isTradeFormAction) return;
-      if (label === "fermer" || label.includes("supprimer le jour") || label.includes("supprimer ce jour")) {
-        btn.remove();
-      }
-    });
-  }
-}
-
-function setModalTradeFocus(enabled) {
-  const modal = $("#entryModal");
-  if (!modal) return;
-  modal.classList.toggle("modal-trade-focus", !!enabled);
-}
-
-/**
- * Piege le focus clavier a l interieur d un conteneur.
- * Appele sur keydown du document quand la modale est ouverte.
- */
-function _trapFocus(e, containerId) {
-  var container = document.getElementById(containerId);
-  if (!container || container.classList.contains("hidden")) return;
-  var focusable = container.querySelectorAll(
-    'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-  );
-  if (focusable.length === 0) return;
-  var first = focusable[0];
-  var last  = focusable[focusable.length - 1];
-  if (e.key === "Tab") {
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  }
-}
-
-function bindModal() {
-  sanitizeEntryModalSticky();
-  bindModalScrollPerf();
-
-  // Focus trap quand la modale est ouverte
-  document.addEventListener("keydown", function (e) {
-    if (e.key === "Tab") _trapFocus(e, "entryModal");
-  });
-
-  // Délégation : un seul listener pour tous les [data-close]
-  $("#entryModal")?.addEventListener("click", function(e) {
-    if (e.target.closest("[data-close]")) closeModal();
-  });
-  // Delete day
-  $("#deleteBtn")?.addEventListener("click", deleteDay);
-  // Add trade button
-  $("#addTradeBtn")?.addEventListener("click", () => openTradeForm(null));
-  // Trade form
-  $("#tradeForm")?.addEventListener("submit", submitTrade);
-  $("#deleteTradeBtn")?.addEventListener("click", deleteTrade);
-  $("#cancelTradeBtn")?.addEventListener("click", closeTradeForm);
-  $("#closeTradeFormBtn")?.addEventListener("click", closeTradeForm);
-  // Screenshots
-  const zone  = $("#uploadZone");
-  const input = $("#fileInput");
-  if (zone && input) {
-    zone.addEventListener("click", () => input.click());
-    input.addEventListener("change", e => handleFiles(e.target.files));
-    ["dragenter","dragover"].forEach(ev =>
-      zone.addEventListener(ev, e => { e.preventDefault(); zone.classList.add("dragover"); }));
-    ["dragleave","drop"].forEach(ev =>
-      zone.addEventListener(ev, e => { e.preventDefault(); zone.classList.remove("dragover"); }));
-    zone.addEventListener("drop", e => handleFiles(e.dataTransfer.files));
-  }
-  // Paste screenshot (Ctrl+V) anywhere in the trade wizard
-  window.addEventListener("paste", onClipboardImagePaste, true);
-  // Lightbox
-  $("#lightbox")?.addEventListener("click", function () {
-    $("#lightbox").classList.add("hidden");
-    if (_lastFocused) { _lastFocused.focus(); _lastFocused = null; }
-  });
-}
-
-function openNewDay(dateKey) {
-  _lastFocused = document.activeElement; // memoriser l'element qui a ouvert
-  sanitizeEntryModalSticky();
-  setModalTradeFocus(false);
-  closeDayPicker();
-  state.currentDayId   = null;
-  state.currentTradeId = null;
-  state.isSavingDay    = false;
-  state.isSavingTrade  = false;
-  state.modalDataDirty = false;
-
-  resetDayForm();
-  resetTradeForm();
-  closeTradeFormUI();
-
-  $("#dayId").value           = "";
-  $("#entryDate").value       = dateKey;
-  $("#entryInstrument").value = _lastInstrument();
-  $("#modalTitle").textContent = "Nouvelle journee";
-  $("#deleteBtn")?.classList.add("hidden");
-  $("#tradesList").innerHTML = "";
-  var _addBtn = $("#addTradeBtn");
-  if (_addBtn) { _addBtn.disabled = false; _addBtn.title = ""; }
-
-  state.initialDayPayload = buildDayPayload();
-  state.initialDayState = snapshotDayForm();
-  $("#entryModal").classList.remove("hidden");
-  if (typeof syncDayContextMidnightVisibility === "function") syncDayContextMidnightVisibility();
-  setTimeout(() => { enhanceSelects($("#entryModal")); }, 0);
-}
-
+// ---- 017_open_existing_day.js ----
+// ---------- openExistingDay : navigation vers le journal pour un jour donne ----------
+// Remplace l'ancienne version qui ouvrait entryModal (supprimee)
 function openExistingDay(day) {
-  sanitizeEntryModalSticky();
-  setModalTradeFocus(false);
-  closeDayPicker();
-  state.currentDayId   = day.id;
-  state.currentTradeId = null;
-  state.isSavingDay    = false;
-  state.isSavingTrade  = false;
-  state.modalDataDirty = false;
+  if (!day || !day.date) return;
+  state.journalFocusDate = day.date;
+  state.currentDayId = day.id;
 
-  resetDayForm();
-  resetTradeForm();
-  closeTradeFormUI();
-
-  // Remplir le formulaire du jour
-  $("#dayId").value     = day.id;
-  $("#entryDate").value = day.date;
-  $("#entryInstrument").value = day.instrument;
-  $("#htfContext").value    = day.htf_context  ?? "";
-  $("#dailyNotes").value    = day.daily_notes   ?? "";
-  setPill("htf_bias", day.htf_bias);
-
-  $("#modalTitle").textContent = `${day.instrument} - ${day.date}`;
-  $("#deleteBtn")?.classList.remove("hidden");
-  var _ab2 = $("#addTradeBtn");
-  if (_ab2) _ab2.disabled = false;
-
-  renderTradesList(day.trades || []);
-
-  state.initialDayPayload = buildDayPayload();
-  state.initialDayState = snapshotDayForm();
-  $("#entryModal").classList.remove("hidden");
-  if (typeof syncDayContextMidnightVisibility === "function") syncDayContextMidnightVisibility();
-  setTimeout(() => { enhanceSelects($("#entryModal")); }, 0);
-}
-
-async function closeModal() {
-  if (state.isSavingDay || state.isSavingTrade) return;
-  // Autosave du jour si modifie
-  if (dayFormChanged() && $("#dayId").value) {
-    await saveDayContext(false);
+  // Mettre a jour le contexte du jour dans le widget Today si visible
+  var dayForm = $("#dayForm");
+  if (dayForm) {
+    $("#dayId").value = day.id || "";
+    $("#entryDate").value = day.date || "";
+    $("#entryInstrument").value = day.instrument || "";
+    $("#htfContext").value = day.htf_context ?? "";
+    $("#dailyNotes").value = day.daily_notes ?? "";
+    if (typeof setPill === "function") setPill("htf_bias", day.htf_bias);
   }
-  closeModalDirect();
-}
 
-function closeModalDirect() {
-  closeDayPicker();
-  setModalTradeFocus(false);
-  $("#entryModal").classList.add("hidden");
-  const shouldRefresh = !!state.modalDataDirty;
-  state.currentDayId   = null;
-  state.currentTradeId = null;
-  state.isSavingDay    = false;
-  state.isSavingTrade  = false;
-  state.modalDataDirty = false;
-  state.initialDayState = null;
-  state.initialDayPayload = null;
-  // Restaurer le focus sur l'element qui a ouvert la modale
-  if (_lastFocused) { _lastFocused.focus(); _lastFocused = null; }
-  if (shouldRefresh) {
-    document.dispatchEvent(new CustomEvent("trade:saved"));
-    loadAll();
-  } else if (typeof renderTodayContextWidget === "function") {
-    renderTodayContextWidget(true);
+  // Naviguer vers la page journal
+  if (typeof goPage === "function") {
+    goPage("journal");
+  }
+
+  // Forcer le focus sur le jour dans le calendrier journal
+  if (typeof loadMonth === "function") {
+    if (state.currentPage !== "journal") {
+      state.currentMonth = parseDateKey(day.date) || state.currentMonth;
+    }
+    loadMonth();
+  }
+
+  // Afficher les trades du jour si le calendrier est pret
+  if (day.trades && day.trades.length && typeof renderJournalDayTrades === "function") {
+    setTimeout(function () {
+      renderJournalDayTrades(day.date, [day]);
+    }, 200);
   }
 }
 
@@ -3369,20 +3191,16 @@ async function saveDayContext(isNew) {
       $("#deleteBtn")?.classList.remove("hidden");
       var _ab = $("#addTradeBtn");
       if (_ab) { _ab.disabled = false; _ab.title = ""; }
-      if ($("#entryModal") && !$("#entryModal").classList.contains("hidden")) {
-        $("#modalTitle").textContent = `${saved.instrument} - ${saved.date}`;
-      }
+      $("#modalTitle").textContent = `${saved.instrument} - ${saved.date}`;
       // Pour une création, tous les champs sont "changés"
       changedFields = Object.keys(fullPayload).filter(function(k) { return fullPayload[k] != null && fullPayload[k] !== ''; });
     } else {
       saved = await api(`/api/days/${activeId}`,
         { method: "PUT", body: JSON.stringify(payload) });
       if (payload.date || payload.instrument) {
-if ($("#entryModal") && !$("#entryModal").classList.contains("hidden") && (payload.date || payload.instrument)) {
         const curDate = $("#entryDate").value;
         const curInstr = $("#entryInstrument").value;
         $("#modalTitle").textContent = `${curInstr} - ${curDate}`;
-      }
       }
     }
     state.modalDataDirty = true;
@@ -3456,7 +3274,9 @@ async function deleteDay() {
     await api(`/api/days/${state.currentDayId}`, { method: "DELETE" });
     state.modalDataDirty = true;
     toast("Journée supprimée", "success");
-    closeModalDirect();
+    // Recharger les donnees apres suppression
+    if (typeof loadMonth === "function") loadMonth();
+    if (typeof loadAll === "function") loadAll();
   } catch (err) { toast(err.message, "error"); }
 }
 
@@ -3551,892 +3371,6 @@ function planAlignmentLabel(alignment) {
   }[alignment] || "Plan inconnu";
 }
 
-// ---- 019_trades_list_dans_la_modal.js ----
-// ---------- Trades list (dans la modal) ----------
-
-var _tradeCardDataCache = {};
-var _tradesListBound = false;
-
-function bindTradesListActions(list) {
-  if (!list || _tradesListBound) return;
-  list.addEventListener("click", function (e) {
-    // Lightbox on shot click
-    var shot = e.target.closest(".trade-card-shot");
-    if (shot) {
-      e.stopPropagation();
-      var card = shot.closest(".trade-card");
-      var tid = card && card.dataset.tid;
-      var trade = tid ? _tradeCardDataCache[tid] : null;
-      var shots = trade && trade.screenshots;
-      var first = shots && shots[0];
-      if (first && typeof openLightbox === "function") {
-        openLightbox("/screenshots/" + first.filename);
-      }
-      return;
-    }
-    // Edit on card click
-    var card = e.target.closest(".trade-card");
-    if (!card) return;
-    var tid = card.dataset.tid;
-    var trade = tid ? _tradeCardDataCache[tid] : null;
-    if (trade && typeof openTradeForm === "function") {
-      openTradeForm(trade);
-    }
-  });
-  _tradesListBound = true;
-}
-
-function renderTradesList(trades) {
-  var list = $("#tradesList");
-  list.innerHTML = "";
-  bindTradesListActions(list);
-  // Build cache
-  var cache = {};
-  trades.forEach(function (t) { if (t.id != null) cache[String(t.id)] = t; });
-  _tradeCardDataCache = cache;
-  if (trades.length === 0) {
-    list.innerHTML = '<div class="trades-empty"><strong>Aucun trade sur cette journee.</strong>Ajoute le premier trade pour construire ton plan, tes niveaux et ta review.</div>';
-    return;
-  }
-  var summary = trades.reduce(function (acc, t) {
-    var d = deriveTradeMetrics(t);
-    var pnl = d.pnl ?? 0;
-    acc.pnl += pnl;
-    if (d.isWin === 1) acc.wins += 1;
-    if (d.isWin === 0) acc.losses += 1;
-    return acc;
-  }, { pnl: 0, wins: 0, losses: 0 });
-  var decided = summary.wins + summary.losses;
-  var wr = decided ? Math.round(summary.wins / decided * 100) + "%" : "-";
-  list.insertAdjacentHTML("beforeend",
-    '<div class="trade-orchestrator">' +
-      '<div class="trade-orchestrator-line"></div>' +
-      '<div class="trade-orchestrator-node">Execution desk</div>' +
-      '<div class="trade-orchestrator-node is-active">Trades du jour</div>' +
-      '<div class="trade-orchestrator-metrics">' +
-        '<span>' + trades.length + ' setups</span>' +
-        '<span>' + fmtMoney(summary.pnl) + '</span>' +
-        '<span>WR ' + wr + '</span>' +
-      '</div>' +
-    '</div>'
-  );
-  var fragment = document.createDocumentFragment();
-  trades.forEach(function (t, i) {
-    fragment.appendChild(tradeCardEl(t, i + 1));
-  });
-  list.appendChild(fragment);
-  if (typeof setActiveTradeCard === "function") setActiveTradeCard(state.currentTradeId);
-}
-
-function tradeCardEl(trade, num) {
-  var el       = document.createElement("article");
-  el.className = "trade-card";
-  el.dataset.tid = trade.id;
-
-  el.innerHTML = tradeHeroCardHtml(trade, {
-    variant: 'card',
-    index: num,
-    showInstrument: false,
-  });
-
-  return el;
-}
-
-function pmWizOpen(tradeId, trade) {
-  if (!tradeId) {
-    toast("Trade introuvable", "error");
-    return;
-  }
-  wizOpen({
-    mode: "postmortem",
-    tradeId: tradeId,
-    dayId: state.currentDayId || (trade ? trade.day_id : null) || null,
-  });
-  if (!wizState) return;
-  wizState.data.exit_price = (trade && trade.exit_price) ?? "";
-  wizState.data.exit_quality = Number((trade && trade.execution_quality) || 0);
-
-  wizState.data.lessons = (trade && trade.lessons_learned) || "";
-  _wizRender();
-}
-
-// ---- 020_trade_form.js ----
-// ---------- Trade form ----------
-
-const MM_INTERNAL_BLOCK_ID = "__mm_challenge__";
-const MIDNIGHT_QUESTION_ORDER = [
-  { key: "pre_open", id: "mmPreOpen", label: "1/10 Avant open: prix monte, baisse ou range ?" },
-  { key: "open_behavior", id: "mmOpenBehavior", label: "2/10 A l'open: creation du high, creation du low, ou chop ?" },
-  { key: "po3_state", id: "mmPo3State", label: "3/10 PO3: valide, partiel, ou invalide ?" },
-  { key: "direction", id: "direction", label: "4/10 Direction executee: respecte-t-elle le plan ?" },
-  { key: "stdv_level", id: "stdvLevel", label: "5/10 Quel niveau STDV a ete touche ?" },
-  { key: "entry_trigger", id: "mmEntryTrigger", label: "6/10 Trigger d'entree: IFVG, breaker, ou les deux ?" },
-  { key: "zone_rule", id: "mmZoneRule", label: "7/10 Regle 50% respectee ? (long=Discount, short=Premium)" },
-  { key: "smt_state", id: "mmSmtState", label: "8/10 SMT confirmee au contact du STDV ?" },
-  { key: "liquidity_target", id: "mmLiquidityTarget", label: "9/10 Quelle liquidite est ciblee en priorite ?" },
-  { key: "counter_thesis", id: "mmCounterThesis", label: "10/10 Quelle est ta contre-these (1 phrase) ?" },
-];
-
-function isMidnightStrategySelected() {
-  return getPill("strategy") === "midnight_model";
-}
-
-function syncDayContextMidnightVisibility() {
-  const field = $("#midnightOpenField");
-  if (!field) return;
-  field.classList.toggle("hidden", !isMidnightStrategySelected());
-}
-
-function getMidnightCoachInputs() {
-  return {
-    pre_open: $("#mmPreOpen")?.value || "",
-    open_behavior: $("#mmOpenBehavior")?.value || "",
-    po3_state: $("#mmPo3State")?.value || "",
-    entry_trigger: $("#mmEntryTrigger")?.value || "",
-    zone_rule: $("#mmZoneRule")?.value || "",
-    smt_state: $("#mmSmtState")?.value || "",
-    liquidity_target: $("#mmLiquidityTarget")?.value || "",
-    counter_thesis: ($("#mmCounterThesis")?.value || "").trim(),
-  };
-}
-
-function getCurrentMidnightPlan() {
-  return evaluateMidnightPlan({
-    direction: getPill("direction"),
-    stdv_level: numOrNull("stdvLevel"),
-    coach: getMidnightCoachInputs(),
-  });
-}
-
-function syncPlanDecisionUI(plan) {
-  const hint = $("#planDirectionHint");
-  const pill = $("#planAlignmentPill");
-  const field = $("#planOverrideField");
-  const ruleText = $("#po3RuleText");
-  const direction = plan?.plan_direction;
-  const alignment = plan?.plan_alignment || "incomplete";
-  if (hint) hint.textContent = direction ? direction.toUpperCase() : "A definir par le Plan PO3";
-  if (pill) {
-    pill.textContent = `${planAlignmentLabel(alignment)}${plan?.plan_score != null ? " - " + plan.plan_score + "/100" : ""}`;
-    pill.className = `plan-alignment-pill ${alignment}`;
-  }
-  if (field) field.classList.toggle("hidden", alignment !== "out_of_plan");
-  if (ruleText) {
-    ruleText.textContent = direction === "short"
-      ? "Open haussier: chercher le high de la journee puis distribution short."
-      : direction === "long"
-        ? "Open baissier: chercher le low de la journee puis expansion long."
-        : "Open haussier = chercher short. Open baissier = chercher long.";
-  }
-}
-
-function resetMidnightChallenge() {
-  [
-    "mmPreOpen",
-    "mmOpenBehavior",
-    "mmPo3State",
-    "mmEntryTrigger",
-    "mmZoneRule",
-    "mmSmtState",
-    "mmLiquidityTarget",
-    "mmCounterThesis",
-  ].forEach((id) => {
-    const el = $("#" + id);
-    if (!el) return;
-    el.value = "";
-  });
-  const status = $("#midnightCoachStatus");
-  const next = $("#midnightCoachNextQuestion");
-  const list = $("#midnightCoachChecklist");
-  if (status) status.textContent = "";
-  if (next) next.textContent = "";
-  if (list) list.innerHTML = "";
-  const override = $("#planOverrideReason");
-  if (override) override.value = "";
-  syncPlanDecisionUI({ plan_alignment: "incomplete", plan_score: null, plan_direction: null });
-}
-
-function evaluateMidnightChallenge() {
-  const direction = getPill("direction");
-  const stdvLevel = numOrNull("stdvLevel");
-  const coach = getMidnightCoachInputs();
-  const missing = [];
-  const blockers = [];
-  const warnings = [];
-  const checks = [];
-  const plan = getCurrentMidnightPlan();
-
-  function miss(key, message) {
-    missing.push({ key, message });
-    checks.push({ tone: "bad", text: message });
-  }
-  function block(message) {
-    blockers.push(message);
-    checks.push({ tone: "bad", text: message });
-  }
-  function warn(message) {
-    warnings.push(message);
-    checks.push({ tone: "warn", text: message });
-  }
-  function ok(message) {
-    checks.push({ tone: "ok", text: message });
-  }
-
-  if (!coach.pre_open) miss("pre_open", "Challenge 1: precise le contexte avant open.");
-  else ok("OK - Avant open renseigne.");
-
-  if (!coach.open_behavior) miss("open_behavior", "Challenge 2: indique la reaction de l'open.");
-  else if (plan.plan_direction) ok(`OK - Plan PO3 attendu: ${plan.plan_direction.toUpperCase()}.`);
-  else warn("Open indecis: plan PO3 incomplet.");
-
-  if (!coach.po3_state) miss("po3_state", "Challenge 3: indique l'etat du PO3.");
-  else if (coach.po3_state === "no") warn("PO3 invalide: challenge ton entree avant execution.");
-  else ok("OK - Etat PO3 renseigne.");
-
-  if (!direction) miss("direction", "Challenge 4: choisis la direction executee (long/short).");
-  else ok(`OK - Direction executee: ${direction.toUpperCase()}.`);
-
-  if (stdvLevel == null) miss("stdv_level", "Challenge 5: precise le niveau STDV touche.");
-  else ok(`OK - STDV ${stdvLevel} renseigne.`);
-
-  if (!coach.entry_trigger) miss("entry_trigger", "Challenge 6: precise le trigger d'entree.");
-  else ok("OK - Trigger d'entree renseigne.");
-
-  if (!coach.zone_rule) miss("zone_rule", "Challenge 7: indique la zone d'entree (Premium/Discount).");
-  else if (coach.zone_rule === "invalid") block("Bloquant: entree hors regle 50% (Premium/Discount).");
-  else ok("OK - Regle Premium/Discount renseignee.");
-
-  if (!coach.smt_state) miss("smt_state", "Challenge 8: confirme la SMT au contact du STDV.");
-  else if (coach.smt_state === "none") warn("Pas de SMT: confluence plus faible.");
-  else ok("OK - SMT renseignee.");
-
-  if (!coach.liquidity_target) miss("liquidity_target", "Challenge 9: precise la liquidite ciblee.");
-  else ok("OK - Liquidite ciblee renseignee.");
-
-  if (!coach.counter_thesis || coach.counter_thesis.length < 10) {
-    miss("counter_thesis", "Challenge 10: ecris une contre-these claire (1 phrase).");
-  } else {
-    ok("OK - Contre-these renseignee.");
-  }
-
-  (plan.plan_errors || []).forEach((code) => block(PLAN_ERROR_LABELS[code] || code));
-  (plan.plan_warnings || [])
-    .filter((code) => code !== "plan_incomplete")
-    .forEach((code) => warn(PLAN_WARNING_LABELS[code] || code));
-
-  const questionMap = Object.fromEntries(MIDNIGHT_QUESTION_ORDER.map((item) => [item.key, item]));
-  const firstMissing = missing[0] || null;
-  const nextQuestion = firstMissing
-    ? `${questionMap[firstMissing.key]?.label || firstMissing.key}`
-    : blockers.length
-      ? `Corrige d'abord: ${blockers[0]}`
-      : warnings.length
-        ? `Point de vigilance: ${warnings[0]}`
-        : "Challenge rapide termine: setup coherent.";
-
-  const score = Math.min(plan.plan_score ?? 100, Math.max(0, 100 - (missing.length * 8) - (blockers.length * 14) - (warnings.length * 5)));
-  return { direction, stdvLevel, coach, plan, missing, blockers, warnings, checks, score, nextQuestion };
-}
-
-function renderMidnightChallenge() {
-  const block = $("#midnightCoachBlock");
-  if (!block) return;
-  const active = isMidnightStrategySelected();
-  syncDayContextMidnightVisibility();
-  block.classList.toggle("hidden", !active);
-  if (!active) {
-    if (typeof refreshTradeFlowNavState === "function") refreshTradeFlowNavState();
-    return;
-  }
-
-  const evals = evaluateMidnightChallenge();
-  const status = $("#midnightCoachStatus");
-  const next = $("#midnightCoachNextQuestion");
-  const list = $("#midnightCoachChecklist");
-
-  if (status) {
-    const tone = evals.blockers.length || evals.missing.length > 2
-      ? "bad"
-      : evals.warnings.length
-        ? "warn"
-        : "good";
-    status.className = `midnight-coach-status ${tone}`;
-    status.innerHTML = `<span class="midnight-coach-score">${Math.round(evals.score)}/100</span>
-      <span>${evals.missing.length} a completer, ${evals.blockers.length} bloquant(s), ${evals.warnings.length} vigilance(s)</span>`;
-  }
-
-  if (next) {
-    next.innerHTML = `<strong>Challenge rapide - prochaine question:</strong> ${escapeHtml(evals.nextQuestion)}`;
-  }
-  syncPlanDecisionUI(evals.plan);
-
-  if (list) {
-    list.innerHTML = evals.checks.slice(0, 10).map((item) =>
-      `<li class="${item.tone}"><span class="midnight-coach-bullet"></span><span>${escapeHtml(item.text)}</span></li>`
-    ).join("");
-  }
-  if (typeof refreshTradeFlowNavState === "function") refreshTradeFlowNavState();
-}
-
-function hydrateMidnightChallengeFromSnapshot(snapshotContent) {
-  if (!snapshotContent) return;
-  let parsed = null;
-  try {
-    parsed = JSON.parse(snapshotContent);
-  } catch (_) {
-    return;
-  }
-  if (!parsed || !parsed.coach) return;
-  const coach = parsed.coach;
-  const map = {
-    mmPreOpen: coach.pre_open,
-    mmOpenBehavior: coach.open_behavior,
-    mmPo3State: coach.po3_state,
-    mmEntryTrigger: coach.entry_trigger,
-    mmZoneRule: coach.zone_rule,
-    mmSmtState: coach.smt_state,
-    mmLiquidityTarget: coach.liquidity_target,
-    mmCounterThesis: coach.counter_thesis,
-  };
-  Object.entries(map).forEach(([id, value]) => {
-    const el = $("#" + id);
-    if (!el || value == null) return;
-    el.value = value;
-  });
-}
-
-function buildMidnightCoachSnapshotBlock(evals) {
-  if (!isMidnightStrategySelected()) return null;
-  const payload = {
-    version: 1,
-    saved_at: new Date().toISOString(),
-    score: evals.score,
-    missing: evals.missing.map((x) => x.key),
-    blockers: evals.blockers,
-    warnings: evals.warnings,
-    direction: evals.direction,
-    stdv_level: evals.stdvLevel,
-    coach: evals.coach,
-    plan: evals.plan,
-  };
-  return {
-    id: MM_INTERNAL_BLOCK_ID,
-    title: "Midnight Challenge Snapshot",
-    content: JSON.stringify(payload),
-  };
-}
-
-function applyMidnightAutofillFromCoach(payload, evals) {
-  const c = evals.coach;
-  const directionLabel = payload.direction === "short" ? "short" : "long";
-  if (!payload.scenario) {
-    const preOpenLabel = { up: "hausse", down: "baisse", range: "range" }[c.pre_open] || "non precise";
-    const openLabel = { drop: "open baissier", rise: "open haussier", chop: "open indecis" }[c.open_behavior] || "open non precise";
-    payload.scenario = `Pre-open: ${preOpenLabel}. ${openLabel}. PO3: ${c.po3_state || "non precise"}.`;
-  }
-  if (!payload.why_entry) {
-    const trigger = c.entry_trigger === "both" ? "IFVG + breaker" : c.entry_trigger || "trigger non precise";
-    const zone = c.zone_rule || "zone non precisee";
-    const smt = c.smt_state || "SMT non precisee";
-    payload.why_entry = `Entree ${directionLabel} via ${trigger}, en zone ${zone}, avec ${smt}.`;
-  }
-  if (!payload.why_trade) {
-    payload.why_trade = `Setup Midnight: validation rapide du scenario, puis execution ${directionLabel} selon check-list.`;
-  }
-  if (!payload.why_stop && c.counter_thesis) {
-    payload.why_stop = `Invalidation definie par la contre-these: ${c.counter_thesis}`;
-  }
-  if (!payload.why_tp) {
-    const targetLabel = { above: "liquidite au-dessus", below: "liquidite en dessous", both: "liquidites des deux cotes (scaling)" }[c.liquidity_target] || "cible non precisee";
-    payload.why_tp = `TP oriente vers ${targetLabel}.`;
-  }
-}
-
-function mergeMidnightCoachTags(tags, evals) {
-  const set = new Set((tags || []).map((x) => String(x).trim()).filter(Boolean));
-  set.add("midnight_challenge");
-  if (evals.coach.entry_trigger) set.add(`entry_${evals.coach.entry_trigger}`);
-  if (evals.coach.zone_rule) set.add(`zone_${evals.coach.zone_rule}`);
-  if (evals.coach.smt_state) set.add(`smt_${evals.coach.smt_state}`);
-  if (evals.coach.liquidity_target) set.add(`liq_${evals.coach.liquidity_target}`);
-  if (evals.stdvLevel != null) set.add(`stdv_${String(evals.stdvLevel).replace(".", "_")}`);
-  return [...set];
-}
-
-function validateMidnightBeforeSave() {
-  if (!isMidnightStrategySelected()) return { ok: true };
-  const evals = evaluateMidnightChallenge();
-  if (evals.plan?.plan_alignment === "out_of_plan" && !($("#planOverrideReason")?.value || "").trim()) {
-    return {
-      ok: false,
-      message: "Trade hors plan PO3: explique la raison de l'override avant d'enregistrer.",
-      focusId: "planOverrideReason",
-      evals,
-    };
-  }
-  if (!evals.missing.length && !evals.blockers.length && !evals.warnings.length) return { ok: true, evals };
-  const details = [];
-  if (evals.missing.length) details.push(`${evals.missing.length} info(s) manquante(s)`);
-  if (evals.blockers.length) details.push(`${evals.blockers.length} incoherence(s)`);
-  if (evals.warnings.length) details.push(`${evals.warnings.length} alerte(s)`);
-  return {
-    ok: true,
-    confirmNeeded: true,
-    confirmMessage: `Challenge rapide Midnight incomplet (${details.join(", ")}).\n\nTu peux enregistrer maintenant, ou revenir completer les points ci-dessus.`,
-    evals,
-  };
-}
-
-function bindMidnightChallenge() {
-  const fields = [
-    "mmPreOpen",
-    "mmOpenBehavior",
-    "mmPo3State",
-    "mmEntryTrigger",
-    "mmZoneRule",
-    "mmSmtState",
-    "mmLiquidityTarget",
-    "mmCounterThesis",
-    "stdvLevel",
-    "whyStop",
-    "whyTp",
-  ];
-  fields.forEach((id) => {
-    const el = $("#" + id);
-    if (!el) return;
-    el.addEventListener("input", scheduleMidnightChallengeRender);
-    el.addEventListener("change", scheduleMidnightChallengeRender);
-  });
-  document.querySelector(`.pills[data-pills="direction"]`)?.addEventListener("click", scheduleMidnightChallengeRender);
-  document.querySelector(`.pills[data-pills="strategy"]`)?.addEventListener("click", scheduleMidnightChallengeRender);
-}
-
-function setActiveTradeCard(tradeId) {
-  const cards = $$("#tradesList .trade-card");
-  const wanted = tradeId == null ? "" : String(tradeId);
-  cards.forEach((card) => {
-    const isActive = wanted !== "" && String(card.dataset.tid || "") === wanted;
-    card.classList.toggle("active", isActive);
-  });
-}
-
-const TRADE_FLOW_STEPS = [
-  { bid: "strategy", label: "Setup" },
-  { bid: "midnight-coach", label: "Plan PO3" },
-  { bid: "direction", label: "Direction" },
-  { bid: "levels", label: "Niveaux" },
-  { bid: "result", label: "Resultat" },
-  { bid: "postmortem", label: "Review" },
-  { bid: "screenshots", label: "Screens" },
-];
-
-let _tradeFlowBound = false;
-let _tradeFlowNavDelegationBound = false;
-let _tradeFlowRefreshRaf = 0;
-let _midnightChallengeRaf = 0;
-
-function scheduleTradeFlowNavStateRefresh() {
-  if (_tradeFlowRefreshRaf) return;
-  _tradeFlowRefreshRaf = requestAnimationFrame(() => {
-    _tradeFlowRefreshRaf = 0;
-    refreshTradeFlowNavState();
-  });
-}
-
-function scheduleMidnightChallengeRender() {
-  if (_midnightChallengeRaf) return;
-  _midnightChallengeRaf = requestAnimationFrame(() => {
-    _midnightChallengeRaf = 0;
-    renderMidnightChallenge();
-  });
-}
-
-function _isFilledValue(v) {
-  if (v == null) return false;
-  if (typeof v === "number") return Number.isFinite(v);
-  return String(v).trim() !== "";
-}
-
-function _stepDone(bid) {
-  if (bid === "strategy") return !!getPill("strategy");
-  if (bid === "direction") {
-    const plan = getCurrentMidnightPlan();
-    const directionOk = !!getPill("direction");
-    const overrideOk = plan.plan_alignment !== "out_of_plan" || _isFilledValue($("#planOverrideReason")?.value);
-    return directionOk && overrideOk;
-  }
-  if (bid === "scenario") return ["whyTrade", "whyEntry", "scenario", "whyStop", "whyTp"].some((id) => _isFilledValue($("#" + id)?.value));
-  if (bid === "levels") return _isFilledValue($("#entryPrice")?.value) && _isFilledValue($("#stopLoss")?.value) && _isFilledValue($("#takeProfit")?.value);
-  if (bid === "result") return _isFilledValue($("#exitPrice")?.value) || _isFilledValue($("#isWin")?.value);
-  if (bid === "midnight-coach") {
-    if (!isMidnightStrategySelected()) return true;
-    const evals = evaluateMidnightChallenge();
-    return evals.missing.length === 0 && evals.blockers.length === 0;
-  }
-  if (bid === "postmortem") return _isFilledValue($("#lessonsLearned")?.value) || !!getPill("thesis_validated");
-  if (bid === "screenshots") return ($$("#shotsList .shot").length > 0);
-  return false;
-}
-
-function _setBlockCollapsed(block, collapsed) {
-  if (!block) return;
-  block.classList.toggle("collapsed", !!collapsed);
-  const bid = block.dataset.bid || "";
-  if (bid && typeof loadCollapsedBlocks === "function" && typeof saveCollapsedBlocks === "function") {
-    const stateCollapsed = loadCollapsedBlocks();
-    stateCollapsed[bid] = !!collapsed;
-    saveCollapsedBlocks(stateCollapsed);
-  }
-  if (typeof updateBlockSummary === "function") updateBlockSummary(block);
-}
-
-function _focusTradeBlockByBid(bid, opts = {}) {
-  const options = opts || {};
-  const blocks = [...$$("#tradeFormSection .block")];
-  const target = blocks.find((b) => (b.dataset.bid || "") === bid && !b.classList.contains("hidden"));
-  if (!target) return;
-
-  blocks.forEach((block) => {
-    if (block.classList.contains("hidden")) return;
-    _setBlockCollapsed(block, block !== target);
-  });
-
-  if (options.scroll !== false) {
-    const behavior = options.smooth ? "smooth" : "auto";
-    const modalScroll = $("#entryModal .modal-scroll");
-    if (modalScroll) {
-      const targetTop = target.offsetTop - modalScroll.offsetTop - 12;
-      modalScroll.scrollTo({ top: Math.max(0, targetTop), behavior });
-    } else {
-      target.scrollIntoView({ behavior, block: "start" });
-    }
-  }
-
-  if (options.focus !== false) {
-    setTimeout(() => {
-      const candidate = target.querySelector("textarea, input:not([type='hidden']):not([readonly]), select, .pill-choice");
-      if (candidate && typeof candidate.focus === "function") candidate.focus();
-    }, 120);
-  }
-}
-
-function _ensureTradeFlowNav() {
-  var section = $("#tradeFormSection");
-  if (!section) return null;
-  var inner = section.querySelector(".trade-form-inner");
-  if (!inner) return null;
-
-  var nav = $("#tradeFlowNav");
-  if (!nav) {
-    nav = document.createElement("div");
-    nav.id = "tradeFlowNav";
-    nav.className = "trade-flow-nav";
-    inner.insertAdjacentElement("beforebegin", nav);
-  }
-
-  nav.innerHTML = TRADE_FLOW_STEPS.map(function (step) {
-    return `<button type="button" class="trade-flow-step" data-bid="${step.bid}">
-      <span class="trade-flow-dot"></span>
-      <span class="trade-flow-label">${step.label}</span>
-    </button>`;
-  }).join("");
-
-  if (!_tradeFlowNavDelegationBound) {
-    _tradeFlowNavDelegationBound = true;
-    nav.addEventListener("click", function (e) {
-      var btn = e.target.closest(".trade-flow-step");
-      if (!btn) return;
-      _focusTradeBlockByBid(btn.dataset.bid, { scroll: true, focus: true });
-      refreshTradeFlowNavState();
-    });
-  }
-  return nav;
-}
-
-function refreshTradeFlowNavState() {
-  const nav = $("#tradeFlowNav");
-  if (!nav) return;
-  const blocks = [...$$("#tradeFormSection .block")].filter((b) => !b.classList.contains("hidden"));
-  const active = blocks.find((b) => !b.classList.contains("collapsed"));
-  const activeBid = active?.dataset?.bid || "";
-
-  nav.querySelectorAll(".trade-flow-step").forEach((btn) => {
-    const bid = btn.dataset.bid || "";
-    const block = blocks.find((b) => (b.dataset.bid || "") === bid);
-    const visible = !!block;
-    const done = visible ? _stepDone(bid) : true;
-    btn.classList.toggle("is-active", bid === activeBid);
-    btn.classList.toggle("is-done", done);
-    btn.classList.toggle("is-hidden-step", !visible);
-  });
-}
-
-function _pickInitialTradeStep(trade) {
-  if (!trade) return "strategy";
-  if (isMidnightStrategySelected()) {
-    const plan = getCurrentMidnightPlan();
-    if (!plan.plan_direction || plan.plan_alignment === "incomplete") return "midnight-coach";
-    if (!getPill("direction")) return "direction";
-  }
-  if (!_isFilledValue($("#entryPrice")?.value) || !_isFilledValue($("#takeProfit")?.value)) return "levels";
-  if (_isFilledValue($("#entryPrice")?.value) && !_isFilledValue($("#exitPrice")?.value)) return "result";
-  return "scenario";
-}
-
-function _initTradeFlowUX() {
-  _ensureTradeFlowNav();
-  if (_tradeFlowBound) {
-    refreshTradeFlowNavState();
-    return;
-  }
-  const form = $("#tradeForm");
-  if (form) {
-    form.addEventListener("input", scheduleTradeFlowNavStateRefresh);
-    form.addEventListener("change", scheduleTradeFlowNavStateRefresh);
-  }
-  $$("#tradeForm .pills").forEach((el) => {
-    el.addEventListener("click", scheduleTradeFlowNavStateRefresh);
-  });
-  _tradeFlowBound = true;
-  refreshTradeFlowNavState();
-}
-
-function _enterCompactTradeFlow(trade) {
-  _initTradeFlowUX();
-  const initialBid = _pickInitialTradeStep(trade);
-  _focusTradeBlockByBid(initialBid, { scroll: true, focus: true });
-  refreshTradeFlowNavState();
-}
-
-function openTradeForm(trade) {
-  if (typeof sanitizeEntryModalSticky === "function") sanitizeEntryModalSticky();
-  if (typeof setModalTradeFocus === "function") setModalTradeFocus(true);
-  state.currentTradeId = trade?.id || null;
-  setActiveTradeCard(state.currentTradeId);
-  resetTradeForm();
-
-  if (trade) {
-    // Edition d'un trade existant
-    $("#tradeId").value         = trade.id;
-    setPill("strategy",          trade.strategy);
-    setPill("direction",         trade.direction);
-    setPill("thesis_validated",  trade.thesis_validated);
-
-    setQuality(trade.execution_quality);
-    $("#whyTrade").value      = trade.why_trade      ?? "";
-    $("#whyEntry").value      = trade.why_entry      ?? "";
-    $("#scenario").value      = trade.scenario       ?? "";
-    $("#whyStop").value       = trade.why_stop       ?? "";
-    $("#whyTp").value         = trade.why_tp         ?? "";
-    $("#stdvLevel").value     = trade.stdv_level     ?? "";
-    $("#entryPrice").value    = trade.entry_price    ?? "";
-    $("#stopLoss").value      = trade.stop_loss      ?? "";
-    $("#takeProfit").value    = trade.take_profit    ?? "";
-    $("#exitPrice").value     = trade.exit_price     ?? "";
-    $("#positionSize").value  = trade.position_size  ?? 1;
-    $("#pnl").value           = trade.pnl            ?? 0;
-    $("#rr").value            = trade.rr             ?? "";
-    $("#isWin").value         = trade.is_win != null ? String(trade.is_win) : "";
-    $("#planOverrideReason").value = trade.plan_override_reason ?? "";
-    $("#exitPrice").dataset.autoSource = (
-      trade.exit_price != null && trade.take_profit != null && Number(trade.exit_price) === Number(trade.take_profit)
-    ) ? "tp" : "manual";
-    $("#lessonsLearned").value = trade.lessons_learned ?? "";
-    (trade.tags || []).forEach((t) => addTag(t));
-    const allBlocks = trade.custom_blocks || [];
-    const internalMidnight = allBlocks.find((b) => String(b?.id || "") === MM_INTERNAL_BLOCK_ID);
-    if (internalMidnight) {
-      hydrateMidnightChallengeFromSnapshot(internalMidnight.content);
-    }
-    allBlocks
-      .filter((b) => String(b?.id || "") !== MM_INTERNAL_BLOCK_ID)
-      .forEach((b) => addCustomBlock(b));
-    renderShots(trade.screenshots || []);
-    $("#tradeFormTitle").textContent = `Trade #${$("#tradesList .trade-card").length} - edition`;
-    $("#deleteTradeBtn").classList.remove("hidden");
-  } else {
-    // Nouveau trade
-    $("#tradeFormTitle").textContent = "Nouveau trade";
-    $("#deleteTradeBtn").classList.add("hidden");
-    renderShots([]);
-    $("#positionSize").value = 1;
-    setPill("strategy", "midnight_model");
-  }
-
-  autoFillExitFromTarget();
-  updateRRPreview();
-  renderMidnightChallenge();
-  syncDayContextMidnightVisibility();
-  setTimeout(function () { enhanceSelects($("#tradeFormSection")); }, 0);
-  const tradeSection = $("#tradeFormSection");
-  tradeSection?.classList.remove("hidden");
-  _enterCompactTradeFlow(trade);
-}
-
-function closeTradeForm() {
-  closeTradeFormUI();
-}
-
-function closeTradeFormUI() {
-  $("#tradeFormSection").classList.add("hidden");
-  if (typeof setModalTradeFocus === "function") setModalTradeFocus(false);
-  setActiveTradeCard(null);
-  state.currentTradeId = null;
-  syncDayContextMidnightVisibility();
-  refreshTradeFlowNavState();
-}
-
-function resetTradeForm() {
-  $("#tradeForm").reset();
-  $("#tradeId").value = "";
-  $$("#tradeForm .pills .pill-choice").forEach((p) => p.classList.remove("active"));
-  $$(".quality button").forEach((b) => b.classList.remove("on"));
-  $("#executionQuality").value = "";
-  $("#tagsInput").querySelectorAll(".tag-pill").forEach((t) => t.remove());
-  $("#customBlocksList").innerHTML = "";
-  renderShots([]);
-  $("#rrPreview").textContent = "";
-  const exit = $("#exitPrice");
-  if (exit) exit.dataset.autoSource = "";
-  const override = $("#planOverrideReason");
-  if (override) override.value = "";
-  resetMidnightChallenge();
-  syncDayContextMidnightVisibility();
-}
-
-function buildTradePayload() {
-  const isWinVal = $("#isWin").value;
-  const eq       = $("#executionQuality").value;
-  const midnightEvals = evaluateMidnightChallenge();
-  const plan = midnightEvals.plan || getCurrentMidnightPlan();
-  const customBlocks = getCustomBlocks().filter((b) => String(b?.id || "") !== MM_INTERNAL_BLOCK_ID);
-  const midnightSnapshot = buildMidnightCoachSnapshotBlock(midnightEvals);
-  if (midnightSnapshot) customBlocks.push(midnightSnapshot);
-  let tags = getTags();
-  if (isMidnightStrategySelected()) tags = mergeMidnightCoachTags(tags, midnightEvals);
-
-  const payload = {
-    strategy:         getPill("strategy"),
-    direction:        getPill("direction"),
-    why_trade:        $("#whyTrade").value   || null,
-    why_entry:        $("#whyEntry").value   || null,
-    scenario:         $("#scenario").value   || null,
-    why_stop:         $("#whyStop").value    || null,
-    why_tp:           $("#whyTp").value      || null,
-    stdv_level:       numOrNull("stdvLevel"),
-    entry_price:      numOrNull("entryPrice"),
-    stop_loss:        numOrNull("stopLoss"),
-    take_profit:      numOrNull("takeProfit"),
-    exit_price:       numOrNull("exitPrice"),
-    position_size:    numOrNull("positionSize"),
-    pnl:              Number($("#pnl").value || 0),
-    rr:               numOrNull("rr"),
-    is_win:           isWinVal === "" ? null : isWinVal === "1",
-    execution_quality: eq === "" ? null : Number(eq),
-    thesis_validated: getPill("thesis_validated"),
-    lessons_learned:  $("#lessonsLearned").value || null,
-    tags,
-    custom_blocks:    customBlocks,
-  };
-
-  if (isMidnightStrategySelected()) {
-    Object.assign(payload, {
-      plan_model:       plan.plan_model,
-      plan_direction:   plan.plan_direction,
-      plan_alignment:   plan.plan_alignment,
-      plan_score:       plan.plan_score,
-      plan_errors:      plan.plan_errors,
-      plan_warnings:    plan.plan_warnings,
-      plan_override_reason: $("#planOverrideReason")?.value?.trim() || null,
-      plan_snapshot:    {
-        version: 1,
-        saved_at: new Date().toISOString(),
-        direction: getPill("direction"),
-        stdv_level: numOrNull("stdvLevel"),
-        coach: midnightEvals.coach,
-        plan,
-      },
-    });
-    applyMidnightAutofillFromCoach(payload, midnightEvals);
-  }
-  return payload;
-}
-
-function numOrNull(id) {
-  const v = $("#" + id)?.value;
-  if (v === "" || v == null) return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
-async function submitTrade(e) {
-  e.preventDefault();
-  if (state.isSavingTrade) return;
-  updateRRPreview();
-  renderMidnightChallenge();
-
-  // S'assurer que le jour existe avant d'enregistrer le trade
-  if (!state.currentDayId) {
-    const saved = await saveDayContext(true);
-    if (!saved) return;
-  }
-
-  const challengeValidation = validateMidnightBeforeSave();
-  if (!challengeValidation.ok) {
-    toast(challengeValidation.message, "error");
-    if (challengeValidation.focusId) {
-      const focusEl = $("#" + challengeValidation.focusId);
-      if (focusEl) focusEl.focus();
-    }
-    return;
-  }
-  if (challengeValidation.confirmNeeded && !confirm(challengeValidation.confirmMessage)) {
-    return;
-  }
-
-  state.isSavingTrade = true;
-  const payload = buildTradePayload();
-
-  try {
-    if (state.currentTradeId) {
-      await api(`/api/trades/${state.currentTradeId}`,
-        { method: "PUT", body: JSON.stringify(payload) });
-      state.modalDataDirty = true;
-      toast("Trade mis a jour ✓", "success");
-    } else {
-      await api(`/api/days/${state.currentDayId}/trades`,
-        { method: "POST", body: JSON.stringify(payload) });
-      state.modalDataDirty = true;
-      toast("Trade enregistre ✓", "success");
-    }
-    // Recharger le jour pour mettre a jour la liste
-    const day = await api(`/api/days/${state.currentDayId}`);
-    renderTradesList(day.trades || []);
-    closeTradeFormUI();
-    document.dispatchEvent(new CustomEvent("trade:saved"));
-    await loadAll();
-  } catch (err) {
-    toast(err.message, "error");
-  } finally {
-    state.isSavingTrade = false;
-  }
-}
-
-async function deleteTrade() {
-  if (!state.currentTradeId) return;
-  if (!confirm("Supprimer ce trade (screenshots inclus) ?")) return;
-  try {
-    await api(`/api/trades/${state.currentTradeId}`, { method: "DELETE" });
-    state.modalDataDirty = true;
-    toast("Trade supprime", "success");
-    const day = await api(`/api/days/${state.currentDayId}`);
-    renderTradesList(day.trades || []);
-    closeTradeFormUI();
-    document.dispatchEvent(new CustomEvent("trade:saved"));
-    await loadAll();
-  } catch (err) { toast(err.message, "error"); }
-}
-
 // ---- 021_rr_preview.js ----
 // ---------- RR preview ----------
 
@@ -4444,10 +3378,15 @@ function bindRRPreview() {
   ["entryPrice","stopLoss","takeProfit","exitPrice","positionSize"].forEach(id =>
     document.getElementById(id)?.addEventListener("input", updateRRPreview)
   );
+  $("#tradeStatus")?.addEventListener("change", function() {
+    syncTradeStatus();
+    updateRRPreview();
+  });
   $("#takeProfit")?.addEventListener("input", autoFillExitFromTarget);
   $("#exitPrice")?.addEventListener("input", () => {
     const exit = $("#exitPrice");
     if (exit) exit.dataset.autoSource = "manual";
+    updateRRPreview();
   });
 }
 
@@ -4472,6 +3411,26 @@ function autoFillExitFromTarget() {
   }
 }
 
+function syncTradeStatus() {
+  var status = $("#tradeStatus")?.value;
+  var exit = $("#exitPrice");
+  var isWinField = $("#isWin");
+  if (!status || !exit) return;
+  if (status === "open") {
+    // Trade ouvert → pas de prix de sortie, PnL inconnu
+    exit.value = "";
+    exit.disabled = true;
+    exit.dataset.autoSource = "";
+    if (isWinField) isWinField.value = "";
+  } else {
+    // Trade clos → prix de sortie actif
+    exit.disabled = false;
+    // Re-essayer auto-fill depuis TP si exit vide
+    if (!exit.value) autoFillExitFromTarget();
+  }
+  updateRRPreview();
+}
+
 function updateRRPreview() {
   const entry = numOrNull("entryPrice");
   const stop  = numOrNull("stopLoss");
@@ -4486,6 +3445,7 @@ function updateRRPreview() {
   const selectedDirection = getPill("direction");
   const inferredDirection = inferDirectionFromPrices(entry, stop, target);
   const direction = selectedDirection || inferredDirection;
+  var tradeStatus = $("#tradeStatus")?.value || "closed";
 
   let rrValue = null;
   if (entry != null && stop != null && target != null && stop !== entry) {
@@ -4494,10 +3454,17 @@ function updateRRPreview() {
   if (rrField) rrField.value = rrValue != null ? rrValue.toFixed(2) : "";
 
   let pnlValue = null;
-  if (direction && entry != null && exit != null) {
+  if (tradeStatus === "closed" && direction && entry != null && exit != null) {
     pnlValue = (direction === "long" ? (exit - entry) : (entry - exit)) * qty;
     if (pnlField) pnlField.value = pnlValue.toFixed(2);
-    if (isWinField) isWinField.value = pnlValue > 0 ? "1" : pnlValue < 0 ? "0" : "";
+    // Deriver is_win depuis le PnL (champ hidden)
+    if (isWinField) {
+      isWinField.value = pnlValue > 0 ? "1" : pnlValue < 0 ? "0" : "";
+    }
+  } else if (tradeStatus === "open") {
+    // Trade ouvert: PnL = 0, pas de win/loss
+    if (pnlField) pnlField.value = "0";
+    if (isWinField) isWinField.value = "";
   }
 
   if (entry != null && stop != null && target != null && stop !== entry) {
@@ -4506,8 +3473,21 @@ function updateRRPreview() {
     const gainEstimate = rewardPerContract * qty;
     const lossEstimate = riskPerContract * qty;
     const dirLabel = direction === "short" ? "Short" : "Long";
-    prev.textContent = `${dirLabel} - RR theorique: ${rrValue.toFixed(2)}R - Estimation (${qty} contrat${qty > 1 ? "s" : ""}): +${gainEstimate.toFixed(2)} / -${lossEstimate.toFixed(2)}`;
-    prev.className = "rr-preview visible";
+
+    if (tradeStatus === "open") {
+      prev.textContent = dirLabel + " - RR theorique: " + rrValue.toFixed(2) + "R - Estimation (" + qty + " contrat" + (qty > 1 ? "s" : "") + "): +" + gainEstimate.toFixed(2) + " / -" + lossEstimate.toFixed(2) + " (trade ouvert)";
+      prev.className = "rr-preview visible";
+    } else {
+      // SL = TP → warning
+      var slEqualsTp = stop === target || Math.abs(stop - target) < 0.01;
+      if (slEqualsTp) {
+        prev.textContent = dirLabel + " - SL = TP: impossible de calculer un RR theorique pertinent.";
+        prev.className = "rr-preview visible warn";
+      } else {
+        prev.textContent = dirLabel + " - RR theorique: " + rrValue.toFixed(2) + "R - Estimation (" + qty + " contrat" + (qty > 1 ? "s" : "") + "): +" + gainEstimate.toFixed(2) + " / -" + lossEstimate.toFixed(2);
+        prev.className = "rr-preview visible";
+      }
+    }
   } else {
     prev.textContent = "";
     prev.className = "rr-preview";
@@ -4636,7 +3616,6 @@ function getPasteMarkdownTarget(target) {
   const field = target.closest("textarea, input[type='text']");
   if (!field) return null;
   if (field.id === "tagsInputField") return null;
-  if (!field.closest("#entryModal")) return null;
   return field;
 }
 
@@ -4679,7 +3658,6 @@ async function onClipboardImagePaste(e) {
     return;
   }
 
-  if ($("#entryModal")?.classList.contains("hidden")) return;
   e.preventDefault();
   const targetField = getPasteMarkdownTarget(e.target);
   const shots = await handleFiles(files);
@@ -4748,7 +3726,8 @@ async function handleFiles(fileList) {
 async function ensureTradeContextForUpload() {
   if (state.currentTradeId) return true;
 
-  const tradeFormOpen = !$("#tradeFormSection")?.classList.contains("hidden");
+  const tradeFormSection = $("#tradeFormSection");
+  const tradeFormOpen = tradeFormSection && !tradeFormSection.classList.contains("hidden");
   if (!tradeFormOpen) {
     toast("Ouvre ou crée un trade pour lui attacher des screenshots", "error");
     return false;
@@ -4765,7 +3744,7 @@ async function ensureTradeContextForUpload() {
     state.modalDataDirty = true;
     if (typeof loadAll === "function") setTimeout(loadAll, 100);
     const day = await api(`/api/days/${state.currentDayId}`);
-    renderTradesList(day.trades || []);
+    if (typeof renderTradesList === "function") renderTradesList(day.trades || []);
     toast("Trade créé automatiquement pour ajouter le screenshot", "success");
     return true;
   } catch (err) {
@@ -4921,8 +3900,7 @@ function bindGlobalKeys() {
 
     if (e.key === "Escape") {
       if (state.cmdkOpen) { closeCmdk(); return; }
-      if (!$("#tradeFormSection")?.classList.contains("hidden")) { closeTradeForm(); return; }
-      if (!$("#entryModal").classList.contains("hidden")) { closeModal(); return; }
+
       if (!$("#lightbox").classList.contains("hidden")) { $("#lightbox").classList.add("hidden"); return; }
     }
 
@@ -5929,78 +4907,6 @@ function slugify(s) {
     .replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"");
 }
 
-// ---- 035_initblocks.js ----
-var _initBlocksDelegationBound = false;
-
-function initBlocks() {
-  var collapsed = loadCollapsedBlocks();
-  $$("#entryModal .block").forEach(function (block) {
-    var head = block.querySelector(".block-h");
-    if (!head) return;
-    if (!block.dataset.bid) {
-      block.dataset.bid = slugify(head.textContent.trim().split(/\s+/).slice(0, 4).join(" "));
-    }
-    var bid = block.dataset.bid;
-    if (!head.querySelector(".chevron")) {
-      var sum = document.createElement("span"); sum.className = "block-summary";
-      var spc = document.createElement("span"); spc.className = "block-h-spacer";
-      var chev = document.createElement("button");
-      chev.type = "button"; chev.className = "chevron"; chev.title = "Replier / déplier";
-      chev.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
-      head.append(sum, spc, chev);
-    }
-    if (collapsed[bid]) block.classList.add("collapsed");
-    updateBlockSummary(block);
-  });
-
-  if (_initBlocksDelegationBound) return;
-  _initBlocksDelegationBound = true;
-  $("#entryModal")?.addEventListener("click", function (e) {
-    if (e.target.closest("button:not(.chevron), input, select, textarea, .pill-choice")) return;
-    var head = e.target.closest(".block-h");
-    if (!head) return;
-    var block = head.closest(".block");
-    if (!block) return;
-    var bid = block.dataset.bid;
-    var willOpen = block.classList.contains("collapsed");
-    if (willOpen && document.querySelector("#entryModal.modal-trade-focus")) {
-      $$("#tradeFormSection .block").forEach(function (other) {
-        if (other === block || other.classList.contains("hidden")) return;
-        other.classList.add("collapsed");
-        var oid = other.dataset.bid;
-        if (oid) {
-          var oc = loadCollapsedBlocks();
-          oc[oid] = true;
-          saveCollapsedBlocks(oc);
-        }
-        updateBlockSummary(other);
-      });
-    }
-    block.classList.toggle("collapsed");
-    var c = loadCollapsedBlocks();
-    c[bid] = block.classList.contains("collapsed");
-    saveCollapsedBlocks(c);
-    updateBlockSummary(block);
-    if (typeof refreshTradeFlowNavState === "function") refreshTradeFlowNavState();
-  });
-}
-
-function updateBlockSummary(block) {
-  const sum = block.querySelector(".block-summary");
-  if (!sum) return;
-  const parts = [];
-  block.querySelectorAll(".pills .pill-choice.active").forEach(p => parts.push(p.textContent.trim()));
-  block.querySelectorAll("textarea, input[type='text'], input[type='number']").forEach(inp => {
-    if (parts.length >= 3) return;
-    const v = (inp.value || "").trim();
-    if (v && inp.id !== "tagsInputField")
-      parts.push(v.length > 28 ? v.slice(0,28)+"…" : v);
-  });
-  const q = block.querySelector("#executionQuality")?.value;
-  if (q) parts.push("★".repeat(Number(q)));
-  sum.textContent = parts.filter(Boolean).slice(0,4).join(" · ");
-}
-
 // ---- 036_markdown_preview.js ----
 // ---------- Markdown preview ----------
 
@@ -6286,9 +5192,8 @@ function applyNarrationToForm(data) {
   // Champs du jour
   if (d._htf_bias) setPill("htf_bias", d._htf_bias);
 
-  // Champs du trade (si le formulaire de trade est ouvert)
-  const tradeFormOpen = !$("#tradeFormSection")?.classList.contains("hidden");
-  if (tradeFormOpen) {
+  // Champs du trade (appliqués automatiquement)
+  {
     if (d.strategy)        setPill("strategy",         d.strategy);
     if (d.direction)       setPill("direction",        d.direction);
 
@@ -6333,8 +5238,8 @@ const WIZ_DRAFT_KEY = 'cockpit:wizard_draft:v3';
 let wizState = null;
 
 // WIZ_INSTRUMENTS supprime — utiliser INSTRUMENTS depuis 001_utilities.js
-const STEPS_TRADE = ['date','instrument','strategy','day_context','why_trade','why_entry','why_stop_tp','levels','screenshots','recap'];
-const STEPS_PM = ['pm_exit','pm_quality','pm_lessons'];
+var STEPS_TRADE = ['date','instrument','strategy','direction','why_trade','why_entry','why_stop_tp','levels','result','screenshots','recap'];
+var STEPS_PM = ['pm_exit','pm_quality','pm_lessons'];
 
 const STRATEGY_HINTS = {
   midnight_model: {
@@ -6535,10 +5440,8 @@ function _wizSaveCurrentStep() {
     case 'date':
       d.date = _q('#wizDate')?.value || d.date;
       break;
-    case 'day_context':
-      d.htf_bias      = _wizActivePill('.wiz-bias')         || d.htf_bias;
-      d.htf_context   = _q('#wizHtfContext')?.value         || d.htf_context;
-      d.daily_notes   = _q('#wizDailyNotes')?.value         || d.daily_notes;
+    case 'direction':
+      d.direction = _wizActiveDir() || d.direction;
       break;
     case 'why_trade':
       d.why_trade = _q('#wizWhyTrade')?.value || d.why_trade;
@@ -6551,11 +5454,13 @@ function _wizSaveCurrentStep() {
       d.why_tp   = _q('#wizWhyTp')?.value   || d.why_tp;
       break;
     case 'levels':
-      d.direction    = _wizActiveDir()               || d.direction;
       d.entry_price  = _q('#wizEntry')?.value        || d.entry_price;
       d.stop_loss    = _q('#wizStop')?.value         || d.stop_loss;
       d.take_profit  = _q('#wizTarget')?.value       || d.take_profit;
       d.stdv_level   = _q('#wizStdv')?.value         || d.stdv_level;
+      break;
+    case 'result':
+      d.exit_price  = _q('#wizExitPrice')?.value     || d.exit_price;
       break;
     case 'pm_exit':
       d.exit_price  = _q('#wizExitPrice')?.value    || d.exit_price;
@@ -6597,6 +5502,18 @@ function _wizRender() {
   const indicator = document.getElementById('wizStepIndicator');
   if (indicator) indicator.textContent = (idx + 1) + ' / ' + total;
 
+  // Step title
+  var stepTitle = document.getElementById('wizStepTitle');
+  var titles = {
+    date: 'Date', instrument: 'Instrument', strategy: 'Strategie',
+    direction: 'Direction', why_trade: 'Pourquoi ce trade',
+    why_entry: "Pourquoi l'entree", why_stop_tp: 'Stop & TP',
+    levels: 'Niveaux', result: 'Resultat',
+    screenshots: 'Captures', recap: 'Recap',
+    pm_exit: 'Sortie', pm_quality: 'Execution', pm_lessons: 'Lecons',
+  };
+  if (stepTitle) stepTitle.textContent = titles[step] || step;
+
   // Back button
   const backBtn = document.getElementById('wizBackBtn');
   if (backBtn) backBtn.classList.toggle('invisible', idx === 0);
@@ -6636,11 +5553,12 @@ function _wizStepHtml(step) {
     case 'date':        return _wizStepDate();
     case 'instrument':  return _wizStepInstrument();
     case 'strategy':    return _wizStepStrategy();
-    case 'day_context': return _wizStepDayContext();
+    case 'direction':   return _wizStepDirection();
     case 'why_trade':   return _wizStepWhyTrade();
     case 'why_entry':   return _wizStepWhyEntry();
     case 'why_stop_tp': return _wizStepWhyStopTp();
     case 'levels':      return _wizStepLevels();
+    case 'result':      return _wizStepResult();
     case 'screenshots': return _wizStepScreenshots();
     case 'recap':       return _wizStepRecap();
     case 'pm_exit':     return _wizStepPmExit();
@@ -6964,7 +5882,7 @@ function _wizCollectMissingFields(data) {
   }
 
   ask('strategy', 'Challenge: quelle strategie as-tu executee ?', 'strategy');
-  ask('direction', 'Challenge: direction finale long ou short ?', 'levels');
+  ask('direction', 'Sens du trade (long/short) ?', 'direction');
   ask('entry_price', 'Challenge: quel est ton prix d\'entree exact ?', 'levels');
   ask('stop_loss', 'Challenge: ou est place ton stop loss ?', 'levels');
   ask('take_profit', 'Challenge: quel est ton take-profit principal ?', 'levels');
@@ -6989,11 +5907,11 @@ function _wizStepRecap() {
     ['Date',       d.date         || '—', idxOf('date', 0)],
     ['Instrument', wizInstrumentLabel(d.instrument) || '—', idxOf('instrument', 1)],
     ['Strategie',  labels[d.strategy] || d.strategy || '—', idxOf('strategy', 2)],
-    ['Biais',      d.htf_bias     || '—', idxOf('day_context', 3)],
-    ['Direction',  d.direction    || '—', idxOf('levels', 7)],
+    ['Direction',  d.direction    || '—', idxOf('direction', 3)],
     ['Entree',     d.entry_price  || '—', idxOf('levels', 7)],
     ['Stop',       d.stop_loss    || '—', idxOf('levels', 7)],
     ['TP',         d.take_profit  || '—', idxOf('levels', 7)],
+    ['Sortie',     d.exit_price   || '—', idxOf('result', 8)],
   ];
 
   var tableRows = rows.filter(function(r) { return r[1] !== '—'; }).map(function(r) {
@@ -7111,6 +6029,14 @@ function _wizAfterRender(step) {
   if (step === 'screenshots') {
     _wizBindScreenshots();
   }
+  if (step === 'direction') {
+    var dirBtns = document.querySelectorAll('.wiz-dir-btn');
+    if (dirBtns.length) setTimeout(function() { dirBtns[0].focus(); }, 50);
+  }
+  if (step === 'result') {
+    var exitInput = document.getElementById('wizExitPrice');
+    if (exitInput) setTimeout(function() { exitInput.focus(); }, 50);
+  }
   if (step === 'recap') {
     var missingTa = document.getElementById('wizMissingChat');
     if (missingTa && !(wizState.data.missing_chat_text || '').trim()) {
@@ -7134,6 +6060,57 @@ function _wizBindScreenshots() {
     _wizHandleFiles(e.dataTransfer.files);
   };
   input.onchange = function(e) { _wizHandleFiles(e.target.files); };
+}
+
+// ─── Direction step ─────────────────────────────────────────
+
+function _wizStepDirection() {
+  var d = wizState.data;
+  var isLong  = d.direction === 'long';
+  var isShort = d.direction === 'short';
+  return '<div class="wiz-question">Direction</div>'
+    + '<div class="wiz-hint">Dans quel sens prends-tu ce trade ?</div>'
+    + '<div class="wiz-direction-toggle">'
+    +   '<button class="wiz-dir-btn' + (isLong?' active-long':'') + '" data-dir="long" onclick="wizSetDir(this)">'
+    +     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>Long</button>'
+    +   '<button class="wiz-dir-btn' + (isShort?' active-short':'') + '" data-dir="short" onclick="wizSetDir(this)">'
+    +     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>Short</button>'
+    + '</div>';
+}
+
+// ─── Result step ────────────────────────────────────────────
+
+function _wizStepResult() {
+  var d = wizState.data;
+  var dir = d.direction || 'long';
+  var pnl = '';
+  if (d.entry_price && d.exit_price) {
+    var pnlVal = dir === 'long' ? (Number(d.exit_price) - Number(d.entry_price)) : (Number(d.entry_price) - Number(d.exit_price));
+    pnl = '<div class="wiz-rr-preview" style="color:' + (pnlVal >= 0 ? 'var(--win)' : 'var(--rose)') + '">PnL: ' + pnlVal.toFixed(2) + '$</div>';
+  }
+  return '<div class="wiz-question">Resultat</div>'
+    + '<div class="wiz-hint">Prix de sortie et PnL calcule automatiquement.</div>'
+    + '<div class="wiz-field">'
+    +   '<label class="wiz-label">Prix de sortie</label>'
+    +   '<input type="number" class="wiz-level-input" id="wizExitPrice" value="' + (d.exit_price||'') + '" placeholder="0.00" step="0.25" oninput="wizUpdateResult()">'
+    + '</div>'
+    + '<div id="wizResultPreview">' + pnl + '</div>';
+}
+
+function wizUpdateResult() {
+  var exit = document.getElementById('wizExitPrice')?.value;
+  if (!wizState) return;
+  wizState.data.exit_price = exit;
+  var dir = wizState.data.direction || 'long';
+  var entry = wizState.data.entry_price;
+  var preview = document.getElementById('wizResultPreview');
+  if (!preview) return;
+  if (entry && exit) {
+    var pnlVal = dir === 'long' ? (Number(exit) - Number(entry)) : (Number(entry) - Number(exit));
+    preview.innerHTML = '<div class="wiz-rr-preview" style="color:' + (pnlVal >= 0 ? 'var(--win)' : 'var(--rose)') + '">PnL: ' + pnlVal.toFixed(2) + '$</div>';
+  } else {
+    preview.innerHTML = '';
+  }
 }
 
 // ---- 044_wizreadfileasdataurl.js ----
@@ -8072,7 +7049,17 @@ function renderTodayCalendar() {
     // Delegation document-level pour garantir la capture
     document.addEventListener("click", function _todayCalClick(e) {
       var dayEl = e.target.closest("#todayCalendarGrid .day");
-      if (!dayEl || dayEl.dataset.otherMonth === "1") return;
+      if (!dayEl) return;
+      // other-month: navigation vers le mois clique uniquement (pas d'ouverture de jour)
+      var isOther = dayEl.dataset.otherMonth === "1";
+      if (isOther) {
+        var otherKey = dayEl.dataset.date;
+        if (otherKey && typeof goPage === "function") {
+          state.journalFocusDate = otherKey;
+          goPage("journal");
+        }
+        return;
+      }
       var key = dayEl.dataset.date;
       if (!key) return;
       if (typeof goPage === "function") {
@@ -8094,7 +7081,7 @@ function renderTodayCalendar() {
 // ---------- AI Chat — frontend ----------
 // State : window.aiChatHistory (session only, not persisted)
 // Uses : api(), toast()
-// Integration : wizard (wizOpen), day editor (openExistingDay), trade form (openTradeForm)
+// Integration : wizard (wizOpen), day editor (openExistingDay)
 
 /* Markdown rendering helpers (lightweight — no external lib needed) */
 
@@ -8215,7 +7202,7 @@ function _aiRenderMarkdown(text) {
 
 function _aiParseActions(text) {
   var actions = [];
-  var regex = /\[(wizOpen|openDay|openTradeForm):\s*(\{[^}]+\})\]/g;
+  var regex = /\[(wizOpen|openDay):\s*(\{[^}]+\})\]/g;
   var match;
   while ((match = regex.exec(text)) !== null) {
     try {
@@ -8229,7 +7216,7 @@ function _aiParseActions(text) {
 /* Strip action markers from display text */
 
 function _aiStripActions(text) {
-  return text.replace(/\[(wizOpen|openDay|openTradeForm):\s*\{[^}]+\}\]/g, '').trim();
+  return text.replace(/\[(wizOpen|openDay):\s*\{[^}]+\}\]/g, '').trim();
 }
 
 /* Render action buttons */
@@ -8249,10 +7236,6 @@ function _aiRenderActions(actions) {
       case 'openDay':
         label = 'Ouvrir le jour';
         icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
-        break;
-      case 'openTradeForm':
-        label = 'Modifier le trade';
-        icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
         break;
     }
     html += '<button type="button" class="ai-chat-action-btn" data-ai-action="' + a.type + '" data-ai-action-data=\'' + JSON.stringify(a.data) + '\'>' + icon + label + '</button>';
@@ -8294,11 +7277,6 @@ function _aiHandleActionClick(e) {
         }).catch(function() {
           toast('Impossible de charger ce jour', 'error');
         });
-      }
-      break;
-    case 'openTradeForm':
-      if (typeof openTradeForm === 'function' && data) {
-        openTradeForm(data);
       }
       break;
   }

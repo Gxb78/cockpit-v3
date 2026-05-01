@@ -35,7 +35,7 @@
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.88);
   border-radius: 27px;
-  background: #f7f8fb;
+  background: var(--surface-solid);
   box-shadow:
     0 38px 84px rgba(0, 0, 0, 0.44),
     0 16px 34px rgba(10, 18, 28, 0.24),

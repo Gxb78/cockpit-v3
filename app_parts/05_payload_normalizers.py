@@ -29,9 +29,32 @@ def normalize_trade_payload(data, *, for_update=False):
         raw["take_profit"] = raw.get("target_price")
     if "tp" in raw and "take_profit" not in raw:
         raw["take_profit"] = raw.get("tp")
-    # exit_price = TP (consolidation)
-    if "exit_price" in raw and "take_profit" not in raw:
-        raw["take_profit"] = raw.get("exit_price")
+    # exit_price = mapping conditionnel selon win/loss
+    if "exit_price" in raw:
+        direction = (raw.get("direction") or "").strip().lower()
+        try:
+            entry = float(raw.get("entry_price"))
+        except (TypeError, ValueError):
+            entry = None
+        try:
+            exit_val = float(raw.get("exit_price"))
+        except (TypeError, ValueError):
+            exit_val = None
+        is_win = raw.get("is_win")
+
+        # Deriver is_win si pas fourni explicitement
+        if is_win is None or is_win == "":
+            if direction in ("long", "short") and entry is not None and exit_val is not None and exit_val != entry:
+                is_win = "1" if (direction == "long" and exit_val > entry) or (direction == "short" and exit_val < entry) else "0"
+
+        if is_win == "1" or is_win == 1:
+            # WIN -> exit_price = TP
+            if "take_profit" not in raw:
+                raw["take_profit"] = raw.get("exit_price")
+        elif is_win == "0" or is_win == 0:
+            # LOSS -> exit_price = SL
+            if "stop_loss" not in raw:
+                raw["stop_loss"] = raw.get("exit_price")
     if "stdv" in raw and "stdv_level" not in raw:
         raw["stdv_level"] = raw.get("stdv")
     if "exit_quality" in raw and "execution_quality" not in raw:

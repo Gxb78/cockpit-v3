@@ -3,12 +3,10 @@
 {% include "partials/layout/head.html" %}
 <body>
 <a href="#main-content" class="skip-link">Aller au contenu principal</a>
-{% include "partials/layout/aurora.html" %}
 
 <div id="loadingBar" class="loading-bar"></div>
 
-<div class="cockpit">
-{% include "partials/layout/rail.html" %}
+<div class="cockpit">{% include "partials/layout/rail.html" %}
 
   <main class="main" id="main-content">
 {% include "partials/pages/today.html" %}
@@ -23,7 +21,6 @@
 
 {% include "partials/overlays/widget_config.html" %}
 {% include "partials/overlays/cmdk.html" %}
-{% include "partials/overlays/entry_modal.html" %}
 {% include "partials/overlays/lightbox.html" %}
 {% include "partials/overlays/wizard.html" %}
 {% include "partials/overlays/toast.html" %}

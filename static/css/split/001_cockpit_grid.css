@@ -5,7 +5,7 @@
   z-index: 1;
   display: grid;
   grid-template-columns: 240px 1fr;
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* ============================================================
@@ -15,7 +15,7 @@
 .rail {
   position: sticky;
   top: 0;
-  height: 100vh;
+  height: 100dvh;
   padding: 18px;
   border-right: 1px solid var(--border);
   background: linear-gradient(180deg, rgba(11,12,22,0.7), rgba(11,12,22,0.35));
@@ -49,7 +49,11 @@
   position: absolute;
   inset: 0;
   background: linear-gradient(135deg, transparent 35%, rgba(255,255,255,0.25) 50%, transparent 65%);
-  animation: shimmer 4s linear infinite;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .brand-logo::after {
+    animation: shimmer 4s linear infinite;
+  }
 }
 @keyframes shimmer {
   0% { transform: translateX(-100%); }

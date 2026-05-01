@@ -14,7 +14,7 @@
 }
 
 .pretext-head {
-  min-height: 118px;
+  min-height: 118px; /* hauteur fixe pour eviter CLS pendant le chargement du canvas */
   border-radius: var(--r);
 }
 

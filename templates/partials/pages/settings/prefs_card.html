@@ -9,6 +9,16 @@
             <input type="checkbox" id="prefDarkMode" />
             <span>Dark mode</span>
           </label>
+          <div class="settings-field">
+            <label for="prefTheme">Theme</label>
+            <div class="select-wrapper">
+              <select id="prefTheme">
+                <option value="default">Classic (cyan)</option>
+                <option value="claude">Claude Warm (terracotta)</option>
+              </select>
+              <svg class="select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+          </div>
           <div class="settings-actions">
             <button type="button" class="btn-primary" id="settingsSavePrefsBtn">Appliquer</button>
           </div>

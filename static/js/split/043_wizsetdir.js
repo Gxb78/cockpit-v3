@@ -70,7 +70,7 @@ function _wizCollectMissingFields(data) {
   }
 
   ask('strategy', 'Challenge: quelle strategie as-tu executee ?', 'strategy');
-  ask('direction', 'Challenge: direction finale long ou short ?', 'levels');
+  ask('direction', 'Sens du trade (long/short) ?', 'direction');
   ask('entry_price', 'Challenge: quel est ton prix d\'entree exact ?', 'levels');
   ask('stop_loss', 'Challenge: ou est place ton stop loss ?', 'levels');
   ask('take_profit', 'Challenge: quel est ton take-profit principal ?', 'levels');
@@ -95,11 +95,11 @@ function _wizStepRecap() {
     ['Date',       d.date         || '—', idxOf('date', 0)],
     ['Instrument', wizInstrumentLabel(d.instrument) || '—', idxOf('instrument', 1)],
     ['Strategie',  labels[d.strategy] || d.strategy || '—', idxOf('strategy', 2)],
-    ['Biais',      d.htf_bias     || '—', idxOf('day_context', 3)],
-    ['Direction',  d.direction    || '—', idxOf('levels', 7)],
+    ['Direction',  d.direction    || '—', idxOf('direction', 3)],
     ['Entree',     d.entry_price  || '—', idxOf('levels', 7)],
     ['Stop',       d.stop_loss    || '—', idxOf('levels', 7)],
     ['TP',         d.take_profit  || '—', idxOf('levels', 7)],
+    ['Sortie',     d.exit_price   || '—', idxOf('result', 8)],
   ];
 
   var tableRows = rows.filter(function(r) { return r[1] !== '—'; }).map(function(r) {
@@ -217,6 +217,14 @@ function _wizAfterRender(step) {
   if (step === 'screenshots') {
     _wizBindScreenshots();
   }
+  if (step === 'direction') {
+    var dirBtns = document.querySelectorAll('.wiz-dir-btn');
+    if (dirBtns.length) setTimeout(function() { dirBtns[0].focus(); }, 50);
+  }
+  if (step === 'result') {
+    var exitInput = document.getElementById('wizExitPrice');
+    if (exitInput) setTimeout(function() { exitInput.focus(); }, 50);
+  }
   if (step === 'recap') {
     var missingTa = document.getElementById('wizMissingChat');
     if (missingTa && !(wizState.data.missing_chat_text || '').trim()) {
@@ -240,5 +248,56 @@ function _wizBindScreenshots() {
     _wizHandleFiles(e.dataTransfer.files);
   };
   input.onchange = function(e) { _wizHandleFiles(e.target.files); };
+}
+
+// ─── Direction step ─────────────────────────────────────────
+
+function _wizStepDirection() {
+  var d = wizState.data;
+  var isLong  = d.direction === 'long';
+  var isShort = d.direction === 'short';
+  return '<div class="wiz-question">Direction</div>'
+    + '<div class="wiz-hint">Dans quel sens prends-tu ce trade ?</div>'
+    + '<div class="wiz-direction-toggle">'
+    +   '<button class="wiz-dir-btn' + (isLong?' active-long':'') + '" data-dir="long" onclick="wizSetDir(this)">'
+    +     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>Long</button>'
+    +   '<button class="wiz-dir-btn' + (isShort?' active-short':'') + '" data-dir="short" onclick="wizSetDir(this)">'
+    +     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>Short</button>'
+    + '</div>';
+}
+
+// ─── Result step ────────────────────────────────────────────
+
+function _wizStepResult() {
+  var d = wizState.data;
+  var dir = d.direction || 'long';
+  var pnl = '';
+  if (d.entry_price && d.exit_price) {
+    var pnlVal = dir === 'long' ? (Number(d.exit_price) - Number(d.entry_price)) : (Number(d.entry_price) - Number(d.exit_price));
+    pnl = '<div class="wiz-rr-preview" style="color:' + (pnlVal >= 0 ? 'var(--win)' : 'var(--rose)') + '">PnL: ' + pnlVal.toFixed(2) + '$</div>';
+  }
+  return '<div class="wiz-question">Resultat</div>'
+    + '<div class="wiz-hint">Prix de sortie et PnL calcule automatiquement.</div>'
+    + '<div class="wiz-field">'
+    +   '<label class="wiz-label">Prix de sortie</label>'
+    +   '<input type="number" class="wiz-level-input" id="wizExitPrice" value="' + (d.exit_price||'') + '" placeholder="0.00" step="0.25" oninput="wizUpdateResult()">'
+    + '</div>'
+    + '<div id="wizResultPreview">' + pnl + '</div>';
+}
+
+function wizUpdateResult() {
+  var exit = document.getElementById('wizExitPrice')?.value;
+  if (!wizState) return;
+  wizState.data.exit_price = exit;
+  var dir = wizState.data.direction || 'long';
+  var entry = wizState.data.entry_price;
+  var preview = document.getElementById('wizResultPreview');
+  if (!preview) return;
+  if (entry && exit) {
+    var pnlVal = dir === 'long' ? (Number(exit) - Number(entry)) : (Number(entry) - Number(exit));
+    preview.innerHTML = '<div class="wiz-rr-preview" style="color:' + (pnlVal >= 0 ? 'var(--win)' : 'var(--rose)') + '">PnL: ' + pnlVal.toFixed(2) + '$</div>';
+  } else {
+    preview.innerHTML = '';
+  }
 }
 

@@ -6,8 +6,8 @@
 .page[data-page="stats"].active,
 .page[data-page="settings"].active,
 .page[data-page="insights"].active {
-  max-width: 1440px;
-  margin: 0 auto;
+  width: 100%;
+  align-self: stretch;
 }
 
 .stats-page-head,
@@ -249,6 +249,18 @@
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface-2);
+}
+.settings-field {
+  margin-top: 10px;
+}
+.settings-field label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .settings-switch input {

@@ -625,7 +625,17 @@ function renderTodayCalendar() {
     // Delegation document-level pour garantir la capture
     document.addEventListener("click", function _todayCalClick(e) {
       var dayEl = e.target.closest("#todayCalendarGrid .day");
-      if (!dayEl || dayEl.dataset.otherMonth === "1") return;
+      if (!dayEl) return;
+      // other-month: navigation vers le mois clique uniquement (pas d'ouverture de jour)
+      var isOther = dayEl.dataset.otherMonth === "1";
+      if (isOther) {
+        var otherKey = dayEl.dataset.date;
+        if (otherKey && typeof goPage === "function") {
+          state.journalFocusDate = otherKey;
+          goPage("journal");
+        }
+        return;
+      }
       var key = dayEl.dataset.date;
       if (!key) return;
       if (typeof goPage === "function") {

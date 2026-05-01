@@ -57,7 +57,7 @@ class TemplateRenderTests(unittest.TestCase):
             self.assertRegex(html, r'/static/style\.css\?v=[a-f0-9]{24}')
             self.assertGreater(html.count('/static/style.css'), 0)
 
-        self.assertIn('id="entryModal"', html)
+        self.assertIn('id="wiz"', html, "Le wizard doit etre rendu")
         self.assertIn('id="wiz"', html)
         self.assertIn('data-page="today"', html)
         self.assertIn('id="kpiPnl"', html)

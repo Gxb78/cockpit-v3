@@ -10,7 +10,18 @@ function bindCalendarGridActions(grid) {
   grid.addEventListener("click", (e) => {
     const dayEl = e.target.closest(".day");
     if (!dayEl || !grid.contains(dayEl)) return;
-    if (dayEl.dataset.otherMonth === "1") return;
+    if (dayEl.dataset.otherMonth === "1") {
+      // Naviguer vers le mois clique
+      var otherKey = dayEl.dataset.date;
+      if (otherKey) {
+        var parts = otherKey.split("-");
+        if (parts.length >= 2) {
+          state.currentMonth = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1);
+          loadMonth();
+        }
+      }
+      return;
+    }
     const key = dayEl.dataset.date;
     if (!key) return;
     const info = _calendarByDayCache[key];
