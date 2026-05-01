@@ -511,13 +511,22 @@ function normalizeCustomStrategies(rawList) {
   if (!Array.isArray(rawList)) return [];
   const out = [];
   const taken = new Set(DEFAULT_STRATEGY_VALUES);
+  const takenLabels = new Set();
   rawList.forEach(item => {
     const label = (typeof item === "string" ? item : item?.label || "").trim();
     if (!label) return;
+    // Deduplicate labels (deux strategies ne peuvent pas avoir le meme nom)
+    var finalLabel = label;
+    var li = 2;
+    while (takenLabels.has(finalLabel)) {
+      finalLabel = label + " " + li;
+      li += 1;
+    }
+    takenLabels.add(finalLabel);
     const preferred = normalizeStrategyValue(typeof item === "object" ? item?.value : "");
     const value = preferred && !taken.has(preferred) ? preferred : uniqueStrategyValue(label, taken);
     taken.add(value);
-    out.push({ value, label });
+    out.push({ value, label: finalLabel });
   });
   return out;
 }
