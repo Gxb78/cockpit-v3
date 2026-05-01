@@ -1325,52 +1325,68 @@ body.light-mode .theme-toggle:hover { border-color: rgba(0,132,255,0.40); backgr
 }
 
 /* ---- 005_journal_toolbar_filters.css ---- */
-/* ---------- Unified journal header ---------- */
+/* ---------- Journal header ---------- */
 
 .journal-page-head {
-  margin-bottom: 8px !important;
-}
-
-.journal-top-bar.unified {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 6px 10px;
-  border-radius: 18px;
-  border: 1px solid #e3e7ee;
-  background: #fff;
-  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+  padding: 8px 14px;
+  margin-bottom: 10px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e3e7ee);
+  border-radius: var(--r, 16px);
 }
 
-/* Left: Period stats */
-.journal-head-stats {
+/* Navigation inline (prev / month / next / today) */
+.journal-nav-inline {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   flex-shrink: 0;
 }
 
-.journal-head-stats .stat {
-  font-size: 13px;
-  font-weight: 850;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-  padding: 4px 10px;
+.journal-nav-inline .btn-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border, #e3e7ee);
+  background: transparent;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s;
+}
+.journal-nav-inline .btn-icon:hover {
+  background: rgba(0,0,0,0.04);
+  border-color: #c5cad4;
+}
+.journal-nav-inline .btn-icon svg {
+  display: block;
+}
+
+.journal-nav-inline .journal-month-control {
+  position: relative;
+}
+.journal-nav-inline #journalMonthInput {
+  width: 130px;
+  height: 32px;
   border-radius: 999px;
-  background: #eef1f6;
-  color: #626b7a;
+  border: 1px solid var(--border, #e3e7ee);
+  background: transparent;
   font-family: "JetBrains Mono", monospace;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.14s;
 }
-
-.journal-head-stats .stat.pos {
-  color: #20570b;
-  background: rgba(232, 255, 222, 0.90);
+.journal-nav-inline #journalMonthInput:hover {
+  border-color: #c5cad4;
 }
-
-.journal-head-stats .stat.neg {
-  color: #8a1429;
-  background: rgba(255, 229, 234, 0.92);
+.journal-nav-inline .journal-month-caption {
+  display: none;
 }
 
 /* Today button */
@@ -1383,491 +1399,394 @@ body.light-mode .theme-toggle:hover { border-color: rgba(0,132,255,0.40); backgr
   letter-spacing: 0.4px;
   background: #08090c;
   color: #fff;
-  border: none;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+  border: 0;
   cursor: pointer;
-  transition: background 0.18s, box-shadow 0.18s, transform 0.18s;
+  transition: opacity 0.14s;
 }
+.journal-today-btn:hover { opacity: 0.85; }
 
-.journal-today-btn:hover {
-  background: #1d1e23;
-  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.22);
-  transform: translateY(-1px);
-}
-
-.journal-today-btn:active {
-  transform: translateY(0);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.14);
-}
-
-/* ---------- Inline nav in filters bar ---------- */
-
-.journal-nav-inline {
-  display: inline-flex;
+/* Right toggles group */
+.journal-head-right {
+  display: flex;
   align-items: center;
-  gap: 5px;
-  flex-shrink: 0;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
-.journal-nav-inline .btn-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  background: #eef1f6;
-  color: #626b7a;
-  border: 1px solid #e3e7ee;
-  display: grid;
-  place-items: center;
-  transition: color 0.18s var(--ease), border-color 0.18s var(--ease), background 0.18s var(--ease);
-}
-
-.journal-nav-inline .btn-icon:hover {
-  color: #111827;
-  border-color: rgba(15, 23, 42, 0.16);
-  background: #fff;
-  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.08);
-}
-
-.journal-nav-inline .btn-icon svg {
-  width: 14px;
-  height: 14px;
-}
-
-.journal-nav-inline .journal-month-control {
-  display: inline-flex;
-  align-items: center;
-  position: relative;
-}
-
-.journal-nav-inline #journalMonthInput {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-  pointer-events: none;
-}
-
-.journal-nav-inline .journal-month-caption {
-  font-size: 13px;
-  font-weight: 850;
-  letter-spacing: -0.02em;
-  color: #111827;
-  padding: 0 6px;
-  min-width: 88px;
-  text-align: center;
-  cursor: pointer;
-  transition: color 0.18s var(--ease);
-}
-
-.journal-nav-inline .journal-month-caption:hover {
-  color: #626b7a;
-}
-
-/* Separator between nav and toggles */
 .journal-filters-sep {
   width: 1px;
   height: 18px;
-  background: #e3e7ee;
+  background: var(--border, #e3e7ee);
   flex-shrink: 0;
 }
 
-/* ---------- Stat chips in the trade-filter row ---------- */
-
-.journal-filter-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  align-self: stretch;
-  justify-content: flex-end;
-  min-width: 88px;
-}
-
-.journal-filter-stat-label {
-  display: block;
-  font-size: 9px;
-  font-weight: 850;
-  color: #98a1af;
-  margin-bottom: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-family: "JetBrains Mono", monospace;
-}
-
-.journal-filter-stat-value {
-  display: flex;
-  align-items: center;
-  min-height: 34px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: #eef1f6;
-  border: 1px solid #e3e7ee;
-  font-size: 13px;
-  font-weight: 850;
-  letter-spacing: -0.01em;
-  color: #626b7a;
-  white-space: nowrap;
-  font-family: "JetBrains Mono", monospace;
-}
-
-.journal-filter-stat-value.pos {
-  color: #20570b;
-  background: rgba(232, 255, 222, 0.90);
-  border-color: rgba(45, 122, 19, 0.18);
-}
-.journal-filter-stat-value.neg {
-  color: #8a1429;
-  background: rgba(255, 229, 234, 0.92);
-  border-color: rgba(180, 35, 60, 0.18);
-}
-
-/* Right: Metric toggle (inline version) */
-.journal-top-bar.unified .calendar-metric-toggle {
+/* Focus mode buttons */
+#calendarMonthFocusToggle {
   display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 3px;
-  border-radius: 999px;
-  border: 1px solid #e3e7ee;
-  background: #eef1f6;
-  flex-shrink: 0;
+  gap: 2px;
 }
-
-.journal-top-bar.unified .calendar-metric-btn {
-  border: 1px solid transparent;
+.calendar-month-focus-btn {
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 0;
   background: transparent;
-  color: #626b7a;
-  font-size: 11px;
-  font-weight: 850;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-  padding: 5px 11px;
-  border-radius: 999px;
-  transition: color, background 0.18s var(--ease);
-  cursor: pointer;
-  line-height: 1;
-}
-
-.journal-top-bar.unified .calendar-metric-btn:hover {
-  color: #111827;
-  background: #fff;
-}
-
-.journal-top-bar.unified .calendar-metric-btn.active {
-  color: #fff;
-  background: #08090c;
-  border-color: #08090c;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
-}
-
-/* Journal page compact body */
-.journal-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* ============================================================
-   JOURNAL — calendar (legacy, keeping for ref)
-   ============================================================ */
-
-.journal-page-head {
-  display: grid;
-  grid-template-columns: minmax(210px, 1fr) auto minmax(210px, 1fr);
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 18px;
-}
-.journal-head-copy {
-  justify-self: start;
-}
-.journal-page-head .page-title {
-  margin-bottom: 1px;
-}
-.journal-page-actions {
-  justify-self: center;
-  gap: 10px;
-}
-
-.calendar-nav {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 0;
-  flex: 0 0 auto;
-  padding: 5px 8px;
-  border-radius: 999px;
-  border: 1px solid #e3e7ee;
-  background: #fff;
-  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
-}
-.journal-today-btn {
-  height: 34px;
-  padding: 0 12px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 850;
-  letter-spacing: 0.6px;
-}
-
-.calendar-month-picker {
-  position: relative;
-}
-.month-label-btn {
-  border: 1px solid #e3e7ee;
-  background: #fff;
-  color: #111827;
-  min-width: 182px;
-  height: 38px;
-  border-radius: 999px;
-  padding: 0 14px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  text-transform: capitalize;
-  cursor: pointer;
-  transition: border-color 0.18s var(--ease), box-shadow 0.18s var(--ease), transform 0.18s var(--ease);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
-}
-.month-label-btn:hover {
-  border-color: rgba(15, 23, 42, 0.16);
-  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.12);
-  transform: translateY(-1px);
-}
-.month-label-btn h2 {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 850;
-  letter-spacing: -0.25px;
-  line-height: 1;
-  color: #111827;
-}
-.month-label-chev {
-  width: 14px;
-  height: 14px;
   color: #98a1af;
-  transition: transform 0.2s var(--ease), color 0.2s var(--ease);
-}
-.calendar-month-picker.open .month-label-chev {
-  transform: rotate(180deg);
-  color: #111827;
-}
-
-.month-pop {
-  position: absolute;
-  top: calc(100% + 10px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: 246px;
-  padding: 10px;
-  border-radius: 18px;
-  border: 1px solid #e3e7ee;
-  background: #fff;
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.18);
-  z-index: 15;
-}
-.month-pop-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-.month-pop-year {
-  font-size: 14px;
-  font-weight: 850;
-  letter-spacing: -0.2px;
-  color: #111827;
-}
-.month-year-btn {
-  width: 28px;
-  height: 28px;
-}
-.month-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-}
-.month-btn {
-  border: 1px solid #e3e7ee;
-  background: #eef1f6;
-  color: #626b7a;
-  border-radius: 999px;
-  padding: 7px 0;
-  font-size: 11px;
-  font-weight: 850;
-  text-transform: uppercase;
-  letter-spacing: 0.55px;
-  transition: color, border-color, background 0.18s var(--ease);
-}
-.month-btn:hover {
-  color: #111827;
-  border-color: rgba(15, 23, 42, 0.16);
-  background: #fff;
-}
-.month-btn.current {
-  border-color: rgba(15, 23, 42, 0.16);
-  color: #111827;
-}
-.month-btn.active {
-  color: #fff;
-  background: #08090c;
-  border-color: #08090c;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
-}
-
-.calendar-metric-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px;
-  border-radius: 999px;
-  border: 1px solid #e3e7ee;
-  background: #eef1f6;
-  box-shadow: none;
-  position: relative;
-  z-index: 5;
-}
-.calendar-metric-btn {
-  border: 1px solid transparent;
-  background: transparent;
-  color: #626b7a;
-  font-size: 11px;
-  font-weight: 850;
-  letter-spacing: 0.7px;
-  text-transform: uppercase;
-  padding: 7px 13px;
-  border-radius: 999px;
-  transition: color, background 0.18s var(--ease);
   cursor: pointer;
+  transition: background 0.14s, color 0.14s;
 }
-.calendar-metric-btn:hover {
-  color: #111827;
-  background: #fff;
-}
-.calendar-metric-btn.active {
-  color: #fff;
-  background: #08090c;
-  border-color: #08090c;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
-}
+.calendar-month-focus-btn:hover { color: #626b7a; }
+.calendar-month-focus-btn.active { background: #08090c; color: #fff; }
 
+/* View / Layout / Range toggles */
 .calendar-view-toggle,
 .calendar-layout-toggle,
 .calendar-range-toggle {
   display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px;
+  gap: 1px;
+  border: 1px solid var(--border, #e3e7ee);
   border-radius: 999px;
-  border: 1px solid #e3e7ee;
-  background: #eef1f6;
-  box-shadow: none;
+  overflow: hidden;
+  background: #f4f6f9;
 }
 
 .calendar-view-btn,
 .calendar-layout-btn,
 .calendar-range-btn {
-  border: 1px solid transparent;
-  background: transparent;
-  color: #626b7a;
-  font-size: 11px;
-  font-weight: 850;
-  letter-spacing: 0.7px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
   text-transform: uppercase;
-  padding: 7px 13px;
-  border-radius: 999px;
-  transition: color, background 0.18s var(--ease);
+  padding: 5px 12px;
+  border: 0;
+  background: transparent;
+  color: #98a1af;
   cursor: pointer;
-}
-.calendar-view-btn:hover,
-.calendar-layout-btn:hover,
-.calendar-range-btn:hover {
-  color: #111827;
-  background: #fff;
+  transition: background 0.14s, color 0.14s;
 }
 .calendar-view-btn.active,
 .calendar-layout-btn.active,
 .calendar-range-btn.active {
-  color: #fff;
-  background: #08090c;
-  border-color: #08090c;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+  background: #fff;
+  color: #10131b;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
 
-.journal-filters {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 4px 0 12px;
-}
-.journal-trade-filters {
-  display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr auto auto auto;
-  gap: 10px;
-  align-items: end;
-  margin: 0 0 12px;
-}
-.journal-filter-field {
-  margin: 0;
-}
-.journal-filter-field label {
-  font-size: 9px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #98a1af;
-  font-family: "JetBrains Mono", monospace;
-  font-weight: 850;
-}
-.journal-filter-reset {
-  height: 36px;
-  padding: 0 12px;
-  white-space: nowrap;
+/* Quick range presets */
+#calendarQuickRange { display: inline-flex; gap: 3px; }
+.calendar-quick-btn {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 10px;
   border-radius: 999px;
-  background: #eef1f6;
-  border: 1px solid #e3e7ee;
+  border: 1px solid var(--border, #e3e7ee);
+  background: transparent;
   color: #626b7a;
-  font-weight: 850;
+  cursor: pointer;
+  transition: background 0.14s;
 }
-.calendar-custom-range {
+.calendar-quick-btn:hover { background: rgba(0,0,0,0.04); }
+
+/* Custom range label */
+#calendarCustomLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: #626b7a;
+  font-family: "JetBrains Mono", monospace;
+}
+
+/* ---------- Month picker popover ---------- */
+
+.calendar-month-picker {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
-.calendar-custom-range input[type="date"] {
-  border: 1px solid #dde2ea;
-  background: #f4f6fa;
-  color: #111827;
-  border-radius: 999px;
-  padding: 7px 9px;
-  font: inherit;
-  font-size: 12px;
-  color-scheme: light;
+#monthLabel {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  color: #626b7a;
+  letter-spacing: -0.01em;
 }
-.calendar-custom-sep {
+
+.month-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 100;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e3e7ee);
+  border-radius: var(--r-sm, 12px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.10);
+  padding: 10px;
+  min-width: 180px;
+}
+.month-pop.hidden { display: none; }
+
+.month-pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.month-pop-year {
+  font-size: 13px;
+  font-weight: 800;
   font-family: "JetBrains Mono", monospace;
+}
+.month-year-btn {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.month-year-btn:hover { background: rgba(0,0,0,0.05); }
+
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+}
+.month-btn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px;
+  border-radius: 6px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.month-btn:hover { background: rgba(0,0,0,0.05); }
+.month-btn.active { background: #08090c; color: #fff; }
+
+/* ---------- Journal filters ---------- */
+
+.journal-filters {
+  margin-bottom: 10px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e3e7ee);
+  border-radius: var(--r, 16px);
+  padding: 12px 14px;
+}
+
+.journal-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.jfilter-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.jfilter-group label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #98a1af;
+}
+.jfilter-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
   color: #98a1af;
 }
 
-.btn-icon {
-  background: #eef1f6;
-  color: #626b7a;
-  border: 1px solid #e3e7ee;
-  width: 34px; height: 34px;
+.jfilter-group select,
+.jfilter-group .journal-range-trigger {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
   border-radius: 999px;
-  display: grid;
-  place-items: center;
-  transition: color, border-color, background, transform, box-shadow 0.2s var(--ease);
+  border: 1px solid var(--border, #e3e7ee);
+  background: #f4f6f9;
+  color: #10131b;
+  cursor: pointer;
+  font-family: inherit;
 }
 
-.btn-icon:hover {
-  color: #111827;
+.jfilter-layout {
+  display: inline-flex;
+  gap: 1px;
+  border: 1px solid var(--border, #e3e7ee);
+  border-radius: 999px;
+  overflow: hidden;
+  background: #f4f6f9;
+}
+.jfilter-layout-btn {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  border: 0;
+  background: transparent;
+  color: #98a1af;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.14s, color 0.14s;
+}
+.jfilter-layout-btn.active {
   background: #fff;
-  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.08);
+  color: #10131b;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+/* Stats carousel */
+.jfilter-stats-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border, #e3e7ee);
+}
+.jfilter-stats-display {
+  text-align: center;
+  min-width: 100px;
+}
+.jfilter-stats-value {
+  display: block;
+  font-size: 20px;
+  font-weight: 850;
+  font-family: "JetBrains Mono", monospace;
+  color: #10131b;
+}
+.jfilter-stats-value.pos { color: #20570b; }
+.jfilter-stats-value.neg { color: #8a1429; }
+.jfilter-stats-label {
+  display: block;
+  font-size: 9px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #98a1af;
+  margin-top: 2px;
+}
+.jfilter-stats-arrow {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border, #e3e7ee);
+  background: transparent;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 0.14s;
+}
+.jfilter-stats-arrow:hover { background: rgba(0,0,0,0.04); }
+
+/* Advanced filters details */
+.journal-advanced-filters {
+  margin-top: 10px;
+  border-top: 1px solid var(--border, #e3e7ee);
+  padding-top: 10px;
+}
+.journal-advanced-filters summary {
+  width: max-content;
+  cursor: pointer;
+  color: #98a1af;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  list-style: none;
+}
+.journal-advanced-filters summary .filter-badge {
+  color: var(--cyan, #00e5ff);
+  font-weight: 700;
+  margin-left: 4px;
+}
+.journal-advanced-filters summary::-webkit-details-marker { display: none; }
+.journal-advanced-filters summary::before {
+  content: "+";
+  margin-right: 7px;
+  color: #626b7a;
+}
+.journal-advanced-filters[open] summary::before { content: "-"; }
+
+.journal-trade-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+  align-items: end;
+}
+.journal-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.journal-filter-field label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #98a1af;
+}
+.journal-filter-field select,
+.journal-filter-field input {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #e3e7ee);
+  background: #f4f6f9;
+  color: #10131b;
+  font-family: inherit;
+  min-width: 80px;
+}
+.select-wrapper { position: relative; }
+.select-wrapper select {
+  appearance: none;
+  padding-right: 24px;
+}
+.select-arrow {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: #98a1af;
+}
+
+.journal-filter-pnl {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.journal-filter-reset {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px dashed var(--border, #e3e7ee);
+  background: transparent;
+  color: #98a1af;
+  cursor: pointer;
+  transition: color 0.14s, border-color 0.14s;
+  white-space: nowrap;
+}
+.journal-filter-reset:hover {
+  color: var(--rose, #ff4e6b);
+  border-color: rgba(255,78,107,0.3);
 }
 
 /* ---- 006_btn_icon_svg.css ---- */
@@ -6528,15 +6447,24 @@ body.is-dragging {
   display: grid;
   gap: 14px;
   grid-template-columns: 1fr 1fr;
-  grid-auto-rows: auto;
+  grid-auto-rows: var(--widget-row-h, 220px);
 }
 
-.page[data-page="today"] .today-grid .widget[data-widget-key="today_context"]:not(.widget-hidden) {
+.today-grid .widget[data-widget-key] {
+  grid-row: span 1;
+}
+
+.today-grid .widget[data-widget-key="today_activity"]:not(.widget-hidden) {
+  grid-row: span 2;
+}
+
+.today-grid .widget[data-widget-key="today_context"]:not(.widget-hidden) {
   grid-column: 1 / -1;
+  grid-row: span 1;
 }
 
-.page[data-page="today"] .today-grid .widget[data-widget-key="today_calendar"]:not(.widget-hidden) {
-  grid-column: auto;
+.today-grid .widget[data-widget-key="today_calendar"]:not(.widget-hidden) {
+  grid-row: span 1;
 }
 
 .page[data-page="today"] .today-grid:not(:has(.widget[data-widget-key="today_context"]:not(.widget-hidden))) {
@@ -11712,80 +11640,6 @@ body.light-mode .app-topbar {
 
 .udp-bound-input {
   cursor: pointer;
-}
-
-.journal-filters {
-  display: block;
-  border-color: #e3e7ee;
-  background: #fff;
-}
-
-.jfilter-period { min-width: min(360px, 100%); }
-.jfilter-label {
-  font-family: "JetBrains Mono", monospace;
-  font-size: 10px;
-  color: #98a1af;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  white-space: nowrap;
-}
-
-.journal-range-trigger {
-  min-height: 36px;
-  min-width: 250px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border: 1px solid #e3e7ee;
-  border-radius: 999px;
-  background: #fff;
-  color: #111827;
-  padding: 0 11px;
-  font-family: "JetBrains Mono", monospace;
-  font-size: 11px;
-  cursor: pointer;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
-  transition: border-color 0.18s, box-shadow 0.18s;
-}
-
-.journal-range-trigger svg {
-  width: 15px;
-  height: 15px;
-  color: #98a1af;
-}
-
-.journal-range-trigger:hover {
-  border-color: rgba(15, 23, 42, 0.16);
-  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.12);
-}
-
-.journal-advanced-filters { margin-top: 10px; }
-.journal-advanced-filters summary {
-  width: max-content;
-  cursor: pointer;
-  color: #98a1af;
-  font-family: "JetBrains Mono", monospace;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  list-style: none;
-}
-.journal-advanced-filters summary .filter-badge {
-  color: var(--cyan, #00e5ff);
-  font-weight: 700;
-  margin-left: 4px;
-}
-.journal-advanced-filters summary::-webkit-details-marker { display: none; }
-.journal-advanced-filters summary::before {
-  content: "+";
-  margin-right: 7px;
-  color: #626b7a;
-}
-.journal-advanced-filters[open] summary::before { content: "-"; }
-.journal-advanced-filters .journal-trade-filters {
-  margin-top: 10px;
-  margin-bottom: 0;
 }
 
 .udp.hidden { display: none; }

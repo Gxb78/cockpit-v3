@@ -7641,6 +7641,13 @@ function dndItemsWithPlaceholder(board, ph) {
 
 function dndHitTest(items, board, cx, cy) {
   var isH = board.dataset.widgetBoard === "today-kpis";
+  var dragSpan = 1;
+  if (_dnd && _dnd.el) {
+    var cs = window.getComputedStyle(_dnd.el);
+    var gr = cs.gridRow || "";
+    var m = gr.match(/span\s*(\d+)/);
+    if (m) dragSpan = parseInt(m[1]);
+  }
   for (var i = 0; i < items.length; i++) {
     var r = items[i].getBoundingClientRect();
     if (cx >= r.left-4 && cx <= r.right+4 && cy >= r.top-4 && cy <= r.bottom+4) {
@@ -7649,7 +7656,8 @@ function dndHitTest(items, board, cx, cy) {
         return cx < mX - DND_DEAD_ZONE ? i : (cx > mX + DND_DEAD_ZONE ? i+1 : i);
       }
       var mY = r.top + r.height / 2;
-      return cy < mY - DND_DEAD_ZONE ? i : (cy > mY + DND_DEAD_ZONE ? i+1 : i);
+      var threshold = DND_DEAD_ZONE * dragSpan;
+      return cy < mY - threshold ? i : (cy > mY + threshold ? i+1 : i);
     }
   }
   var best = 0, bestD = Infinity;

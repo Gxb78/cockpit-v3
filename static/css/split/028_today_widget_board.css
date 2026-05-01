@@ -265,15 +265,24 @@ body.is-dragging {
   display: grid;
   gap: 14px;
   grid-template-columns: 1fr 1fr;
-  grid-auto-rows: auto;
+  grid-auto-rows: var(--widget-row-h, 220px);
 }
 
-.page[data-page="today"] .today-grid .widget[data-widget-key="today_context"]:not(.widget-hidden) {
+.today-grid .widget[data-widget-key] {
+  grid-row: span 1;
+}
+
+.today-grid .widget[data-widget-key="today_activity"]:not(.widget-hidden) {
+  grid-row: span 2;
+}
+
+.today-grid .widget[data-widget-key="today_context"]:not(.widget-hidden) {
   grid-column: 1 / -1;
+  grid-row: span 1;
 }
 
-.page[data-page="today"] .today-grid .widget[data-widget-key="today_calendar"]:not(.widget-hidden) {
-  grid-column: auto;
+.today-grid .widget[data-widget-key="today_calendar"]:not(.widget-hidden) {
+  grid-row: span 1;
 }
 
 .page[data-page="today"] .today-grid:not(:has(.widget[data-widget-key="today_context"]:not(.widget-hidden))) {
