@@ -125,8 +125,8 @@
           fontSize: 11,
         },
         grid: {
-          vertLines: { color: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.03)' },
-          horzLines: { color: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.03)' },
+          vertLines: { color: 'transparent' },
+          horzLines: { color: 'transparent' },
         },
         crosshair: { mode: 0 },
         rightPriceScale: {

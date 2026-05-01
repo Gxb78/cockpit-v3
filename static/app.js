@@ -11077,8 +11077,8 @@ TradeEditorController.renderHtml = function (day, trade) {
           textColor: isLight ? '#1e293b' : '#d1d5db',
         },
         grid: {
-          vertLines: { color: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.04)' },
-          horzLines: { color: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.04)' },
+          vertLines: { color: 'transparent' },
+          horzLines: { color: 'transparent' },
         },
         crosshair: { mode: 0 },
         rightPriceScale: {
@@ -11327,8 +11327,8 @@ TradeEditorController.renderHtml = function (day, trade) {
           fontSize: 11,
         },
         grid: {
-          vertLines: { color: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.03)' },
-          horzLines: { color: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.03)' },
+          vertLines: { color: 'transparent' },
+          horzLines: { color: 'transparent' },
         },
         crosshair: { mode: 0 },
         rightPriceScale: {
