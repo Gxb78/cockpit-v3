@@ -8033,7 +8033,7 @@ function dndHitTest(items, ghostLeft, ghostTop, ghostRight, ghostBottom, ghostCX
 function renderTodayCalendar() {
   var grid = $("#todayCalendarGrid");
   var monthEl = $("#todayCalendarMonth");
-  if (!grid) return;
+  if (!grid) { console.warn("[today] calendar grid missing"); return; }
 
   var now = new Date();
   var year = now.getFullYear();
