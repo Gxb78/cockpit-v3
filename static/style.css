@@ -426,7 +426,6 @@ body.light-mode .aurora::before {
   z-index: 1;
   display: grid;
   grid-template-columns: 240px 1fr;
-  min-height: 100dvh;
 }
 
 /* ============================================================
