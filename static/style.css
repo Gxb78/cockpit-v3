@@ -6104,11 +6104,57 @@ body.light-mode .day-dots { gap: 3px; }
   padding: 0;
 }
 .wiz-rail-mode .wiz-panel {
-  width: min(580px, calc(100vw - 280px));
-  height: min(440px, 80dvh);
+  width: min(660px, calc(100vw - 280px));
+  height: min(360px, 70dvh);
   box-shadow: 0 18px 48px rgba(0,0,0,0.35);
   margin: 0;
 }
+
+/* Rail mode : etapes compactes, pas de scroll */
+.wiz-rail-mode .wiz-header {
+  padding: 8px 16px 6px;
+}
+.wiz-rail-mode .wiz-step-title { font-size: 0.92rem; }
+.wiz-rail-mode .wiz-body {
+  overflow-y: visible;
+  padding: 6px 18px 4px;
+}
+.wiz-rail-mode .wiz-footer {
+  padding: 8px 16px 12px;
+}
+.wiz-rail-mode .wiz-question {
+  font-size: 0.95rem;
+  margin-bottom: 6px;
+}
+.wiz-rail-mode .wiz-hint {
+  font-size: 0.72rem;
+  margin-bottom: 8px;
+}
+.wiz-rail-mode .wiz-card {
+  padding: 12px 10px 10px;
+}
+.wiz-rail-mode .wiz-card-icon { font-size: 1.1rem; }
+.wiz-rail-mode .wiz-card-main { font-size: 0.85rem; }
+.wiz-rail-mode .wiz-card-sub  { font-size: 0.62rem; }
+.wiz-rail-mode .wiz-cards { gap: 6px; }
+.wiz-rail-mode .wiz-textarea {
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  min-height: 52px;
+}
+.wiz-rail-mode .wiz-textarea.lg {
+  min-height: 52px;
+  font-size: 0.85rem;
+}
+.wiz-rail-mode .wiz-levels-grid { gap: 6px; }
+.wiz-rail-mode .wiz-level-lbl { font-size: 0.65rem; margin-bottom: 3px; }
+.wiz-rail-mode .wiz-input { padding: 8px 10px; font-size: 0.85rem; }
+.wiz-rail-mode .wiz-pills { gap: 4px; }
+.wiz-rail-mode .wiz-pill { padding: 5px 10px; font-size: 0.8rem; }
+.wiz-rail-mode .wiz-direction-toggle { margin-bottom: 8px; }
+.wiz-rail-mode .wiz-dir-btn { padding: 10px; font-size: 0.85rem; }
+.wiz-rail-mode .wiz-dir-btn svg { width: 16px; height: 16px; }
+.wiz-rail-mode .wiz-label { font-size: 0.7rem; margin-bottom: 3px; }
 .wiz-progress-fill { height: 100%; background: var(--cyan); transition: width 0.3s var(--ease); border-radius: 0 2px 2px 0; }
 .wiz-header {
   display: flex; align-items: center; gap: 10px;
