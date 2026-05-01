@@ -2651,10 +2651,22 @@ function renderCalendar(windowDef = null) {
   } else if (state.journalRangeMode === "custom") {
     const cursor = parseDateKey(win.from);
     const end = parseDateKey(win.to);
+    // Padding leading days pour aligner le premier jour sous son weekday (Lun=0..Dim=6)
+    const leadIndex = (cursor.getDay() + 6) % 7;
+    for (let i = leadIndex; i > 0; i -= 1) {
+      fragment.appendChild(dayCell(shiftDays(cursor, -i), byDay, true, tk));
+    }
     let c = cursor;
+    let count = 0;
     while (c <= end) {
       fragment.appendChild(dayCell(c, byDay, false, tk));
       c = shiftDays(c, 1);
+      count += 1;
+    }
+    // Padding trailing pour completer la derniere semaine
+    const trailing = (7 - ((leadIndex + count) % 7)) % 7;
+    for (let i = 0; i < trailing; i += 1) {
+      fragment.appendChild(dayCell(shiftDays(c, i), byDay, true, tk));
     }
   } else {
     const ref   = state.currentMonth;
