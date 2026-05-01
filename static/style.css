@@ -1316,6 +1316,21 @@ body.light-mode .entry-card:hover {
   background: var(--win-bg);
   border-color: var(--win-border);
 }
+body.light-mode .entry-result-chip {
+  background: transparent;
+  border-color: rgba(15,23,42,0.08);
+  font-weight: 700;
+}
+body.light-mode .entry-result-chip.win {
+  color: #15803d;
+  border-color: rgba(21,128,61,0.20);
+  background: rgba(21,128,61,0.04);
+}
+body.light-mode .entry-result-chip.loss {
+  color: #b91c1c;
+  border-color: rgba(185,28,28,0.20);
+  background: rgba(185,28,28,0.04);
+}
 .entry-result-chip.loss {
   color: var(--loss);
   background: var(--loss-bg);
@@ -15160,7 +15175,7 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   border-radius: var(--r);
   position: relative;
   overflow: hidden;
-  box-shadow: var(--shadow-xs);
+  box-shadow: var(--shadow-xs), inset 0 0 0 1px rgba(255,255,255,0.03);
   transition: border-color var(--duration-normal) var(--ease),
               box-shadow var(--duration-normal) var(--ease),
               transform var(--duration-normal) var(--ease);

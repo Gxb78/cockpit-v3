@@ -105,6 +105,21 @@ body.light-mode .entry-card:hover {
   background: var(--win-bg);
   border-color: var(--win-border);
 }
+body.light-mode .entry-result-chip {
+  background: transparent;
+  border-color: rgba(15,23,42,0.08);
+  font-weight: 700;
+}
+body.light-mode .entry-result-chip.win {
+  color: #15803d;
+  border-color: rgba(21,128,61,0.20);
+  background: rgba(21,128,61,0.04);
+}
+body.light-mode .entry-result-chip.loss {
+  color: #b91c1c;
+  border-color: rgba(185,28,28,0.20);
+  background: rgba(185,28,28,0.04);
+}
 .entry-result-chip.loss {
   color: var(--loss);
   background: var(--loss-bg);

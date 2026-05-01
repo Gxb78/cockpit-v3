@@ -12,7 +12,7 @@
   border-radius: var(--r);
   position: relative;
   overflow: hidden;
-  box-shadow: var(--shadow-xs);
+  box-shadow: var(--shadow-xs), inset 0 0 0 1px rgba(255,255,255,0.03);
   transition: border-color var(--duration-normal) var(--ease),
               box-shadow var(--duration-normal) var(--ease),
               transform var(--duration-normal) var(--ease);
