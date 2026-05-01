@@ -361,3 +361,7 @@ Format obligatoire d'une lesson:
 - Regle de prevention: toujours utiliser `type="password"` pour les cles API, avec un bouton toggle œil pour afficher/masquer. Pattern: `<input type="password">` + bouton `#settingsApiToggle` qui switch entre `type="password"` et `type="text"`.
 - Test de non-regression: ouvrir Settings → la cle est masquee (dots).
 - Fichiers a surveiller: `templates/partials/pages/settings/api_card.html`, `static/js/split/003_addcustomstrategyfromsettings.js`, `static/css/split/034_priority3_stats_settings_insights.css`.
+
+### CONVENTION-20260501 - exit_price = TP (consolidation champs)
+- Regle: Dans Cockpit v3, exit_price et take_profit designent la meme chose (le prix de sortie = take-profit). Le backend normalise `exit_price` → `take_profit` dans `05_payload_normalizers.py`. Le frontend affiche le champ `exit_price` sous le label "TP" partout (editeur inline section Niveaux, tableau journal, card back). Le champ `take_profit` / "Target" est supprime de l'editeur pour eviter la confusion. La DB conserve les deux colonnes pour retrocompatibilite.
+- Fichiers a surveiller: `app_parts/05_payload_normalizers.py`, `static/js/split/059_trade_editor_controller.js`, `templates/partials/pages/journal/table.html`, `static/js/split/056_journal_day_trade_cards.js`.

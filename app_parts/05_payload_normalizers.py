@@ -29,6 +29,9 @@ def normalize_trade_payload(data, *, for_update=False):
         raw["take_profit"] = raw.get("target_price")
     if "tp" in raw and "take_profit" not in raw:
         raw["take_profit"] = raw.get("tp")
+    # exit_price = TP (consolidation)
+    if "exit_price" in raw and "take_profit" not in raw:
+        raw["take_profit"] = raw.get("exit_price")
     if "stdv" in raw and "stdv_level" not in raw:
         raw["stdv_level"] = raw.get("stdv")
     if "exit_quality" in raw and "execution_quality" not in raw:
