@@ -115,6 +115,15 @@ if ($("#entryModal") && !$("#entryModal").classList.contains("hidden") && (paylo
           }
         }
       }
+      // Patcher aussi state.allDays (utilise par findTodayContextDay)
+      if (state.allDays) {
+        for (var _ai = 0; _ai < state.allDays.length; _ai++) {
+          if (state.allDays[_ai].id === (saved && saved.id != null ? saved.id : activeId)) {
+            Object.assign(state.allDays[_ai], saved || payload);
+            break;
+          }
+        }
+      }
       if (state.currentPage === "today" && typeof renderToday === "function") renderToday();
       if (state._stats && typeof renderKPIs === "function") renderKPIs(state._stats);
     } else {

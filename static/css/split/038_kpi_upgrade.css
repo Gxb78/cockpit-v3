@@ -369,6 +369,7 @@ body.light-mode .page[data-page="today"] .kpi:hover {
   min-height: 44px;
   padding: 4px 3px;
   border-radius: var(--r-sm);
+  cursor: pointer;
 }
 
 .page[data-page="today"] .today-calendar-wrap .day-num {
