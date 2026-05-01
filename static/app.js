@@ -10893,6 +10893,50 @@ TradeEditorController.renderHtml = function (day, trade) {
   var currentInterval = '1h';
   var resizeObserver = null;
   var chartReady = false;
+  var countdownTimer = null;
+  var lastCandleTime = 0;
+
+  // Intervalle en ms pour le countdown
+  var INTERVAL_MS = {
+    '1m': 60000, '3m': 180000, '5m': 300000, '15m': 900000,
+    '30m': 1800000, '1h': 3600000, '2h': 7200000, '4h': 14400000,
+    '6h': 21600000, '8h': 28800000, '12h': 43200000,
+    '1d': 86400000, '3d': 259200000, '1w': 604800000, '1M': 2592000000,
+  };
+
+  function _getIntervalMs(interval) {
+    var m = INTERVAL_MS[interval];
+    if (m) return m;
+    // Custom: parser 5m, 2h, 3d etc.
+    var match = interval.match(/^(\d+)(m|h|d|w|M)$/);
+    if (!match) return 3600000;
+    var num = parseInt(match[1], 10);
+    var unit = match[2];
+    var mult = { m: 60000, h: 3600000, d: 86400000, w: 604800000, M: 2592000000 };
+    return num * (mult[unit] || 3600000);
+  }
+
+  function _startCountdown() {
+    if (countdownTimer) clearInterval(countdownTimer);
+    var el = document.getElementById('btcChartCountdown');
+    if (!el) return;
+
+    function tick() {
+      if (!lastCandleTime) { el.textContent = ''; return; }
+      var now = Date.now();
+      var ms = _getIntervalMs(currentInterval);
+      var elapsed = now - lastCandleTime;
+      var remaining = ms - elapsed;
+      if (remaining <= 0) { el.textContent = '0:00'; return; }
+      var totalSec = Math.ceil(remaining / 1000);
+      var m = Math.floor(totalSec / 60);
+      var s = totalSec % 60;
+      el.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+    }
+
+    tick();
+    countdownTimer = setInterval(tick, 1000);
+  }
 
   function initBtcChart() {
     var container = document.getElementById('btcChartContainer');
@@ -11005,6 +11049,9 @@ TradeEditorController.renderHtml = function (day, trade) {
           document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
           btn.classList.add('active');
           currentInterval = btn.dataset.interval;
+          // Vider le champ custom
+          var ci = document.getElementById('btcChartCustom');
+          if (ci) ci.value = '';
           _fetchAndRender();
         });
       });
@@ -11013,8 +11060,12 @@ TradeEditorController.renderHtml = function (day, trade) {
       var customInput = document.getElementById('btcChartCustom');
       if (customInput) {
         customInput.addEventListener('change', function () {
-          var val = this.value.trim();
-          if (!val) return;
+          var val = this.value.trim().toLowerCase();
+          // Valider le format (chiffres + une lettre: m/h/d/w/M)
+          if (!/^\d+(m|h|d|w|M)$/.test(val)) {
+            this.value = '';
+            return;
+          }
           document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
           currentInterval = val;
           _fetchAndRender();
@@ -11039,6 +11090,9 @@ TradeEditorController.renderHtml = function (day, trade) {
         var candles = data.candles || [];
         if (!candles.length) return;
         var last = candles[candles.length - 1];
+        // Sauvegarder le timestamp de la derniere bougie pour le countdown
+        lastCandleTime = last.time * 1000;
+        _startCountdown();
         var priceEl = document.getElementById('btcChartPrice');
         if (priceEl) priceEl.textContent = '$' + Number(last.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
         series.setData(candles);
