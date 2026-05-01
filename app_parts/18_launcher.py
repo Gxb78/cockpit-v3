@@ -16,7 +16,10 @@ def open_browser(url):
 @app.post("/api/dev/restart")
 def dev_restart():
     """Redémarre le serveur Flask (mode dev uniquement).
-    Rebuild d'abord le bundle, puis remplace le processus via os.execv."""
+    Rebuild d'abord le bundle, puis remplace le processus via os.execv.
+    Désactivé hors mode DEBUG — sécurité réseau."""
+    if not env_bool("DEBUG", env_bool("FLASK_DEBUG", False)):
+        return jsonify({"error": "desactive hors mode DEBUG"}), 403
     import threading as _t
     def _restart():
         import sys

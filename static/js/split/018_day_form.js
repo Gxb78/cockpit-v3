@@ -100,8 +100,24 @@ async function saveDayContext(isNew) {
       }
     }
     state.modalDataDirty = true;
-    if (typeof loadAll === "function") {
-      setTimeout(loadAll, 100);
+    // Mutation locale + re-render si update simple (pas de changement date/instrument)
+    if (!isCreate && !payload.date && !payload.instrument) {
+      // Patcher localement state.days pour eviter un loadAll()
+      if (state.days) {
+        for (var _i = 0; _i < state.days.length; _i++) {
+          if (state.days[_i].id === (saved && saved.id != null ? saved.id : activeId)) {
+            Object.assign(state.days[_i], saved || payload);
+            break;
+          }
+        }
+      }
+      if (state.currentPage === "today" && typeof renderToday === "function") renderToday();
+      if (state._stats && typeof renderKPIs === "function") renderKPIs(state._stats);
+    } else {
+      // Changement structurel (create, date, instrument) -> rechargement complet
+      if (typeof loadAll === "function") {
+        setTimeout(loadAll, 100);
+      }
     }
     state.initialDayPayload = buildDayPayload();
     state.initialDayState = snapshotDayForm();

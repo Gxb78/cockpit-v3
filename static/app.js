@@ -7468,6 +7468,8 @@ function dndStart() {
   ph.className = "widget-drag-placeholder";
   ph.style.width = _dnd.width + "px";
   ph.style.height = _dnd.height + "px";
+  var col = window.getComputedStyle(_dnd.el).gridColumn;
+  if (col && col !== "auto") ph.style.gridColumn = col;
   _dnd.el.parentNode.insertBefore(ph, _dnd.el);
   _dnd.placeholder = ph;
 

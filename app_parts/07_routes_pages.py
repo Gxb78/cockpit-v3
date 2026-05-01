@@ -124,4 +124,5 @@ def get_config():
         "instruments": INSTRUMENTS,
         "strategies": STRATEGIES,
         "strategy_labels": STRATEGY_LABELS,
+        "debug": os.environ.get("DEBUG", os.environ.get("FLASK_DEBUG", "0")).strip().lower() in ("1", "true", "yes", "on"),
     })

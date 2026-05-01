@@ -8,6 +8,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (cfg && cfg.strategies) DEFAULT_STRATEGY_VALUES = cfg.strategies;
     if (cfg && cfg.strategy_labels) STRATEGY_LABELS = cfg.strategy_labels;
     renderInstruments();
+    // Cacher le bouton dev restart hors mode DEBUG
+    if (cfg && !cfg.debug) {
+      var devBtn = document.getElementById("devRestart");
+      if (devBtn) devBtn.style.display = "none";
+    }
   } catch (_) { /* fallback silencieux sur les valeurs hardcodees */ }
 
   document.body.setAttribute("data-current-page", state.currentPage || "today");
