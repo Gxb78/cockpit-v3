@@ -623,6 +623,7 @@ function renderTodayCalendar() {
   if (!grid.dataset.bound) {
     grid.dataset.bound = "1";
     grid.addEventListener("click", function _todayCalClick(e) {
+      console.log("[today] calendar click", e.target);
       var dayEl = e.target.closest(".day");
       if (!dayEl || dayEl.dataset.otherMonth === "1") return;
       var key = dayEl.dataset.date;
@@ -630,6 +631,8 @@ function renderTodayCalendar() {
       if (typeof goPage === "function") {
         state.journalFocusDate = key;
         goPage("journal");
+      } else {
+        console.warn("[today] goPage not available");
       }
     });
     grid.addEventListener("keydown", function(e) {

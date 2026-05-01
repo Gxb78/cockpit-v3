@@ -11459,6 +11459,12 @@ body.light-mode .page[data-page="today"] .kpi:hover {
   padding: 4px 3px;
   border-radius: var(--r-sm);
   cursor: pointer;
+  position: relative;
+  z-index: 1;
+}
+.page[data-page="today"] .today-calendar-wrap .day:hover {
+  border-color: var(--border-glow);
+  z-index: 2;
 }
 
 .page[data-page="today"] .today-calendar-wrap .day-num {
