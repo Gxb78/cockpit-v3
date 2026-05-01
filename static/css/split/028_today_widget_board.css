@@ -228,10 +228,10 @@ body.is-dragging {
   overflow: hidden;
 }
 
-.widget.drop-target-before {
+.widget.drop-target {
   position: relative;
 }
-.widget.drop-target-before::before {
+.widget.drop-target::before {
   content: "";
   position: absolute;
   left: 0;
@@ -245,7 +245,7 @@ body.is-dragging {
   animation: drop-line-in 150ms ease forwards;
 }
 
-.kpi-row .widget.drop-target-before::before {
+.kpi-row .widget.drop-target::before {
   top: 0;
   bottom: 0;
   left: 0;

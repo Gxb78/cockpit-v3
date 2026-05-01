@@ -398,24 +398,29 @@ function dndMove(cx, cy) {
   var ghostCX     = ghostLeft + _dnd.width  / 2;
   var ghostCY     = ghostTop  + _dnd.height / 2;
 
-  var dropIdx = dndHitTest(items, _dnd.board, ghostLeft, ghostTop, ghostRight, ghostBottom, ghostCX, ghostCY, _dnd.el);
-
-  var dropRef = dropIdx < items.length ? items[dropIdx] : null;
+var dropIdx = dndHitTest(items, _dnd.board, ghostLeft, ghostTop, ghostRight, ghostBottom, ghostCX, ghostCY, _dnd.el);
+  var dropRef = dropIdx >= 0 && dropIdx < items.length ? items[dropIdx] : null;
 
   if (dropRef === _dnd.dropRef) return;
 
-  if (_dnd.dropRef) _dnd.dropRef.classList.remove("widget-drop-before");
+  if (_dnd.dropRef) _dnd.dropRef.classList.remove("widget-drop-target");
   _dnd.dropRef = dropRef;
-  if (dropRef) dropRef.classList.add("widget-drop-before");
+  if (dropRef) dropRef.classList.add("widget-drop-target");
 }
 
 function dndEnd() {
   if (!_dnd) return;
   var el = _dnd.el, board = _dnd.board;
 
-  if (_dnd.dropRef) {
-    _dnd.dropRef.classList.remove("widget-drop-before");
-    board.insertBefore(el, _dnd.dropRef);
+  if (_dnd.dropRef && _dnd.dropRef !== el) {
+    _dnd.dropRef.classList.remove("widget-drop-target");
+
+    var target = _dnd.dropRef;
+    var placeholder = document.createElement("div");
+    board.insertBefore(placeholder, el);
+    board.insertBefore(el, target);
+    board.insertBefore(target, placeholder);
+    placeholder.remove();
   }
 
   el.classList.remove("widget-dragging");
@@ -482,7 +487,7 @@ function dndItems(board) {
 function dndHitTest(items, board, ghostLeft, ghostTop, ghostRight, ghostBottom, ghostCX, ghostCY, draggedEl) {
   var isH = board.dataset.widgetBoard === "today-kpis";
 
-  var bestOverlap = 0, bestIdx = -1;
+  var bestScore = 0, bestIdx = -1;
 
   for (var i = 0; i < items.length; i++) {
     if (items[i] === draggedEl) continue;
@@ -490,18 +495,17 @@ function dndHitTest(items, board, ghostLeft, ghostTop, ghostRight, ghostBottom, 
     var ox = Math.max(0, Math.min(ghostRight, r.right) - Math.max(ghostLeft, r.left));
     var oy = Math.max(0, Math.min(ghostBottom, r.bottom) - Math.max(ghostTop, r.top));
     var overlap = ox * oy;
-    if (overlap > bestOverlap) {
-      bestOverlap = overlap;
+    if (overlap <= 0) continue;
+    var targetArea = r.width * r.height;
+    var score = overlap / targetArea;
+    if (score > bestScore) {
+      bestScore = score;
       bestIdx = i;
     }
   }
 
   if (bestIdx >= 0) {
-    var br = items[bestIdx].getBoundingClientRect();
-    if (isH) {
-      return ghostCX < br.left + br.width / 2 ? bestIdx : bestIdx + 1;
-    }
-    return ghostCY < br.top + br.height / 2 ? bestIdx : bestIdx + 1;
+    return bestIdx;
   }
 
   var nearest = -1, nearestDist = Infinity;
@@ -514,10 +518,7 @@ function dndHitTest(items, board, ghostLeft, ghostTop, ghostRight, ghostBottom, 
     if (dist < nearestDist) { nearestDist = dist; nearest = j; }
   }
 
-  if (nearest < 0) return items.length;
-  var rn = items[nearest].getBoundingClientRect();
-  if (isH) return ghostCX < rn.left + rn.width / 2 ? nearest : nearest + 1;
-  return ghostCY < rn.top + rn.height / 2 ? nearest : nearest + 1;
+  return nearest < 0 ? -1 : nearest;
 }
 
 // ---------- Today calendar (mini vue mois courant) ----------
