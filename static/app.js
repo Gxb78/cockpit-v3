@@ -486,7 +486,7 @@ function defaultSettingsState() {
     profile: { pseudo: "trader" },
     custom_strategies: [],
     custom_tags: [],
-    preferences: { animations: true, dark_mode: true },
+    preferences: { animations: true, dark_mode: false },
   };
 }
 

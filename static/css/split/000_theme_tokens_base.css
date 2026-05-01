@@ -147,11 +147,14 @@ body.light-mode {
 
   --shadow-xs:           0 1px 2px rgba(15, 23, 42, 0.06);
   --shadow-sm:           0 4px 14px rgba(15, 23, 42, 0.08);
-  --shadow:              0 12px 32px rgba(15, 23, 42, 0.14);
-  --shadow-lg:           0 30px 70px rgba(15, 23, 42, 0.20);
+  --shadow:              0 0 0 1px rgba(4, 23, 43, 0.05), 0 20px 25px -5px rgba(0,0,0,0.10), 0 8px 10px -6px rgba(0,0,0,0.10);
+  --shadow-lg:           0 0 0 1px rgba(4, 23, 43, 0.05), 0 30px 50px -8px rgba(0,0,0,0.14), 0 12px 18px -6px rgba(0,0,0,0.10);
   --glow-cyan:           0 0 0 1px rgba(14, 165, 233, 0.25), 0 8px 24px rgba(14, 165, 233, 0.12);
   --glow-magenta:        0 0 0 1px rgba(147, 51, 234, 0.25), 0 8px 24px rgba(147, 51, 234, 0.12);
   --shadow-glow-cyan:    0 8px 24px rgba(14, 165, 233, 0.08);
+  --surface-warm:        #fef8f5;
+  --accent-warm:         #5d2a1a;
+  --accent-warm-border:  rgba(93, 42, 26, 0.15);
 }
 
 body.light-mode *::selection { background: rgba(14, 165, 233, 0.18); color: #111827; }
