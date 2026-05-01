@@ -635,6 +635,15 @@ function renderTodayCalendar() {
         console.warn("[today] goPage not available");
       }
     });
+    // Fallback: capturer au cas ou un element interieur bloquerait
+    grid.addEventListener("click", function(e) {
+      if (e.target.closest(".day")) return;
+      var dayEl = grid.querySelector(".day:hover");
+      if (dayEl) {
+        console.log("[today] fallback click on", dayEl);
+        dayEl.click();
+      }
+    }, true);
     grid.addEventListener("keydown", function(e) {
       if (e.key !== "Enter" && e.key !== " ") return;
       var dayEl = e.target.closest(".day");
