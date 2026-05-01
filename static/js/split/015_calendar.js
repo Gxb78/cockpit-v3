@@ -2,6 +2,7 @@
 
 let _calendarByDayCache = {};
 let _calendarGridBound = false;
+let _calWasAutoTable = false;
 
 function bindCalendarGridActions(grid) {
   if (!grid || _calendarGridBound) return;
@@ -48,10 +49,10 @@ function renderCalendar(windowDef = null) {
     if (state.journalLayoutMode !== "table") {
       setJournalLayoutMode("table", { persist: false, rerender: false });
     }
-    state._wasAutoTable = true;
-  } else if (state._wasAutoTable) {
+    _calWasAutoTable = true;
+  } else if (_calWasAutoTable) {
     setJournalLayoutMode("calendar", { persist: false, rerender: false });
-    state._wasAutoTable = false;
+    _calWasAutoTable = false;
   }
 
   updateJournalTradeFiltersUI();
