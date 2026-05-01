@@ -92,10 +92,8 @@
 /* Desktop workspace refinement:
    reduce vertical footprint and keep scroll mainly inside center column. */
 @media (min-width: 761px) {
-  .main {
+  .page.active {
     padding: 18px 24px 24px;
-    overflow-y: auto;
-    min-height: 0;
   }
   .page-head { margin-bottom: 16px; }
   .kpi-row { margin-bottom: 14px; gap: 12px; }
@@ -167,7 +165,7 @@
     gap: 8px;
   }
   .nav-item .kbd { display: none; }
-  .main { padding: 20px 18px 60px; }
+  .page.active { padding: 20px 18px 60px; }
   .page-actions { width: 100%; justify-content: space-between; }
   .journal-page-actions { justify-content: flex-start; gap: 8px; }
   .calendar-view-toggle,

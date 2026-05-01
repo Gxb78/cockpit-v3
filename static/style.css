@@ -297,12 +297,12 @@ input[type="date"] { color-scheme: dark; }
   position: sticky;
   top: 0;
   height: 100vh;
-  padding: 28px 18px;
+  padding: 18px;
   border-right: 1px solid var(--border);
   background: linear-gradient(180deg, rgba(11,12,22,0.7), rgba(11,12,22,0.35));
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
   overflow-y: auto;
   box-shadow: 2px 0 24px rgba(0,0,0,0.25);
 }
@@ -795,7 +795,7 @@ body.light-mode .theme-toggle:hover { border-color: rgba(0,132,255,0.40); backgr
    ============================================================ */
 
 .main {
-  padding: 28px 36px 80px;
+  padding: 0;
   min-width: 0;
   position: relative;
 }
@@ -829,7 +829,7 @@ body.light-mode .theme-toggle:hover { border-color: rgba(0,132,255,0.40); backgr
 .page-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 
 .page { display: none; }
-.page.active { display: block; animation: fadeUp 0.35s var(--ease); }
+.page.active { display: block; animation: fadeUp 0.35s var(--ease); padding: 28px 36px 80px; }
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -4331,10 +4331,8 @@ input[type="date"]:hover {
 /* Desktop workspace refinement:
    reduce vertical footprint and keep scroll mainly inside center column. */
 @media (min-width: 761px) {
-  .main {
+  .page.active {
     padding: 18px 24px 24px;
-    overflow-y: auto;
-    min-height: 0;
   }
   .page-head { margin-bottom: 16px; }
   .kpi-row { margin-bottom: 14px; gap: 12px; }
@@ -4406,7 +4404,7 @@ input[type="date"]:hover {
     gap: 8px;
   }
   .nav-item .kbd { display: none; }
-  .main { padding: 20px 18px 60px; }
+  .page.active { padding: 20px 18px 60px; }
   .page-actions { width: 100%; justify-content: space-between; }
   .journal-page-actions { justify-content: flex-start; gap: 8px; }
   .calendar-view-toggle,
@@ -8322,6 +8320,7 @@ body.light-mode .app-topbar {
   --magenta: #9333ea;
   background: #f6f7fb;
   color: #111827;
+  padding: 0;
 }
 
 .page[data-page="journal"] select,

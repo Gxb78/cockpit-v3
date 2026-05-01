@@ -268,10 +268,15 @@ function refreshDragHandles() {
         if (navigator.vibrate) navigator.vibrate(18);
         widget.classList.remove("is-press-pending");
         var rect = widget.getBoundingClientRect();
+        var rawOffsetX = pressStartX - rect.left;
+        var rawOffsetY = pressStartY - rect.top;
+        var centerX = rect.width / 2;
+        var centerY = rect.height / 2;
+        var SNAP_TO_CENTER = 0.40;
         _dnd = {
           el: widget, board: board,
-          offsetX: pressStartX - rect.left,
-          offsetY: pressStartY - rect.top,
+          offsetX: rawOffsetX + (centerX - rawOffsetX) * SNAP_TO_CENTER,
+          offsetY: rawOffsetY + (centerY - rawOffsetY) * SNAP_TO_CENTER,
           width: rect.width, height: rect.height,
           ghost: null, placeholder: null,
           active: false, items: null, lastToIdx: -1

@@ -27,6 +27,7 @@
   --magenta: #9333ea;
   background: #f6f7fb;
   color: #111827;
+  padding: 0;
 }
 
 .page[data-page="journal"] select,
