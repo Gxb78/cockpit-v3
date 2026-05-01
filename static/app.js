@@ -2436,6 +2436,7 @@ function dayCardEl(day) {
 let _calendarByDayCache = {};
 let _calendarGridBound = false;
 let _calWasAutoTable = false;
+let _calPnLThresholds = null;
 
 function bindCalendarGridActions(grid) {
   if (!grid || _calendarGridBound) return;
@@ -2491,6 +2492,7 @@ function renderCalendar(windowDef = null) {
 
   updateJournalTradeFiltersUI();
   const byDay = buildCalendarByDay(state.days);
+  _calPnLThresholds = _computePnLBands(byDay);
 
   const monthLabelEl = $("#monthLabel");
   if (monthLabelEl) monthLabelEl.textContent = state.journalViewMode === "month" ? win.label : `${win.title} · ${win.label}`;
@@ -2627,6 +2629,47 @@ function renderCalendarMonthFocus(byDay, windowDef) {
   renderJournalHeaderStats(data);
 }
 
+/* ---- PnL intensity bands (4 levels based on quartiles) ---- */
+
+function _computePnLBands(byDay) {
+  const wins = [];
+  const losses = [];
+  Object.values(byDay).forEach(function(info) {
+    if (info && info.pnl > 0) wins.push(info.pnl);
+    else if (info && info.pnl < 0) losses.push(Math.abs(info.pnl));
+  });
+  wins.sort(function(a, b) { return a - b; });
+  losses.sort(function(a, b) { return a - b; });
+  function quartile(arr, q) {
+    if (arr.length === 0) return null;
+    const pos = (arr.length - 1) * q;
+    const lo = Math.floor(pos);
+    const hi = Math.ceil(pos);
+    return arr[lo] + (arr[hi] - arr[lo]) * (pos - lo);
+  }
+  return {
+    winBands: wins.length > 3 ? [quartile(wins, 0.25), quartile(wins, 0.5), quartile(wins, 0.75)] : null,
+    lossBands: losses.length > 3 ? [quartile(losses, 0.25), quartile(losses, 0.5), quartile(losses, 0.75)] : null,
+  };
+}
+
+function _pnlBand(pnl, thresholds) {
+  if (!thresholds || pnl == null || pnl === 0) return "";
+  if (pnl > 0) {
+    if (!thresholds.winBands) return "win";
+    if (pnl <= thresholds.winBands[0]) return "win-1";
+    if (pnl <= thresholds.winBands[1]) return "win-2";
+    if (pnl <= thresholds.winBands[2]) return "win-3";
+    return "win-4";
+  }
+  var absPnl = Math.abs(pnl);
+  if (!thresholds.lossBands) return "loss";
+  if (absPnl <= thresholds.lossBands[0]) return "loss-1";
+  if (absPnl <= thresholds.lossBands[1]) return "loss-2";
+  if (absPnl <= thresholds.lossBands[2]) return "loss-3";
+  return "loss-4";
+}
+
 function dayCell(dt, byDay, otherMonth, today) {
   const key  = fmtDateKey(dt);
   const info = byDay[key];
@@ -2636,10 +2679,8 @@ function dayCell(dt, byDay, otherMonth, today) {
   el.dataset.otherMonth = otherMonth ? "1" : "0";
   el.className = "day" + (otherMonth ? " other-month" : "") + (key === today ? " today" : "");
   el.classList.add(`day-mode-${mode}`);
-  if (info) {
-    if (info.pnl > 0) el.classList.add("win");
-    else if (info.pnl < 0) el.classList.add("loss");
-  }
+  const band = _pnlBand(info?.pnl, _calPnLThresholds);
+  if (band) el.classList.add(band);
 
   let metricHtml = `<div class="day-center day-center-empty"></div>`;
 
@@ -2651,12 +2692,9 @@ function dayCell(dt, byDay, otherMonth, today) {
           <div class="day-metric day-metric-pnl ${pnlClass}">${fmtMoney(info.pnl)}</div>
         </div>`;
     } else if (mode === "trades") {
-      const tradeWord = info.trades > 1 ? "trades" : "trade";
-      const executedWord = info.trades > 1 ? "ex\u00E9cut\u00E9s" : "ex\u00E9cut\u00E9";
       metricHtml = `
         <div class="day-center mode-trades">
-          <div class="day-metric day-metric-trades">${info.trades}</div>
-          <div class="day-metric-sub">${tradeWord} ${executedWord}</div>
+          <div class="day-metric day-metric-trades">${info.trades}<span class="day-metric-suffix">T</span></div>
         </div>`;
     } else {
       metricHtml = `
@@ -7538,11 +7576,37 @@ function dndEnd() {
     _dnd.dropRef.classList.remove("widget-drop-target");
 
     var target = _dnd.dropRef;
-    var placeholder = document.createElement("div");
-    board.insertBefore(placeholder, el);
-    board.insertBefore(el, target);
-    board.insertBefore(target, placeholder);
-    placeholder.remove();
+    var targetBoard = _dnd.targetBoard || target.closest(".widget-board[data-widget-board]");
+
+    if (targetBoard === board) {
+      // ── Snapshot AVANT mouvement DOM ──────────────────────────────
+      var snapCol = {}, snapRow = {};
+      Array.from(board.children).forEach(function(c) {
+        var k = c.dataset && c.dataset.widgetKey;
+        if (k) { snapCol[k] = c.style.gridColumnStart; snapRow[k] = c.style.gridRowStart; }
+      });
+
+      // ── Swap DOM ──────────────────────────────────────────────────
+      var placeholder = document.createElement("div");
+      board.insertBefore(placeholder, el);
+      board.insertBefore(el, target);
+      board.insertBefore(target, placeholder);
+      placeholder.remove();
+
+      // ── Échanger les positions CSS (draggé ↔ cible) ───────────────
+      var dk = el.dataset.widgetKey, tk = target.dataset.widgetKey;
+      el.style.gridColumnStart     = snapCol[tk] || "";
+      el.style.gridRowStart        = snapRow[tk] || "";
+      target.style.gridColumnStart = snapCol[dk] || "";
+      target.style.gridRowStart    = snapRow[dk] || "";
+
+    } else {
+      var ph = document.createComment("swap");
+      board.insertBefore(ph, el);
+      targetBoard.insertBefore(el, target);
+      board.insertBefore(target, ph);
+      ph.remove();
+    }
   }
 
   el.classList.remove("widget-dragging");
@@ -7560,38 +7624,28 @@ function dndEnd() {
   if (_dnd.ghost) _dnd.ghost.remove();
   document.body.classList.remove("is-dragging");
 
-  var boardKey = board.dataset.widgetBoard;
-  var order = Array.from(board.children)
-    .map(function(c) { return c.dataset && c.dataset.widgetKey; })
-    .filter(Boolean);
-  writeWidgetOrder(boardKey, order);
+  var affectedBoards = [board];
+  if (_dnd.targetBoard && _dnd.targetBoard !== board) affectedBoards.push(_dnd.targetBoard);
 
-  Array.from(board.children).forEach(function(child) {
-    var key = child.dataset && child.dataset.widgetKey;
-    if (!key || child.classList.contains("widget-hidden")) return;
-    child.style.gridColumnStart = "";
-    child.style.gridRowStart = "";
-  });
+  affectedBoards.forEach(function(b) {
+    var bKey = b.dataset.widgetBoard;
+    var order = Array.from(b.children)
+      .map(function(c) { return c.dataset && c.dataset.widgetKey; }).filter(Boolean);
+    writeWidgetOrder(bKey, order);
 
-  var pos = {};
-  Array.from(board.children).forEach(function(child) {
-    var key = child.dataset && child.dataset.widgetKey;
-    if (!key || child.classList.contains("widget-hidden")) return;
-    var cs = window.getComputedStyle(child);
-    var col = parseInt(cs.gridColumnStart, 10);
-    var row = parseInt(cs.gridRowStart, 10);
-    if (!isNaN(col) && !isNaN(row) && col > 0 && row > 0) {
-      pos[key] = { col: col, row: row };
-    }
-  });
-  writeWidgetPositions(boardKey, pos);
-
-  Object.keys(pos).forEach(function(key) {
-    var child = board.querySelector('[data-widget-key="' + key + '"]');
-    if (child) {
-      child.style.gridColumnStart = pos[key].col;
-      child.style.gridRowStart = pos[key].row;
-    }
+    // ── Lire les positions APRÈS swap (avec les styles déjà corrects) ──
+    // NE PAS CLEAR — lire directement ce qui est sur les éléments
+    var pos = {};
+    Array.from(b.children).forEach(function(child) {
+      var key = child.dataset && child.dataset.widgetKey;
+      if (!key || child.classList.contains("widget-hidden")) return;
+      var col = parseInt(child.style.gridColumnStart, 10);
+      var row = parseInt(child.style.gridRowStart, 10);
+      if (!isNaN(col) && col > 0 && !isNaN(row) && row > 0) {
+        pos[key] = { col: col, row: row };
+      }
+    });
+    writeWidgetPositions(bKey, pos);
   });
 
   updateDashboardLayout();
