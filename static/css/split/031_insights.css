@@ -87,6 +87,34 @@
 .insight-card:hover::before { opacity: 1; }
 
 .insight-card--success::before { background: var(--win); }
+
+.insight-save-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s, transform 0.15s;
+  z-index: 2;
+}
+.insight-save-btn:hover {
+  color: var(--amber);
+  background: rgba(255, 170, 0, 0.10);
+  transform: scale(1.15);
+}
+.insight-card.is-saved .insight-save-btn {
+  color: var(--amber);
+}
 .insight-card--warning::before { background: var(--amber); }
 .insight-card--info::before    { background: var(--cyan); }
 .insight-card--danger::before  { background: var(--loss); }

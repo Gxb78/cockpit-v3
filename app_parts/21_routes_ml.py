@@ -132,3 +132,94 @@ def ml_stats():
     db = get_db()
     stats = get_ml_stats(db)
     return jsonify(stats)
+
+
+# ── Knowledge Cards CRUD ──
+
+
+def _card_from_row(row):
+    """Convertit une ligne knowledge_cards en dict."""
+    return {
+        "id": row["id"],
+        "kind": row["kind"],
+        "title": row["title"],
+        "body": row["body"],
+        "confidence": row["confidence"],
+        "evidence_count": row["evidence_count"],
+        "total_count": row["total_count"],
+        "tags": json.loads(row["tags"]) if row.get("tags") else [],
+        "is_user_saved": bool(row["is_user_saved"]),
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+@app.get("/api/ml/knowledge")
+def ml_list_knowledge():
+    """Liste les knowledge cards sauveguardees par l'utilisateur."""
+    db = get_db()
+    rows = db.execute(
+        "SELECT * FROM knowledge_cards WHERE is_user_saved=1 ORDER BY updated_at DESC"
+    ).fetchall()
+    return jsonify([_card_from_row(r) for r in rows])
+
+
+@app.post("/api/ml/knowledge")
+def ml_save_knowledge():
+    """Sauvegarde une knowledge card (pattern sauvegardé par l'utilisateur)."""
+    data = request.get_json(force=True)
+    kind = data.get("kind")
+    title = data.get("title")
+    if not kind or not title:
+        return jsonify({"error": "kind et title requis"}), 400
+
+    now = now_iso()
+    db = get_db()
+
+    # Upsert : si même kind + title existe déjà, le réactiver
+    existing = db.execute(
+        "SELECT id FROM knowledge_cards WHERE kind=? AND title=?",
+        (kind, title),
+    ).fetchone()
+
+    if existing:
+        db.execute(
+            "UPDATE knowledge_cards SET is_user_saved=1, updated_at=? WHERE id=?",
+            (now, existing["id"]),
+        )
+        card_id = existing["id"]
+    else:
+        cur = db.execute(
+            """INSERT INTO knowledge_cards
+               (kind, title, body, confidence, evidence_count, total_count, tags,
+                is_user_saved, version, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?, 1, 1, ?, ?)""",
+            (
+                kind,
+                title,
+                data.get("body", ""),
+                data.get("confidence", 1.0),
+                data.get("evidence_count", 0),
+                data.get("total_count", 0),
+                json.dumps(data.get("tags", [])),
+                now,
+                now,
+            ),
+        )
+        card_id = cur.lastrowid
+
+    db.commit()
+    row = db.execute("SELECT * FROM knowledge_cards WHERE id=?", (card_id,)).fetchone()
+    return jsonify(_card_from_row(row)), 201
+
+
+@app.delete("/api/ml/knowledge/<int:card_id>")
+def ml_delete_knowledge(card_id):
+    """Supprime (archive) une knowledge card."""
+    db = get_db()
+    db.execute(
+        "UPDATE knowledge_cards SET is_user_saved=0, updated_at=? WHERE id=?",
+        (now_iso(), card_id),
+    )
+    db.commit()
+    return jsonify({"ok": True})

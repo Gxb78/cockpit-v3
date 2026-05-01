@@ -383,6 +383,14 @@ Format obligatoire d'une lesson:
 - Test de non-regression: ecrire dans une textarea du contexte jour → focusout → rafraichir → le texte est preserve.
 |- Fichiers a surveiller: `static/js/split/018_day_form.js`.
 
+### BUG-20260501-13 - Knowledge cards sauvegardables dans l'UI Insights
+- Symptome: les patterns ML etaient calcules a la volee mais on ne pouvait pas les sauvegarder/bookmarker. La table `knowledge_cards` existait sans UI.
+- Cause racine: la table knowledge_cards etait creee en migration v4 mais aucune route CRUD ni UI n'y accedait. Les patterns etaient generes a la volee par analyze_patterns() sans persistance.
+- Regle de prevention: quand on cree une table en DB, implementer AU MOINS les routes CRUD de base avant de passer a autre chose, meme si l'UI vient plus tard.
+- Test de non-regression: cliquer sur l'etoile d'une insight card → recharger la page → l'etoile est encore jaune.
+- Changement: routes CRUD POST/GET/DELETE `/api/ml/knowledge`, bouton etoile sur chaque insight card, etat sauvegarde persistant via classe `.is-saved` + API.
+- Fichiers a surveiller: `app_parts/21_routes_ml.py`, `static/js/split/049_insights.js`, `static/css/split/031_insights.css`.
+
 ### BUG-20260501-12 - Session ajoutee comme etape wizard + champ trade
 - Symptome: impossible de selectionner la session de trading par trade (Asia, London, NY AM, NY PM).
 - Cause racine: le champ `session` existait en DB sur `days` (par jour) mais pas sur `trades` (par trade). Aucune UI pour le saisir par trade.

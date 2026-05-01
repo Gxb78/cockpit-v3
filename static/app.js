@@ -7931,7 +7931,7 @@ function _closeSelect(trigger, dropdown) {
     var confPct = Math.round((pattern.confidence || 0) * 100);
     var confCls = _confidenceClass(pattern.confidence);
 
-    return '<div class="' + cardCls + '">' +
+    return '<div class="' + cardCls + '" data-kind="' + _escapeHtml(pattern.kind || '') + '" data-title="' + _escapeHtml(pattern.title || '') + '">' +
       '<div class="insight-header">' +
       '<div class="insight-icon insight-icon--' + def.cls + '">' + def.icon + "</div>" +
       '<div class="insight-title">' + _escapeHtml(pattern.title || "") + "</div>" +
@@ -7944,6 +7944,7 @@ function _closeSelect(trigger, dropdown) {
       "</div>" +
       (tags ? '<div class="insight-meta" style="margin-top:8px">' + tags + "</div>" : "") +
       '<div class="confidence-track"><div class="confidence-fill confidence-fill--' + confCls + '" style="width:' + confPct + '%"></div></div>' +
+      '<button type="button" class="insight-save-btn" onclick="InsightsCtrl.toggleSave(this)" title="Sauvegarder">&#9733;</button>' +
       "</div>";
   }
 
@@ -8033,6 +8034,7 @@ function _closeSelect(trigger, dropdown) {
       if (profile.preferred_strategies && profile.preferred_strategies.length) html += _renderStrategyTable(profile.preferred_strategies);
       html += _renderSuggestions(profile, patterns);
       container.innerHTML = html;
+      _markSavedCards();
     }).catch(function (err) {
       loading.style.display = "none";
       container.style.display = "grid";
@@ -8187,11 +8189,65 @@ function _closeSelect(trigger, dropdown) {
     });
   }
 
+  function _markSavedCards() {
+    fetch('/api/ml/knowledge').then(function (r) { return r.json(); }).then(function (cards) {
+      if (!cards || !cards.length) return;
+      var lookup = {};
+      cards.forEach(function (c) { lookup[c.kind + '|' + c.title] = true; });
+      document.querySelectorAll('.insight-card').forEach(function (card) {
+        var key = (card.dataset.kind || '') + '|' + (card.dataset.title || '');
+        if (lookup[key]) {
+          card.classList.add('is-saved');
+          var btn = card.querySelector('.insight-save-btn');
+          if (btn) btn.title = 'Retirer des sauvegardes';
+        }
+      });
+    }).catch(function () {});
+  }
+
   function _escapeHtml(str) {
     if (typeof str !== "string") return str || "";
     return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   }
+
+  window.InsightsCtrl = {
+    toggleSave: function (btn) {
+      var card = btn.closest('.insight-card');
+      if (!card) return;
+      var kind = card.dataset.kind;
+      var title = card.dataset.title;
+      if (!kind || !title) return;
+
+      var isSaved = card.classList.contains('is-saved');
+      var url = isSaved ? '' : '/api/ml/knowledge';
+      var method = isSaved ? 'GET' : 'POST';
+
+      if (isSaved) {
+        // Unsaved: find card ID from saved data
+        fetch('/api/ml/knowledge').then(function (r) { return r.json(); }).then(function (cards) {
+          var match = cards.filter(function (c) { return c.kind === kind && c.title === title; })[0];
+          if (match) {
+            fetch('/api/ml/knowledge/' + match.id, { method: 'DELETE' }).then(function () {
+              card.classList.remove('is-saved');
+              btn.title = 'Sauvegarder';
+            });
+          }
+        }).catch(function () {});
+      } else {
+        var body = JSON.stringify({
+          kind: kind, title: title,
+          body: card.querySelector('.insight-body')?.textContent || '',
+          confidence: parseFloat(card.querySelector('.insight-badge')?.textContent || '0') / 100,
+        });
+        fetch(url, { method: 'POST', body: body, headers: { 'Content-Type': 'application/json' } })
+          .then(function () {
+            card.classList.add('is-saved');
+            btn.title = 'Retirer des sauvegardes';
+          }).catch(function () {});
+      }
+    }
+  };
 
   window.initInsights = initInsights;
   window.loadInsights = loadInsights;
