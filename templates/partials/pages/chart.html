@@ -16,11 +16,13 @@
       </div>
       <div class="chart-topbar-right">
         <div class="chart-indicators">
-          <span class="chart-ind-label">VWAP</span>
-          <button type="button" class="chart-ind-btn" data-vwap="1D">1D</button>
-          <button type="button" class="chart-ind-btn" data-vwap="7D">7D</button>
-          <button type="button" class="chart-ind-btn" data-vwap="30D">30D</button>
-          <button type="button" class="chart-ind-btn" data-vwap="90D">90D</button>
+          <button type="button" class="chart-ind-toggle" id="vwapToggle">VWAP <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="2 3 4 5 6 3"/></svg></button>
+          <div class="chart-ind-dropdown hidden" id="vwapDropdown">
+            <button type="button" class="chart-ind-opt" data-vwap="1D">1 jour</button>
+            <button type="button" class="chart-ind-opt" data-vwap="7D">7 jours</button>
+            <button type="button" class="chart-ind-opt" data-vwap="30D">30 jours</button>
+            <button type="button" class="chart-ind-opt" data-vwap="90D">90 jours</button>
+          </div>
         </div>
         <div class="chart-timeframes">
           <button class="chart-tf-btn" data-interval="5m">5m</button>

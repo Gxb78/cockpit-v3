@@ -16718,6 +16718,15 @@ body.light-mode .btc-chart-custom {
   gap: 10px;
 }
 
+.chart-countdown-inline {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-faint);
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
 .chart-price {
   font-family: "JetBrains Mono", monospace;
   font-size: 20px;
@@ -16738,44 +16747,83 @@ body.light-mode .btc-chart-custom {
   gap: 12px;
 }
 
+/* ── Indicators dropdown ── */
 .chart-indicators {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 2px;
 }
 
-.chart-ind-label {
-  font-size: 9px;
-  font-weight: 700;
-  color: var(--text-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin-right: 4px;
-}
-
-.chart-ind-btn {
-  padding: 3px 7px;
+.chart-ind-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
   border-radius: 4px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-faint);
   font-size: 10px;
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   cursor: pointer;
   transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
 
-.chart-ind-btn:hover {
+.chart-ind-toggle:hover {
   color: var(--text-muted);
   border-color: var(--border);
 }
 
-.chart-ind-btn.active {
+.chart-ind-toggle.active {
   color: #f59e0b;
   border-color: rgba(245, 158, 11, 0.30);
   background: rgba(245, 158, 11, 0.08);
 }
 
+.chart-ind-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: var(--surface-solid);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  z-index: 50;
+  padding: 4px;
+  min-width: 120px;
+}
+
+.chart-ind-opt {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.chart-ind-opt:hover {
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+}
+
+.chart-ind-opt.active {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.hidden { display: none !important; }
+
+/* ── Timeframes ── */
 .chart-timeframes {
   display: flex;
   gap: 2px;
@@ -16804,23 +16852,7 @@ body.light-mode .btc-chart-custom {
   background: rgba(56, 211, 238, 0.06);
 }
 
-.chart-countdown-inline {
-  font-family: "JetBrains Mono", monospace;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-faint);
-  margin-right: 8px;
-  white-space: nowrap;
-}
-
-.chart-price {
-  font-family: "JetBrains Mono", monospace;
-  font-size: 20px;
-  font-weight: 800;
-  color: var(--text);
-  letter-spacing: -0.03em;
-}
-
+/* ── Main chart ── */
 .chart-main {
   flex: 1;
   min-height: 0;
@@ -16872,6 +16904,10 @@ body.light-mode .chart-tf-btn.active {
   color: #0ea5e9;
   border-color: rgba(14, 165, 233, 0.25);
   background: rgba(14, 165, 233, 0.05);
+}
+
+body.light-mode .chart-ind-opt:hover {
+  background: rgba(0,0,0,0.04);
 }
 
 /* ── Responsive ── */

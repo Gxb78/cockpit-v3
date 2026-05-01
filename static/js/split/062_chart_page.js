@@ -172,20 +172,34 @@
       });
       resizeObserver.observe(wrap);
 
-      // VWAP indicator buttons
-      document.querySelectorAll('.chart-ind-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          var isActive = btn.classList.contains('active');
-          document.querySelectorAll('.chart-ind-btn').forEach(function (b) { b.classList.remove('active'); });
-          if (!isActive) {
-            btn.classList.add('active');
-            activeVwapPeriod = btn.dataset.vwap;
-          } else {
-            activeVwapPeriod = null;
-          }
-          _fetchAndRender(true);
+      // VWAP toggle dropdown
+      var vwapToggle = document.getElementById('vwapToggle');
+      var vwapDropdown = document.getElementById('vwapDropdown');
+      if (vwapToggle && vwapDropdown) {
+        vwapToggle.addEventListener('click', function (e) {
+          e.stopPropagation();
+          vwapDropdown.classList.toggle('hidden');
         });
-      });
+        document.addEventListener('click', function () { vwapDropdown.classList.add('hidden'); }, false);
+        vwapDropdown.querySelectorAll('.chart-ind-opt').forEach(function (btn) {
+          btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var period = btn.dataset.vwap;
+            if (btn.classList.contains('active')) {
+              btn.classList.remove('active');
+              activeVwapPeriod = null;
+              vwapToggle.classList.remove('active');
+            } else {
+              vwapDropdown.querySelectorAll('.chart-ind-opt').forEach(function (b) { b.classList.remove('active'); });
+              btn.classList.add('active');
+              activeVwapPeriod = period;
+              vwapToggle.classList.add('active');
+            }
+            vwapDropdown.classList.add('hidden');
+            _fetchAndRender(true);
+          });
+        });
+      }
 
       // Timeframe buttons
       document.querySelectorAll('.chart-tf-btn').forEach(function (btn) {
@@ -215,51 +229,43 @@
   }
 
   function _calcAndDrawVwap(candles) {
+    if (!activeVwapPeriod || !candles || !candles.length) {
+      if (vwapSeries) { try { chart.removeSeries(vwapSeries); } catch(e) {} vwapSeries = null; }
+      return;
+    }
+
+    var days = { '1D': 1, '7D': 7, '30D': 30, '90D': 90 }[activeVwapPeriod] || 1;
+    var now = Math.floor(Date.now() / 1000);
+    var cutoff = now - days * 86400;
+
+    var cumTpv = 0, cumVol = 0;
+    for (var i = 0; i < candles.length; i++) {
+      var c = candles[i];
+      if (c.time < cutoff) continue;
+      var tp = (c.high + c.low + c.close) / 3;
+      cumTpv += tp * c.volume;
+      cumVol += c.volume;
+    }
+
+    if (cumVol === 0) {
+      if (vwapSeries) { try { chart.removeSeries(vwapSeries); } catch(e) {} vwapSeries = null; }
+      return;
+    }
+
+    var vwap = cumTpv / cumVol;
     if (!vwapSeries) {
       vwapSeries = chart.addLineSeries({
         color: '#f59e0b',
         lineWidth: 1.5,
         priceLineVisible: false,
         lastValueVisible: true,
+        crosshairMarkerVisible: false,
       });
     }
-    if (!activeVwapPeriod || !candles.length) { vwapSeries.setData([]); return; }
 
-    var days = { '1D': 1, '7D': 7, '30D': 30, '90D': 90 }[activeVwapPeriod] || 1;
-    var now = Math.floor(Date.now() / 1000);
-    var windowStart = now - days * 86400;
-
-    // Calculer VWAP cumulatif pour chaque bougie dans la fenêtre
-    var cumTpv = 0, cumVol = 0;
-    var vwapData = [];
-    // D'abord, trouver les bougies dans la fenêtre
-    var inWindow = false;
-    for (var i = 0; i < candles.length; i++) {
-      var c = candles[i];
-      if (!inWindow && c.time >= windowStart) inWindow = true;
-      if (!inWindow) continue;
-      var tp = (c.high + c.low + c.close) / 3;
-      cumTpv += tp * c.volume;
-      cumVol += c.volume;
-      if (cumVol > 0) {
-        vwapData.push({ time: c.time, value: cumTpv / cumVol });
-      }
-    }
-
-    // Si on a trop peu de donnees, utiliser tout ce qu'on a
-    if (!inWindow && candles.length > 0) {
-      for (var i = 0; i < candles.length; i++) {
-        var c = candles[i];
-        var tp = (c.high + c.low + c.close) / 3;
-        cumTpv += tp * c.volume;
-        cumVol += c.volume;
-        if (cumVol > 0) {
-          vwapData.push({ time: c.time, value: cumTpv / cumVol });
-        }
-      }
-    }
-
-    vwapSeries.setData(vwapData);
+    // Ligne horizontale a la valeur VWAP
+    var data = candles.map(function (c) { return { time: c.time, value: vwap }; });
+    vwapSeries.setData(data);
   }
 
   function _fetchAndRender(keepZoom) {
