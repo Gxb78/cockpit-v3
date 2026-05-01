@@ -6493,10 +6493,11 @@ var WIDGET_REGISTRY = {
   today_activity:      { label: "Activite",          icon: "bolt",  kind: "panel",  size: "tall" },
   today_calendar:      { label: "Calendrier",        icon: "cal",   kind: "panel",  size: "md" },
   today_streak:        { label: "Streak",            icon: "bolt",  kind: "kpi",    size: "sm" },
+  btc_chart:           { label: "BTC Chart",         icon: "chart", kind: "panel",  size: "xl" },
 };
 
 var WIDGET_DEFAULTS = {
-  "today": ["kpi_total_pnl", "kpi_winrate", "kpi_average_rr", "kpi_trades", "kpi_profit_factor", "kpi_expectancy", "today_context", "today_log", "today_activity", "today_calendar", "today_streak"],
+  "today": ["kpi_total_pnl", "kpi_winrate", "kpi_average_rr", "kpi_trades", "kpi_profit_factor", "kpi_expectancy", "today_context", "today_log", "today_activity", "today_calendar", "today_streak", "btc_chart"],
 };
 
 function readWidgetOrder(boardKey) {
@@ -10882,3 +10883,125 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   return '\n    <aside class="journal-trade-editor" data-trade-id="' + tid + '" role="dialog" aria-label="Edition du trade">\n      <div class="jedit-panel">\n        <div class="jedit-hero">\n          <div class="jedit-hero-shot ' + shotClass + '"' + shotStyle + '>' + (shot ? '' : '<span>Aucune capture</span>') + '</div>\n          <div class="jedit-hero-copy">\n            <div class="jedit-topline">\n              <span>' + escapeHtml(dateLabel) + '</span>\n              <span>' + escapeHtml(day.instrument || '-') + '</span>\n              <span>' + escapeHtml((direction || '-').toUpperCase()) + '</span>\n            </div>\n            <h3>' + escapeHtml(strategy) + '</h3>\n            <p>' + escapeHtml(TradeEditorController.shortText(trade.why_trade, trade.scenario, trade.why_entry)) + '</p>\n            <div class="jedit-metrics">\n              <div class="jedit-metric-pnl"><strong class="' + pnlClass + '">' + fmtMoney(pnl) + '</strong><span>PnL</span></div>\n              <div class="jedit-metric-rr"><strong>' + escapeHtml(rr) + '</strong><span>R multiple</span></div>\n              <div class="jedit-metric-result"><strong class="' + resultClass + '">' + escapeHtml(resultLabel) + '</strong><span>Resultat</span></div>\n            </div>\n          </div>\n          <div class="jedit-actions">\n            <span class="jedit-status" data-state=""></span>\n            <button type="button" class="jedit-save" data-journal-editor-save="' + tid + '">Sauver</button>\n            <button type="button" class="jedit-close" data-journal-editor-close aria-label="Fermer">\n              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>\n            </button>\n          </div>\n        </div>\n\n        <div class="jedit-scroll">\n          <div class="jedit-sticky">\n            <button type="button" class="jedit-save" data-journal-editor-save="' + tid + '">Sauver</button>\n            <button type="button" class="jedit-close" data-journal-editor-close aria-label="Fermer">\n              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>\n            </button>\n          </div>\n          <section class="jedit-block jedit-identity">\n            <div class="jedit-block-title"><span>01</span><h4>Setup</h4></div>\n            <div class="jedit-grid">\n              <label class="jedit-field-wrap"><span>Strategie</span><select class="jedit-field" data-field="strategy">' + TradeEditorController.strategyOptions(trade.strategy || '') + '</select></label>\n              <label class="jedit-field-wrap"><span>Direction</span>' + TradeEditorController.pills('direction', direction, [{ value: 'long', label: 'Long' }, { value: 'short', label: 'Short' }, { value: '', label: '?' }]) + '</label>\n              <label class="jedit-field-wrap"><span>Session</span><select class="jedit-field" data-field="session">' + TradeEditorController.sessionOptions(trade.session || '') + '</select></label>\n              ' + TradeEditorController.field('Stdv', 'stdv_level', trade.stdv_level, 'number', { step: '0.5', placeholder: '1 - 5' }) + '\n              <label class="jedit-field-wrap"><span>Resultat</span><select class="jedit-field" data-field="is_win" data-type="bool">' + TradeEditorController.selectOption('', 'A qualifier', winValue) + TradeEditorController.selectOption('1', 'Win', winValue) + TradeEditorController.selectOption('0', 'Loss', winValue) + '</select></label>\n            </div>\n          </section>\n\n          <section class="jedit-block">\n            <div class="jedit-block-title"><span>02</span><h4>Niveaux</h4></div>\n            <div class="jedit-grid jedit-grid-5">\n              ' + TradeEditorController.field('Entree', 'entry_price', trade.entry_price, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('Stop', 'stop_loss', trade.stop_loss, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('TP', 'exit_price', trade.exit_price, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('Sortie', 'exit_price', trade.exit_price, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('Size', 'position_size', trade.position_size, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('Levier', 'leverage', trade.leverage, 'number', { step: '1', placeholder: '1x' }) + '\n              ' + TradeEditorController.field('PnL', 'pnl', trade.pnl, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('RR', 'rr', trade.rr, 'number', { step: '0.01' }) + '\n            </div>\n          </section>\n\n          <section class="jedit-block">\n            <div class="jedit-block-title"><span>03</span><h4>Scenario</h4></div>\n            <div class="jedit-notes">\n              ' + TradeEditorController.textarea('Pourquoi ce trade', 'why_trade', trade.why_trade, 3) + '\n              ' + TradeEditorController.textarea('Pourquoi cette entree', 'why_entry', trade.why_entry, 3) + '\n              ' + TradeEditorController.textarea('Scenario complet', 'scenario', trade.scenario, 4) + '\n              ' + TradeEditorController.textarea('Pourquoi ce stop', 'why_stop', trade.why_stop, 3) + '\n              ' + TradeEditorController.textarea('Pourquoi ce TP', 'why_tp', trade.why_tp, 3) + '\n            </div>\n          </section>\n\n          <section class="jedit-block">\n            <div class="jedit-block-title"><span>04</span><h4>Review</h4></div>\n            <div class="jedit-grid">\n              <label class="jedit-field-wrap"><span>These validee</span>' + TradeEditorController.pills('thesis_validated', trade.thesis_validated || '', [{ value: 'yes', label: 'Oui' }, { value: 'no', label: 'Non' }, { value: '', label: '?' }]) + '</label>\n              <label class="jedit-field-wrap"><span>Qualite execution</span><div class="jedit-stars" data-field="execution_quality" data-value="' + qualityRaw + '">' + starsHtml + '</div></label>\n              ' + TradeEditorController.field('Tags', 'tags', TradeEditorController.tagsValue(trade.tags), 'tags', { placeholder: 'tag1, tag2' }) + '\n              ' + TradeEditorController.textarea('Lecons apprises', 'lessons_learned', trade.lessons_learned, 4) + '\n            </div>\n          </section>\n\n          <section class="jedit-block">\n            <div class="jedit-block-title"><span>05</span><h4>Plan & captures</h4></div>\n            <div class="jedit-plan-grid">\n              <div><span>Plan model</span><strong>' + escapeHtml(trade.plan_model || '-') + '</strong></div>\n              <div><span>Direction plan</span><strong>' + escapeHtml(trade.plan_direction || '-') + '</strong></div>\n              <div><span>Alignement</span><strong>' + escapeHtml(trade.plan_alignment || 'unknown') + '</strong></div>\n              <div><span>Score</span><strong>' + (trade.plan_score == null ? '-' : escapeHtml(String(trade.plan_score))) + '</strong></div>\n            </div>\n            ' + TradeEditorController.textarea('Raison override plan', 'plan_override_reason', trade.plan_override_reason, 3) + '\n            <div class="jedit-shots">' + screenshotsHtml + '</div>\n          </section>\n        </div>\n      </div>\n    </aside>\n  ';
 };
+
+// ---- 060_btc_chart_widget.js ----
+// ---------- BTC Chart widget — TradingView Lightweight Charts ----------
+
+(function () {
+  var chart = null;
+  var series = null;
+  var currentInterval = '1h';
+
+  function initBtcChart() {
+    var container = document.getElementById('btcChartContainer');
+    if (!container) return;
+    if (chart) return; // deja init
+
+    // Charger Lightweight Charts depuis CDN
+    if (typeof window.LightweightCharts === 'undefined') {
+      var script = document.createElement('script');
+      script.src = 'https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js';
+      script.onload = function () {
+        _createChart(container);
+        _fetchAndRender();
+      };
+      document.head.appendChild(script);
+      return;
+    }
+
+    _createChart(container);
+    _fetchAndRender();
+  }
+
+  function _createChart(container) {
+    var isLight = document.body.classList.contains('light-mode');
+    chart = window.LightweightCharts.createChart(container, {
+      width: container.clientWidth,
+      height: Math.max(320, Math.min(480, container.clientHeight || 400)),
+      layout: {
+        background: { type: 'solid', color: 'transparent' },
+        textColor: isLight ? '#1e293b' : '#d1d5db',
+      },
+      grid: {
+        vertLines: { color: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.04)' },
+        horzLines: { color: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.04)' },
+      },
+      crosshair: {
+        mode: window.LightweightCharts.CrosshairMode.Normal,
+      },
+      rightPriceScale: {
+        borderColor: isLight ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.08)',
+      },
+      timeScale: {
+        borderColor: isLight ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.08)',
+        timeVisible: true,
+        secondsVisible: false,
+      },
+      handleScroll: { vertTouchDrag: false },
+    });
+
+    series = chart.addCandlestickSeries({
+      upColor: '#22c55e',
+      downColor: '#ef4444',
+      borderDownColor: '#ef4444',
+      borderUpColor: '#22c55e',
+      wickDownColor: '#ef4444',
+      wickUpColor: '#22c55e',
+    });
+
+    // Redimmensionnement
+    var resizeObserver = new ResizeObserver(function () {
+      if (chart) {
+        chart.applyOptions({ width: container.clientWidth, height: Math.max(320, Math.min(480, container.clientHeight || 400)) });
+      }
+    });
+    resizeObserver.observe(container);
+
+    // Intervalles
+    document.querySelectorAll('.btc-chart-interval').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentInterval = btn.dataset.interval;
+        _fetchAndRender();
+      });
+    });
+  }
+
+  function _fetchAndRender() {
+    if (!series) return;
+    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + currentInterval + '&limit=200';
+    fetch(url)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) { console.error('[btc-chart]', data.error); return; }
+        var candles = data.candles || [];
+        if (!candles.length) return;
+        // Mettre a jour le prix
+        var last = candles[candles.length - 1];
+        var priceEl = document.getElementById('btcChartPrice');
+        if (priceEl) priceEl.textContent = '$' + Number(last.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
+        series.setData(candles);
+        chart.timeScale().fitContent();
+      })
+      .catch(function (err) { console.error('[btc-chart] fetch error:', err); });
+  }
+
+  // Initialisation au chargement de la page Today
+  document.addEventListener('DOMContentLoaded', function () {
+    if (document.querySelector('.page[data-page="today"].active')) {
+      initBtcChart();
+    }
+  });
+
+  // Re-init quand on navigue vers Today
+  var _origGoPage = window.goPage;
+  if (_origGoPage) {
+    window.goPage = function (pageName) {
+      _origGoPage(pageName);
+      if (pageName === 'today') setTimeout(initBtcChart, 200);
+    };
+  }
+
+  window.initBtcChart = initBtcChart;
+})();

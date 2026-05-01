@@ -391,6 +391,15 @@ Format obligatoire d'une lesson:
 - Changement: routes CRUD POST/GET/DELETE `/api/ml/knowledge`, bouton etoile sur chaque insight card, etat sauvegarde persistant via classe `.is-saved` + API.
 - Fichiers a surveiller: `app_parts/21_routes_ml.py`, `static/js/split/049_insights.js`, `static/css/split/031_insights.css`.
 
+
+### FEATURE-20260501 - BTC chart widget en direct
+- Ajout d'un widget graphique bougies chandeliers BTC/USDT dans le dashboard Today.
+- Backend: route `/api/market/klines` proxy Binance API (23_routes_market.py).
+- Frontend: TradingView Lightweight Charts (CDN), zoom/defilement, intervalles 1H/4H/1D.
+- Widget enregistre dans WIDGET_REGISTRY + WIDGET_DEFAULTS pour apparaitre par defaut.
+- Fichiers a surveiller: `app_parts/23_routes_market.py`, `static/js/split/060_btc_chart_widget.js`, `static/css/split/061_btc_chart_widget.css`, `templates/partials/pages/today/widgets/011_btc_chart.html`, `static/js/split/047_today_widget_board.js`.
+
+
 ### BUG-20260501-12 - Session ajoutee comme etape wizard + champ trade
 - Symptome: impossible de selectionner la session de trading par trade (Asia, London, NY AM, NY PM).
 - Cause racine: le champ `session` existait en DB sur `days` (par jour) mais pas sur `trades` (par trade). Aucune UI pour le saisir par trade.

@@ -31,6 +31,7 @@ _PART_FILES = [
     "20_ml_engine.py",              # 20 — ML Engine : apprentissage automatique
     "21_routes_ml.py",              # 21 — Routes API ML / insights
     "22_routes_settings.py",        # 22 — Routes API user settings
+    "23_routes_market.py",          # 23 — Routes API market data (Binance)
 ]
 
 for _part in _PART_FILES:

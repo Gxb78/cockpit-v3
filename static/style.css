@@ -16471,3 +16471,88 @@ select.jedit-field-error {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- 061_btc_chart_widget.css ---- */
+/* ---- 061_btc_chart_widget.css ---- */
+
+.btc-chart-widget {
+  min-height: 380px;
+  display: flex;
+  flex-direction: column;
+}
+
+.btc-chart-widget .panel-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.btc-chart-widget .panel-h h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.btc-chart-price {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.btc-chart-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.btc-chart-controls .btn-icon {
+  width: 32px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  padding: 0;
+  line-height: 1;
+}
+
+.btc-chart-controls .btn-icon:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: rgba(255,255,255,0.04);
+}
+
+.btc-chart-controls .btn-icon.active {
+  color: var(--cyan);
+  border-color: rgba(56, 211, 238, 0.35);
+  background: rgba(56, 211, 238, 0.08);
+}
+
+.btc-chart-container {
+  flex: 1;
+  min-height: 320px;
+  position: relative;
+  overflow: hidden;
+}
+
+body.light-mode .btc-chart-controls .btn-icon {
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+body.light-mode .btc-chart-controls .btn-icon:hover {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+body.light-mode .btc-chart-controls .btn-icon.active {
+  border-color: rgba(14, 165, 233, 0.30);
+  background: rgba(14, 165, 233, 0.08);
+  color: #0ea5e9;
+}

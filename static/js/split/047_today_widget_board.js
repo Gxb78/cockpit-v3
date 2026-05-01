@@ -16,10 +16,11 @@ var WIDGET_REGISTRY = {
   today_activity:      { label: "Activite",          icon: "bolt",  kind: "panel",  size: "tall" },
   today_calendar:      { label: "Calendrier",        icon: "cal",   kind: "panel",  size: "md" },
   today_streak:        { label: "Streak",            icon: "bolt",  kind: "kpi",    size: "sm" },
+  btc_chart:           { label: "BTC Chart",         icon: "chart", kind: "panel",  size: "xl" },
 };
 
 var WIDGET_DEFAULTS = {
-  "today": ["kpi_total_pnl", "kpi_winrate", "kpi_average_rr", "kpi_trades", "kpi_profit_factor", "kpi_expectancy", "today_context", "today_log", "today_activity", "today_calendar", "today_streak"],
+  "today": ["kpi_total_pnl", "kpi_winrate", "kpi_average_rr", "kpi_trades", "kpi_profit_factor", "kpi_expectancy", "today_context", "today_log", "today_activity", "today_calendar", "today_streak", "btc_chart"],
 };
 
 function readWidgetOrder(boardKey) {
