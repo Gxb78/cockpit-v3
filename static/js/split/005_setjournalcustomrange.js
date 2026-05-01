@@ -169,13 +169,14 @@ function rowMatchesJournalTradeFilters(row, filters = state.journalTradeFilters)
   if (min != null && pnl < min) return false;
   if (max != null && pnl > max) return false;
 
-  // Full-text search — minimum 2 caracteres, cherche dans les textes longs
+  // Full-text search — minimum 2 caracteres, cherche dans les textes longs du trade
   if (f.search && f.search.trim().length >= 2) {
     var q = f.search.trim().toLowerCase();
+    var t = row.trade || {};
     var haystack = [
-      row.why_trade, row.scenario, row.why_entry,
-      row.why_stop, row.why_tp, row.lessons_learned,
-      row.plan_override_reason, row.plan_snapshot,
+      t.why_trade, t.scenario, t.why_entry,
+      t.why_stop, t.why_tp, t.lessons_learned,
+      t.plan_override_reason, t.plan_snapshot,
     ].concat(row.tags || []).filter(Boolean).join(" ").toLowerCase();
     if (haystack.indexOf(q) === -1) return false;
   }
