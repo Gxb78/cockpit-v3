@@ -16522,7 +16522,7 @@ select.jedit-field-error {
 /* ---- 061_btc_chart_widget.css ---- */
 
 .btc-chart-widget {
-  min-height: 380px;
+  min-height: 420px;
   display: flex;
   flex-direction: column;
 }
@@ -16533,6 +16533,7 @@ select.jedit-field-error {
   justify-content: space-between;
   gap: 12px;
   flex-shrink: 0;
+  padding: 12px 18px 8px;
 }
 
 .btc-chart-widget .panel-h h3 {
@@ -16584,7 +16585,7 @@ select.jedit-field-error {
 
 .btc-chart-container {
   flex: 1;
-  min-height: 320px;
+  min-height: 360px;
   position: relative;
   overflow: hidden;
 }
