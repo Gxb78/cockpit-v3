@@ -222,15 +222,15 @@ function bindWidgetConfig() {
 }
 
 // ============================================================
-// Drag & Drop v8 — FLIP + Placeholder DOM
+// Drag & Drop v9 — FLIP + Placeholder DOM + Adaptive Spring
 // Le CSS grid calcule les positions, FLIP anime les deltas.
-// Fonctionne pour tous les widgets quelle que soit leur taille.
+// Hit-test pondéré par surface — les grands widgets n'écrasent pas les petits.
 // ============================================================
 
 var _dnd = null;
 var _dndRaf = 0;
 var DND_DEAD_ZONE = 12;
-var DND_LONG_PRESS = 280;
+var DND_LONG_PRESS = ('ontouchstart' in window) ? 120 : 180;
 
 function initWidgetDragDrop() {
   refreshDragHandles();
@@ -256,6 +256,8 @@ function refreshDragHandles() {
       var widget = el;
       var board = widget.closest(".widget-board[data-widget-board]");
       if (!board) return;
+
+      el.setPointerCapture(e.pointerId);
 
       pressStartX = e.clientX;
       pressStartY = e.clientY;
@@ -321,11 +323,14 @@ function dndStart(cx, cy) {
 
   var ph = document.createElement("div");
   ph.className = "widget-drag-placeholder";
-  ph.style.width  = _dnd.width  + "px";
-  ph.style.height = _dnd.height + "px";
   var cs = window.getComputedStyle(el);
   ph.style.gridColumn = cs.gridColumn || "";
   ph.style.gridRow    = cs.gridRow    || "";
+  ph.style.width      = _dnd.width  + "px";
+  ph.style.height     = _dnd.height + "px";
+  ph.style.minHeight  = _dnd.height + "px";
+  ph.style.minWidth   = _dnd.width  + "px";
+  ph.style.boxSizing  = "border-box";
   board.insertBefore(ph, el);
   _dnd.placeholder = ph;
 
@@ -388,10 +393,15 @@ function dndMove(cx, cy) {
       item.style.transform  = "";
       return;
     }
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    var duration = Math.min(80 + dist * 0.35, 380);
+    var easing = dist > 120
+      ? "cubic-bezier(0.22, 1, 0.36, 1)"
+      : "cubic-bezier(0.34, 1.56, 0.64, 1)";
     item.style.transition = "none";
     item.style.transform  = "translate(" + dx + "px," + dy + "px)";
     item.getBoundingClientRect();
-    item.style.transition = "transform 200ms cubic-bezier(0.25,1,0.5,1)";
+    item.style.transition = "transform " + duration + "ms " + easing;
     item.style.transform  = "";
   });
 }
@@ -448,34 +458,31 @@ function dndItemsWithPlaceholder(board, ph) {
 
 function dndHitTest(items, board, cx, cy) {
   var isH = board.dataset.widgetBoard === "today-kpis";
-  var dragSpan = 1;
-  if (_dnd && _dnd.el) {
-    var cs = window.getComputedStyle(_dnd.el);
-    var gr = cs.gridRow || "";
-    var m = gr.match(/span\s*(\d+)/);
-    if (m) dragSpan = parseInt(m[1]);
-  }
+  var best = -1, bestScore = Infinity;
+
   for (var i = 0; i < items.length; i++) {
     var r = items[i].getBoundingClientRect();
-    if (cx >= r.left-4 && cx <= r.right+4 && cy >= r.top-4 && cy <= r.bottom+4) {
-      if (isH) {
-        var mX = r.left + r.width / 2;
-        return cx < mX - DND_DEAD_ZONE ? i : (cx > mX + DND_DEAD_ZONE ? i+1 : i);
-      }
-      var mY = r.top + r.height / 2;
-      var threshold = DND_DEAD_ZONE * dragSpan;
-      return cy < mY - threshold ? i : (cy > mY + threshold ? i+1 : i);
-    }
+    var centerX = r.left + r.width  / 2;
+    var centerY = r.top  + r.height / 2;
+    var area = Math.max(r.width * r.height, 1);
+    var weight = 1 / Math.sqrt(area);
+    var dx = (cx - centerX) * weight;
+    var dy = (cy - centerY) * weight * (isH ? 0.1 : 1);
+    var score = dx * dx + dy * dy;
+    if (score < bestScore) { bestScore = score; best = i; }
   }
-  var best = 0, bestD = Infinity;
-  for (var j = 0; j < items.length; j++) {
-    var rj = items[j].getBoundingClientRect();
-    var d = Math.pow(cx-(rj.left+rj.width/2),2) + Math.pow(cy-(rj.top+rj.height/2),2);
-    if (d < bestD) { bestD = d; best = j; }
-  }
+
+  if (best < 0) return items.length;
+
   var br = items[best].getBoundingClientRect();
-  return isH ? (cx < br.left+br.width/2 ? best : best+1)
-             : (cy < br.top+br.height/2 ? best : best+1);
+  if (isH) {
+    return cx < br.left + br.width / 2 ? best : best + 1;
+  }
+  var third = br.height / 3;
+  var relY = cy - br.top;
+  if (relY < third)             return best;
+  if (relY > br.height - third) return best + 1;
+  return best;
 }
 
 // ---------- Today calendar (mini vue mois courant) ----------
