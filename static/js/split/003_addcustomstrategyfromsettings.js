@@ -274,6 +274,8 @@ function sanitizeJournalTradeFilters(raw) {
 function loadJournalTradeFilters() {
   try {
     const raw = JSON.parse(localStorage.getItem(JOURNAL_TRADE_FILTERS_KEY) || "{}");
+    // Ne pas restaurer la recherche au refresh (transient)
+    delete raw.search;
     return sanitizeJournalTradeFilters(raw);
   } catch {
     return defaultJournalTradeFilters();
