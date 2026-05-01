@@ -207,63 +207,6 @@ function setJournalRangeMode(mode, opts = {}) {
 
 // ---------- Nouveaux filtres Journal (style Insights) ----------
 
-function _initQuickFilterButtons() {
-  var from = $("#jFilterFrom");
-  var to = $("#jFilterTo");
-  var instr = $("#jFilterInstrument");
-  var quick = $("#jFilterQuick");
-  if (!from || !to || !instr || !quick) return;
-
-  var now = new Date();
-  var firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-  from.value = _fmtDate2(firstDay);
-  to.value = _fmtDate2(now);
-
-  var quickBtns = [
-    { label: "7j",  days: 7 },
-    { label: "30j", days: 30 },
-    { label: "90j", days: 90 },
-    { label: "Ce mois", fn: true },
-  ];
-
-  quickBtns.forEach(function(q) {
-    var btn = document.createElement("button");
-    btn.className = "qbtn";
-    btn.textContent = q.label;
-    btn.addEventListener("click", function() {
-      if (q.fn === true) {
-        var d = new Date();
-        from.value = _fmtDate2(new Date(d.getFullYear(), d.getMonth(), 1));
-        to.value = _fmtDate2(d);
-      } else {
-        var d2 = new Date(Date.now() - q.days * 86400000);
-        from.value = _fmtDate2(d2);
-        to.value = _fmtDate2(new Date());
-      }
-      _applyJournalFilter();
-    });
-    quick.appendChild(btn);
-  });
-  quick.removeAttribute("hidden");
-
-  from.addEventListener("change", _applyJournalFilter);
-  to.addEventListener("change", _applyJournalFilter);
-  instr.addEventListener("change", _applyJournalFilter);
-
-  // Layout toggle (Calendrier/Table) — utilise le systeme d'etat existant
-  var layoutBtns = $$("#journalFilters .jfilter-layout-btn");
-  layoutBtns.forEach(function(btn) {
-    btn.addEventListener("click", function() {
-      setJournalLayoutMode(btn.dataset.mode, { persist: true, rerender: true });
-    });
-  });
-
-  // Metric toggle (PnL/Tr/Mix) — bind via delegation sur le conteneur
-  if (typeof bindCalendarMetricToggle === "function") {
-    bindCalendarMetricToggle();
-  }
-}
-
 function _applyJournalFilter() {
   var from = $("#jFilterFrom");
   var to = $("#jFilterTo");

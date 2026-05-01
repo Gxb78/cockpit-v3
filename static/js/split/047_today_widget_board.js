@@ -18,8 +18,7 @@ var WIDGET_REGISTRY = {
 };
 
 var WIDGET_DEFAULTS = {
-  "today-kpis": ["kpi_total_pnl", "kpi_winrate", "kpi_average_rr", "kpi_trades", "kpi_profit_factor", "kpi_expectancy"],
-  "today-main": ["today_context", "today_log", "today_activity", "today_calendar"],
+  "today": ["kpi_total_pnl", "kpi_winrate", "kpi_average_rr", "kpi_trades", "kpi_profit_factor", "kpi_expectancy", "today_context", "today_log", "today_activity", "today_calendar"],
 };
 
 function readWidgetOrder(boardKey) {
@@ -108,21 +107,13 @@ function applyWidgetVisibility() {
 }
 
 function updateDashboardLayout() {
-  var kpiBoard = document.querySelector('[data-widget-board="today-kpis"]');
-  var mainBoard = document.querySelector('[data-widget-board="today-main"]');
-  if (kpiBoard) {
-    var kpiVisible = Array.from(kpiBoard.children).filter(function(el) {
+  var board = document.querySelector('[data-widget-board="today"]');
+  if (board) {
+    var visible = Array.from(board.children).filter(function(el) {
       return el.dataset && el.dataset.widgetKey && !el.classList.contains("widget-hidden");
     }).length;
-    kpiBoard.dataset.visibleCount = kpiVisible;
-    kpiBoard.classList.toggle("kpis-empty", kpiVisible === 0);
-  }
-  if (mainBoard) {
-    var mainVisible = Array.from(mainBoard.children).filter(function(el) {
-      return el.dataset && el.dataset.widgetKey && !el.classList.contains("widget-hidden");
-    }).length;
-    mainBoard.dataset.visibleCount = mainVisible;
-    mainBoard.classList.toggle("panels-empty", mainVisible === 0);
+    board.dataset.visibleCount = visible;
+    board.classList.toggle("today-empty", visible === 0);
   }
 }
 
@@ -147,13 +138,10 @@ function toggleWidgetVisibility(key) {
 
 function resetWidgetVisibility() {
   writeWidgetVisibility(getWidgetDefaults());
-  writeWidgetOrder("today-kpis", WIDGET_DEFAULTS["today-kpis"]);
-  writeWidgetOrder("today-main", WIDGET_DEFAULTS["today-main"]);
-  writeWidgetPositions("today-kpis", {});
-  writeWidgetPositions("today-main", {});
+  writeWidgetOrder("today", WIDGET_DEFAULTS["today"]);
+  writeWidgetPositions("today", {});
   applyWidgetVisibility();
-  applyWidgetBoardOrder(document.querySelector('[data-widget-board="today-kpis"]'));
-  applyWidgetBoardOrder(document.querySelector('[data-widget-board="today-main"]'));
+  applyWidgetBoardOrder(document.querySelector('[data-widget-board="today"]'));
   renderWidgetConfigItems();
   if (state.currentPage === "today" && typeof renderToday === "function") renderToday();
   if (typeof renderKPIs === "function" && state._stats) renderKPIs(state._stats);
@@ -178,14 +166,11 @@ function widgetIconSvg(icon) {
 }
 
 function renderWidgetConfigItems() {
-  var kpiContainer = document.getElementById("widgetConfigKpis");
-  var panelContainer = document.getElementById("widgetConfigPanels");
-  if (!kpiContainer || !panelContainer) return;
+  var container = document.getElementById("widgetConfigItems");
+  if (!container) return;
   var vis = readWidgetVisibility();
-  var kpiOrder = readWidgetOrder("today-kpis");
-  var mainOrder = readWidgetOrder("today-main");
-  if (!kpiOrder.length) kpiOrder = WIDGET_DEFAULTS["today-kpis"];
-  if (!mainOrder.length) mainOrder = WIDGET_DEFAULTS["today-main"];
+  var order = readWidgetOrder("today");
+  if (!order.length) order = WIDGET_DEFAULTS["today"];
   function renderItem(key) {
     var meta = WIDGET_REGISTRY[key];
     if (!meta) return "";
@@ -201,8 +186,7 @@ function renderWidgetConfigItems() {
       '</div>' +
     '</div>';
   }
-  kpiContainer.innerHTML = kpiOrder.map(renderItem).join("");
-  panelContainer.innerHTML = mainOrder.map(renderItem).join("");
+  container.innerHTML = order.map(renderItem).join("");
 }
 
 function positionDropdown(dropdown, btn) {
@@ -220,8 +204,7 @@ function bindWidgetConfig() {
   var dropdown = document.getElementById("widgetDropdown");
   var btn = document.getElementById("widgetConfigBtn");
   var resetBtn = document.getElementById("widgetConfigReset");
-  var kpiC = document.getElementById("widgetConfigKpis");
-  var panelC = document.getElementById("widgetConfigPanels");
+  var itemsC = document.getElementById("widgetConfigItems");
   if (!dropdown || !btn) return;
 
   btn.addEventListener("click", function(e) {
@@ -244,15 +227,12 @@ function bindWidgetConfig() {
     e.preventDefault();
     toggleWidgetVisibility(item.dataset.widgetToggle);
   }
-  kpiC.addEventListener("click", handleToggle);
-  panelC.addEventListener("click", handleToggle);
+  itemsC.addEventListener("click", handleToggle);
   applyWidgetVisibility();
 }
 
 // ============================================================
-// Drag & Drop v9 — FLIP + Placeholder DOM + Adaptive Spring
-// Le CSS grid calcule les positions, FLIP anime les deltas.
-// Hit-test pondéré par surface — les grands widgets n'écrasent pas les petits.
+// Drag & Drop v12 — swap-based with overlap-normalized hit test
 // ============================================================
 
 var _dnd = null;
@@ -307,8 +287,7 @@ function refreshDragHandles() {
           width: rect.width, height: rect.height,
           ghost: null,
           active: false,
-          dropRef: null,
-          targetBoard: null
+          dropRef: null
         };
         dndStart(pressStartX, pressStartY);
       }, DND_LONG_PRESS);
@@ -383,7 +362,6 @@ function dndStart(cx, cy) {
 
   document.body.classList.add("is-dragging");
   _dnd.dropRef = null;
-  _dnd.targetBoard = null;
 }
 
 function dndMove(cx, cy) {
@@ -392,7 +370,7 @@ function dndMove(cx, cy) {
   _dnd.ghost.style.transition = "none";
   _dnd.ghost.style.transform  = "translate(" + (cx - _dnd.offsetX) + "px," + (cy - _dnd.offsetY) + "px) scale(1.04)";
 
-  var boards = document.querySelectorAll(".widget-board[data-widget-board]");
+  var items = dndItems(_dnd.board);
   var ghostLeft   = cx - _dnd.offsetX;
   var ghostTop    = cy - _dnd.offsetY;
   var ghostRight  = ghostLeft + _dnd.width;
@@ -400,34 +378,14 @@ function dndMove(cx, cy) {
   var ghostCX     = ghostLeft + _dnd.width  / 2;
   var ghostCY     = ghostTop  + _dnd.height / 2;
 
-  var bestRef = null;
-  var bestBoard = null;
-  var bestScore = 0;
+  var dropIdx = dndHitTest(items, ghostLeft, ghostTop, ghostRight, ghostBottom, ghostCX, ghostCY, _dnd.el);
+  var dropRef = dropIdx >= 0 && dropIdx < items.length ? items[dropIdx] : null;
 
-  for (var b = 0; b < boards.length; b++) {
-    var boardEl = boards[b];
-    var items = dndItems(boardEl);
-    var idx = dndHitTest(items, boardEl, ghostLeft, ghostTop, ghostRight, ghostBottom, ghostCX, ghostCY, _dnd.el);
-    if (idx >= 0) {
-      var r = items[idx].getBoundingClientRect();
-      var rArea = r.width * r.height;
-      var ox = Math.max(0, Math.min(ghostRight, r.right) - Math.max(ghostLeft, r.left));
-      var oy = Math.max(0, Math.min(ghostBottom, r.bottom) - Math.max(ghostTop, r.top));
-      var score = (ox * oy) / rArea;
-      if (score > bestScore) {
-        bestScore = score;
-        bestRef = items[idx];
-        bestBoard = boardEl;
-      }
-    }
-  }
-
-  if (bestRef === _dnd.dropRef) return;
+  if (dropRef === _dnd.dropRef) return;
 
   if (_dnd.dropRef) _dnd.dropRef.classList.remove("widget-drop-target");
-  _dnd.dropRef = bestRef;
-  _dnd.targetBoard = bestBoard;
-  if (bestRef) bestRef.classList.add("widget-drop-target");
+  _dnd.dropRef = dropRef;
+  if (dropRef) dropRef.classList.add("widget-drop-target");
 }
 
 function dndEnd() {
@@ -438,21 +396,11 @@ function dndEnd() {
     _dnd.dropRef.classList.remove("widget-drop-target");
 
     var target = _dnd.dropRef;
-    var targetBoard = _dnd.targetBoard || target.closest(".widget-board[data-widget-board]");
-
-    if (targetBoard === board) {
-      var placeholder = document.createElement("div");
-      board.insertBefore(placeholder, el);
-      board.insertBefore(el, target);
-      board.insertBefore(target, placeholder);
-      placeholder.remove();
-    } else {
-      var ph = document.createComment("swap");
-      board.insertBefore(ph, el);
-      targetBoard.insertBefore(el, target);
-      board.insertBefore(target, ph);
-      ph.remove();
-    }
+    var placeholder = document.createElement("div");
+    board.insertBefore(placeholder, el);
+    board.insertBefore(el, target);
+    board.insertBefore(target, placeholder);
+    placeholder.remove();
   }
 
   el.classList.remove("widget-dragging");
@@ -470,43 +418,38 @@ function dndEnd() {
   if (_dnd.ghost) _dnd.ghost.remove();
   document.body.classList.remove("is-dragging");
 
-  var affectedBoards = [board];
-  if (_dnd.targetBoard && _dnd.targetBoard !== board) {
-    affectedBoards.push(_dnd.targetBoard);
-  }
+  var boardKey = board.dataset.widgetBoard;
+  var order = Array.from(board.children)
+    .map(function(c) { return c.dataset && c.dataset.widgetKey; })
+    .filter(Boolean);
+  writeWidgetOrder(boardKey, order);
 
-  affectedBoards.forEach(function(b) {
-    var bKey = b.dataset.widgetBoard;
-    var order = Array.from(b.children).map(function(c) { return c.dataset && c.dataset.widgetKey; }).filter(Boolean);
-    writeWidgetOrder(bKey, order);
+  Array.from(board.children).forEach(function(child) {
+    var key = child.dataset && child.dataset.widgetKey;
+    if (!key || child.classList.contains("widget-hidden")) return;
+    child.style.gridColumnStart = "";
+    child.style.gridRowStart = "";
+  });
 
-    Array.from(b.children).forEach(function(child) {
-      var key = child.dataset && child.dataset.widgetKey;
-      if (!key || child.classList.contains("widget-hidden")) return;
-      child.style.gridColumnStart = "";
-      child.style.gridRowStart = "";
-    });
+  var pos = {};
+  Array.from(board.children).forEach(function(child) {
+    var key = child.dataset && child.dataset.widgetKey;
+    if (!key || child.classList.contains("widget-hidden")) return;
+    var cs = window.getComputedStyle(child);
+    var col = parseInt(cs.gridColumnStart, 10);
+    var row = parseInt(cs.gridRowStart, 10);
+    if (!isNaN(col) && !isNaN(row) && col > 0 && row > 0) {
+      pos[key] = { col: col, row: row };
+    }
+  });
+  writeWidgetPositions(boardKey, pos);
 
-    var pos = {};
-    Array.from(b.children).forEach(function(child) {
-      var key = child.dataset && child.dataset.widgetKey;
-      if (!key || child.classList.contains("widget-hidden")) return;
-      var cs = window.getComputedStyle(child);
-      var col = parseInt(cs.gridColumnStart, 10);
-      var row = parseInt(cs.gridRowStart, 10);
-      if (!isNaN(col) && !isNaN(row) && col > 0 && row > 0) {
-        pos[key] = { col: col, row: row };
-      }
-    });
-    writeWidgetPositions(bKey, pos);
-
-    Object.keys(pos).forEach(function(key) {
-      var child = b.querySelector('[data-widget-key="' + key + '"]');
-      if (child) {
-        child.style.gridColumnStart = pos[key].col;
-        child.style.gridRowStart = pos[key].row;
-      }
-    });
+  Object.keys(pos).forEach(function(key) {
+    var child = board.querySelector('[data-widget-key="' + key + '"]');
+    if (child) {
+      child.style.gridColumnStart = pos[key].col;
+      child.style.gridRowStart = pos[key].row;
+    }
   });
 
   updateDashboardLayout();
@@ -521,9 +464,7 @@ function dndItems(board) {
   });
 }
 
-function dndHitTest(items, board, ghostLeft, ghostTop, ghostRight, ghostBottom, ghostCX, ghostCY, draggedEl) {
-  var isH = board.dataset.widgetBoard === "today-kpis";
-
+function dndHitTest(items, ghostLeft, ghostTop, ghostRight, ghostBottom, ghostCX, ghostCY, draggedEl) {
   var bestScore = 0, bestIdx = -1;
 
   for (var i = 0; i < items.length; i++) {

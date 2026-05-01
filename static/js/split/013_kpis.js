@@ -142,5 +142,5 @@ function renderKPIs(s) {
   if (streakEl) streakEl.textContent = s.streak || 0;
 
   // Remove skeleton loading state
-  $(".kpi-row")?.classList.remove("loading");
+  document.querySelector('[data-widget-board="today"]')?.classList.remove("loading");
 }

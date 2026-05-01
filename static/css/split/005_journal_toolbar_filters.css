@@ -56,6 +56,17 @@
   text-align: center;
   cursor: pointer;
   transition: border-color 0.14s;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding: 0 4px;
+}
+.journal-nav-inline #journalMonthInput::-webkit-calendar-picker-indicator,
+.journal-nav-inline #journalMonthInput::-webkit-inner-spin-button {
+  display: none !important;
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
 }
 .journal-nav-inline #journalMonthInput:hover {
   border-color: #c5cad4;
@@ -297,6 +308,16 @@
   color: #10131b;
   cursor: pointer;
   font-family: inherit;
+  max-width: 240px;
+  overflow: hidden;
+}
+.jfilter-group .journal-range-trigger #journalRangeLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 .jfilter-layout {

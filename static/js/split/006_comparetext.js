@@ -80,7 +80,7 @@ function updateJournalTableSortUI() {
     if (active) {
       const dir = document.createElement("span");
       dir.className = "sort-dir";
-      dir.textContent = state.journalTableSortDir === "asc" ? "^" : "v";
+      dir.textContent = state.journalTableSortDir === "asc" ? "\u25B2" : "\u25BC";
       btn.appendChild(dir);
     }
   });

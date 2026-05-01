@@ -206,7 +206,6 @@
 .page[data-page="today"] .today-grid {
   flex: 1;
   min-height: 0;
-  grid-template-columns: minmax(200px, 1fr) minmax(300px, 3fr);
 }
 
 .page[data-page="today"] .today-grid .panel,
