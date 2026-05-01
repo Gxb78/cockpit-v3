@@ -7461,10 +7461,15 @@ function refreshDragHandles() {
         if (navigator.vibrate) navigator.vibrate(18);
         widget.classList.remove("is-press-pending");
         var rect = widget.getBoundingClientRect();
+        var rawOffsetX = pressStartX - rect.left;
+        var rawOffsetY = pressStartY - rect.top;
+        var centerX = rect.width / 2;
+        var centerY = rect.height / 2;
+        var SNAP_TO_CENTER = 0.40;
         _dnd = {
           el: widget, board: board,
-          offsetX: pressStartX - rect.left,
-          offsetY: pressStartY - rect.top,
+          offsetX: rawOffsetX + (centerX - rawOffsetX) * SNAP_TO_CENTER,
+          offsetY: rawOffsetY + (centerY - rawOffsetY) * SNAP_TO_CENTER,
           width: rect.width, height: rect.height,
           ghost: null, placeholder: null,
           active: false, items: null, lastToIdx: -1
@@ -7565,7 +7570,9 @@ function dndMove(cx, cy) {
   _dnd.ghost.style.transform  = "translate(" + (cx - _dnd.offsetX) + "px," + (cy - _dnd.offsetY) + "px) scale(1.04)";
 
   var items = dndItemsWithPlaceholder(_dnd.board, _dnd.placeholder);
-  var newIdx = dndHitTest(items, _dnd.board, cx, cy);
+  var ghostCX = cx - _dnd.offsetX + _dnd.width / 2;
+  var ghostCY = cy - _dnd.offsetY + _dnd.height / 2;
+  var newIdx = dndHitTest(items, _dnd.board, ghostCX, ghostCY);
 
   if (newIdx === _dnd.lastToIdx) return;
 

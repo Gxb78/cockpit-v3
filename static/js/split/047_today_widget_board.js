@@ -377,7 +377,9 @@ function dndMove(cx, cy) {
   _dnd.ghost.style.transform  = "translate(" + (cx - _dnd.offsetX) + "px," + (cy - _dnd.offsetY) + "px) scale(1.04)";
 
   var items = dndItemsWithPlaceholder(_dnd.board, _dnd.placeholder);
-  var newIdx = dndHitTest(items, _dnd.board, cx, cy);
+  var ghostCX = cx - _dnd.offsetX + _dnd.width / 2;
+  var ghostCY = cy - _dnd.offsetY + _dnd.height / 2;
+  var newIdx = dndHitTest(items, _dnd.board, ghostCX, ghostCY);
 
   if (newIdx === _dnd.lastToIdx) return;
 
