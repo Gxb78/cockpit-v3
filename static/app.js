@@ -1706,6 +1706,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (cfg && cfg.strategies) DEFAULT_STRATEGY_VALUES = cfg.strategies;
     if (cfg && cfg.strategy_labels) STRATEGY_LABELS = cfg.strategy_labels;
     renderInstruments();
+    // Cacher le bouton dev restart hors mode DEBUG
+    if (cfg && !cfg.debug) {
+      var devBtn = document.getElementById("devRestart");
+      if (devBtn) devBtn.style.display = "none";
+    }
   } catch (_) { /* fallback silencieux sur les valeurs hardcodees */ }
 
   document.body.setAttribute("data-current-page", state.currentPage || "today");
@@ -3100,8 +3105,24 @@ async function saveDayContext(isNew) {
       }
     }
     state.modalDataDirty = true;
-    if (typeof loadAll === "function") {
-      setTimeout(loadAll, 100);
+    // Mutation locale + re-render si update simple (pas de changement date/instrument)
+    if (!isCreate && !payload.date && !payload.instrument) {
+      // Patcher localement state.days pour eviter un loadAll()
+      if (state.days) {
+        for (var _i = 0; _i < state.days.length; _i++) {
+          if (state.days[_i].id === (saved && saved.id != null ? saved.id : activeId)) {
+            Object.assign(state.days[_i], saved || payload);
+            break;
+          }
+        }
+      }
+      if (state.currentPage === "today" && typeof renderToday === "function") renderToday();
+      if (state._stats && typeof renderKPIs === "function") renderKPIs(state._stats);
+    } else {
+      // Changement structurel (create, date, instrument) -> rechargement complet
+      if (typeof loadAll === "function") {
+        setTimeout(loadAll, 100);
+      }
     }
     state.initialDayPayload = buildDayPayload();
     state.initialDayState = snapshotDayForm();
@@ -7479,14 +7500,20 @@ function dndStart() {
 
 function dndMove(cx, cy) {
   if (!_dnd) return;
-  var gx = cx - _dnd.offsetX;
-  var gy = cy - _dnd.offsetY;
+
   _dnd.ghost.style.transition = "none";
-  _dnd.ghost.style.transform = "translate(" + gx + "px," + gy + "px) scale(1.03)";
+  _dnd.ghost.style.transform = "translate(" + (cx - _dnd.offsetX) + "px," + (cy - _dnd.offsetY) + "px) scale(1.03)";
 
   var idx = dndInsertionIndex(_dnd.board, cx, cy);
   if (idx === _dnd.lastIdx) return;
   _dnd.lastIdx = idx;
+
+  var siblings = Array.from(_dnd.board.children).filter(function(el) {
+    return el !== _dnd.placeholder && el !== _dnd.el;
+  });
+  siblings.forEach(function(el) {
+    el.style.transition = "transform 160ms cubic-bezier(0.25, 1, 0.5, 1)";
+  });
 
   var ref = idx === -1 ? null : dndSiblingAt(_dnd.board, idx);
   if (ref) {
@@ -7503,6 +7530,10 @@ function dndEnd() {
   var board = _dnd.board;
   var ghost = _dnd.ghost;
   var placeholder = _dnd.placeholder;
+
+  Array.from(board.children).forEach(function(c) {
+    c.style.transition = "";
+  });
 
   board.insertBefore(el, placeholder);
 
@@ -7552,54 +7583,34 @@ function dndInsertionIndex(board, cx, cy) {
   if (n === 0) return -1;
 
   var isH = board.dataset.widgetBoard === "today-kpis";
-  var rects = [];
+
   for (var i = 0; i < n; i++) {
-    rects.push(siblings[i].getBoundingClientRect());
-  }
-
-  var bestGap = 0;
-  var bestDist = Infinity;
-
-  for (var i = 0; i <= n; i++) {
-    var mx, my;
-    if (isH) {
-      if (i === 0) {
-        mx = rects[0].left - 2;
-        my = rects[0].top + rects[0].height / 2;
-      } else if (i === n) {
-        mx = rects[n - 1].right + 2;
-        my = rects[n - 1].top + rects[n - 1].height / 2;
+    var r = siblings[i].getBoundingClientRect();
+    if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) {
+      if (isH) {
+        return cx < r.left + r.width / 2 ? i : i + 1;
       } else {
-        mx = (rects[i - 1].right + rects[i].left) / 2;
-        my = (rects[i - 1].top + rects[i].top) / 2;
-      }
-    } else {
-      if (i === 0) {
-        mx = rects[0].left + rects[0].width / 2;
-        my = rects[0].top - 4;
-      } else if (i === n) {
-        mx = rects[n - 1].left + rects[n - 1].width / 2;
-        my = rects[n - 1].bottom + 4;
-      } else {
-        var prevR = rects[i - 1];
-        var currR = rects[i];
-        var sameRow = Math.abs((currR.top + currR.height / 2) - (prevR.top + prevR.height / 2)) < prevR.height * 0.5;
-        if (sameRow) {
-          mx = (prevR.right + currR.left) / 2;
-          my = (prevR.top + prevR.bottom) / 2;
-        } else {
-          mx = currR.left + currR.width / 2;
-          my = (prevR.bottom + currR.top) / 2;
-        }
+        return cy < r.top + r.height / 2 ? i : i + 1;
       }
     }
-    var dx = cx - mx;
-    var dy = cy - my;
-    var dist = dx * dx + dy * dy;
-    if (dist < bestDist) { bestDist = dist; bestGap = i; }
   }
 
-  return bestGap === n ? -1 : bestGap;
+  var bestIdx = -1;
+  var bestDist = Infinity;
+  for (var i = 0; i < n; i++) {
+    var r = siblings[i].getBoundingClientRect();
+    var mcx = r.left + r.width / 2;
+    var mcy = r.top + r.height / 2;
+    var dist = (cx - mcx) * (cx - mcx) + (cy - mcy) * (cy - mcy);
+    if (dist < bestDist) { bestDist = dist; bestIdx = i; }
+  }
+  if (bestIdx === -1) return -1;
+  var br = siblings[bestIdx].getBoundingClientRect();
+  if (isH) {
+    return cx < br.left + br.width / 2 ? bestIdx : bestIdx + 1;
+  } else {
+    return cy < br.top + br.height / 2 ? bestIdx : bestIdx + 1;
+  }
 }
 
 // ---------- Today calendar (mini vue mois courant) ----------

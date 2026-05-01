@@ -2,6 +2,7 @@
 <html lang="fr">
 {% include "partials/layout/head.html" %}
 <body>
+<a href="#main-content" class="skip-link">Aller au contenu principal</a>
 {% include "partials/layout/aurora.html" %}
 
 <div id="loadingBar" class="loading-bar"></div>
@@ -9,7 +10,7 @@
 <div class="cockpit">
 {% include "partials/layout/rail.html" %}
 
-  <main class="main">
+  <main class="main" id="main-content">
 {% include "partials/pages/today.html" %}
 {% include "partials/pages/journal.html" %}
 {% include "partials/pages/stats.html" %}

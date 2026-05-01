@@ -115,6 +115,27 @@ body.reduce-motion *::after {
 
 html { font-size: 87.5%; } /* 1rem = 14px (browser default 16px × 0.875) */
 
+/* Skip-link accessible */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 8px;
+  z-index: 99999;
+  padding: 10px 18px;
+  border-radius: 0 0 10px 10px;
+  background: #08090c;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: top 0.18s;
+}
+.skip-link:focus {
+  top: 0;
+  outline: 2px solid var(--cyan, #00e5ff);
+  outline-offset: 2px;
+}
+
 html, body {
   margin: 0;
   padding: 0;
