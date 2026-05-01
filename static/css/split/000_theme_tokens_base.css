@@ -282,6 +282,10 @@ html { font-size: 87.5%; }
   outline-offset: 2px;
 }
 
+body > link {
+  display: none !important;
+}
+
 html, body {
   margin: 0;
   padding: 0;
