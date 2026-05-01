@@ -218,6 +218,7 @@ function initJournalFilters() {
     });
     quick.appendChild(btn);
   });
+  quick.removeAttribute("hidden");
 
   from.addEventListener("change", _applyJournalFilter);
   to.addEventListener("change", _applyJournalFilter);
@@ -230,6 +231,11 @@ function initJournalFilters() {
       setJournalLayoutMode(btn.dataset.mode, { persist: true, rerender: true });
     });
   });
+
+  // Metric toggle (PnL/Tr/Mix) — bind via delegation sur le conteneur
+  if (typeof bindCalendarMetricToggle === "function") {
+    bindCalendarMetricToggle();
+  }
 }
 
 function _applyJournalFilter() {

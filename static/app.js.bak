@@ -1,4 +1,3 @@
-// ---- 000_state.js ----
 /* =============================================================
    COCKPIT v3 — Trading Journal — frontend
    Schéma : days (contexte journalier) + trades (N par jour)
@@ -122,7 +121,6 @@ var state = new Proxy(_state, {
   },
 });
 
-// ---- 001_utilities.js ----
 // ---------- Utilities ----------
 
 const $  = (s) => document.querySelector(s);
@@ -452,7 +450,6 @@ async function api(path, opts = {}) {
   return res.json();
 }
 
-// ---- 002_prettify.js ----
 function prettify(s) {
   return STRATEGY_LABELS[s] || String(s).replace(/_/g," ").replace(/\b\w/g, c => c.toUpperCase());
 }
@@ -646,7 +643,6 @@ function saveProfileSettings() {
   toast("Profil mis à jour ✓", "success");
 }
 
-// ---- 003_addcustomstrategyfromsettings.js ----
 function addCustomTagFromSettings() {
   const input = $("#settingsTagInput");
   if (!input || !state.settings) return;
@@ -919,7 +915,6 @@ function loadJournalTradeFilters() {
   }
 }
 
-// ---- 004_loadjournaltablesort.js ----
 function loadJournalTableSort() {
   try {
     const raw = JSON.parse(localStorage.getItem(JOURNAL_TABLE_SORT_KEY) || "{}");
@@ -1182,8 +1177,6 @@ function _fmtDate2(d) {
   var day = String(d.getDate()).padStart(2, "0");
   return y + "-" + m + "-" + day;
 }
-
-// ---- 005_setjournalcustomrange.js ----
 function setJournalCustomRange(fromKey, toKey, opts = {}) {
   const { persist = true, reload = true } = opts;
   state.journalCustomFrom = fromKey || "";
@@ -1364,8 +1357,6 @@ function compareNullableNumbers(a, b) {
   if (b == null) return -1;
   return Number(a) - Number(b);
 }
-
-// ---- 006_comparetext.js ----
 function compareText(a, b) {
   return String(a || "").localeCompare(String(b || ""), "fr", { sensitivity: "base" });
 }
@@ -1591,7 +1582,6 @@ function renderJournalTable() {
   emptyEl.classList.toggle("hidden", count > 0);
 }
 
-// ---- 007_loadcalendarmonthfocusmode.js ----
 function loadCalendarMonthFocusMode() {
   try {
     const raw = localStorage.getItem(CALENDAR_MONTH_FOCUS_MODE_KEY);
@@ -1663,7 +1653,6 @@ function bindBreakdownSort() {
   });
 }
 
-// ---- 008_boot.js ----
 // ---------- Boot ----------
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -1755,7 +1744,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 });
 
-// ---- 009_navigation.js ----
 // ---------- Navigation ----------
 
 var PAGE_TITLES = {
@@ -1847,8 +1835,6 @@ function setTodayHeader() {
     if (localStorage.getItem("theme") === "light") document.body.classList.add("light-mode");
   } catch (_) {}
 })();
-
-// ---- 010_filter.js ----
 // ---------- Filter ----------
 
 function bindFilter() {
@@ -1866,7 +1852,6 @@ function bindFilter() {
   });
 }
 
-// ---- 011_calendar_nav.js ----
 // ---------- Calendar nav ----------
 
 function getJournalCustomWindow() {
@@ -2063,7 +2048,6 @@ function bindCalendarMonthPicker() {
   });
 }
 
-// ---- 012_data_loading.js ----
 // ---------- Data loading ----------
 
 /**
@@ -2138,7 +2122,6 @@ async function loadStats(opts = {}) {
   finally { loading(false); }
 }
 
-// ---- 013_kpis.js ----
 // ---------- KPIs ----------
 
 function getTradesForCurrentFilter() {
@@ -2285,8 +2268,6 @@ function renderKPIs(s) {
   // Remove skeleton loading state
   $(".kpi-row")?.classList.remove("loading");
 }
-
-// ---- 014_today_page.js ----
 // ---------- TODAY page ----------
 
 function renderToday() {
@@ -2418,7 +2399,6 @@ function dayCardEl(day) {
   return card;
 }
 
-// ---- 015_calendar.js ----
 // ---------- Calendar ----------
 
 let _calendarByDayCache = {};
@@ -2671,8 +2651,6 @@ function dayCell(dt, byDay, otherMonth, today) {
   el.innerHTML = `<div class="day-num">${dt.getDate()}</div>${metricHtml}${stackHtml}${dotsHtml}`;
   return el;
 }
-
-// ---- 016_openpickerfordate.js ----
 var _dayPickerEscHandler = null;
 var _dayPickerDays = null;
 
@@ -2740,8 +2718,6 @@ function closeDayPicker() {
   }
   document.getElementById("dayPickerOverlay")?.remove();
 }
-
-// ---- 017_modal_gestion_globale.js ----
 // ---------- Modal : gestion globale ----------
 
 var _lastFocused = null; // element qui a ouvert la modale (pour restauration)
@@ -2979,7 +2955,6 @@ function closeModalDirect() {
   }
 }
 
-// ---- 018_day_form.js ----
 // ---------- Day form ----------
 
   function resetDayForm() {
@@ -3131,7 +3106,6 @@ async function deleteDay() {
   } catch (err) { toast(err.message, "error"); }
 }
 
-// ---- 018_plan_engine.js ----
 // ---------- Plan / PO3 engine ----------
 
 const PLAN_ERROR_LABELS = {
@@ -3221,8 +3195,6 @@ function planAlignmentLabel(alignment) {
     unknown: "Plan inconnu",
   }[alignment] || "Plan inconnu";
 }
-
-// ---- 019_trades_list_dans_la_modal.js ----
 // ---------- Trades list (dans la modal) ----------
 
 var _tradeCardDataCache = {};
@@ -3330,8 +3302,6 @@ function pmWizOpen(tradeId, trade) {
   wizState.data.lessons = (trade && trade.lessons_learned) || "";
   _wizRender();
 }
-
-// ---- 020_trade_form.js ----
 // ---------- Trade form ----------
 
 const MM_INTERNAL_BLOCK_ID = "__mm_challenge__";
@@ -4107,8 +4077,6 @@ async function deleteTrade() {
     await loadAll();
   } catch (err) { toast(err.message, "error"); }
 }
-
-// ---- 021_rr_preview.js ----
 // ---------- RR preview ----------
 
 function bindRRPreview() {
@@ -4185,7 +4153,6 @@ function updateRRPreview() {
   }
 }
 
-// ---- 022_pills.js ----
 // ---------- Pills ----------
 
 function bindPills() {
@@ -4220,7 +4187,6 @@ function getPill(group) {
   return a ? a.dataset.value : null;
 }
 
-// ---- 023_quality_stars.js ----
 // ---------- Quality stars ----------
 
 function bindQuality() {
@@ -4249,7 +4215,6 @@ function setQuality(q) {
   );
 }
 
-// ---- 024_tags_input.js ----
 // ---------- Tags input ----------
 
 function bindTagsInput() {
@@ -4287,7 +4252,6 @@ function getTags() {
   return [...($("#tagsInput")?.querySelectorAll(".tag-pill") || [])].map(p => p.dataset.value);
 }
 
-// ---- 025_screenshots.js ----
 // ---------- Screenshots ----------
 
 function getClipboardImageFiles(e) {
@@ -4497,7 +4461,6 @@ function openLightbox(src) {
   $("#lightbox").classList.remove("hidden");
 }
 
-// ---- 026_autosave_du_jour.js ----
 // ---------- Autosave du jour ----------
 
 let _autosaveState = "idle";
@@ -4555,7 +4518,6 @@ function dayFormHasMeaningfulContent() {
   return !!(p.htf_bias || p.htf_context || p.daily_notes);
 }
 
-// ---- 027_export.js ----
 // ---------- Export ----------
 
 function bindExport() {
@@ -4574,7 +4536,6 @@ function bindExport() {
   });
 }
 
-// ---- 028_global_keys.js ----
 // ---------- Global keys ----------
 
 function bindGlobalKeys() {
@@ -4610,7 +4571,6 @@ function bindGlobalKeys() {
   });
 }
 
-// ---- 029_command_palette.js ----
 // ---------- Command Palette ----------
 
 var _cmdkLastFocused = null;
@@ -4802,8 +4762,6 @@ function highlightCmdk() {
 function execCmdk() {
   state.cmdkResults[state.cmdkActiveIdx]?.run();
 }
-
-// ---- 030_stats.js ----
 // ---------- Stats ----------
 
 var _statsLastLoad = 0;
@@ -4917,7 +4875,6 @@ function renderInsights(insights) {
   if (typeof applyWidgetBoardOrder === "function") applyWidgetBoardOrder(c);
 }
 
-// ---- 031_heatmap.js ----
 // ---------- Heatmap ----------
 
 var _hmLastActivity = null;  // cache: skip rerender if same reference
@@ -5051,8 +5008,6 @@ function hideHmTooltip() {
   var tt = $("#hmTooltip");
   if (tt) tt.style.display = "none";
 }
-
-// ---- 032_breakdowns.js ----
 // ---------- Breakdowns ----------
 
 function renderBreakdown(selector, data, opts = {}) {
@@ -5286,7 +5241,6 @@ function renderPnlHistogram(buckets) {
   });
 }
 
-// ---- 033_renderdrawdownchart.js ----
 function renderDrawdownChart(drawdown, opts = {}) {
   const canvas = $("#drawdownChart");
   const meta = $("#drawdownMeta");
@@ -5407,8 +5361,6 @@ if (!renderDrawdownChart._listenerAttached) {
   window.addEventListener("resize", () => { renderDrawdownChart._dirty = true; });
   renderDrawdownChart._listenerAttached = true;
 }
-
-// ---- 034_cumulative_chart_canvas.js ----
 // ---------- Cumulative chart (canvas) ----------
 
 function renderCumChart(data, opts = {}) {
@@ -5594,7 +5546,6 @@ function slugify(s) {
     .replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"");
 }
 
-// ---- 035_initblocks.js ----
 var _initBlocksDelegationBound = false;
 
 function initBlocks() {
@@ -5666,7 +5617,6 @@ function updateBlockSummary(block) {
   sum.textContent = parts.filter(Boolean).slice(0,4).join(" · ");
 }
 
-// ---- 036_markdown_preview.js ----
 // ---------- Markdown preview ----------
 
 const MARKDOWN_FIELDS = ["htfContext","midnightOpen","dailyNotes","whyTrade","whyEntry","whyStop","stdvLevel","lessonsLearned"];
@@ -5722,7 +5672,6 @@ function renderMarkdown(text) {
   return html;
 }
 
-// ---- 037_hashtag_auto_extraction.js ----
 // ---------- Hashtag auto-extraction ----------
 
 function bindHashtagSync() {
@@ -5736,7 +5685,6 @@ function syncHashtagsFromText() {
   found.forEach(t => addTag(t));
 }
 
-// ---- 038_custom_blocks.js ----
 // ---------- Custom blocks ----------
 
 var _customBlocksDelegationBound = false;
@@ -5980,7 +5928,6 @@ function applyNarrationToForm(data) {
   }
 }
 
-// ---- 039_helpers.js ----
 // ---------- Helpers ----------
 
 function _lastInstrument() {
@@ -5988,7 +5935,11 @@ function _lastInstrument() {
   return raw === "NAS" ? "NQ" : raw;
 }
 
-// ---- 040_wizard_core.js ----
+
+
+
+
+
 /* ============================================================
    WIZARD MODULE — Scenario Logger
    ============================================================ */
@@ -6172,7 +6123,6 @@ function wizBack() {
   }
 }
 
-// ---- 041_wizskip.js ----
 function wizSkip() {
   if (!wizState) return;
   if (wizState.stepIdx < wizState.steps.length - 1) {
@@ -6348,7 +6298,6 @@ function _wizStepDate() {
     + '</div>';
 }
 
-// ---- 042_wizsetdate.js ----
 function wizSetDate(dt) {
   if (!wizState) return;
   wizState.data.date = dt;
@@ -6556,7 +6505,6 @@ function _wizStepLevels() {
     + '<div id="wizRrPreview">' + rrHtml + '</div>';
 }
 
-// ---- 043_wizsetdir.js ----
 function wizSetDir(btn) {
   document.querySelectorAll('.wiz-dir-btn').forEach(function(b) {
     b.classList.remove('active-long','active-short');
@@ -6801,7 +6749,6 @@ function _wizBindScreenshots() {
   input.onchange = function(e) { _wizHandleFiles(e.target.files); };
 }
 
-// ---- 044_wizreadfileasdataurl.js ----
 function _wizReadFileAsDataUrl(file) {
   return new Promise(function(resolve, reject) {
     var reader = new FileReader();
@@ -7049,7 +6996,6 @@ function _wizKeydown(e) {
 
 // ─── Bind ──────────────────────────────────────────────────
 
-// ---- 045_bindwizard.js ----
 function bindWizard() {
   var wiz = document.getElementById('wiz');
   if (!wiz) return;
@@ -7082,8 +7028,6 @@ function bindWizard() {
 
   document.addEventListener('keydown', _wizKeydown);
 }
-
-// ---- 046_ai_panel.js ----
 // ---------- AI panel ----------
 
 const AI_PANEL_OPEN_KEY = "cockpit:aiPanelOpen:v1";
@@ -7108,8 +7052,6 @@ function bindAiPanelToggle() {
     setAiPanelOpen(next, true);
   });
 }
-
-// ---- 047_today_widget_board.js ----
 // ---------- Widget boards ----------
 
 const WIDGET_ORDER_PREFIX = "cockpit:widgetOrder:";
@@ -7219,8 +7161,6 @@ function renderTodayCalendar() {
     });
   }
 }
-
-// ---- 048_ai_chat.js ----
 // ---------- AI Chat — frontend ----------
 // State : window.aiChatHistory (session only, not persisted)
 // Uses : api(), toast()
@@ -7774,8 +7714,6 @@ function bindAIChat() {
     });
   }
 }
-
-// ---- 049_enhanced_select.js ----
 // ---------- Enhanced select : remplace les <select> natifs par un dropdown custom ----------
 //
 // Le select natif est cache mais garde sa valeur (utilise pour la compatibilité formulaire).
@@ -7942,8 +7880,6 @@ function _closeSelect(trigger, dropdown) {
   dropdown.classList.remove("open");
   if (trigger) { trigger.classList.remove("open"); trigger.setAttribute("aria-expanded", "false"); }
 }
-
-// ---- 049_insights.js ----
 // ---- 049_insights.js ---- Page Profil & Insights ML ----
 
 (function () {
@@ -8345,8 +8281,6 @@ function _closeSelect(trigger, dropdown) {
     }
   }
 })();
-
-// ---- 050_priority1_app_shell.js ----
 // ---------- Priority 1 app shell ----------
 
 const APP_SHELL_PAGES = {
@@ -8420,12 +8354,8 @@ function bindAppShellActions() {
     updateAppShell(state.currentPage || "today");
   });
 })();
-
-// ---- 051_spotlight.js ----
 // Legacy cursor spotlight disabled.
 // The global empty-space background is handled by 055_interactive_empty_background.js.
-
-// ---- 052_pretext_greeting.js ----
 // ---- 052_pretext_greeting.js ----
 // Animated greeting with @chenglou/pretext: text flows around a subtle orb.
 
@@ -8759,8 +8689,6 @@ function bindAppShellActions() {
     _patchGoPage();
   }
 })();
-
-// ---- 053_unified_date_picker.js ----
 // ---------- Unified date/range picker ----------
 
 var _unifiedDatePickerState = null;
@@ -9037,8 +8965,6 @@ function bindUnifiedDatePickers(root = document) {
 document.addEventListener("DOMContentLoaded", function() {
   bindUnifiedDatePickers(document);
 });
-
-// ---- 054_journal_filter_picker_override.js ----
 // ---------- Journal filters override: single range picker + lean controls ----------
 
 function initJournalFilters() {
@@ -9193,8 +9119,6 @@ function bindJournalStatsArrows() {
     updateJournalStatsDisplay();
   });
 }
-
-// ---- 055_interactive_empty_background.js ----
 // ---------- Interactive empty-space background ----------
 
 (function () {
@@ -9335,8 +9259,6 @@ function bindJournalStatsArrows() {
     initInteractiveBackground();
   }
 })();
-
-// ---- 056_journal_day_trade_cards.js ----
 function journalTradeEditorHtml(day, trade) { return TradeEditorController.renderHtml(day, trade); }
 
 // ---------- Journal inline day trades ----------
@@ -9563,7 +9485,27 @@ function _journalCardScheduleSave(tid) {
 // ---- Inline warnings in editor sections ----
 
 function openJournalTradeEditor(tid) {
-  TradeEditorController.open(tid);
+  var tidStr = String(tid);
+  var wrap = $("#journalDayTrades");
+  var trade = _journalDayTradeCache[tidStr];
+  var day = _journalDayTradeDays[tidStr];
+  if (!wrap || !trade || !day) return;
+
+  closeJournalTradeEditor({ immediate: true });
+  TradeEditorController.activeTradeId = tidStr;
+  wrap.classList.add('is-editing');
+  // 🛡️ CLASSE HTML : source de vérité qui survit à closeJournalDayTrades()
+  document.documentElement.classList.add('html-editor-open');
+  document.documentElement.classList.add('journal-no-flip');
+  wrap.insertAdjacentHTML('beforeend', journalTradeEditorHtml(day, trade));
+
+  var editor = wrap.querySelector('.journal-trade-editor[data-trade-id="' + tidStr + '"]');
+  if (!editor) return;
+  requestAnimationFrame(function () { editor.classList.add('is-visible'); });
+  setTimeout(function () {
+    var focusTarget = editor.querySelector('.jedit-field, .jedit-pill, .jedit-close');
+    if (focusTarget && typeof focusTarget.focus === 'function') focusTarget.focus({ preventScroll: true });
+  }, 80);
 }
 
 // Save a trade immediately via TradeEditorController
@@ -10173,8 +10115,6 @@ function journalTradeFlipCardHtml(day, trade, idx, deck) {
     </article>
   `;
 }
-
-// ---- 057_debug_labels.js ----
 // ---- 057_debug_labels.js ----
 // Affiche des labels sur chaque composant avec data-name.
 // Activer: localStorage.DEBUG_LABELS = "1" puis reload.
@@ -10202,8 +10142,6 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 });
 }
-
-// ---- 058_trade_hero_card.js ----
 // ---------- TradeHeroCard — reusable primitive ----------
 // Two variants:
 //   'flip-front' → journal card front face (light Apple, compact)
@@ -10360,8 +10298,6 @@ function _thcField(label, value) {
     '<strong class="thc-field-value">' + value + '</strong>' +
   '</div>';
 }
-
-// ---- 059_trade_editor_controller.js ----
 // ---------- TradeEditorController — inline trade editor ----------
 // Responsabilités:
 //   - Ouvrir/fermer l'éditeur (drawer latéral)
@@ -10670,20 +10606,18 @@ TradeEditorController.open = function (tid) {
   var editor = wrap.querySelector('.journal-trade-editor[data-trade-id="' + tidStr + '"]');
   if (!editor) return;
 
-  // Double RAF : laisser le navigateur peindre l'état initial (opacity:0)
-  // avant de déclencher la transition vers l'état final (opacity:1)
+  // Laisser le DOM s'afficher, puis animer l'éditeur
   requestAnimationFrame(function () {
-    requestAnimationFrame(function () {
-      editor.classList.add('is-visible');
-      var scroll = editor.querySelector('.jedit-scroll');
-      if (scroll) scroll.classList.add('is-revealing');
-    });
+    editor.classList.add('is-visible');
+    // Stagger reveal des sections
+    var scroll = editor.querySelector('.jedit-scroll');
+    if (scroll) scroll.classList.add('is-revealing');
   });
 
   setTimeout(function () {
     var focusTarget = editor.querySelector('.jedit-field, .jedit-pill, .jedit-close');
     if (focusTarget && typeof focusTarget.focus === 'function') focusTarget.focus({ preventScroll: true });
-  }, 220);
+  }, 120);
 };
 
 TradeEditorController.close = function (opts) {
@@ -10714,35 +10648,28 @@ TradeEditorController.close = function (opts) {
   // 🔥 Unfocus : animation inverse
   wrap.classList.add('is-unfocusing');
   wrap.classList.remove('is-focusing');
-
-  // Retirer is-source tout de suite pour que la card
-  // suive la transition de retour normalement
-  var sourceCard = wrap.querySelector('.journal-flip-card.is-source');
-  if (sourceCard) sourceCard.classList.remove('is-source');
+  wrap.classList.remove('is-editing');
+  document.documentElement.classList.remove('journal-no-flip');
 
   if (opts && opts.immediate) {
-    wrap.classList.remove('is-editing');
-    wrap.classList.remove('is-unfocusing');
-    document.documentElement.classList.remove('html-editor-open');
-    document.documentElement.classList.remove('journal-no-flip');
     TradeEditorController.activeTradeId = null;
+    document.documentElement.classList.remove('html-editor-open');
+    wrap.classList.remove('is-unfocusing');
     editor.remove();
     setTimeout(function () { TradeEditorController.justClosed = false; }, 250);
     return;
   }
 
   editor.classList.remove('is-visible');
-  wrap.classList.remove('is-editing');
-  document.documentElement.classList.remove('journal-no-flip');
 
-  // Attendre la fin de l'animation unfocus puis nettoyer
+  // Attendre l'animation de unfocus puis nettoyer
   setTimeout(function () {
     TradeEditorController.activeTradeId = null;
     document.documentElement.classList.remove('html-editor-open');
     wrap.classList.remove('is-unfocusing');
     if (editor.parentNode) editor.remove();
-  }, 420);
-  setTimeout(function () { TradeEditorController.justClosed = false; }, 500);
+  }, 550);
+  setTimeout(function () { TradeEditorController.justClosed = false; }, 650);
 };
 
 // ---- Editor HTML helpers ----

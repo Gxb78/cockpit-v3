@@ -306,18 +306,20 @@ TradeEditorController.open = function (tid) {
   var editor = wrap.querySelector('.journal-trade-editor[data-trade-id="' + tidStr + '"]');
   if (!editor) return;
 
-  // Laisser le DOM s'afficher, puis animer l'éditeur
+  // Double RAF : laisser le navigateur peindre l'état initial (opacity:0)
+  // avant de déclencher la transition vers l'état final (opacity:1)
   requestAnimationFrame(function () {
-    editor.classList.add('is-visible');
-    // Stagger reveal des sections
-    var scroll = editor.querySelector('.jedit-scroll');
-    if (scroll) scroll.classList.add('is-revealing');
+    requestAnimationFrame(function () {
+      editor.classList.add('is-visible');
+      var scroll = editor.querySelector('.jedit-scroll');
+      if (scroll) scroll.classList.add('is-revealing');
+    });
   });
 
   setTimeout(function () {
     var focusTarget = editor.querySelector('.jedit-field, .jedit-pill, .jedit-close');
     if (focusTarget && typeof focusTarget.focus === 'function') focusTarget.focus({ preventScroll: true });
-  }, 120);
+  }, 220);
 };
 
 TradeEditorController.close = function (opts) {
@@ -348,28 +350,35 @@ TradeEditorController.close = function (opts) {
   // 🔥 Unfocus : animation inverse
   wrap.classList.add('is-unfocusing');
   wrap.classList.remove('is-focusing');
-  wrap.classList.remove('is-editing');
-  document.documentElement.classList.remove('journal-no-flip');
+
+  // Retirer is-source tout de suite pour que la card
+  // suive la transition de retour normalement
+  var sourceCard = wrap.querySelector('.journal-flip-card.is-source');
+  if (sourceCard) sourceCard.classList.remove('is-source');
 
   if (opts && opts.immediate) {
-    TradeEditorController.activeTradeId = null;
-    document.documentElement.classList.remove('html-editor-open');
+    wrap.classList.remove('is-editing');
     wrap.classList.remove('is-unfocusing');
+    document.documentElement.classList.remove('html-editor-open');
+    document.documentElement.classList.remove('journal-no-flip');
+    TradeEditorController.activeTradeId = null;
     editor.remove();
     setTimeout(function () { TradeEditorController.justClosed = false; }, 250);
     return;
   }
 
   editor.classList.remove('is-visible');
+  wrap.classList.remove('is-editing');
+  document.documentElement.classList.remove('journal-no-flip');
 
-  // Attendre l'animation de unfocus puis nettoyer
+  // Attendre la fin de l'animation unfocus puis nettoyer
   setTimeout(function () {
     TradeEditorController.activeTradeId = null;
     document.documentElement.classList.remove('html-editor-open');
     wrap.classList.remove('is-unfocusing');
     if (editor.parentNode) editor.remove();
-  }, 550);
-  setTimeout(function () { TradeEditorController.justClosed = false; }, 650);
+  }, 420);
+  setTimeout(function () { TradeEditorController.justClosed = false; }, 500);
 };
 
 // ---- Editor HTML helpers ----

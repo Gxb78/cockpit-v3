@@ -236,7 +236,7 @@ _CONTRACT_MULTIPLIERS = {
 }
 
 
-def _auto_calc_pnl(payload, day_id, db, existing=None):
+def _auto_calc_pnl(payload, day_id, db):
     """Calcule le PnL depuis entry/exit/size avec la direction pour le signe."""
     if payload.get("pnl") is not None:
         payload.get("leverage")

@@ -1,8 +1,8 @@
-/* ---- Focus mode — transition simple card → éditeur ---- */
-/* Animé depuis TradeEditorController.open() / close() */
+/* ---- Focus mode — transition card → editeur ---- */
+/* Animate depuis TradeEditorController.open() / close() */
 
-/* Neutraliser le dimming global de .is-editing sur la grille
-   — on gère le focus visuel sur les cards individuellement */
+/* 1. Grid : neutraliser le dimming global pendant les phases de transition
+      — le dimming se gere par card individuelle, pas par la grille entiere */
 .journal-day-trades.is-focusing.is-editing .journal-day-trades-grid,
 .journal-day-trades.is-unfocusing.is-editing .journal-day-trades-grid {
   opacity: 1 !important;
@@ -10,77 +10,96 @@
   transform: none !important;
 }
 
-/* La card source monte un peu */
+/* 2. Card source : legere elevation + glow pour signaler "ce trade" */
 .journal-day-trades.is-focusing .journal-flip-card.is-source {
-  transition: transform 0.35s cubic-bezier(.2,.8,.2,1),
-              box-shadow 0.35s ease,
-              filter 0.35s ease;
-  transform: scale(1.03) translateY(-6px);
-  filter: brightness(1.08);
-  box-shadow: 0 16px 40px rgba(0,0,0,0.16), 0 6px 16px rgba(0,0,0,0.08);
+  transition: transform 0.38s cubic-bezier(.22,.92,.32,1),
+              box-shadow 0.38s ease,
+              filter 0.38s ease,
+              opacity 0.28s ease;
+  transform: scale(1.025) translateY(-4px);
+  filter: brightness(1.06);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06);
 }
 
-/* Les autres cards s'atténuent */
+/* 3. Autres cards : recul doux + desaturation progressive */
 .journal-day-trades.is-focusing .journal-flip-card:not(.is-source) {
-  transition: opacity 0.35s ease, transform 0.35s ease, filter 0.35s ease;
-  opacity: 0.3;
-  transform: scale(0.94) translateY(12px);
-  filter: saturate(0.5) brightness(0.8);
+  transition: opacity 0.36s cubic-bezier(.22,.92,.32,1),
+              transform 0.38s cubic-bezier(.22,.92,.32,1),
+              filter 0.36s ease;
+  opacity: 0.28;
+  transform: scale(0.96) translateY(8px);
+  filter: saturate(0.45) brightness(0.78);
   pointer-events: none;
 }
 
-/* Retour à la normale — transition */
+/* 4. Retour a la normale — plus lent et plus doux que l'entree */
 .journal-day-trades.is-unfocusing .journal-flip-card.is-source {
-  transition: transform 0.35s cubic-bezier(.55,0,.78,.2),
-              box-shadow 0.35s ease,
-              filter 0.35s ease;
+  transition: transform 0.42s cubic-bezier(.25,.46,.45,.94),
+              box-shadow 0.42s ease,
+              filter 0.36s ease;
   transform: scale(1) translateY(0);
   filter: brightness(1);
   box-shadow: 0 2px 6px rgba(0,0,0,0.06);
 }
 
 .journal-day-trades.is-unfocusing .journal-flip-card:not(.is-source) {
-  transition: opacity 0.35s ease, transform 0.35s ease, filter 0.35s ease;
+  transition: opacity 0.4s cubic-bezier(.25,.46,.45,.94),
+              transform 0.42s cubic-bezier(.25,.46,.45,.94),
+              filter 0.38s ease;
   opacity: 1;
   transform: scale(1) translateY(0);
   filter: saturate(1) brightness(1);
 }
 
-/* Éditeur — slide depuis la droite */
+/* 5. Editeur : glissement depuis la droite avec un leger bounce */
 .journal-day-trades.is-focusing .journal-trade-editor {
   opacity: 0;
-  transform: translateX(60px) scale(0.96);
+  transform: translateX(50px) scale(0.97);
+  pointer-events: none;
   transition: none;
 }
 
 .journal-day-trades.is-focusing .journal-trade-editor.is-visible {
-  transition: opacity 0.35s ease-out, transform 0.4s cubic-bezier(.14,.82,.22,1);
+  transition: opacity 0.4s cubic-bezier(.16,1,.3,1),
+              transform 0.48s cubic-bezier(.16,1,.3,1);
   opacity: 1;
   transform: translateX(0) scale(1);
+  pointer-events: auto;
 }
 
-/* Fermeture éditeur */
+/* 6. Fermeture editeur : retrait plus rapide, fluide */
 .journal-day-trades.is-unfocusing .journal-trade-editor {
-  transition: opacity 0.28s ease-in, transform 0.3s cubic-bezier(.55,0,.78,.2);
+  transition: opacity 0.26s cubic-bezier(.4,0,1,1),
+              transform 0.3s cubic-bezier(.4,0,1,1);
   opacity: 0;
-  transform: translateX(40px) scale(0.94);
+  transform: translateX(30px) scale(0.96);
+  pointer-events: none;
 }
 
-/* ---- Section reveal stagger — blocks apparaissent en séquence ---- */
-/* Chaque .jedit-block est masqué initialement pendant le reveal */
+/* ---- Section reveal stagger — blocks apparaissent en sequence ---- */
+/* Chaque .jedit-block est masque initialement pendant le reveal */
 .jedit-scroll.is-revealing .jedit-block {
   opacity: 0;
-  transform: translateY(8px);
+  transform: translateY(16px);
 }
 
-/* Animation quand motion OK */
+/* Animation quand motion OK — stagger fluide avec easing spring */
 body:not(.reduce-motion) .jedit-scroll.is-revealing .jedit-block {
-  animation: sectionFadeIn 0.4s cubic-bezier(.2,.9,.1,1) forwards;
+  animation: sectionFadeIn 0.48s cubic-bezier(.22,.92,.32,1) forwards;
 }
-body:not(.reduce-motion) .jedit-scroll.is-revealing .jedit-block:nth-child(2) { animation-delay: 40ms; }
-body:not(.reduce-motion) .jedit-scroll.is-revealing .jedit-block:nth-child(3) { animation-delay: 80ms; }
-body:not(.reduce-motion) .jedit-scroll.is-revealing .jedit-block:nth-child(4) { animation-delay: 120ms; }
-body:not(.reduce-motion) .jedit-scroll.is-revealing .jedit-block:nth-child(5) { animation-delay: 160ms; }
+body:not(.reduce-motion) .jedit-scroll.is-revealing .jedit-block:nth-child(1) { animation-delay: 60ms; }
+body:not(.reduce-motion) .jedit-scroll.is-revealing .jedit-block:nth-child(2) { animation-delay: 140ms; }
+body:not(.reduce-motion) .jedit-scroll.is-revealing .jedit-block:nth-child(3) { animation-delay: 230ms; }
+body:not(.reduce-motion) .jedit-scroll.is-revealing .jedit-block:nth-child(4) { animation-delay: 320ms; }
+body:not(.reduce-motion) .jedit-scroll.is-revealing .jedit-block:nth-child(5) { animation-delay: 410ms; }
+body:not(.reduce-motion) .jedit-scroll.is-revealing .jedit-block:nth-child(n+6) { animation-delay: 410ms; }
+
+/* Premiere apparition : legere mise a l'echelle pour un effet "pop subtil" */
+@keyframes sectionFadeIn {
+  0%   { opacity: 0; transform: translateY(16px) scale(0.98); }
+  60%  { opacity: 1; transform: translateY(-1px) scale(1.003); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
 
 /* Show immediately when reduce-motion */
 body.reduce-motion .jedit-scroll.is-revealing .jedit-block {
@@ -88,14 +107,9 @@ body.reduce-motion .jedit-scroll.is-revealing .jedit-block {
   transform: none;
 }
 
-@keyframes sectionFadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
 /* ---- Field glow — feedback sauvegarde directement sur le champ ---- */
 
-/* Succès — respiration douce : monte → pic → redescend */
+/* Succes — respiration douce : monte -> pic -> redescend */
 .jedit-field.jedit-field-glow,
 textarea.jedit-field-glow,
 select.jedit-field-glow,

@@ -224,27 +224,7 @@ function _journalCardScheduleSave(tid) {
 // ---- Inline warnings in editor sections ----
 
 function openJournalTradeEditor(tid) {
-  var tidStr = String(tid);
-  var wrap = $("#journalDayTrades");
-  var trade = _journalDayTradeCache[tidStr];
-  var day = _journalDayTradeDays[tidStr];
-  if (!wrap || !trade || !day) return;
-
-  closeJournalTradeEditor({ immediate: true });
-  TradeEditorController.activeTradeId = tidStr;
-  wrap.classList.add('is-editing');
-  // 🛡️ CLASSE HTML : source de vérité qui survit à closeJournalDayTrades()
-  document.documentElement.classList.add('html-editor-open');
-  document.documentElement.classList.add('journal-no-flip');
-  wrap.insertAdjacentHTML('beforeend', journalTradeEditorHtml(day, trade));
-
-  var editor = wrap.querySelector('.journal-trade-editor[data-trade-id="' + tidStr + '"]');
-  if (!editor) return;
-  requestAnimationFrame(function () { editor.classList.add('is-visible'); });
-  setTimeout(function () {
-    var focusTarget = editor.querySelector('.jedit-field, .jedit-pill, .jedit-close');
-    if (focusTarget && typeof focusTarget.focus === 'function') focusTarget.focus({ preventScroll: true });
-  }, 80);
+  TradeEditorController.open(tid);
 }
 
 // Save a trade immediately via TradeEditorController

@@ -319,3 +319,10 @@ Format obligatoire d'une lesson:
 - Regle de prevention: apres chaque refactoring, verifier `git ls-files app_parts/__archive__/` = 0. Verifier que les IDs DOM references par les JS existent dans les templates HTML (`rg -rn '#prevMonth\|#nextMonth\|#monthLabel' templates/ --type html`).
 - Test de non-regression: `python -m unittest tests.test_template_render -v` (verifie que les templates rendent correctement). Apres build, verifier que les IDs sont presents dans le template rendu.
 - Fichiers a surveiller: `app_parts/__archive__/*`, `templates/partials/pages/journal/header.html`, tous les JS qui referencent des IDs de navigation/stats header.
+
+### BUG-20260501-03 - Parametre mort `existing` dans _auto_calc_pnl + catch silencieux state.js
+- Symptome: `_auto_calc_pnl()` acceptait `existing=None` mais ne l'utilisait jamais. `19_ai_chat.py` lui passait `existing` pour rien. State.js ligne 79 catch silencieux qui avale les erreurs de listeners.
+- Cause racine: accumulation de code mort et de catch aveugles.
+- Regle de prevention: apres chaque refactoring, chercher les parametres de fonction inutilises (`grep -rn "def.*existing=None" app_parts/`). Les catch doivent toujours logger (`console.warn` minimum).
+- Test de non-regression: `grep -n 'existing=None' app_parts/03_core_helpers.py` doit retourner 0. `grep 'catch.*{}' static/js/split/000_state.js` ne doit pas exister.
+- Fichiers a surveiller: `app_parts/03_core_helpers.py`, `app_parts/19_ai_chat.py`, `static/js/split/000_state.js`.

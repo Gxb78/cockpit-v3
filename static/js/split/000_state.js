@@ -76,7 +76,7 @@ function _dispatchStateChange(key, newValue, oldValue) {
   var list = STATE_LISTENERS[key];
   if (!list) return;
   for (var i = 0; i < list.length; i++) {
-    try { list[i](newValue, oldValue); } catch (_) {}
+    try { list[i](newValue, oldValue); } catch (_) { console.warn('state listener error', _, newValue, oldValue); }
   }
 }
 

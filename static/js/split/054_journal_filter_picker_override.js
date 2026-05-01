@@ -42,6 +42,15 @@ function initJournalFilters() {
     });
   });
 
+  // Metric toggle (PnL/Tr/Mix)
+  $$("#calendarMetricToggle .calendar-metric-btn").forEach(function(btn) {
+    if (btn.dataset.metricBound) return;
+    btn.dataset.metricBound = "1";
+    btn.addEventListener("click", function() {
+      setCalendarMetricMode(btn.dataset.mode, { persist: true, rerender: true });
+    });
+  });
+
   bindJournalStatsArrows();
   updateJournalStatsDisplay();
 }

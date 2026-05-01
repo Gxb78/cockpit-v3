@@ -13,6 +13,10 @@
   overflow: visible;
   transform: translate(-50%, -50%);
   pointer-events: auto;
+  transition: width 0.42s cubic-bezier(.22,.92,.32,1),
+              max-height 0.42s cubic-bezier(.22,.92,.32,1),
+              top 0.42s cubic-bezier(.22,.92,.32,1),
+              left 0.42s cubic-bezier(.22,.92,.32,1);
 }
 
 .journal-day-trades.hidden { display: none; }
@@ -44,7 +48,7 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   scrollbar-width: thin;
   scrollbar-color: rgba(10, 18, 28, 0.22) transparent;
   width: 100%;
-  transition: opacity 0.24s ease, transform 0.28s cubic-bezier(.2,.8,.2,1), filter 0.24s ease;
+  transition: opacity 0.3s cubic-bezier(.22,.92,.32,1), transform 0.34s cubic-bezier(.22,.92,.32,1), filter 0.3s ease;
 }
 
 .journal-day-trades:not(.hidden) .journal-flip-card {
@@ -60,7 +64,7 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-.journal-day-trades.is-editing .journal-day-trades-grid {
+.journal-day-trades.is-editing:not(.is-focusing):not(.is-unfocusing) .journal-day-trades-grid {
   opacity: 0.22;
   filter: saturate(0.78);
   transform: translateX(-32px) scale(0.965);
@@ -700,8 +704,9 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   align-items: center;
   pointer-events: none;
   opacity: 0;
-  transform: translateY(16px) scale(0.975);
-  transition: opacity 0.2s ease, transform 0.26s cubic-bezier(.2,.8,.2,1);
+  transform: translateY(12px) scale(0.98);
+  transition: none;
+  will-change: opacity, transform;
 }
 
 .journal-trade-editor.is-visible {

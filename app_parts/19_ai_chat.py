@@ -1011,7 +1011,7 @@ def _tool_update_trade(db, args):
         return {"error": "; ".join(semantic_errors)}
 
     # Auto-calcul du PnL si non fourni mais que les donnees sont la
-    _auto_calc_pnl(payload, existing["day_id"], db, existing)
+    _auto_calc_pnl(payload, existing["day_id"], db)
     semantic_payload.update(evaluate_trade_plan(semantic_payload))
 
     if not payload:
