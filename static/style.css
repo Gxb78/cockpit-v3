@@ -13,7 +13,7 @@ a:focus-visible:not(:focus-visible),
   outline: 2px solid var(--cyan);
   outline-offset: 2px;
 }
-button:active:not(:disabled):not(.widget-drag-handle) { transform: scale(0.97); }
+button:active:not(:disabled) { transform: scale(0.97); }
 
 :root {
   /* Surfaces — deep space SOLID (no glassmorphism) */
@@ -6405,53 +6405,37 @@ body.ai-panel-open .ai-panel-handle {
   display: none !important;
 }
 
-/* ---- Base widget position for drag handles & drop indicators ---- */
+/* ---- Widget base position & long-press cursor ---- */
 .widget[data-widget-key] {
   position: relative;
+  cursor: grab;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.widget[data-widget-key]:active {
+  cursor: grabbing;
+}
+
+.widget[data-widget-key] input,
+.widget[data-widget-key] textarea,
+.widget[data-widget-key] button,
+.widget[data-widget-key] a,
+.widget[data-widget-key] select,
+.widget[data-widget-key] [contenteditable] {
+  cursor: auto;
+  -webkit-user-select: auto;
+  user-select: auto;
+}
+
+.widget.is-press-pending {
+  transition: transform 300ms ease, box-shadow 300ms ease !important;
+  transform: scale(1.012) !important;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.25) !important;
 }
 
 .widget-board[data-widget-board] {
   contain: layout style;
-}
-
-/* ---- Drag handle (grip icon on hover) ---- */
-.widget-drag-handle {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 5;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  display: grid;
-  place-items: center;
-  opacity: 0;
-  background: rgba(255,255,255,0.08);
-  color: var(--text-faint);
-  cursor: grab;
-  touch-action: none;
-  transition: opacity 0.2s, background 0.16s, color 0.16s, transform 0.16s;
-}
-
-.widget-drag-handle svg {
-  width: 16px;
-  height: 16px;
-}
-
-.widget:hover .widget-drag-handle {
-  opacity: 1;
-}
-
-.widget-drag-handle:hover {
-  background: rgba(0,229,255,0.12);
-  color: var(--cyan);
-  transform: scale(1.08);
-}
-
-.widget-drag-handle:active {
-  cursor: grabbing;
-  background: rgba(0,229,255,0.18);
-  transform: none !important;
 }
 
 /* ---- Dragging state ---- */
@@ -6467,11 +6451,6 @@ body.is-dragging {
   -webkit-user-select: none !important;
 }
 
-body.is-dragging .widget:not(.widget-dragging) .widget-drag-handle {
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-
 .widget-drag-ghost {
   position: fixed;
   pointer-events: none;
@@ -6479,38 +6458,6 @@ body.is-dragging .widget:not(.widget-dragging) .widget-drag-handle {
   border-radius: var(--r, 16px);
   box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,229,255,0.3);
   overflow: hidden;
-}
-
-.widget-drag-placeholder {
-  border-radius: var(--r, 16px);
-  border: 1px dashed rgba(0,229,255,0.4);
-  background: rgba(0,229,255,0.04);
-  pointer-events: none;
-  flex-shrink: 0;
-  animation: placeholder-appear 150ms ease forwards;
-}
-
-@keyframes placeholder-appear {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-body.is-dragging .widget-drag-placeholder {
-  animation: none;
-  opacity: 1;
-}
-
-/* KPI drag handle: slightly smaller */
-.page[data-page="today"] .kpi .widget-drag-handle {
-  top: 6px;
-  right: 6px;
-  width: 20px;
-  height: 20px;
-}
-
-.page[data-page="today"] .kpi .widget-drag-handle svg {
-  width: 14px;
-  height: 14px;
 }
 
 /* ---- Adaptive KPI row: 2-3-4-5-6 columns ---- */

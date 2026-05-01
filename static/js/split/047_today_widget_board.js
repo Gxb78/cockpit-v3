@@ -237,63 +237,85 @@ function refreshDragHandles() {
   if (_dnd) return;
   document.querySelectorAll(".widget-board[data-widget-board] .widget[data-widget-key]").forEach(function(el) {
     if (el.classList.contains("widget-hidden")) return;
+
     var existing = el.querySelector(".widget-drag-handle");
     if (existing) existing.remove();
-    var handle = document.createElement("div");
-    handle.className = "widget-drag-handle";
-    handle.setAttribute("aria-label", "Drag to reorder");
-    handle.innerHTML = '<svg viewBox="0 0 20 8" fill="currentColor"><circle cx="4" cy="2" r="1.2"/><circle cx="4" cy="6" r="1.2"/><circle cx="10" cy="2" r="1.2"/><circle cx="10" cy="6" r="1.2"/><circle cx="16" cy="2" r="1.2"/><circle cx="16" cy="6" r="1.2"/></svg>';
-    el.prepend(handle);
-    handle.addEventListener("pointerdown", onDndPointerDown);
+
+    if (el._dndBound) return;
+    el._dndBound = true;
+
+    var pressTimer = null;
+    var pressStartX = 0, pressStartY = 0;
+
+    el.addEventListener("pointerdown", function(e) {
+      if (e.button && e.button !== 0) return;
+      if (e.target.closest("input,textarea,button,a,select,[contenteditable]")) return;
+      if (_dnd) return;
+
+      var widget = el;
+      var board = widget.closest(".widget-board[data-widget-board]");
+      if (!board) return;
+
+      pressStartX = e.clientX;
+      pressStartY = e.clientY;
+      widget.classList.add("is-press-pending");
+
+      pressTimer = setTimeout(function() {
+        pressTimer = null;
+        if (navigator.vibrate) navigator.vibrate(18);
+        widget.classList.remove("is-press-pending");
+
+        var rect = widget.getBoundingClientRect();
+        _dnd = {
+          el: widget,
+          board: board,
+          startX: pressStartX,
+          startY: pressStartY,
+          offsetX: pressStartX - rect.left,
+          offsetY: pressStartY - rect.top,
+          width: rect.width,
+          height: rect.height,
+          ghost: null,
+          active: false,
+          fromIdx: -1,
+          toIdx: -1
+        };
+        dndStart();
+      }, 300);
+    });
+
+    el.addEventListener("pointerup", function() {
+      if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+      el.classList.remove("is-press-pending");
+    });
+
+    el.addEventListener("pointercancel", function() {
+      if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+      el.classList.remove("is-press-pending");
+    });
+
+    el.addEventListener("pointermove", function(e) {
+      if (!pressTimer) return;
+      var dx = e.clientX - pressStartX;
+      var dy = e.clientY - pressStartY;
+      if (dx * dx + dy * dy > 64) {
+        clearTimeout(pressTimer);
+        pressTimer = null;
+        el.classList.remove("is-press-pending");
+      }
+    }, { passive: true });
   });
 }
 
-function onDndPointerDown(e) {
-  if (_dnd) return;
-  if (e.button && e.button !== 0) return;
-  var handle = e.currentTarget;
-  var widget = handle.closest(".widget[data-widget-key]");
-  if (!widget) return;
-  var board = widget.closest(".widget-board[data-widget-board]");
-  if (!board) return;
-  e.preventDefault();
-  handle.setPointerCapture(e.pointerId);
-  var rect = widget.getBoundingClientRect();
-  _dnd = {
-    el: widget,
-    board: board,
-    startX: e.clientX,
-    startY: e.clientY,
-    offsetX: e.clientX - rect.left,
-    offsetY: e.clientY - rect.top,
-    width: rect.width,
-    height: rect.height,
-    ghost: null,
-    active: false,
-    fromIdx: -1,
-    toIdx: -1,
-    items: null,
-    rects: null
-  };
-}
-
 function onDndPointerMove(e) {
-  if (!_dnd) return;
-  if (!_dnd.active) {
-    var dx = e.clientX - _dnd.startX;
-    var dy = e.clientY - _dnd.startY;
-    if (dx * dx + dy * dy < 36) return;
-    dndStart(e.clientX, e.clientY);
-  }
-  if (_dnd.active) {
-    e.preventDefault();
-    var cx = e.clientX, cy = e.clientY;
-    if (_dndRaf) cancelAnimationFrame(_dndRaf);
-    _dndRaf = requestAnimationFrame(function() {
-      _dndRaf = 0;
-      if (_dnd && _dnd.active) dndMove(cx, cy);
-    });
-  }
+  if (!_dnd || !_dnd.active) return;
+  e.preventDefault();
+  if (_dndRaf) cancelAnimationFrame(_dndRaf);
+  var cx = e.clientX, cy = e.clientY;
+  _dndRaf = requestAnimationFrame(function() {
+    _dndRaf = 0;
+    if (_dnd && _dnd.active) dndMove(cx, cy);
+  });
 }
 
 function onDndPointerUp() {
@@ -303,7 +325,7 @@ function onDndPointerUp() {
   _dnd = null;
 }
 
-function dndStart(cx, cy) {
+function dndStart() {
   _dnd.active = true;
   var el = _dnd.el;
   var board = _dnd.board;
@@ -319,6 +341,7 @@ function dndStart(cx, cy) {
   var ghost = el.cloneNode(true);
   var gh = ghost.querySelector(".widget-drag-handle");
   if (gh) gh.remove();
+  ghost.classList.remove("is-press-pending");
   ghost.classList.add("widget-drag-ghost");
   ghost.style.cssText = [
     "position:fixed",
@@ -392,31 +415,31 @@ function applyDndShifts() {
   var rects = _dnd.rects;
   var from = _dnd.fromIdx;
   var to = _dnd.toIdx;
+  var n = items.length;
   var isH = _dnd.board.dataset.widgetBoard === "today-kpis";
-  var gap = 14;
 
-  for (var i = 0; i < items.length; i++) {
+  for (var i = 0; i < n; i++) {
     if (i === from) continue;
     var item = items[i];
-    var shift = 0;
+    var origPos = i;
+    var simPos = i;
 
     if (from < to) {
-      if (i > from && i <= to - 1) shift = -1;
-    } else {
-      if (i >= to && i < from) shift = 1;
+      if (i > from && i < to) simPos = i - 1;
+    } else if (from > to) {
+      if (i >= to && i < from) simPos = i + 1;
     }
 
-    if (shift === 0) {
+    if (simPos === origPos) {
       item.style.transition = "transform 200ms cubic-bezier(0.25,1,0.5,1)";
       item.style.transform = "";
     } else {
-      var delta = isH
-        ? (shift > 0 ? rects[from].width + gap : -(rects[from].width + gap))
-        : (shift > 0 ? rects[from].height + gap : -(rects[from].height + gap));
+      var targetRect = rects[simPos];
+      var ownRect = rects[origPos];
+      var dx = isH ? (targetRect.left - ownRect.left) : 0;
+      var dy = isH ? 0 : (targetRect.top - ownRect.top);
       item.style.transition = "transform 200ms cubic-bezier(0.25,1,0.5,1)";
-      item.style.transform = isH
-        ? "translateX(" + delta + "px)"
-        : "translateY(" + delta + "px)";
+      item.style.transform = "translate(" + dx + "px," + dy + "px)";
     }
   }
 }
@@ -435,15 +458,12 @@ function dndEnd() {
   });
 
   el.classList.remove("widget-dragging");
+  el.style.transition = "";
+  el.style.transform = "";
 
-  if (to !== from && items[to] !== undefined) {
-    if (to > from) {
-      var after = items[to - 1 < from ? to : to - 1];
-      if (after && after.nextSibling) {
-        board.insertBefore(el, after.nextSibling);
-      } else {
-        board.appendChild(el);
-      }
+  if (to !== from && to !== from + 1) {
+    if (to >= items.length) {
+      board.appendChild(el);
     } else {
       board.insertBefore(el, items[to]);
     }

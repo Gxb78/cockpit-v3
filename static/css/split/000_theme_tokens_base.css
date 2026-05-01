@@ -12,7 +12,7 @@ a:focus-visible:not(:focus-visible),
   outline: 2px solid var(--cyan);
   outline-offset: 2px;
 }
-button:active:not(:disabled):not(.widget-drag-handle) { transform: scale(0.97); }
+button:active:not(:disabled) { transform: scale(0.97); }
 
 :root {
   /* Surfaces — deep space SOLID (no glassmorphism) */

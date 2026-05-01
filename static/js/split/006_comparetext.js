@@ -186,6 +186,19 @@ function openJournalTradeRow(row) {
   if (!row?.day) return;
   if (typeof renderJournalDayTrades === "function") {
     renderJournalDayTrades(row.date, [row.day]);
+    // Ouvrir l'editeur inline pour ce trade directement
+    var tradeId = row.trade && row.trade.id != null ? String(row.trade.id) : null;
+    if (tradeId) {
+      var checkExist = setInterval(function () {
+        var editBtn = document.querySelector('[data-journal-trade-edit="' + tradeId + '"]');
+        if (editBtn) {
+          clearInterval(checkExist);
+          editBtn.click();
+          editBtn.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 50);
+      setTimeout(function () { clearInterval(checkExist); }, 3000);
+    }
   }
 }
 
