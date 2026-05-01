@@ -195,6 +195,7 @@
     display: grid !important;
     grid-template-columns: 240px minmax(0, 1fr);
     align-items: start;
+    align-content: start;
     height: 100vh;
     min-height: 100vh;
     overflow: hidden;
