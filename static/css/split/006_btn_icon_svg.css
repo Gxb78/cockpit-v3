@@ -228,7 +228,8 @@ input[type="date"]:hover {
     flex-direction: column;
     height: calc(100vh - 50px);
     min-height: 0;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
     animation: fadeUp 0.35s var(--ease);
   }
 
