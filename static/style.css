@@ -1333,7 +1333,6 @@ body.light-mode .theme-toggle:hover { border-color: rgba(0,132,255,0.40); backgr
   justify-content: space-between;
   gap: 10px;
   padding: 8px 14px;
-  margin-bottom: 10px;
   background: var(--surface, #fff);
   border: 1px solid var(--border-soft, #eef1f6);
   border-radius: var(--r-lg, 22px);
@@ -1873,7 +1872,7 @@ input[type="date"]:hover {
 }
 
 .journal-table-wrap {
-  margin-top: 14px;
+  margin-top: 10px;
   overflow: hidden;
 }
 .journal-table-head {
@@ -8335,7 +8334,7 @@ body.light-mode .app-topbar {
   --magenta: #9333ea;
   background: #f6f7fb;
   color: #111827;
-  padding: 0;
+  padding: 18px;
   min-height: 100%;
   display: flex;
   flex-direction: column;

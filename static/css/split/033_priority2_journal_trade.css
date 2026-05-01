@@ -27,7 +27,7 @@
   --magenta: #9333ea;
   background: #f6f7fb;
   color: #111827;
-  padding: 0;
+  padding: 18px;
   min-height: 100%;
   display: flex;
   flex-direction: column;

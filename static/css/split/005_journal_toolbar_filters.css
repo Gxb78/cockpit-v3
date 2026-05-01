@@ -6,7 +6,6 @@
   justify-content: space-between;
   gap: 10px;
   padding: 8px 14px;
-  margin-bottom: 10px;
   background: var(--surface, #fff);
   border: 1px solid var(--border-soft, #eef1f6);
   border-radius: var(--r-lg, 22px);
