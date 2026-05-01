@@ -60,6 +60,7 @@ function setJournalLayoutMode(mode, opts = {}) {
   const { persist = true, rerender = true } = opts;
   if (!JOURNAL_LAYOUT_MODES.has(mode)) return;
   state.journalLayoutMode = mode;
+  state._journalLayoutExplicit = persist; // auto-switch (persist:false) ne compte pas
   updateJournalLayoutToggleUI();
   updateJournalControlsVisibility();
   if (persist) localStorage.setItem(JOURNAL_LAYOUT_MODE_KEY, mode);

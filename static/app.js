@@ -1278,6 +1278,7 @@ function setJournalLayoutMode(mode, opts = {}) {
   const { persist = true, rerender = true } = opts;
   if (!JOURNAL_LAYOUT_MODES.has(mode)) return;
   state.journalLayoutMode = mode;
+  state._journalLayoutExplicit = persist; // auto-switch (persist:false) ne compte pas
   updateJournalLayoutToggleUI();
   updateJournalControlsVisibility();
   if (persist) localStorage.setItem(JOURNAL_LAYOUT_MODE_KEY, mode);
@@ -2498,13 +2499,14 @@ function renderCalendar(windowDef = null) {
   updateJournalTradeFilterOptions(state.days);
   if (typeof updateJournalStatsDisplay === "function") updateJournalStatsDisplay();
 
-  // Auto-switch: table si range > 35 jours, calendrier sinon
+  // Auto-switch: table si range > 35 jours (sauf si utilisateur a explicitement choisi)
   var from = parseDateKey(win.from);
   var to = parseDateKey(win.to);
   var spanDays = from && to ? Math.round((to - from) / 86400000) + 1 : 0;
-  if (spanDays > 35) {
+  if (spanDays > 35 && !state._journalLayoutExplicit) {
     if (state.journalLayoutMode !== "table") {
       setJournalLayoutMode("table", { persist: false, rerender: false });
+      if (typeof toast === "function") toast("Vue table activee pour les periodes > 35 jours", "info");
     }
     _calWasAutoTable = true;
   } else if (_calWasAutoTable) {
