@@ -259,7 +259,7 @@ function refreshDragHandles() {
 
     el.addEventListener("pointerdown", function(e) {
       if (e.button && e.button !== 0) return;
-      if (e.target.closest("input,textarea,button,a,select,[contenteditable]")) return;
+      if (e.target.closest("input,textarea,button,a,select,[contenteditable],[draggable],[role=\"button\"]")) return;
       if (_dnd) return;
       var widget = el;
       var board = widget.closest(".widget-board[data-widget-board]");
@@ -586,7 +586,7 @@ function dndHitTest(items, ghostLeft, ghostTop, ghostRight, ghostBottom, ghostCX
 function renderTodayCalendar() {
   var grid = $("#todayCalendarGrid");
   var monthEl = $("#todayCalendarMonth");
-  if (!grid) { console.warn("[today] calendar grid missing"); return; }
+  if (!grid) return;
 
   var now = new Date();
   var year = now.getFullYear();
@@ -631,8 +631,6 @@ function renderTodayCalendar() {
       if (typeof goPage === "function") {
         state.journalFocusDate = key;
         goPage("journal");
-      } else {
-        console.warn("[today] goPage not available");
       }
     });
     grid.addEventListener("keydown", function(e) {
