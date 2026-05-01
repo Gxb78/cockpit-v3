@@ -1961,6 +1961,24 @@ input[type="date"]:hover {
   text-transform: uppercase;
   color: var(--text-muted);
 }
+.journal-table-stats {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.journal-table-stats .stat {
+  font-size: 10px;
+  font-weight: 700;
+  font-family: "JetBrains Mono", monospace;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eef1f6;
+  color: #626b7a;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+}
+.journal-table-stats .stat.pos { color: #20570b; background: rgba(232,255,222,0.90); }
+.journal-table-stats .stat.neg { color: #8a1429; background: rgba(255,229,234,0.85); }
 .journal-table-meta {
   font-size: 11px;
   color: var(--text-faint);
