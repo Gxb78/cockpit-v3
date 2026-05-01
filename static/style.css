@@ -1335,8 +1335,9 @@ body.light-mode .theme-toggle:hover { border-color: rgba(0,132,255,0.40); backgr
   padding: 8px 14px;
   margin-bottom: 10px;
   background: var(--surface, #fff);
-  border: 1px solid var(--border, #eef1f6);
-  border-radius: var(--r, 16px);
+  border: 1px solid var(--border-soft, #eef1f6);
+  border-radius: var(--r-lg, 22px);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 
 /* Navigation inline (prev / month / next / today) */
@@ -1580,9 +1581,10 @@ body.light-mode .theme-toggle:hover { border-color: rgba(0,132,255,0.40); backgr
 .journal-filters {
   margin-bottom: 10px;
   background: var(--surface, #fff);
-  border: 1px solid var(--border, #eef1f6);
+  border: 1px solid var(--border-soft, #eef1f6);
   border-radius: var(--r-lg, 22px);
   padding: 12px 14px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 
 .journal-filter-row {
@@ -6463,23 +6465,23 @@ body.is-dragging {
 }
 
 .today-grid .widget[data-widget-key] {
+  grid-column: span 1;
   grid-row: span 1;
 }
 
-.today-grid .widget[data-widget-key="today_activity"]:not(.widget-hidden) {
+.today-grid .widget[data-size="full"]:not(.widget-hidden) {
+  grid-column: 1 / -1;
+}
+
+.today-grid .widget[data-size="tall"]:not(.widget-hidden) {
   grid-row: span 2;
 }
 
-.today-grid .widget[data-widget-key="today_context"]:not(.widget-hidden) {
-  grid-column: 1 / -1;
-  grid-row: span 1;
+.today-grid .widget[data-size="wide"]:not(.widget-hidden) {
+  grid-column: span 2;
 }
 
-.today-grid .widget[data-widget-key="today_calendar"]:not(.widget-hidden) {
-  grid-row: span 1;
-}
-
-.page[data-page="today"] .today-grid:not(:has(.widget[data-widget-key="today_context"]:not(.widget-hidden))) {
+.page[data-page="today"] .today-grid:not(:has(.widget[data-size="full"]:not(.widget-hidden))) {
   grid-template-columns: 1fr 1fr;
 }
 
@@ -6526,7 +6528,7 @@ body.is-dragging {
     grid-template-columns: 1fr;
   }
 
-  .page[data-page="today"] .today-grid .widget[data-widget-key="today_context"]:not(.widget-hidden) {
+  .page[data-page="today"] .today-grid .widget[data-size="full"]:not(.widget-hidden) {
     grid-column: 1;
   }
 }

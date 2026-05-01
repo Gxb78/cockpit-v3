@@ -274,23 +274,23 @@ body.is-dragging {
 }
 
 .today-grid .widget[data-widget-key] {
+  grid-column: span 1;
   grid-row: span 1;
 }
 
-.today-grid .widget[data-widget-key="today_activity"]:not(.widget-hidden) {
+.today-grid .widget[data-size="full"]:not(.widget-hidden) {
+  grid-column: 1 / -1;
+}
+
+.today-grid .widget[data-size="tall"]:not(.widget-hidden) {
   grid-row: span 2;
 }
 
-.today-grid .widget[data-widget-key="today_context"]:not(.widget-hidden) {
-  grid-column: 1 / -1;
-  grid-row: span 1;
+.today-grid .widget[data-size="wide"]:not(.widget-hidden) {
+  grid-column: span 2;
 }
 
-.today-grid .widget[data-widget-key="today_calendar"]:not(.widget-hidden) {
-  grid-row: span 1;
-}
-
-.page[data-page="today"] .today-grid:not(:has(.widget[data-widget-key="today_context"]:not(.widget-hidden))) {
+.page[data-page="today"] .today-grid:not(:has(.widget[data-size="full"]:not(.widget-hidden))) {
   grid-template-columns: 1fr 1fr;
 }
 
@@ -337,7 +337,7 @@ body.is-dragging {
     grid-template-columns: 1fr;
   }
 
-  .page[data-page="today"] .today-grid .widget[data-widget-key="today_context"]:not(.widget-hidden) {
+  .page[data-page="today"] .today-grid .widget[data-size="full"]:not(.widget-hidden) {
     grid-column: 1;
   }
 }

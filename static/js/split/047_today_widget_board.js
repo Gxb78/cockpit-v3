@@ -323,6 +323,7 @@ function dndStart(cx, cy) {
 
   var ph = document.createElement("div");
   ph.className = "widget-drag-placeholder";
+  ph.dataset.size = el.dataset.size || "";
   var cs = window.getComputedStyle(el);
   ph.style.gridColumn = cs.gridColumn || "";
   ph.style.gridRow    = cs.gridRow    || "";

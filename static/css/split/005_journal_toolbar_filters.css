@@ -8,8 +8,9 @@
   padding: 8px 14px;
   margin-bottom: 10px;
   background: var(--surface, #fff);
-  border: 1px solid var(--border, #eef1f6);
-  border-radius: var(--r, 16px);
+  border: 1px solid var(--border-soft, #eef1f6);
+  border-radius: var(--r-lg, 22px);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 
 /* Navigation inline (prev / month / next / today) */
@@ -253,9 +254,10 @@
 .journal-filters {
   margin-bottom: 10px;
   background: var(--surface, #fff);
-  border: 1px solid var(--border, #eef1f6);
+  border: 1px solid var(--border-soft, #eef1f6);
   border-radius: var(--r-lg, 22px);
   padding: 12px 14px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 
 .journal-filter-row {
