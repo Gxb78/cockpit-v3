@@ -2618,7 +2618,7 @@ function dayCardEl(day) {
   }
 
   card.innerHTML = `
-    <div class="entry-instr">${day.instrument}</div>
+    <div class="entry-instr">${escapeHtml(day.instrument || "-")}</div>
     <div class="entry-meta">
       <div class="entry-title">${escapeHtml(title.slice(0, 80))}</div>
       <div class="entry-tags">
