@@ -7195,6 +7195,7 @@ function bindAiPanelToggle() {
 
 const WIDGET_ORDER_PREFIX = "cockpit:widgetOrder:";
 const WIDGET_VIS_PREFIX = "cockpit:widgetVis:";
+const WIDGET_POS_PREFIX = "cockpit:widgetPos:";
 
 var WIDGET_REGISTRY = {
   kpi_total_pnl:      { label: "Net P&L",          icon: "dollar",  kind: "kpi",    size: "sm" },
@@ -7224,6 +7225,18 @@ function readWidgetOrder(boardKey) {
 
 function writeWidgetOrder(boardKey, keys) {
   try { localStorage.setItem(WIDGET_ORDER_PREFIX + boardKey, JSON.stringify(keys)); } catch (_) {}
+}
+
+function readWidgetPositions(boardKey) {
+  try {
+    var raw = localStorage.getItem(WIDGET_POS_PREFIX + boardKey);
+    var parsed = JSON.parse(raw || "{}");
+    return (typeof parsed === "object" && parsed !== null) ? parsed : {};
+  } catch (_) { return {}; }
+}
+
+function writeWidgetPositions(boardKey, pos) {
+  try { localStorage.setItem(WIDGET_POS_PREFIX + boardKey, JSON.stringify(pos)); } catch (_) {}
 }
 
 function readWidgetVisibility() {
@@ -7256,6 +7269,21 @@ function applyWidgetBoardOrder(board) {
   });
   var finalKeys = Array.from(board.children).map(function(el) { return el && el.dataset && el.dataset.widgetKey; }).filter(Boolean);
   writeWidgetOrder(boardKey, finalKeys);
+
+  var pos = readWidgetPositions(boardKey);
+  Array.from(board.children).forEach(function(el) {
+    var key = el.dataset && el.dataset.widgetKey;
+    if (!key) return;
+    var p = pos[key];
+    if (p && p.col && p.row) {
+      el.style.gridColumnStart = p.col;
+      el.style.gridRowStart = p.row;
+    } else {
+      el.style.gridColumnStart = "";
+      el.style.gridRowStart = "";
+    }
+  });
+
   board.dataset.widgetReady = "1";
 }
 
@@ -7314,6 +7342,8 @@ function resetWidgetVisibility() {
   writeWidgetVisibility(getWidgetDefaults());
   writeWidgetOrder("today-kpis", WIDGET_DEFAULTS["today-kpis"]);
   writeWidgetOrder("today-main", WIDGET_DEFAULTS["today-main"]);
+  writeWidgetPositions("today-kpis", {});
+  writeWidgetPositions("today-main", {});
   applyWidgetVisibility();
   applyWidgetBoardOrder(document.querySelector('[data-widget-board="today-kpis"]'));
   applyWidgetBoardOrder(document.querySelector('[data-widget-board="today-main"]'));
@@ -7420,7 +7450,6 @@ function bindWidgetConfig() {
 
 var _dnd = null;
 var _dndRaf = 0;
-var DND_DEAD_ZONE = 12;
 var DND_LONG_PRESS = ('ontouchstart' in window) ? 120 : 180;
 
 function initWidgetDragDrop() {
@@ -7555,9 +7584,14 @@ function dndMove(cx, cy) {
   _dnd.ghost.style.transform  = "translate(" + (cx - _dnd.offsetX) + "px," + (cy - _dnd.offsetY) + "px) scale(1.04)";
 
   var items = dndItems(_dnd.board);
-  var ghostCX = cx - _dnd.offsetX + _dnd.width / 2;
-  var ghostCY = cy - _dnd.offsetY + _dnd.height / 2;
-  var dropIdx = dndHitTest(items, _dnd.board, ghostCX, ghostCY, _dnd.el);
+  var ghostLeft   = cx - _dnd.offsetX;
+  var ghostTop    = cy - _dnd.offsetY;
+  var ghostRight  = ghostLeft + _dnd.width;
+  var ghostBottom = ghostTop  + _dnd.height;
+  var ghostCX     = ghostLeft + _dnd.width  / 2;
+  var ghostCY     = ghostTop  + _dnd.height / 2;
+
+  var dropIdx = dndHitTest(items, _dnd.board, ghostLeft, ghostTop, ghostRight, ghostBottom, ghostCX, ghostCY, _dnd.el);
 
   var dropRef = dropIdx < items.length ? items[dropIdx] : null;
 
@@ -7592,10 +7626,40 @@ function dndEnd() {
   if (_dnd.ghost) _dnd.ghost.remove();
   document.body.classList.remove("is-dragging");
 
+  var boardKey = board.dataset.widgetBoard;
   var order = Array.from(board.children)
     .map(function(c) { return c.dataset && c.dataset.widgetKey; })
     .filter(Boolean);
-  writeWidgetOrder(board.dataset.widgetBoard, order);
+  writeWidgetOrder(boardKey, order);
+
+  Array.from(board.children).forEach(function(child) {
+    var key = child.dataset && child.dataset.widgetKey;
+    if (!key || child.classList.contains("widget-hidden")) return;
+    child.style.gridColumnStart = "";
+    child.style.gridRowStart = "";
+  });
+
+  var pos = {};
+  Array.from(board.children).forEach(function(child) {
+    var key = child.dataset && child.dataset.widgetKey;
+    if (!key || child.classList.contains("widget-hidden")) return;
+    var cs = window.getComputedStyle(child);
+    var col = parseInt(cs.gridColumnStart, 10);
+    var row = parseInt(cs.gridRowStart, 10);
+    if (!isNaN(col) && !isNaN(row) && col > 0 && row > 0) {
+      pos[key] = { col: col, row: row };
+    }
+  });
+  writeWidgetPositions(boardKey, pos);
+
+  Object.keys(pos).forEach(function(key) {
+    var child = board.querySelector('[data-widget-key="' + key + '"]');
+    if (child) {
+      child.style.gridColumnStart = pos[key].col;
+      child.style.gridRowStart = pos[key].row;
+    }
+  });
+
   updateDashboardLayout();
   setTimeout(refreshDragHandles, 300);
   _dnd = null;
@@ -7608,44 +7672,45 @@ function dndItems(board) {
   });
 }
 
-function dndHitTest(items, board, cx, cy, draggedEl) {
+function dndHitTest(items, board, ghostLeft, ghostTop, ghostRight, ghostBottom, ghostCX, ghostCY, draggedEl) {
   var isH = board.dataset.widgetBoard === "today-kpis";
-  var dragSpan = 1;
-  if (draggedEl) {
-    var cs = window.getComputedStyle(draggedEl);
-    var gr = cs.gridRow || "";
-    var m = gr.match(/span\s*(\d+)/);
-    if (m) dragSpan = parseInt(m[1]);
-  }
+
+  var bestOverlap = 0, bestIdx = -1;
 
   for (var i = 0; i < items.length; i++) {
     if (items[i] === draggedEl) continue;
     var r = items[i].getBoundingClientRect();
-    if (cx >= r.left - 4 && cx <= r.right + 4 && cy >= r.top - 4 && cy <= r.bottom + 4) {
-      if (isH) {
-        var mX = r.left + r.width / 2;
-        return cx < mX - DND_DEAD_ZONE ? i : (cx > mX + DND_DEAD_ZONE ? i + 1 : i);
-      }
-      var mY = r.top + r.height / 2;
-      var threshold = DND_DEAD_ZONE * dragSpan;
-      return cy < mY - threshold ? i : (cy > mY + threshold ? i + 1 : i);
+    var ox = Math.max(0, Math.min(ghostRight, r.right) - Math.max(ghostLeft, r.left));
+    var oy = Math.max(0, Math.min(ghostBottom, r.bottom) - Math.max(ghostTop, r.top));
+    var overlap = ox * oy;
+    if (overlap > bestOverlap) {
+      bestOverlap = overlap;
+      bestIdx = i;
     }
   }
 
-  var best = -1, bestScore = Infinity;
+  if (bestIdx >= 0) {
+    var br = items[bestIdx].getBoundingClientRect();
+    if (isH) {
+      return ghostCX < br.left + br.width / 2 ? bestIdx : bestIdx + 1;
+    }
+    return ghostCY < br.top + br.height / 2 ? bestIdx : bestIdx + 1;
+  }
+
+  var nearest = -1, nearestDist = Infinity;
   for (var j = 0; j < items.length; j++) {
     if (items[j] === draggedEl) continue;
     var rj = items[j].getBoundingClientRect();
-    var d = Math.pow(cx - (rj.left + rj.width / 2), 2) + Math.pow(cy - (rj.top + rj.height / 2), 2);
-    if (d < bestScore) { bestScore = d; best = j; }
+    var dx = ghostCX - (rj.left + rj.width / 2);
+    var dy = ghostCY - (rj.top + rj.height / 2);
+    var dist = dx * dx + dy * dy;
+    if (dist < nearestDist) { nearestDist = dist; nearest = j; }
   }
-  if (best < 0) return items.length;
 
-  var br = items[best].getBoundingClientRect();
-  if (isH) {
-    return cx < br.left + br.width / 2 ? best : best + 1;
-  }
-  return cy < br.top + br.height / 2 ? best : best + 1;
+  if (nearest < 0) return items.length;
+  var rn = items[nearest].getBoundingClientRect();
+  if (isH) return ghostCX < rn.left + rn.width / 2 ? nearest : nearest + 1;
+  return ghostCY < rn.top + rn.height / 2 ? nearest : nearest + 1;
 }
 
 // ---------- Today calendar (mini vue mois courant) ----------

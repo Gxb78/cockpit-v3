@@ -164,9 +164,7 @@ body {
 }
 
 .main {
-  background:
-    radial-gradient(circle at 50% 0, rgba(56, 211, 238, 0.035), transparent 34%),
-    linear-gradient(180deg, rgba(255,255,255,0.012), transparent 160px);
+  background: transparent;
 }
 
 .app-topbar {

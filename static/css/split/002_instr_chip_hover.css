@@ -142,7 +142,7 @@ body.light-mode .theme-toggle:hover { border-color: rgba(0,132,255,0.40); backgr
 .page-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 
 .page { display: none; }
-.page.active { display: block; animation: fadeUp 0.35s var(--ease); padding: 28px 36px 80px; }
+.page.active { display: block; animation: fadeUp 0.35s var(--ease); padding: 28px 36px 80px; overflow-y: auto; }
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
