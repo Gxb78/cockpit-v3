@@ -94,7 +94,8 @@ function _wizStepRecap() {
   var rows = [
     ['Date',       d.date         || '—', idxOf('date', 0)],
     ['Instrument', wizInstrumentLabel(d.instrument) || '—', idxOf('instrument', 1)],
-    ['Strategie',  labels[d.strategy] || d.strategy || '—', idxOf('strategy', 2)],
+    ['Session',    d.session      || '—', idxOf('session', 2)],
+    ['Strategie',  labels[d.strategy] || d.strategy || '—', idxOf('strategy', 3)],
     ['Direction',  d.direction    || '—', idxOf('direction', 3)],
     ['Entree',     d.entry_price  || '—', idxOf('levels', 7)],
     ['Stop',       d.stop_loss    || '—', idxOf('levels', 7)],

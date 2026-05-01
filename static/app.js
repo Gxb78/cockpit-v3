@@ -5238,7 +5238,7 @@ const WIZ_DRAFT_KEY = 'cockpit:wizard_draft:v3';
 let wizState = null;
 
 // WIZ_INSTRUMENTS supprime — utiliser INSTRUMENTS depuis 001_utilities.js
-var STEPS_TRADE = ['date','instrument','strategy','direction','why_trade','why_entry','why_stop_tp','levels','result','screenshots','recap'];
+var STEPS_TRADE = ['date','instrument','session','strategy','direction','why_trade','why_entry','why_stop_tp','levels','result','screenshots','recap'];
 var STEPS_PM = ['pm_exit','pm_quality','pm_lessons'];
 
 const STRATEGY_HINTS = {
@@ -5552,6 +5552,7 @@ function _wizStepHtml(step) {
   switch (step) {
     case 'date':        return _wizStepDate();
     case 'instrument':  return _wizStepInstrument();
+    case 'session':     return _wizStepSession();
     case 'strategy':    return _wizStepStrategy();
     case 'direction':   return _wizStepDirection();
     case 'why_trade':   return _wizStepWhyTrade();
@@ -5638,6 +5639,34 @@ function _wizStepInstrument() {
 function wizSelectInstrument(id) {
   if (!wizState) return;
   wizState.data.instrument = wizCanonicalInstrument(id);
+  _wizRender();
+  setTimeout(wizNext, 200);
+}
+
+// ── Session ──
+
+function _wizStepSession() {
+  var d = wizState.data;
+  var sessions = [
+    { id:'asia',    icon:'&#x1F305;', main:'Asia',   sub:'Session asiatique — Tokyo, Sydney' },
+    { id:'london',  icon:'&#x1F1EC;&#x1F1E7;', main:'London', sub:'Session London — Europe' },
+    { id:'ny_am',   icon:'&#x1F5FD;', main:'NY AM',  sub:'Matin New York — ouverture US' },
+    { id:'ny_pm',   icon:'&#x1F303;', main:'NY PM',  sub:'Apres-midi New York — continuation' },
+  ];
+  var html = '<div class="wiz-question">Dans quelle session ?</div><div class="wiz-cards">';
+  sessions.forEach(function(s) {
+    html += '<div class="wiz-card' + (d.session===s.id?' active':'') + '" onclick="wizSelectSession(\'' + s.id + '\')">'
+      + '<div class="wiz-card-icon">' + s.icon + '</div>'
+      + '<div class="wiz-card-main">' + s.main + '</div>'
+      + '<div class="wiz-card-sub">'  + s.sub + '</div>'
+      + '</div>';
+  });
+  return html + '</div>';
+}
+
+function wizSelectSession(id) {
+  if (!wizState) return;
+  wizState.data.session = id;
   _wizRender();
   setTimeout(wizNext, 200);
 }
@@ -5906,7 +5935,8 @@ function _wizStepRecap() {
   var rows = [
     ['Date',       d.date         || '—', idxOf('date', 0)],
     ['Instrument', wizInstrumentLabel(d.instrument) || '—', idxOf('instrument', 1)],
-    ['Strategie',  labels[d.strategy] || d.strategy || '—', idxOf('strategy', 2)],
+    ['Session',    d.session      || '—', idxOf('session', 2)],
+    ['Strategie',  labels[d.strategy] || d.strategy || '—', idxOf('strategy', 3)],
     ['Direction',  d.direction    || '—', idxOf('direction', 3)],
     ['Entree',     d.entry_price  || '—', idxOf('levels', 7)],
     ['Stop',       d.stop_loss    || '—', idxOf('levels', 7)],
@@ -10017,6 +10047,7 @@ function journalTradeFlipCardHtml(day, trade, idx, deck) {
 
             <div class="journal-back-stats">
               <div><strong>${escapeHtml(direction)}</strong><span>Direction</span></div>
+              <div><strong>${escapeHtml(trade.session || '-')}</strong><span>Session</span></div>
               <div><strong class="jcard-rr-display">${escapeHtml(rr)}</strong><span>R multiple</span></div>
               <div><strong class="jcard-pnl-display ${pnlClass}">${fmtMoney(pnl)}</strong><span>PnL</span></div>
             </div>
@@ -10677,6 +10708,21 @@ TradeEditorController.selectOption = function (value, label, current) {
   return '<option value="' + escapeHtml(value) + '"' + (String(current || '') === String(value) ? ' selected' : '') + '>' + escapeHtml(label) + '</option>';
 };
 
+
+
+TradeEditorController.sessionOptions = function (current) {
+  var sessions = [
+    { value: '', label: 'Choisir' },
+    { value: 'asia', label: 'Asia' },
+    { value: 'london', label: 'London' },
+    { value: 'ny_am', label: 'NY AM' },
+    { value: 'ny_pm', label: 'NY PM' },
+  ];
+  return sessions.map(function (s) {
+    var sel = String(current) === s.value ? ' selected' : '';
+    return '<option value="' + s.value + '"' + sel + '>' + s.label + '</option>';
+  }).join('');
+};
 TradeEditorController.field = function (label, field, value, type, opts) {
   var o = opts || {};
   var inputType = type === 'number' || type === 'int' ? 'number' : 'text';
@@ -10755,5 +10801,5 @@ TradeEditorController.renderHtml = function (day, trade) {
       }).join('')
     : '<div class="jedit-empty">Aucune capture pour ce trade.</div>';
 
-  return '\n    <aside class="journal-trade-editor" data-trade-id="' + tid + '" role="dialog" aria-label="Edition du trade">\n      <div class="jedit-panel">\n        <div class="jedit-hero">\n          <div class="jedit-hero-shot ' + shotClass + '"' + shotStyle + '>' + (shot ? '' : '<span>Aucune capture</span>') + '</div>\n          <div class="jedit-hero-copy">\n            <div class="jedit-topline">\n              <span>' + escapeHtml(dateLabel) + '</span>\n              <span>' + escapeHtml(day.instrument || '-') + '</span>\n              <span>' + escapeHtml((direction || '-').toUpperCase()) + '</span>\n            </div>\n            <h3>' + escapeHtml(strategy) + '</h3>\n            <p>' + escapeHtml(TradeEditorController.shortText(trade.why_trade, trade.scenario, trade.why_entry)) + '</p>\n            <div class="jedit-metrics">\n              <div class="jedit-metric-pnl"><strong class="' + pnlClass + '">' + fmtMoney(pnl) + '</strong><span>PnL</span></div>\n              <div class="jedit-metric-rr"><strong>' + escapeHtml(rr) + '</strong><span>R multiple</span></div>\n              <div class="jedit-metric-result"><strong class="' + resultClass + '">' + escapeHtml(resultLabel) + '</strong><span>Resultat</span></div>\n            </div>\n          </div>\n          <div class="jedit-actions">\n            <span class="jedit-status" data-state=""></span>\n            <button type="button" class="jedit-save" data-journal-editor-save="' + tid + '">Sauver</button>\n            <button type="button" class="jedit-close" data-journal-editor-close aria-label="Fermer">\n              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>\n            </button>\n          </div>\n        </div>\n\n        <div class="jedit-scroll">\n          <div class="jedit-sticky">\n            <button type="button" class="jedit-save" data-journal-editor-save="' + tid + '">Sauver</button>\n            <button type="button" class="jedit-close" data-journal-editor-close aria-label="Fermer">\n              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>\n            </button>\n          </div>\n          <section class="jedit-block jedit-identity">\n            <div class="jedit-block-title"><span>01</span><h4>Setup</h4></div>\n            <div class="jedit-grid">\n              <label class="jedit-field-wrap"><span>Strategie</span><select class="jedit-field" data-field="strategy">' + TradeEditorController.strategyOptions(trade.strategy || '') + '</select></label>\n              <label class="jedit-field-wrap"><span>Direction</span>' + TradeEditorController.pills('direction', direction, [{ value: 'long', label: 'Long' }, { value: 'short', label: 'Short' }, { value: '', label: '?' }]) + '</label>\n              ' + TradeEditorController.field('Stdv', 'stdv_level', trade.stdv_level, 'number', { step: '0.5', placeholder: '1 - 5' }) + '\n              <label class="jedit-field-wrap"><span>Resultat</span><select class="jedit-field" data-field="is_win" data-type="bool">' + TradeEditorController.selectOption('', 'A qualifier', winValue) + TradeEditorController.selectOption('1', 'Win', winValue) + TradeEditorController.selectOption('0', 'Loss', winValue) + '</select></label>\n            </div>\n          </section>\n\n          <section class="jedit-block">\n            <div class="jedit-block-title"><span>02</span><h4>Niveaux</h4></div>\n            <div class="jedit-grid jedit-grid-5">\n              ' + TradeEditorController.field('Entree', 'entry_price', trade.entry_price, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('Stop', 'stop_loss', trade.stop_loss, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('TP', 'exit_price', trade.exit_price, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('Sortie', 'exit_price', trade.exit_price, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('Size', 'position_size', trade.position_size, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('Levier', 'leverage', trade.leverage, 'number', { step: '1', placeholder: '1x' }) + '\n              ' + TradeEditorController.field('PnL', 'pnl', trade.pnl, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('RR', 'rr', trade.rr, 'number', { step: '0.01' }) + '\n            </div>\n          </section>\n\n          <section class="jedit-block">\n            <div class="jedit-block-title"><span>03</span><h4>Scenario</h4></div>\n            <div class="jedit-notes">\n              ' + TradeEditorController.textarea('Pourquoi ce trade', 'why_trade', trade.why_trade, 3) + '\n              ' + TradeEditorController.textarea('Pourquoi cette entree', 'why_entry', trade.why_entry, 3) + '\n              ' + TradeEditorController.textarea('Scenario complet', 'scenario', trade.scenario, 4) + '\n              ' + TradeEditorController.textarea('Pourquoi ce stop', 'why_stop', trade.why_stop, 3) + '\n              ' + TradeEditorController.textarea('Pourquoi ce TP', 'why_tp', trade.why_tp, 3) + '\n            </div>\n          </section>\n\n          <section class="jedit-block">\n            <div class="jedit-block-title"><span>04</span><h4>Review</h4></div>\n            <div class="jedit-grid">\n              <label class="jedit-field-wrap"><span>These validee</span>' + TradeEditorController.pills('thesis_validated', trade.thesis_validated || '', [{ value: 'yes', label: 'Oui' }, { value: 'no', label: 'Non' }, { value: '', label: '?' }]) + '</label>\n              <label class="jedit-field-wrap"><span>Qualite execution</span><div class="jedit-stars" data-field="execution_quality" data-value="' + qualityRaw + '">' + starsHtml + '</div></label>\n              ' + TradeEditorController.field('Tags', 'tags', TradeEditorController.tagsValue(trade.tags), 'tags', { placeholder: 'tag1, tag2' }) + '\n              ' + TradeEditorController.textarea('Lecons apprises', 'lessons_learned', trade.lessons_learned, 4) + '\n            </div>\n          </section>\n\n          <section class="jedit-block">\n            <div class="jedit-block-title"><span>05</span><h4>Plan & captures</h4></div>\n            <div class="jedit-plan-grid">\n              <div><span>Plan model</span><strong>' + escapeHtml(trade.plan_model || '-') + '</strong></div>\n              <div><span>Direction plan</span><strong>' + escapeHtml(trade.plan_direction || '-') + '</strong></div>\n              <div><span>Alignement</span><strong>' + escapeHtml(trade.plan_alignment || 'unknown') + '</strong></div>\n              <div><span>Score</span><strong>' + (trade.plan_score == null ? '-' : escapeHtml(String(trade.plan_score))) + '</strong></div>\n            </div>\n            ' + TradeEditorController.textarea('Raison override plan', 'plan_override_reason', trade.plan_override_reason, 3) + '\n            <div class="jedit-shots">' + screenshotsHtml + '</div>\n          </section>\n        </div>\n      </div>\n    </aside>\n  ';
+  return '\n    <aside class="journal-trade-editor" data-trade-id="' + tid + '" role="dialog" aria-label="Edition du trade">\n      <div class="jedit-panel">\n        <div class="jedit-hero">\n          <div class="jedit-hero-shot ' + shotClass + '"' + shotStyle + '>' + (shot ? '' : '<span>Aucune capture</span>') + '</div>\n          <div class="jedit-hero-copy">\n            <div class="jedit-topline">\n              <span>' + escapeHtml(dateLabel) + '</span>\n              <span>' + escapeHtml(day.instrument || '-') + '</span>\n              <span>' + escapeHtml((direction || '-').toUpperCase()) + '</span>\n            </div>\n            <h3>' + escapeHtml(strategy) + '</h3>\n            <p>' + escapeHtml(TradeEditorController.shortText(trade.why_trade, trade.scenario, trade.why_entry)) + '</p>\n            <div class="jedit-metrics">\n              <div class="jedit-metric-pnl"><strong class="' + pnlClass + '">' + fmtMoney(pnl) + '</strong><span>PnL</span></div>\n              <div class="jedit-metric-rr"><strong>' + escapeHtml(rr) + '</strong><span>R multiple</span></div>\n              <div class="jedit-metric-result"><strong class="' + resultClass + '">' + escapeHtml(resultLabel) + '</strong><span>Resultat</span></div>\n            </div>\n          </div>\n          <div class="jedit-actions">\n            <span class="jedit-status" data-state=""></span>\n            <button type="button" class="jedit-save" data-journal-editor-save="' + tid + '">Sauver</button>\n            <button type="button" class="jedit-close" data-journal-editor-close aria-label="Fermer">\n              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>\n            </button>\n          </div>\n        </div>\n\n        <div class="jedit-scroll">\n          <div class="jedit-sticky">\n            <button type="button" class="jedit-save" data-journal-editor-save="' + tid + '">Sauver</button>\n            <button type="button" class="jedit-close" data-journal-editor-close aria-label="Fermer">\n              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>\n            </button>\n          </div>\n          <section class="jedit-block jedit-identity">\n            <div class="jedit-block-title"><span>01</span><h4>Setup</h4></div>\n            <div class="jedit-grid">\n              <label class="jedit-field-wrap"><span>Strategie</span><select class="jedit-field" data-field="strategy">' + TradeEditorController.strategyOptions(trade.strategy || '') + '</select></label>\n              <label class="jedit-field-wrap"><span>Direction</span>' + TradeEditorController.pills('direction', direction, [{ value: 'long', label: 'Long' }, { value: 'short', label: 'Short' }, { value: '', label: '?' }]) + '</label>\n              <label class="jedit-field-wrap"><span>Session</span><select class="jedit-field" data-field="session">' + TradeEditorController.sessionOptions(trade.session || '') + '</select></label>\n              ' + TradeEditorController.field('Stdv', 'stdv_level', trade.stdv_level, 'number', { step: '0.5', placeholder: '1 - 5' }) + '\n              <label class="jedit-field-wrap"><span>Resultat</span><select class="jedit-field" data-field="is_win" data-type="bool">' + TradeEditorController.selectOption('', 'A qualifier', winValue) + TradeEditorController.selectOption('1', 'Win', winValue) + TradeEditorController.selectOption('0', 'Loss', winValue) + '</select></label>\n            </div>\n          </section>\n\n          <section class="jedit-block">\n            <div class="jedit-block-title"><span>02</span><h4>Niveaux</h4></div>\n            <div class="jedit-grid jedit-grid-5">\n              ' + TradeEditorController.field('Entree', 'entry_price', trade.entry_price, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('Stop', 'stop_loss', trade.stop_loss, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('TP', 'exit_price', trade.exit_price, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('Sortie', 'exit_price', trade.exit_price, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('Size', 'position_size', trade.position_size, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('Levier', 'leverage', trade.leverage, 'number', { step: '1', placeholder: '1x' }) + '\n              ' + TradeEditorController.field('PnL', 'pnl', trade.pnl, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('RR', 'rr', trade.rr, 'number', { step: '0.01' }) + '\n            </div>\n          </section>\n\n          <section class="jedit-block">\n            <div class="jedit-block-title"><span>03</span><h4>Scenario</h4></div>\n            <div class="jedit-notes">\n              ' + TradeEditorController.textarea('Pourquoi ce trade', 'why_trade', trade.why_trade, 3) + '\n              ' + TradeEditorController.textarea('Pourquoi cette entree', 'why_entry', trade.why_entry, 3) + '\n              ' + TradeEditorController.textarea('Scenario complet', 'scenario', trade.scenario, 4) + '\n              ' + TradeEditorController.textarea('Pourquoi ce stop', 'why_stop', trade.why_stop, 3) + '\n              ' + TradeEditorController.textarea('Pourquoi ce TP', 'why_tp', trade.why_tp, 3) + '\n            </div>\n          </section>\n\n          <section class="jedit-block">\n            <div class="jedit-block-title"><span>04</span><h4>Review</h4></div>\n            <div class="jedit-grid">\n              <label class="jedit-field-wrap"><span>These validee</span>' + TradeEditorController.pills('thesis_validated', trade.thesis_validated || '', [{ value: 'yes', label: 'Oui' }, { value: 'no', label: 'Non' }, { value: '', label: '?' }]) + '</label>\n              <label class="jedit-field-wrap"><span>Qualite execution</span><div class="jedit-stars" data-field="execution_quality" data-value="' + qualityRaw + '">' + starsHtml + '</div></label>\n              ' + TradeEditorController.field('Tags', 'tags', TradeEditorController.tagsValue(trade.tags), 'tags', { placeholder: 'tag1, tag2' }) + '\n              ' + TradeEditorController.textarea('Lecons apprises', 'lessons_learned', trade.lessons_learned, 4) + '\n            </div>\n          </section>\n\n          <section class="jedit-block">\n            <div class="jedit-block-title"><span>05</span><h4>Plan & captures</h4></div>\n            <div class="jedit-plan-grid">\n              <div><span>Plan model</span><strong>' + escapeHtml(trade.plan_model || '-') + '</strong></div>\n              <div><span>Direction plan</span><strong>' + escapeHtml(trade.plan_direction || '-') + '</strong></div>\n              <div><span>Alignement</span><strong>' + escapeHtml(trade.plan_alignment || 'unknown') + '</strong></div>\n              <div><span>Score</span><strong>' + (trade.plan_score == null ? '-' : escapeHtml(String(trade.plan_score))) + '</strong></div>\n            </div>\n            ' + TradeEditorController.textarea('Raison override plan', 'plan_override_reason', trade.plan_override_reason, 3) + '\n            <div class="jedit-shots">' + screenshotsHtml + '</div>\n          </section>\n        </div>\n      </div>\n    </aside>\n  ';
 };

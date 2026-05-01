@@ -7,7 +7,7 @@ const WIZ_DRAFT_KEY = 'cockpit:wizard_draft:v3';
 let wizState = null;
 
 // WIZ_INSTRUMENTS supprime — utiliser INSTRUMENTS depuis 001_utilities.js
-var STEPS_TRADE = ['date','instrument','strategy','direction','why_trade','why_entry','why_stop_tp','levels','result','screenshots','recap'];
+var STEPS_TRADE = ['date','instrument','session','strategy','direction','why_trade','why_entry','why_stop_tp','levels','result','screenshots','recap'];
 var STEPS_PM = ['pm_exit','pm_quality','pm_lessons'];
 
 const STRATEGY_HINTS = {

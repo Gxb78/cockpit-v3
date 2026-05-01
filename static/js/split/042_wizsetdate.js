@@ -38,6 +38,34 @@ function wizSelectInstrument(id) {
   setTimeout(wizNext, 200);
 }
 
+// ── Session ──
+
+function _wizStepSession() {
+  var d = wizState.data;
+  var sessions = [
+    { id:'asia',    icon:'&#x1F305;', main:'Asia',   sub:'Session asiatique — Tokyo, Sydney' },
+    { id:'london',  icon:'&#x1F1EC;&#x1F1E7;', main:'London', sub:'Session London — Europe' },
+    { id:'ny_am',   icon:'&#x1F5FD;', main:'NY AM',  sub:'Matin New York — ouverture US' },
+    { id:'ny_pm',   icon:'&#x1F303;', main:'NY PM',  sub:'Apres-midi New York — continuation' },
+  ];
+  var html = '<div class="wiz-question">Dans quelle session ?</div><div class="wiz-cards">';
+  sessions.forEach(function(s) {
+    html += '<div class="wiz-card' + (d.session===s.id?' active':'') + '" onclick="wizSelectSession(\'' + s.id + '\')">'
+      + '<div class="wiz-card-icon">' + s.icon + '</div>'
+      + '<div class="wiz-card-main">' + s.main + '</div>'
+      + '<div class="wiz-card-sub">'  + s.sub + '</div>'
+      + '</div>';
+  });
+  return html + '</div>';
+}
+
+function wizSelectSession(id) {
+  if (!wizState) return;
+  wizState.data.session = id;
+  _wizRender();
+  setTimeout(wizNext, 200);
+}
+
 // ── Strategy ──
 
 function _wizStepStrategy() {

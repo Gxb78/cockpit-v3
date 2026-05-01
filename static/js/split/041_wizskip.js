@@ -137,6 +137,7 @@ function _wizStepHtml(step) {
   switch (step) {
     case 'date':        return _wizStepDate();
     case 'instrument':  return _wizStepInstrument();
+    case 'session':     return _wizStepSession();
     case 'strategy':    return _wizStepStrategy();
     case 'direction':   return _wizStepDirection();
     case 'why_trade':   return _wizStepWhyTrade();

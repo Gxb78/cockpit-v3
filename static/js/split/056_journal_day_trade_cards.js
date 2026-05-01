@@ -771,6 +771,7 @@ function journalTradeFlipCardHtml(day, trade, idx, deck) {
 
             <div class="journal-back-stats">
               <div><strong>${escapeHtml(direction)}</strong><span>Direction</span></div>
+              <div><strong>${escapeHtml(trade.session || '-')}</strong><span>Session</span></div>
               <div><strong class="jcard-rr-display">${escapeHtml(rr)}</strong><span>R multiple</span></div>
               <div><strong class="jcard-pnl-display ${pnlClass}">${fmtMoney(pnl)}</strong><span>PnL</span></div>
             </div>

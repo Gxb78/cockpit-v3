@@ -383,6 +383,15 @@ Format obligatoire d'une lesson:
 - Test de non-regression: ecrire dans une textarea du contexte jour → focusout → rafraichir → le texte est preserve.
 |- Fichiers a surveiller: `static/js/split/018_day_form.js`.
 
+### BUG-20260501-12 - Session ajoutee comme etape wizard + champ trade
+- Symptome: impossible de selectionner la session de trading par trade (Asia, London, NY AM, NY PM).
+- Cause racine: le champ `session` existait en DB sur `days` (par jour) mais pas sur `trades` (par trade). Aucune UI pour le saisir par trade.
+- Regle de prevention: quand un champ existe dans un contexte (day) mais est aussi pertinent dans un autre (trade), l'ajouter aux deux schemas et whitelists + UI associee.
+- Test de non-regression: creer un trade via wizard → selectionner une session → verifier dans l'editeur XXL que la session est conservee → flip card → session visible.
+- Changement: `session` ajoute a `TRADE_TEXT_FIELDS`, migration v8 (`_migrate_v7_to_v8`), etape wizard dediee (entre instrument et strategy), champ select dans l'editeur XXL, affichage dans les flip cards.
+- Valeurs session: `asia`, `london`, `ny_am`, `ny_pm`.
+- Fichiers a surveiller: `app_parts/00_paths_constants.py`, `app_parts/02_database.py`, `static/js/split/040_wizard_core.js`, `static/js/split/042_wizsetdate.js`, `static/js/split/041_wizskip.js`, `static/js/split/043_wizsetdir.js`, `static/js/split/059_trade_editor_controller.js`, `static/js/split/056_journal_day_trade_cards.js`.
+
 ### CONVENTION-20260502 - Mode par defaut = light (white), upgrade design
 - Regle: Le theme par defaut est le light mode (`dark_mode: false` dans les defaults). Les ombres light utilisent le pattern 3 couches de Steep. Les border-radius ont ete augmentes (cards 16px, small 12px) inspires de Legend. Les accents warm (--surface-warm, --accent-warm) sont disponibles. Le rail et la topbar ont des overrides light-mode. Le widget contexte jour a ete redesign pour ressembler aux entry-cards (compact, badge instr, hover glow). Les badges resultat (WIN/LOSS) sont minimalistes en light mode (transparents).
 - Fichiers a surveiller: `static/js/split/002_prettify.js`, `static/css/split/000_theme_tokens_base.css`, `static/css/split/032_priority1_app_shell.css`, `static/css/split/048_card_surface.css`, `static/css/split/045_today_context_widget.css`.

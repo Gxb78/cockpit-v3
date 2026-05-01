@@ -164,6 +164,7 @@ def _run_migrations(con):
         5: _migrate_v4_to_v5,
         6: _migrate_v5_to_v6,
         7: _migrate_v6_to_v7,
+        8: _migrate_v7_to_v8,
     }
 
     for target in sorted(_MIGRATIONS):
@@ -347,5 +348,11 @@ def _migrate_v6_to_v7(con):
             )
         """)
     log.info("Migration v7 OK - table user_settings creee.")
+
+
+def _migrate_v7_to_v8(con):
+    """Migration v8: ajoute colonne session dans trades."""
+    _ensure_column(con, "trades", "session", "TEXT")
+    log.info("Migration v8 OK - session ajoutee dans trades.")
 
 

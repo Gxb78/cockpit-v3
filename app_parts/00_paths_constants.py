@@ -50,7 +50,7 @@ STRATEGY_LABELS    = _CONFIG_DATA.get("strategy_labels", {
     "london_model": "London Model",
     "ny_model": "NY Model",
 })
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 MAX_BACKUPS    = 50
 
 # Limites de taille pour les champs textes
@@ -61,6 +61,7 @@ MAX_TEXT_LONG   = 10000  # daily_notes, htf_context, lessons_learned
 # Whitelists pour la normalisation des payloads
 DAY_TEXT_FIELDS   = ["htf_bias", "htf_context", "session", "daily_notes"]
 TRADE_TEXT_FIELDS = [
+    "session",
     "strategy", "direction",
     "why_trade", "why_entry", "why_stop", "why_tp",
     "scenario",
