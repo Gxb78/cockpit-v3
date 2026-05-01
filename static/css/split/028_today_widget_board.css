@@ -228,15 +228,30 @@ body.is-dragging {
   overflow: hidden;
 }
 
-.widget-drag-placeholder {
+.widget.drop-target-before {
+  position: relative;
+}
+.widget.drop-target-before::before {
+  content: "";
+  position: absolute;
+  background: var(--cyan, #00e5ff);
+  border-radius: 2px;
+  z-index: 10;
   pointer-events: none;
-  border: 2px dashed rgba(0, 229, 255, 0.35);
-  border-radius: 12px;
-  background: rgba(0, 229, 255, 0.04);
-  box-sizing: border-box;
-  align-self: stretch;
-  justify-self: stretch;
-  transition: opacity 150ms ease;
+}
+
+.today-grid .widget.drop-target-before::before {
+  left: 0;
+  right: 0;
+  top: -8px;
+  height: 3px;
+}
+
+.kpi-row .widget.drop-target-before::before {
+  top: 0;
+  bottom: 0;
+  left: -8px;
+  width: 3px;
 }
 
 /* ---- Adaptive KPI row: 2-3-4-5-6 columns ---- */

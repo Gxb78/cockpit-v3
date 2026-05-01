@@ -336,7 +336,7 @@ body.light-mode .app-topbar {
   .app-topbar {
     left: 240px;
   }
-  .main {
+  .page.active {
     padding-top: 16px;
   }
 }

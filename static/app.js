@@ -7469,6 +7469,224 @@ function refreshDragHandles() {
           offsetX: rawOffsetX + (centerX - rawOffsetX) * SNAP_TO_CENTER,
           offsetY: rawOffsetY + (centerY - rawOffsetY) * SNAP_TO_CENTER,
           width: rect.width, height: rect.height,
+          ghost: null,
+          active: false,
+          dropRef: null
+        };
+        dndStart(pressStartX, pressStartY);
+      }, DND_LONG_PRESS);
+    });
+
+    el.addEventListener("pointerup", function() {
+      if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+      el.classList.remove("is-press-pending");
+    });
+    el.addEventListener("pointercancel", function() {
+      if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+      el.classList.remove("is-press-pending");
+    });
+    el.addEventListener("pointermove", function(e) {
+      if (!pressTimer) return;
+      var dx = e.clientX - pressStartX, dy = e.clientY - pressStartY;
+      if (dx*dx + dy*dy > 100) {
+        clearTimeout(pressTimer); pressTimer = null;
+        el.classList.remove("is-press-pending");
+      }
+    }, { passive: true });
+  });
+}
+
+function onDndPointerMove(e) {
+  if (!_dnd || !_dnd.active) return;
+  e.preventDefault();
+  if (_dndRaf) cancelAnimationFrame(_dndRaf);
+  var cx = e.clientX, cy = e.clientY;
+  _dndRaf = requestAnimationFrame(function() {
+    _dndRaf = 0;
+    if (_dnd && _dnd.active) dndMove(cx, cy);
+  });
+}
+
+function onDndPointerUp() {
+  if (_dndRaf) { cancelAnimationFrame(_dndRaf); _dndRaf = 0; }
+  if (!_dnd) return;
+  if (_dnd.active) dndEnd();
+  _dnd = null;
+}
+
+function dndStart(cx, cy) {
+  _dnd.active = true;
+  var el = _dnd.el;
+
+  el.classList.add("widget-dragging");
+
+  var ghost = el.cloneNode(true);
+  ghost.classList.remove("is-press-pending", "widget-dragging");
+  ghost.removeAttribute("data-widget-key");
+  ghost.classList.add("widget-drag-ghost");
+  ghost.style.cssText = [
+    "position:fixed","z-index:10000","left:0","top:0",
+    "width:"  + _dnd.width  + "px",
+    "height:" + _dnd.height + "px",
+    "margin:0","pointer-events:none","will-change:transform",
+    "transform:translate(" + (cx - _dnd.offsetX) + "px," + (cy - _dnd.offsetY) + "px) scale(0.97)",
+    "opacity:0.75",
+    "transition:opacity 120ms ease,box-shadow 120ms ease"
+  ].join(";");
+  document.body.appendChild(ghost);
+  _dnd.ghost = ghost;
+
+  requestAnimationFrame(function() {
+    if (!_dnd || !_dnd.ghost) return;
+    _dnd.ghost.style.opacity   = "0.97";
+    _dnd.ghost.style.transform = "translate(" + (cx - _dnd.offsetX) + "px," + (cy - _dnd.offsetY) + "px) scale(1.04)";
+    _dnd.ghost.style.boxShadow = "0 28px 80px rgba(0,0,0,0.65),0 0 0 1.5px rgba(0,229,255,0.4)";
+    _dnd.ghost.style.transition = "opacity 120ms ease,box-shadow 120ms ease";
+  });
+
+  document.body.classList.add("is-dragging");
+  _dnd.dropRef = null;
+}
+
+function dndMove(cx, cy) {
+  if (!_dnd) return;
+
+  _dnd.ghost.style.transition = "none";
+  _dnd.ghost.style.transform  = "translate(" + (cx - _dnd.offsetX) + "px," + (cy - _dnd.offsetY) + "px) scale(1.04)";
+
+  var items = dndItems(_dnd.board);
+  var ghostCX = cx - _dnd.offsetX + _dnd.width / 2;
+  var ghostCY = cy - _dnd.offsetY + _dnd.height / 2;
+  var dropIdx = dndHitTest(items, _dnd.board, ghostCX, ghostCY, _dnd.el);
+
+  var dropRef = dropIdx < items.length ? items[dropIdx] : null;
+
+  if (dropRef === _dnd.dropRef) return;
+
+  if (_dnd.dropRef) _dnd.dropRef.classList.remove("widget-drop-before");
+  _dnd.dropRef = dropRef;
+  if (dropRef) dropRef.classList.add("widget-drop-before");
+}
+
+function dndEnd() {
+  if (!_dnd) return;
+  var el = _dnd.el, board = _dnd.board;
+
+  if (_dnd.dropRef) {
+    _dnd.dropRef.classList.remove("widget-drop-before");
+    board.insertBefore(el, _dnd.dropRef);
+  }
+
+  el.classList.remove("widget-dragging");
+  el.style.transition = ""; el.style.transform = "";
+
+  requestAnimationFrame(function() {
+    el.style.transition = "transform 220ms cubic-bezier(0.34,1.56,0.64,1)";
+    el.style.transform  = "scale(1.03)";
+    setTimeout(function() {
+      el.style.transform = "scale(1)";
+      setTimeout(function() { el.style.transition = ""; el.style.transform = ""; }, 220);
+    }, 30);
+  });
+
+  if (_dnd.ghost) _dnd.ghost.remove();
+  document.body.classList.remove("is-dragging");
+
+  var order = Array.from(board.children)
+    .map(function(c) { return c.dataset && c.dataset.widgetKey; })
+    .filter(Boolean);
+  writeWidgetOrder(board.dataset.widgetBoard, order);
+  updateDashboardLayout();
+  setTimeout(refreshDragHandles, 300);
+  _dnd = null;
+}
+
+function dndItems(board) {
+  return Array.from(board.children).filter(function(el) {
+    return el && el.dataset && el.dataset.widgetKey
+      && !el.classList.contains("widget-hidden");
+  });
+}
+
+function dndHitTest(items, board, cx, cy, draggedEl) {
+  var isH = board.dataset.widgetBoard === "today-kpis";
+  var dragSpan = 1;
+  if (draggedEl) {
+    var cs = window.getComputedStyle(draggedEl);
+    var gr = cs.gridRow || "";
+    var m = gr.match(/span\s*(\d+)/);
+    if (m) dragSpan = parseInt(m[1]);
+  }
+
+  for (var i = 0; i < items.length; i++) {
+    if (items[i] === draggedEl) continue;
+    var r = items[i].getBoundingClientRect();
+    if (cx >= r.left - 4 && cx <= r.right + 4 && cy >= r.top - 4 && cy <= r.bottom + 4) {
+      if (isH) {
+        var mX = r.left + r.width / 2;
+        return cx < mX - DND_DEAD_ZONE ? i : (cx > mX + DND_DEAD_ZONE ? i + 1 : i);
+      }
+      var mY = r.top + r.height / 2;
+      var threshold = DND_DEAD_ZONE * dragSpan;
+      return cy < mY - threshold ? i : (cy > mY + threshold ? i + 1 : i);
+    }
+  }
+
+  var best = -1, bestScore = Infinity;
+  for (var j = 0; j < items.length; j++) {
+    if (items[j] === draggedEl) continue;
+    var rj = items[j].getBoundingClientRect();
+    var d = Math.pow(cx - (rj.left + rj.width / 2), 2) + Math.pow(cy - (rj.top + rj.height / 2), 2);
+    if (d < bestScore) { bestScore = d; best = j; }
+  }
+  if (best < 0) return items.length;
+
+  var br = items[best].getBoundingClientRect();
+  if (isH) {
+    return cx < br.left + br.width / 2 ? best : best + 1;
+  }
+  return cy < br.top + br.height / 2 ? best : best + 1;
+}
+
+function refreshDragHandles() {
+  if (_dnd) return;
+  document.querySelectorAll(".widget-board[data-widget-board] .widget[data-widget-key]").forEach(function(el) {
+    if (el.classList.contains("widget-hidden")) return;
+    if (el._dndBound) return;
+    el._dndBound = true;
+
+    var pressTimer = null;
+    var pressStartX = 0, pressStartY = 0;
+
+    el.addEventListener("pointerdown", function(e) {
+      if (e.button && e.button !== 0) return;
+      if (e.target.closest("input,textarea,button,a,select,[contenteditable]")) return;
+      if (_dnd) return;
+      var widget = el;
+      var board = widget.closest(".widget-board[data-widget-board]");
+      if (!board) return;
+
+      el.setPointerCapture(e.pointerId);
+
+      pressStartX = e.clientX;
+      pressStartY = e.clientY;
+      widget.classList.add("is-press-pending");
+
+      pressTimer = setTimeout(function() {
+        pressTimer = null;
+        if (navigator.vibrate) navigator.vibrate(18);
+        widget.classList.remove("is-press-pending");
+        var rect = widget.getBoundingClientRect();
+        var rawOffsetX = pressStartX - rect.left;
+        var rawOffsetY = pressStartY - rect.top;
+        var centerX = rect.width / 2;
+        var centerY = rect.height / 2;
+        var SNAP_TO_CENTER = 0.40;
+        _dnd = {
+          el: widget, board: board,
+          offsetX: rawOffsetX + (centerX - rawOffsetX) * SNAP_TO_CENTER,
+          offsetY: rawOffsetY + (centerY - rawOffsetY) * SNAP_TO_CENTER,
+          width: rect.width, height: rect.height,
           ghost: null, placeholder: null,
           active: false, items: null, lastToIdx: -1
         };
