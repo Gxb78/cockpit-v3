@@ -1,21 +1,14 @@
-        <section class="panel widget widget-panel today-context-widget" data-widget-key="today_context" data-widget-kind="panel" data-size="full">
+        <section class="panel widget widget-panel today-context-widget" data-widget-key="today_context" data-widget-kind="panel">
           <form id="dayForm" class="today-context-form">
             <input type="hidden" id="dayId" />
-            <header class="today-context-head">
-              <div class="today-context-title-group">
-                <span class="today-context-kicker">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                    <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
-                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                  </svg>
-                  Contexte du jour
-                </span>
-              </div>
-              <div class="today-context-actions">
-                <div class="day-inline-field day-inline-date">
+
+            <!-- Header : date + instrument + autosave indicator -->
+            <div class="tc-header">
+              <div class="tc-header-left">
+                <div class="tc-field tc-date">
                   <input type="date" id="entryDate" required />
                 </div>
-                <div class="day-inline-field day-inline-instrument">
+                <div class="tc-field tc-instrument">
                   <div class="select-wrapper">
                     <select id="entryInstrument" required>
                       <option value="">Instrument</option>
@@ -24,26 +17,30 @@
                   </div>
                 </div>
               </div>
+              <div class="tc-header-right">
+                <span id="autosaveInd" data-state="idle">
+                  <span id="autosaveText" class="tc-autosave-text">Auto-save</span>
+                  <span class="tc-autosave-dot"></span>
+                </span>
+              </div>
+            </div>
 
-            <div class="today-context-body">
-              <div class="today-context-bias day-context-field">
-                <label>Biais HTF</label>
-                <div class="pills" data-pills="htf_bias">
+            <!-- Body : bias row + notes -->
+            <div class="tc-body">
+              <div class="tc-bias-row">
+                <label class="tc-bias-label">Biais</label>
+                <div class="pills tc-bias-pills" data-pills="htf_bias">
                   <button type="button" class="pill-choice lime" data-value="bullish">Bullish</button>
                   <button type="button" class="pill-choice rose" data-value="bearish">Bearish</button>
                   <button type="button" class="pill-choice" data-value="neutral">Neutral</button>
                 </div>
               </div>
-              <div class="today-context-notes">
-                <div class="day-context-field">
-                  <label>Analyse HTF</label>
-                  <textarea id="htfContext" rows="2" placeholder="Structure W/D/4H, niveaux clés, biais..."></textarea>
-                </div>
-                <div class="day-context-field">
-                  <label>Notes du jour</label>
-                  <textarea id="dailyNotes" rows="2" placeholder="News macro, contexte particulier, préparation mentale..."></textarea>
-                </div>
+
+              <div class="tc-notes">
+                <textarea id="htfContext" rows="2" placeholder="Analyse HTF — structure, niveaux clés…"></textarea>
+                <textarea id="dailyNotes" rows="2" placeholder="Notes du jour — macro, prépa…"></textarea>
               </div>
             </div>
+
           </form>
         </section>

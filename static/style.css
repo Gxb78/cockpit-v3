@@ -12663,225 +12663,247 @@ body.light-mode .main {
 /* ---- 045_today_context_widget.css ---- */
 /* ---- Dashboard day context widget ---- */
 
+
+/* ── Container ────────────────────────────── */
+
 .today-context-widget {
-  grid-column: 1 / -1;
+  grid-column: auto;
   position: relative;
-  padding: 20px 24px;
+  padding: 16px 18px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 14px;
-  box-shadow: var(--shadow-xs);
+  box-shadow: var(--shadow-xs), inset 0 0 0 1px rgba(255,255,255,0.03);
   transition: box-shadow 0.25s var(--ease), border-color 0.25s var(--ease);
+  max-width: 520px;
 }
 
-.today-context-widget:hover {
-  box-shadow: var(--shadow-sm);
-}
 
-/* Head section */
-.today-context-head {
+/* ── Header (date + instrument + autosave) ── */
+
+.tc-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 16px;
-  padding-bottom: 14px;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
 }
 
-.today-context-kicker {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-  color: var(--cyan);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.today-context-kicker svg {
-  color: var(--cyan);
-}
-
-.today-context-head h3 {
-  margin: 0;
-  color: var(--text);
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-.today-context-actions {
+.tc-header-left {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-/* Inline fields (date / select) */
-.today-context-widget .day-inline-field input,
-.today-context-widget .day-inline-field select {
-  height: 34px;
-  border-radius: 10px;
-  border: 1px solid var(--border-strong);
-  background: var(--surface-2);
-  color: var(--text);
-  font-size: 13px;
-  padding: 0 10px;
-  transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease), background 0.2s var(--ease);
-}
-
-.today-context-widget .day-inline-field input::placeholder,
-.today-context-widget .day-inline-field select::placeholder {
-  color: var(--text-faint);
-  font-style: italic;
-}
-
-.today-context-widget .day-inline-date input {
-  width: 146px;
-}
-
-/* Body grid: bias pills (left) / notes (right) */
-.today-context-body {
-  display: grid;
-  grid-template-columns: minmax(140px, 0.25fr) minmax(0, 1fr);
-  gap: 48px;
-}
-
-.today-context-bias {
-  align-self: center;
-}
-
-.today-context-bias .pills {
-  display: grid;
   gap: 8px;
+  flex: 1;
+  min-width: 0;
 }
 
-/* Field labels */
-.today-context-widget .day-context-field label {
-  display: block;
-  margin-bottom: 14px;
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-/* Textareas */
-.today-context-widget .day-context-field textarea {
-  width: 100%;
-  min-height: 58px;
-  border-radius: 10px;
-  border: 1px solid var(--border-strong);
+.tc-field input,
+.tc-field select {
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text);
-  font-size: 13px;
-  padding: 10px 12px;
-  resize: vertical;
-  transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease), background 0.2s var(--ease);
+  font-size: 12px;
+  padding: 0 8px;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 }
 
-.today-context-widget .day-context-field textarea::placeholder {
-  color: var(--text-faint);
-  font-style: italic;
-}
-
-/* Focus states */
-.today-context-widget .day-context-field textarea:focus,
-.today-context-widget .day-inline-field input:focus,
-.today-context-widget .day-inline-field select:focus {
+.tc-field input:focus,
+.tc-field select:focus {
   outline: none;
   border-color: var(--cyan);
   background: var(--surface);
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.12);
+  box-shadow: 0 0 0 2.5px rgba(14, 165, 233, 0.10);
 }
 
-/* Pill choice base */
-.today-context-widget .day-context-field .pill-choice {
+.tc-date input { width: 132px; }
+.tc-instrument select { width: 100px; }
+
+/* Autosave indicator */
+.tc-header-right {
+  flex-shrink: 0;
+}
+
+.tc-autosave-text {
+  font-size: 10px;
+  color: var(--text-faint);
+  letter-spacing: 0.3px;
+}
+
+.tc-autosave-dot {
+  display: none;
+}
+
+#autosaveInd[data-state="saving"] .tc-autosave-text { color: var(--cyan); }
+#autosaveInd[data-state="saved"]  .tc-autosave-text { color: var(--win); }
+#autosaveInd[data-state="error"]  .tc-autosave-text { color: var(--loss); }
+
+
+/* ── Body ─────────────────────────────────── */
+
+.tc-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+
+/* ── Bias row ─────────────────────────────── */
+
+.tc-bias-row {
   display: flex;
   align-items: center;
-  min-height: 38px;
+  gap: 10px;
+}
+
+.tc-bias-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  width: 34px;
+}
+
+.tc-bias-pills {
+  display: flex;
+  gap: 6px;
+}
+
+.tc-bias-pills .pill-choice {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  border-radius: 10px;
-  border: 1px solid var(--border-strong);
+  min-height: 28px;
+  padding: 3px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 500;
-  padding: 6px 14px;
   cursor: pointer;
-  transition: border-color 0.2s var(--ease), background 0.2s var(--ease), color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+  transition: border-color 0.18s, background 0.18s, color 0.18s, box-shadow 0.18s;
   user-select: none;
+  line-height: 1;
 }
 
-.today-context-widget .day-context-field .pill-choice:hover {
+.tc-bias-pills .pill-choice:hover {
   background: var(--surface-hover);
+  color: var(--text-soft);
 }
 
-/* Neutral / default active */
-.today-context-widget .day-context-field .pill-choice.active {
+.tc-bias-pills .pill-choice.active {
   color: var(--cyan);
   border-color: var(--border-glow);
   background: rgba(56, 211, 238, 0.08);
   box-shadow: inset 0 0 0 1px rgba(56, 211, 238, 0.15);
 }
 
-body.light-mode .today-context-widget .day-context-field .pill-choice.active {
-  color: #0891b2;
-  border-color: rgba(8, 145, 178, 0.35);
-  background: rgba(8, 145, 178, 0.06);
-  box-shadow: inset 0 0 0 1px rgba(8, 145, 178, 0.12);
-}
-
-/* Bullish (lime/green) active */
-.today-context-widget .day-context-field .pill-choice.lime.active {
+.tc-bias-pills .pill-choice.lime.active {
   color: var(--win);
   border-color: var(--win-border);
   background: var(--win-bg);
   box-shadow: inset 0 0 0 1px var(--win-border);
 }
 
-.today-context-widget .day-context-field .pill-choice.lime:hover {
-  background: var(--surface-hover);
-}
-
-/* Bearish (rose/red) active */
-.today-context-widget .day-context-field .pill-choice.rose.active {
+.tc-bias-pills .pill-choice.rose.active {
   color: var(--loss);
   border-color: var(--loss-border);
   background: var(--loss-bg);
   box-shadow: inset 0 0 0 1px var(--loss-border);
 }
 
-.today-context-widget .day-context-field .pill-choice.rose:hover {
-  background: var(--surface-hover);
+body.light-mode .tc-bias-pills .pill-choice.active {
+  color: #0891b2;
+  border-color: rgba(8, 145, 178, 0.30);
+  background: rgba(8, 145, 178, 0.05);
+  box-shadow: inset 0 0 0 1px rgba(8, 145, 178, 0.10);
+}
+body.light-mode .tc-bias-pills .pill-choice.lime.active {
+  color: #15803d;
+  border-color: rgba(21, 128, 61, 0.25);
+  background: rgba(21, 128, 61, 0.05);
+}
+body.light-mode .tc-bias-pills .pill-choice.rose.active {
+  color: #b91c1c;
+  border-color: rgba(185, 28, 28, 0.25);
+  background: rgba(185, 28, 28, 0.05);
 }
 
-/* Notes section */
-.today-context-notes {
-  display: grid;
-  gap: 12px;
+
+/* ── Notes textareas ──────────────────────── */
+
+.tc-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-/* Responsive */
+.tc-notes textarea {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12px;
+  padding: 8px 10px;
+  resize: vertical;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  line-height: 1.45;
+}
+
+.tc-notes textarea::placeholder {
+  color: var(--text-faint);
+  font-style: italic;
+  font-size: 11px;
+}
+
+.tc-notes textarea:focus {
+  outline: none;
+  border-color: var(--cyan);
+  background: var(--surface);
+  box-shadow: 0 0 0 2.5px rgba(14, 165, 233, 0.10);
+}
+
+
+/* ── Field glow (save feedback) ───────────── */
+
+.day-inline-date.day-field-glow,
+.day-inline-instrument.day-field-glow,
+.today-context-bias .pills.day-field-glow,
+#htfContext.day-field-glow,
+#dailyNotes.day-field-glow {
+  animation: fieldGlowBreath 0.4s linear forwards;
+}
+
+.day-inline-date.day-field-error,
+.day-inline-instrument.day-field-error,
+.today-context-bias .pills.day-field-error,
+#htfContext.day-field-error,
+#dailyNotes.day-field-error {
+  border-color: #f87171 !important;
+  box-shadow: 0 0 0 2.5px rgba(248, 113, 113, 0.28), 0 0 14px rgba(248, 113, 113, 0.08);
+}
+
+
+/* ── Responsive ───────────────────────────── */
+
 @media (max-width: 900px) {
-  .today-context-head,
-  .today-context-body {
-    grid-template-columns: 1fr;
+  .today-context-widget {
+    max-width: none;
   }
-
-  .today-context-head {
-    align-items: flex-start;
+  .tc-header {
     flex-direction: column;
+    align-items: flex-start;
   }
-
-  .today-context-actions {
-    width: 100%;
-    justify-content: flex-start;
+  .tc-header-left {
+    flex-wrap: wrap;
   }
 }
 
