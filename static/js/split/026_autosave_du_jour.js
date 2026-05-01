@@ -33,8 +33,12 @@ function setAutosaveState(s, msg) {
 }
 
 function bindAutosave() {
-  // Sauvegarde à la sortie d'un champ (focusout) comme dans l'éditeur
-  $("#dayForm")?.addEventListener("focusout", triggerDayAutosave);
+  // Sauvegarde à la sortie d'un champ (focusout) avec debounce
+  var _autosaveTimer = null;
+  $("#dayForm")?.addEventListener("focusout", function () {
+    clearTimeout(_autosaveTimer);
+    _autosaveTimer = setTimeout(triggerDayAutosave, 200);
+  });
   $("#dayForm")?.addEventListener("click", e => {
     if (e.target.closest(".pill-choice")) setTimeout(triggerDayAutosave, 50);
   });
