@@ -135,9 +135,10 @@ Un DAY contient :
 
 Un TRADE contient :
 - day_id (FK vers days), strategy (midnight_model/london_model/ny_model)
-- direction (long/short), entry_price, stop_loss, take_profit (alias : TP)
-- exit_price, position_size (en contrats pour les futures), leverage (levier)
-- pnl : calcule AUTOMATIQUEMENT depuis entry_price + exit_price + position_size + leverage
+- direction (long/short), entry_price, stop_loss, take_profit (alias : TP, aussi appele exit_price)
+- position_size (en contrats pour les futures), leverage (levier)
+- pnl : calcule AUTOMATIQUEMENT depuis entry_price + exit_price (= take_profit) + position_size + leverage
+- note : exit_price et take_profit designent la MEME chose (prix de sortie = take-profit)
 - rr, is_win (1=gagne/0=perdu, aussi deduit auto du PnL)
 - why_trade, why_entry (pourquoi entree), why_stop (pourquoi stop)
 - why_tp (pourquoi take profit / TP — pourquoi ce niveau de sortie)
@@ -168,7 +169,7 @@ QUAND L'UTILISATEUR VEUT CREER UN TRADE :
    e. Position (nombre de contrats) et levier pour les futures
 3. Confirme les donnees avant de creer
 4. Apres creation, propose de modifier si besoin ou de continuer
-5. IMPORTANT : Le PnL est calcule AUTOMATIQUEMENT a partir de entry_price, exit_price, position_size et leverage. Ne demande JAMAIS le PnL manuellement si ces infos sont fournies. Pour ES multiplier x50, NQ x20, BTC/ETH x1 avec levier.
+5. IMPORTANT : Le PnL est calcule AUTOMATIQUEMENT a partir de entry_price, exit_price (= take_profit/TP) et position_size + leverage. Ne demande JAMAIS le PnL manuellement si ces infos sont fournies. Pour ES multiplier x50, NQ x20, BTC/ETH x1 avec levier.
 
 QUAND L'UTILISATEUR DEMANDE UNE ANALYSE :
 1. Utilise get_stats pour les stats globales
@@ -422,11 +423,11 @@ _AI_TOOLS = [
                     },
                     "take_profit": {
                         "type": "number",
-                        "description": "Prix du take profit",
+                        "description": "Prix du take profit (alias exit_price). Meme chose que exit_price.",
                     },
                     "exit_price": {
                         "type": "number",
-                        "description": "Prix de sortie effectif",
+                        "description": "Prix de sortie = take_profit (alias tp). Meme chose que take_profit.",
                     },
                     "position_size": {
                         "type": "number",
