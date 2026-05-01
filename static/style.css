@@ -8356,7 +8356,7 @@ body {
   background: transparent;
   display: flex;
   flex-direction: column;
-  height: 100dvh;
+  height: 100vh;
   overflow: hidden;
 }
 
@@ -8512,7 +8512,7 @@ body.light-mode .brand-mark {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 14px 20px 6px;
+  padding: 6px 20px 6px;
   flex-shrink: 0;
 }
 .page-title {
