@@ -9,7 +9,7 @@
   padding: 16px 18px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--r);
   box-shadow: var(--shadow-xs), inset 0 0 0 1px rgba(255,255,255,0.03);
   transition: box-shadow 0.25s var(--ease), border-color 0.25s var(--ease);
   max-width: 520px;

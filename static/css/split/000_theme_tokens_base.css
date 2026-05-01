@@ -84,9 +84,9 @@ button:active:not(:disabled) { transform: scale(0.97); }
   --shadow-glow-cyan:    0 8px 24px rgba(56, 211, 238, 0.18);
 
   --r-xs: 8px;
-  --r-sm: 10px;
-  --r:    12px;
-  --r-lg: 16px;
+  --r-sm: 12px;
+  --r:    16px;
+  --r-lg: 22px;
 
   --duration-fast:   0.15s;
   --duration-normal: 0.2s;

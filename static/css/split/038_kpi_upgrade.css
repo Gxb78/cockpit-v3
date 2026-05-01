@@ -368,7 +368,7 @@ body.light-mode .page[data-page="today"] .kpi:hover {
 .page[data-page="today"] .today-calendar-wrap .day {
   min-height: 44px;
   padding: 4px 3px;
-  border-radius: 14px;
+  border-radius: var(--r-sm);
 }
 
 .page[data-page="today"] .today-calendar-wrap .day-num {
