@@ -1697,3 +1697,68 @@ def ai_chat():
         _ai_cache_put(messages_json_str, result)
 
     return jsonify(result)
+
+
+@app.post("/api/ai/ping")
+def ai_ping():
+    """POST /api/ai/ping — Verifie que la cle API DeepSeek est valide.
+
+    Fait un appel probe minimal (1 token) pour tester la connectivite.
+    Retourne 200 si OK, 4xx si cle invalide, 503 si indisponible.
+    """
+    api_key = (os.environ.get("DEEPSEEK_API_KEY") or "").strip()
+    if not api_key:
+        return jsonify({"ok": False, "status": "no_key", "message": "Aucune cle API configuree."}), 200
+
+    import urllib.request as _ur
+    import json as _json
+
+    body = {
+        "model": DEEPSEEK_MODEL,
+        "messages": [{"role": "user", "content": "Ping"}],
+        "max_tokens": 1,
+    }
+    payload = _json.dumps(body).encode("utf-8")
+    try:
+        req = _ur.Request(
+            DEEPSEEK_API_URL,
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with _ur.urlopen(req, timeout=15) as resp:
+            resp_data = _json.loads(resp.read())
+            return jsonify({
+                "ok": True,
+                "status": "valid",
+                "message": "Cle API valide (DeepSeek repond).",
+                "model": resp_data.get("model", DEEPSEEK_MODEL),
+            })
+    except urllib.error.HTTPError as exc:
+        status = exc.code
+        detail = ""
+        try:
+            detail = exc.read().decode("utf-8", errors="replace")[:200]
+        except Exception:
+            pass
+        return jsonify({
+            "ok": False,
+            "status": "invalid",
+            "message": f"Cle API rejetee (HTTP {status}).",
+            "detail": detail,
+        })
+    except urllib.error.URLError as exc:
+        return jsonify({
+            "ok": False,
+            "status": "unreachable",
+            "message": f"Impossible de joindre DeepSeek : {exc.reason}",
+        })
+    except Exception as exc:
+        return jsonify({
+            "ok": False,
+            "status": "error",
+            "message": f"Erreur de connexion : {exc}",
+        })

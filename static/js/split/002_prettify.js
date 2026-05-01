@@ -64,9 +64,9 @@ function sanitizeSettings(raw) {
 }
 
 function loadSettingsState() {
+  var defaults = defaultSettingsState();
   try {
     const raw = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || "{}");
-    // Migration: ancien localStorage["theme"] -> preferences.dark_mode
     if (raw.preferences?.dark_mode === undefined) {
       try {
         const legacyTheme = localStorage.getItem("theme");
@@ -74,15 +74,33 @@ function loadSettingsState() {
         if (legacyTheme === "light") raw.preferences.dark_mode = false;
       } catch (_) {}
     }
-    return sanitizeSettings(raw);
+    state.settings = sanitizeSettings(raw);
   } catch {
-    return defaultSettingsState();
+    state.settings = defaults;
   }
+  fetch("/api/user/settings", { credentials: "same-origin" })
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if (!data || !data.settings) return;
+      var merged = Object.assign({}, defaultSettingsState(), data.settings);
+      merged.custom_strategies = normalizeCustomStrategies(merged.custom_strategies || []);
+      state.settings = sanitizeSettings(merged);
+      applySettingsState();
+      try { localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(state.settings)); } catch(_) {}
+    })
+    .catch(function() {});
+  return state.settings;
 }
 
 function saveSettingsState() {
   if (!state.settings) return;
-  localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(state.settings));
+  try { localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(state.settings)); } catch(_) {}
+  fetch("/api/user/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify(state.settings),
+  }).catch(function() {});
 }
 
 function applyProfileSetting() {
@@ -96,6 +114,9 @@ function applyVisualSettings() {
   const prefersAnimations = state.settings?.preferences?.animations !== false;
   document.body.classList.toggle("light-mode", !prefersDark);
   document.body.classList.toggle("reduce-motion", !prefersAnimations);
+  // Sync checkbox Settings si visible
+  var cb = document.getElementById("prefDarkMode");
+  if (cb) cb.checked = prefersDark;
 }
 
 function syncStrategyLabels() {

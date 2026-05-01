@@ -1,12 +1,11 @@
 /* ---- 000_theme_tokens_base.css ---- */
 /* =============================================================
-   COCKPIT — Trading Journal v2
-   Deep Space dark theme. Cyan + magenta. Cockpit layout.
+   COCKPIT — Theme Tokens
+   Single source of truth for dark + light palettes.
    ============================================================= */
 
 * { box-sizing: border-box; }
 
-/* Screen-reader only */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -18,7 +17,8 @@
   white-space: nowrap;
   border: 0;
 }
-*::selection { background: rgba(0, 229, 255, 0.25); color: #fff; }
+
+*::selection { background: rgba(56, 211, 238, 0.25); color: #fff; }
 :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 button:focus-visible:not(:focus-visible),
 a:focus-visible:not(:focus-visible),
@@ -28,42 +28,44 @@ a:focus-visible:not(:focus-visible),
 }
 button:active:not(:disabled) { transform: scale(0.97); }
 
+/* ---------- Dark theme (default) ---------- */
+
 :root {
-  /* Surfaces — deep space SOLID (no glassmorphism) */
-  --bg:           #07070d;
-  --bg-2:         #0a0c18;
-  --surface:      #0e101f;
-  --surface-2:    #121426;
-  --surface-3:    #16182e;
-  --surface-solid:#13141f;
+  color-scheme: dark;
 
-  --border:        rgba(255, 255, 255, 0.07);
-  --border-strong: rgba(255, 255, 255, 0.14);
-  --border-glow:   rgba(0, 229, 255, 0.35);
+  --bg:           #090a0f;
+  --bg-2:         #0d1017;
+  --surface:      #121620;
+  --surface-2:    #171c27;
+  --surface-3:    #1d2430;
+  --surface-solid: #151922;
+  --surface-hover: rgba(255, 255, 255, 0.04);
 
-  --text:        #f0f3ff;
-  --text-soft:   #c8ccdb;
-  --text-muted:  #8a91ae;
-  --text-faint:  #6b7190;
-  --text-dim:    #484e6a;  /* labels, meta infos secondaires */
+  --border:        rgba(226, 232, 240, 0.075);
+  --border-strong: rgba(226, 232, 240, 0.14);
+  --border-soft:   rgba(226, 232, 240, 0.06);
+  --border-glow:   rgba(56, 189, 248, 0.36);
 
-  /* Accents */
-  --cyan:    #00E5FF;
-  --cyan-2:  #00b4d8;
-  --magenta: #FF2EC4;
-  --violet:  #b400ff;
-  --lime:    #88ff5a;
-  --rose:    #ff4e6b;
-  --amber:   #ffaa00;
+  --text:        #f6f7fb;
+  --text-soft:   #d7dce7;
+  --text-muted:  #98a2b3;
+  --text-faint:  #7d8798;
+  --text-dim:    #606b7d;
 
-  /* Gradients */
-  --grad-cyan:    linear-gradient(135deg, #00E5FF, #00b4d8);
-  --grad-magenta: linear-gradient(135deg, #FF2EC4, #b400ff);
-  --grad-aurora:  linear-gradient(135deg, #00E5FF 0%, #b400ff 50%, #FF2EC4 100%);
-  --grad-text:    linear-gradient(90deg, #00E5FF 0%, #b400ff 50%, #FF2EC4 100%);
-  --grad-soft:    linear-gradient(135deg, rgba(0,229,255,0.06), rgba(255,46,196,0.06));
+  --cyan:    #38d3ee;
+  --cyan-2:  #0ea5c7;
+  --magenta: #b989ff;
+  --violet:  #8b7cf6;
+  --lime:    #7ddf8a;
+  --rose:    #ff6b7a;
+  --amber:   #f5b84b;
 
-  /* Semantic */
+  --grad-cyan:    linear-gradient(135deg, #38d3ee, #0ea5c7);
+  --grad-magenta: linear-gradient(135deg, #b989ff, #8b7cf6);
+  --grad-aurora:  linear-gradient(135deg, #38d3ee 0%, #7c8cff 54%, #b989ff 100%);
+  --grad-text:    linear-gradient(90deg, #f6f7fb 0%, #aeefff 48%, #cbb9ff 100%);
+  --grad-soft:    linear-gradient(135deg, rgba(56, 211, 238, 0.07), rgba(139, 124, 246, 0.045));
+
   --win:        #88ff5a;
   --win-2:      #5cd62a;
   --win-bg:     rgba(136, 255, 90, 0.10);
@@ -74,50 +76,86 @@ button:active:not(:disabled) { transform: scale(0.97); }
   --loss-border:rgba(255, 78, 107, 0.30);
   --danger:     #ff4e6b;
 
-  /* Shadow & glow */
-  --shadow-xs:    0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-sm:    0 4px 14px rgba(0, 0, 0, 0.4);
-  --shadow:       0 12px 36px rgba(0, 0, 0, 0.5);
-  --shadow-lg:    0 30px 80px rgba(0, 0, 0, 0.7);
-  --glow-cyan:    0 0 0 1px rgba(0, 229, 255, 0.4), 0 8px 24px rgba(0, 229, 255, 0.25);
-  --glow-magenta: 0 0 0 1px rgba(255, 46, 196, 0.4), 0 8px 24px rgba(255, 46, 196, 0.25);
-  --shadow-glow-cyan: 0 8px 24px rgba(0, 229, 255, 0.18);
+  --shadow-xs:           0 1px 2px rgba(0, 0, 0, 0.28);
+  --shadow-sm:           0 8px 20px rgba(0, 0, 0, 0.24);
+  --shadow:              0 18px 44px rgba(0, 0, 0, 0.34);
+  --shadow-lg:           0 32px 72px rgba(0, 0, 0, 0.52);
+  --glow-cyan:           0 0 0 1px rgba(56, 211, 238, 0.4), 0 8px 24px rgba(56, 211, 238, 0.25);
+  --glow-magenta:        0 0 0 1px rgba(185, 137, 255, 0.4), 0 8px 24px rgba(185, 137, 255, 0.25);
+  --shadow-glow-cyan:    0 8px 24px rgba(56, 211, 238, 0.18);
 
-  /* Radius */
   --r-xs: 8px;
-  --r-sm: 12px;
-  --r:    16px;
-  --r-lg: 22px;
+  --r-sm: 10px;
+  --r:    12px;
+  --r-lg: 16px;
 
-  /* Duration tokens */
   --duration-fast:   0.15s;
   --duration-normal: 0.2s;
   --duration-slow:   0.3s;
   --duration-enter:  0.35s;
 
-  /* Easing */
   --ease:        cubic-bezier(0.4, 0, 0.2, 1);
   --ease-bouncy: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+/* ---------- Light theme ---------- */
+
 body.light-mode {
-  --bg:            #f2f6ff;
-  --bg-2:          #e8eefb;
-  --surface:       rgba(255, 255, 255, 0.80);
-  --surface-2:     rgba(255, 255, 255, 0.92);
-  --surface-3:     rgba(243, 248, 255, 0.96);
+  color-scheme: light;
+
+  --bg:            #f6f7fb;
+  --bg-2:          #eef2f7;
+  --surface:       #ffffff;
+  --surface-2:     #f8fafc;
+  --surface-3:     #eef2f7;
   --surface-solid: #ffffff;
-  --border:        rgba(16, 24, 40, 0.10);
-  --border-strong: rgba(16, 24, 40, 0.18);
-  --border-glow:   rgba(0, 132, 255, 0.35);
-  --text:          #111827;
-  --text-soft:     #2b3344;
-  --text-muted:    #5f6c84;
-  --text-faint:    #5a657a;  /* ratio ~4.8:1 sur --bg light (WCAG AA) */
-  --shadow:        0 12px 32px rgba(16, 24, 40, 0.14);
-  --shadow-lg:     0 30px 70px rgba(16, 24, 40, 0.20);
+  --surface-hover: rgba(15, 23, 42, 0.03);
+
+  --border:        rgba(15, 23, 42, 0.10);
+  --border-strong: rgba(15, 23, 42, 0.16);
+  --border-soft:   rgba(15, 23, 42, 0.06);
+  --border-glow:   rgba(14, 165, 233, 0.35);
+
+  --text:        #111827;
+  --text-soft:   #263244;
+  --text-muted:  #64748b;
+  --text-faint:  #94a3b8;
+  --text-dim:    #7b8496;
+
+  --cyan:    #0891b2;
+  --cyan-2:  #0e7490;
+  --magenta: #9333ea;
+  --violet:  #7c3aed;
+  --lime:    #16a34a;
+  --rose:    #e11d48;
+  --amber:   #d97706;
+
+  --grad-cyan:    linear-gradient(135deg, #0891b2, #0e7490);
+  --grad-magenta: linear-gradient(135deg, #9333ea, #7c3aed);
+  --grad-aurora:  linear-gradient(135deg, #0891b2 0%, #6366f1 54%, #9333ea 100%);
+  --grad-text:    linear-gradient(90deg, #111827 0%, #0891b2 48%, #9333ea 100%);
+  --grad-soft:    linear-gradient(135deg, rgba(14, 165, 233, 0.05), rgba(147, 51, 234, 0.03));
+
+  --win:        #2d7a13;
+  --win-2:      #15803d;
+  --win-bg:     rgba(45, 122, 19, 0.10);
+  --win-border: rgba(45, 122, 19, 0.25);
+  --loss:       #b4233c;
+  --loss-2:     #be123c;
+  --loss-bg:    rgba(180, 35, 60, 0.08);
+  --loss-border:rgba(180, 35, 60, 0.20);
+  --danger:     #dc2626;
+
+  --shadow-xs:           0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-sm:           0 4px 14px rgba(15, 23, 42, 0.08);
+  --shadow:              0 12px 32px rgba(15, 23, 42, 0.14);
+  --shadow-lg:           0 30px 70px rgba(15, 23, 42, 0.20);
+  --glow-cyan:           0 0 0 1px rgba(14, 165, 233, 0.25), 0 8px 24px rgba(14, 165, 233, 0.12);
+  --glow-magenta:        0 0 0 1px rgba(147, 51, 234, 0.25), 0 8px 24px rgba(147, 51, 234, 0.12);
+  --shadow-glow-cyan:    0 8px 24px rgba(14, 165, 233, 0.08);
 }
 
+body.light-mode *::selection { background: rgba(14, 165, 233, 0.18); color: #111827; }
 body.light-mode .blob { opacity: 0.26; }
 
 body.reduce-motion *,
@@ -127,9 +165,8 @@ body.reduce-motion *::after {
   transition: none !important;
 }
 
-html { font-size: 87.5%; } /* 1rem = 14px (browser default 16px × 0.875) */
+html { font-size: 87.5%; }
 
-/* Skip-link accessible */
 .skip-link {
   position: absolute;
   top: -100%;
@@ -137,8 +174,8 @@ html { font-size: 87.5%; } /* 1rem = 14px (browser default 16px × 0.875) */
   z-index: 99999;
   padding: 10px 18px;
   border-radius: 0 0 10px 10px;
-  background: #08090c;
-  color: #fff;
+  background: var(--surface-solid);
+  color: var(--text);
   font-size: 14px;
   font-weight: 600;
   text-decoration: none;
@@ -146,7 +183,7 @@ html { font-size: 87.5%; } /* 1rem = 14px (browser default 16px × 0.875) */
 }
 .skip-link:focus {
   top: 0;
-  outline: 2px solid var(--cyan, #00e5ff);
+  outline: 2px solid var(--cyan);
   outline-offset: 2px;
 }
 
@@ -177,13 +214,13 @@ html, body {
 
 button { font-family: inherit; cursor: pointer; }
 input, select, textarea { font-family: inherit; }
-select { color-scheme: dark; }
-input[type="date"] { color-scheme: dark; }
 
-/* Thin scrollbars — comme dans les cards */
 * {
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.20) transparent;
+}
+body.light-mode * {
+  scrollbar-color: rgba(0,0,0,0.15) transparent;
 }
 
 /* ---------- Aurora background ---------- */
@@ -196,7 +233,6 @@ input[type="date"] { color-scheme: dark; }
   z-index: 0;
 }
 .aurora::before {
-  /* Scanlines subtiles + noise — effet cockpit HUD */
   content: "";
   position: absolute;
   inset: -50%;
@@ -205,8 +241,8 @@ input[type="date"] { color-scheme: dark; }
       0deg,
       transparent,
       transparent 1px,
-      rgba(0, 229, 255, 0.012) 1px,
-      rgba(0, 229, 255, 0.012) 2px
+      rgba(56, 211, 238, 0.012) 1px,
+      rgba(56, 211, 238, 0.012) 2px
     ),
     radial-gradient(rgba(255,255,255,0.010) 1px, transparent 1px),
     radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.45) 100%);
@@ -214,6 +250,14 @@ input[type="date"] { color-scheme: dark; }
   background-position: 0 0, 0 0, 0 0;
   opacity: 0.45;
 }
+body.light-mode .aurora::before {
+  opacity: 0.08;
+  background-image:
+    radial-gradient(rgba(15, 23, 42, 0.015) 1px, transparent 1px),
+    radial-gradient(ellipse at center, transparent 60%, rgba(15, 23, 42, 0.06) 100%);
+  background-size: 3px 3px, 100% 100%;
+}
+
 .blob {
   position: absolute;
   border-radius: 50%;
@@ -223,20 +267,20 @@ input[type="date"] { color-scheme: dark; }
 }
 .blob-cyan {
   width: 900px; height: 900px;
-  background: radial-gradient(circle, #00E5FF 0%, transparent 60%);
+  background: radial-gradient(circle, var(--cyan) 0%, transparent 60%);
   top: -240px; left: -200px;
   opacity: 0.50;
 }
 .blob-magenta {
   width: 780px; height: 780px;
-  background: radial-gradient(circle, #FF2EC4 0%, transparent 60%);
+  background: radial-gradient(circle, var(--magenta) 0%, transparent 60%);
   top: 20%; right: -200px;
   animation-delay: -9s;
   opacity: 0.40;
 }
 .blob-violet {
   width: 700px; height: 700px;
-  background: radial-gradient(circle, #b400ff 0%, transparent 60%);
+  background: radial-gradient(circle, var(--violet) 0%, transparent 60%);
   bottom: -200px; left: 25%;
   animation-delay: -18s;
   opacity: 0.30;
@@ -2474,6 +2518,120 @@ input[type="date"]:hover {
   opacity: 0.9;
   font-weight: 700;
 }
+
+/* ============================================================
+   LIGHT THEME — calendar cells
+   ============================================================ */
+
+body.light-mode .day {
+  background: #fff;
+  border-color: #e7eaf0;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+  transition: transform 0.18s var(--ease), border-color 0.18s var(--ease), box-shadow 0.18s var(--ease);
+}
+body.light-mode .day::before { display: none; }
+body.light-mode .day:hover {
+  transform: translateY(-2px);
+  border-color: rgba(15, 23, 42, 0.16);
+  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
+}
+body.light-mode .day:active {
+  border-color: rgba(15, 23, 42, 0.18);
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.10);
+}
+body.light-mode .day.other-month { opacity: 0.42; }
+body.light-mode .day.is-weekend { background: rgba(0,0,0,0.015); border-color: rgba(0,0,0,0.04); }
+body.light-mode .day.is-weekend:hover { border-color: rgba(0,0,0,0.08); }
+
+body.light-mode .day.win {
+  background: rgba(232, 255, 222, 0.90);
+  border-color: rgba(45, 122, 19, 0.18);
+}
+body.light-mode .day.win:hover {
+  border-color: rgba(45, 122, 19, 0.30);
+  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
+}
+body.light-mode .day.win-1 { background: rgba(232, 255, 222, 0.55); border-color: rgba(45, 122, 19, 0.10); }
+body.light-mode .day.win-2 { background: rgba(232, 255, 222, 0.72); border-color: rgba(45, 122, 19, 0.16); }
+body.light-mode .day.win-3 { background: rgba(232, 255, 222, 0.88); border-color: rgba(45, 122, 19, 0.24); }
+body.light-mode .day.win-4 { background: rgba(200, 240, 185, 0.95); border-color: rgba(45, 122, 19, 0.35); }
+body.light-mode .day.win-1:hover,
+body.light-mode .day.win-2:hover,
+body.light-mode .day.win-3:hover,
+body.light-mode .day.win-4:hover { border-color: rgba(45, 122, 19, 0.30); box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12); }
+
+body.light-mode .day.loss {
+  background: rgba(255, 229, 234, 0.92);
+  border-color: rgba(180, 35, 60, 0.18);
+}
+body.light-mode .day.loss:hover {
+  border-color: rgba(180, 35, 60, 0.30);
+  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
+}
+body.light-mode .day.loss-1 { background: rgba(255, 229, 234, 0.55); border-color: rgba(180, 35, 60, 0.10); }
+body.light-mode .day.loss-2 { background: rgba(255, 229, 234, 0.72); border-color: rgba(180, 35, 60, 0.16); }
+body.light-mode .day.loss-3 { background: rgba(255, 229, 234, 0.88); border-color: rgba(180, 35, 60, 0.24); }
+body.light-mode .day.loss-4 { background: rgba(255, 210, 215, 0.95); border-color: rgba(180, 35, 60, 0.35); }
+body.light-mode .day.loss-1:hover,
+body.light-mode .day.loss-2:hover,
+body.light-mode .day.loss-3:hover,
+body.light-mode .day.loss-4:hover { border-color: rgba(180, 35, 60, 0.30); box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12); }
+
+body.light-mode .day.today {
+  border-color: rgba(8, 145, 178, 0.45);
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06), 0 0 0 2px rgba(8, 145, 178, 0.15);
+}
+body.light-mode .day.today .day-num {
+  background: rgba(8, 145, 178, 0.15);
+  color: #0891b2;
+  border: 1px solid rgba(8, 145, 178, 0.25);
+  box-shadow: none;
+}
+body.light-mode .day-num {
+  color: #4b5563;
+}
+body.light-mode .day-metric { text-shadow: none; }
+body.light-mode .day-metric-pnl { font-weight: 900; }
+body.light-mode .day-metric-pnl.pos { color: var(--win); text-shadow: none; }
+body.light-mode .day-metric-pnl.neg { color: var(--loss); text-shadow: none; }
+body.light-mode .day-metric-pnl.flat { color: #111827; text-shadow: none; }
+body.light-mode .day-dot.win { background: var(--win); box-shadow: none; }
+body.light-mode .day-dot.loss { background: var(--loss); box-shadow: none; }
+body.light-mode .day-empty-mark { background: rgba(15, 23, 42, 0.12); box-shadow: none; }
+body.light-mode .day-stack-indicator {
+  background: #eef1f6;
+  color: #626b7a;
+  border: 1px solid #e3e7ee;
+  box-shadow: none;
+}
+body.light-mode .day-stack-indicator.trades {
+  color: #201106;
+  background: rgba(245, 184, 75, 0.22);
+  border-color: rgba(245, 184, 75, 0.4);
+  box-shadow: none;
+}
+body.light-mode .mode-trades .day-metric-trades {
+  color: #111827;
+  text-shadow: none;
+}
+body.light-mode .mode-both .day-mix-inline {
+  background: #eef1f6;
+  border-color: #e3e7ee;
+}
+body.light-mode .mode-both .day-mix-slash {
+  color: rgba(15, 23, 42, 0.25);
+}
+body.light-mode .mode-both .day-metric-trades {
+  color: #111827;
+  text-shadow: none;
+}
+body.light-mode .day-metric-sub {
+  color: var(--text-muted);
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 10px;
+}
+body.light-mode .day-dots { gap: 3px; }
 
 /* ---- 008_day_mode_trades_day_metric_sub.css ---- */
 .day-mode-trades .day-metric-sub { font-size: 11.5px; letter-spacing: 1.2px; color: #a6d6e6; }
@@ -7809,59 +7967,6 @@ body.is-dragging {
    Calm trading-desk frame, persistent top bar and mobile nav.
    ============================================================ */
 
-:root {
-  --bg: #090a0f;
-  --bg-2: #0d1017;
-  --surface: #121620;
-  --surface-2: #171c27;
-  --surface-3: #1d2430;
-  --surface-solid: #151922;
-  --border: rgba(226, 232, 240, 0.075);
-  --border-strong: rgba(226, 232, 240, 0.14);
-  --border-glow: rgba(56, 189, 248, 0.36);
-  --text: #f6f7fb;
-  --text-soft: #d7dce7;
-  --text-muted: #98a2b3;
-  --text-faint: #7d8798;
-  --text-dim: #606b7d;
-  --cyan: #38d3ee;
-  --cyan-2: #0ea5c7;
-  --magenta: #b989ff;
-  --violet: #8b7cf6;
-  --lime: #7ddf8a;
-  --rose: #ff6b7a;
-  --amber: #f5b84b;
-  --grad-cyan: linear-gradient(135deg, #38d3ee, #0ea5c7);
-  --grad-magenta: linear-gradient(135deg, #b989ff, #8b7cf6);
-  --grad-aurora: linear-gradient(135deg, #38d3ee 0%, #7c8cff 54%, #b989ff 100%);
-  --grad-text: linear-gradient(90deg, #f6f7fb 0%, #aeefff 48%, #cbb9ff 100%);
-  --grad-soft: linear-gradient(135deg, rgba(56, 211, 238, 0.07), rgba(139, 124, 246, 0.045));
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.28);
-  --shadow-sm: 0 8px 20px rgba(0, 0, 0, 0.24);
-  --shadow: 0 18px 44px rgba(0, 0, 0, 0.34);
-  --shadow-lg: 0 32px 72px rgba(0, 0, 0, 0.52);
-  --r-xs: 8px;
-  --r-sm: 10px;
-  --r: 12px;
-  --r-lg: 16px;
-}
-
-body.light-mode {
-  --bg: #f6f7fb;
-  --bg-2: #eef2f7;
-  --surface: #ffffff;
-  --surface-2: #f8fafc;
-  --surface-3: #eef2f7;
-  --surface-solid: #ffffff;
-  --border: rgba(15, 23, 42, 0.10);
-  --border-strong: rgba(15, 23, 42, 0.16);
-  --text: #111827;
-  --text-soft: #263244;
-  --text-muted: #64748b;
-  --text-faint: #667085;
-  --text-dim: #7b8496;
-}
-
 html,
 body {
   letter-spacing: 0;
@@ -8487,7 +8592,7 @@ body.light-mode .app-topbar {
   border-radius: 999px;
 }
 
-.calendar-head {
+.page[data-page="journal"] .calendar-head {
   padding: 3px 5px 6px;
   color: #98a1af;
   letter-spacing: 0;
@@ -8497,11 +8602,11 @@ body.light-mode .app-topbar {
   font-weight: 850;
 }
 
-.calendar-grid {
+.page[data-page="journal"] .calendar-grid {
   gap: 5px;
 }
 
-.day {
+.page[data-page="journal"] .day {
   border-radius: 18px;
   background: #fff;
   border-color: #e7eaf0;
@@ -8509,47 +8614,52 @@ body.light-mode .app-topbar {
   transition: transform 0.18s var(--ease), border-color 0.18s var(--ease), box-shadow 0.18s var(--ease);
 }
 
-.day::before {
+.page[data-page="journal"] .day::before {
   display: none;
 }
 
-.day:hover {
+.page[data-page="journal"] .day:hover {
   transform: translateY(-2px);
   border-color: rgba(15, 23, 42, 0.16);
   box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
 }
 
-/* PnL intensity bands — win (4 levels based on quartile, .win = fallback) */
-.day.win-1 { background: rgba(232, 255, 222, 0.55); border-color: rgba(45, 122, 19, 0.10); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
-.day.win-2 { background: rgba(232, 255, 222, 0.72); border-color: rgba(45, 122, 19, 0.16); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
-.day.win-3 { background: rgba(232, 255, 222, 0.88); border-color: rgba(45, 122, 19, 0.24); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
-.day.win-4 { background: rgba(200, 240, 185, 0.95); border-color: rgba(45, 122, 19, 0.35); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.08); }
-.day.win   { background: rgba(232, 255, 222, 0.90); border-color: rgba(45, 122, 19, 0.18); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
+.page[data-page="journal"] .day.win-1 { background: rgba(232, 255, 222, 0.55); border-color: rgba(45, 122, 19, 0.10); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
+.page[data-page="journal"] .day.win-2 { background: rgba(232, 255, 222, 0.72); border-color: rgba(45, 122, 19, 0.16); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
+.page[data-page="journal"] .day.win-3 { background: rgba(232, 255, 222, 0.88); border-color: rgba(45, 122, 19, 0.24); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
+.page[data-page="journal"] .day.win-4 { background: rgba(200, 240, 185, 0.95); border-color: rgba(45, 122, 19, 0.35); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.08); }
+.page[data-page="journal"] .day.win   { background: rgba(232, 255, 222, 0.90); border-color: rgba(45, 122, 19, 0.18); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
 
-/* PnL intensity bands — loss */
-.day.loss-1 { background: rgba(255, 229, 234, 0.55); border-color: rgba(180, 35, 60, 0.10); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
-.day.loss-2 { background: rgba(255, 229, 234, 0.72); border-color: rgba(180, 35, 60, 0.16); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
-.day.loss-3 { background: rgba(255, 229, 234, 0.88); border-color: rgba(180, 35, 60, 0.24); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
-.day.loss-4 { background: rgba(255, 210, 215, 0.95); border-color: rgba(180, 35, 60, 0.35); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.08); }
-.day.loss   { background: rgba(255, 229, 234, 0.92); border-color: rgba(180, 35, 60, 0.18); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
+.page[data-page="journal"] .day.loss-1 { background: rgba(255, 229, 234, 0.55); border-color: rgba(180, 35, 60, 0.10); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
+.page[data-page="journal"] .day.loss-2 { background: rgba(255, 229, 234, 0.72); border-color: rgba(180, 35, 60, 0.16); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
+.page[data-page="journal"] .day.loss-3 { background: rgba(255, 229, 234, 0.88); border-color: rgba(180, 35, 60, 0.24); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
+.page[data-page="journal"] .day.loss-4 { background: rgba(255, 210, 215, 0.95); border-color: rgba(180, 35, 60, 0.35); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.08); }
+.page[data-page="journal"] .day.loss   { background: rgba(255, 229, 234, 0.92); border-color: rgba(180, 35, 60, 0.18); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
 
-/* Hover — same hover for all win/loss bands */
-.day.win:hover, .day.win-1:hover, .day.win-2:hover, .day.win-3:hover, .day.win-4:hover {
+.page[data-page="journal"] .day.win:hover,
+.page[data-page="journal"] .day.win-1:hover,
+.page[data-page="journal"] .day.win-2:hover,
+.page[data-page="journal"] .day.win-3:hover,
+.page[data-page="journal"] .day.win-4:hover {
   border-color: rgba(45, 122, 19, 0.30);
   box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
 }
-.day.loss:hover, .day.loss-1:hover, .day.loss-2:hover, .day.loss-3:hover, .day.loss-4:hover {
+.page[data-page="journal"] .day.loss:hover,
+.page[data-page="journal"] .day.loss-1:hover,
+.page[data-page="journal"] .day.loss-2:hover,
+.page[data-page="journal"] .day.loss-3:hover,
+.page[data-page="journal"] .day.loss-4:hover {
   border-color: rgba(180, 35, 60, 0.30);
   box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
 }
 
-.day.today {
-  border-color: rgba(0, 197, 220, 0.45);
-  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06), 0 0 0 2px rgba(0, 197, 220, 0.15);
+.page[data-page="journal"] .day.today {
+  border-color: rgba(8, 145, 178, 0.45);
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06), 0 0 0 2px rgba(8, 145, 178, 0.15);
 }
 
-.day.today .day-num,
-.day-stack-indicator {
+.page[data-page="journal"] .day.today .day-num,
+.page[data-page="journal"] .day-stack-indicator {
   background: #eef1f6;
   color: #626b7a;
   border: 1px solid #e3e7ee;
@@ -8560,55 +8670,55 @@ body.light-mode .app-topbar {
   white-space: nowrap;
 }
 
-.day-stack-indicator.trades {
+.page[data-page="journal"] .day-stack-indicator.trades {
   color: #201106;
   background: rgba(245, 184, 75, 0.22);
   border-color: rgba(245, 184, 75, 0.4);
 }
 
-.day-num {
+.page[data-page="journal"] .day-num {
   color: #4b5563;
 }
 
-.day-metric {
+.page[data-page="journal"] .day-metric {
   text-shadow: none;
 }
 
-.day-metric-pnl {
+.page[data-page="journal"] .day-metric-pnl {
   font-size: clamp(20px, 1.35vw, 28px);
   letter-spacing: -0.04em;
 }
 
-.day-metric-pnl.pos { color: #2d7a13; text-shadow: none; }
-.day-metric-pnl.neg { color: #b4233c; text-shadow: none; }
-.day-metric-pnl.flat { color: #111827; text-shadow: none; }
+.page[data-page="journal"] .day-metric-pnl.pos { color: var(--win); text-shadow: none; }
+.page[data-page="journal"] .day-metric-pnl.neg { color: var(--loss); text-shadow: none; }
+.page[data-page="journal"] .day-metric-pnl.flat { color: #111827; text-shadow: none; }
 
-.day-dot.win  { background: #2d7a13; box-shadow: none; }
-.day-dot.loss { background: #b4233c; box-shadow: none; }
+.page[data-page="journal"] .day-dot.win  { background: var(--win); box-shadow: none; }
+.page[data-page="journal"] .day-dot.loss { background: var(--loss); box-shadow: none; }
 
-.day-empty-mark {
+.page[data-page="journal"] .day-empty-mark {
   background: rgba(15, 23, 42, 0.12);
   box-shadow: none;
 }
 
-.day:active {
+.page[data-page="journal"] .day:active {
   border-color: rgba(15, 23, 42, 0.18);
   box-shadow: 0 10px 22px rgba(12, 18, 28, 0.10);
 }
 
-.day.today .day-num {
-  background: rgba(0, 197, 220, 0.15);
+.page[data-page="journal"] .day.today .day-num {
+  background: rgba(8, 145, 178, 0.15);
   color: #0891b2;
-  border: 1px solid rgba(0, 197, 220, 0.25);
+  border: 1px solid rgba(8, 145, 178, 0.25);
   box-shadow: none;
 }
 
-.mode-trades .day-metric-trades {
+.page[data-page="journal"] .mode-trades .day-metric-trades {
   font-size: clamp(26px, 1.75vw, 38px);
   color: #111827;
   text-shadow: none;
 }
-.day-metric-suffix {
+.page[data-page="journal"] .day-metric-suffix {
   font-size: 0.45em;
   font-weight: 750;
   color: #98a1af;
@@ -8616,22 +8726,22 @@ body.light-mode .app-topbar {
   margin-left: 1px;
 }
 
-.mode-both .day-mix-inline {
+.page[data-page="journal"] .mode-both .day-mix-inline {
   border-radius: 9px;
   background: #eef1f6;
   border-color: #e3e7ee;
 }
 
-.mode-both .day-mix-slash {
+.page[data-page="journal"] .mode-both .day-mix-slash {
   color: rgba(15, 23, 42, 0.25);
 }
 
-.mode-both .day-metric-trades {
+.page[data-page="journal"] .mode-both .day-metric-trades {
   color: #111827;
   text-shadow: none;
 }
 
-.day-metric-sub {
+.page[data-page="journal"] .day-metric-sub {
   color: #98a1af;
   letter-spacing: 0;
   text-transform: none;
@@ -9466,8 +9576,8 @@ body.light-mode .app-topbar {
    ============================================================ */
 
 /* Weekend header: subtle attenuation */
-.calendar-head > div:nth-child(6),
-.calendar-head > div:nth-child(7) {
+.page[data-page="journal"] .calendar-head > div:nth-child(6),
+.page[data-page="journal"] .calendar-head > div:nth-child(7) {
   opacity: 0.5;
 }
 
@@ -9570,16 +9680,6 @@ body.light-mode .app-topbar {
 }
 
 /* Weekend cells: lighter bg, subtler borders */
-.day.is-weekend {
-  background: rgba(0,0,0,0.015);
-  border-color: rgba(0,0,0,0.04);
-  box-shadow: none;
-}
-.day.is-weekend:hover {
-  border-color: rgba(0,0,0,0.08);
-  box-shadow: 0 4px 12px rgba(10, 18, 28, 0.04);
-}
-
 /* Calendar empty state — masquer la grille + header */
 .journal-calendar-wrap.cal-empty .calendar-head,
 .journal-calendar-wrap.cal-empty .calendar-grid {
@@ -9587,29 +9687,27 @@ body.light-mode .app-topbar {
 }
 
 /* Other-month cells: slightly more visible on light background */
-.day.other-month {
+.page[data-page="journal"] .day.other-month {
   opacity: 0.42;
 }
 
-/* Day num: ensure consistent size + weight */
-.day-num {
+.page[data-page="journal"] .day-num {
   font-size: 13px;
   font-weight: 750;
 }
 
-/* Hover: smooth shadow intensification without color shift */
-.day:hover {
+.page[data-page="journal"] .day:hover {
   transform: translateY(-2px);
   border-color: rgba(15, 23, 42, 0.14);
   box-shadow: 0 16px 32px rgba(10, 18, 28, 0.10);
 }
 
-.day.win:hover {
+.page[data-page="journal"] .day.win:hover {
   border-color: rgba(45, 122, 19, 0.28);
   box-shadow: 0 16px 32px rgba(10, 18, 28, 0.10);
 }
 
-.day.loss:hover {
+.page[data-page="journal"] .day.loss:hover {
   border-color: rgba(180, 35, 60, 0.28);
   box-shadow: 0 16px 32px rgba(10, 18, 28, 0.10);
 }
@@ -10021,6 +10119,44 @@ body.light-mode .app-topbar {
 .settings-input:focus {
   border-color: rgba(56, 211, 238, 0.5);
   box-shadow: 0 0 0 3px rgba(56, 211, 238, 0.08);
+}
+
+/* API key input with toggle */
+.settings-api-input-wrap {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.settings-api-input-wrap .settings-input {
+  border: none;
+  border-radius: 0;
+  min-height: 36px;
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+}
+.settings-api-toggle {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  margin-right: 4px;
+  color: var(--text-faint);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.settings-api-toggle:hover {
+  color: var(--text-color);
+  background: var(--hover-bg);
+}
+.settings-api-toggle.is-visible {
+  color: var(--accent, #2563eb);
 }
 
 .settings-switch {
@@ -10715,26 +10851,28 @@ body.light-mode .app-topbar {
 .page[data-page="journal"] .panel,
 .page[data-page="journal"] .journal-filters,
 .page[data-page="journal"] .journal-table-wrap,
-.page[data-page="journal"] .journal-calendar-wrap {
+.page[data-page="journal"] .journal-calendar-wrap,
+.page[data-page="today"] .today-calendar-wrap {
   position: relative;
   overflow: hidden;
   transition: border-color 0.3s, transform 0.3s, box-shadow 0.3s;
 }
 
 .page[data-page="today"] .kpi:hover {
-  border-color: rgba(15, 23, 42, 0.16);
+  border-color: var(--border-glow);
   transform: translateY(-2px);
-  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.10);
+  box-shadow: var(--shadow-lg);
 }
 
 .page[data-page="today"] .panel:hover,
 .page[data-page="journal"] .panel:hover,
 .page[data-page="journal"] .journal-filters:hover,
 .page[data-page="journal"] .journal-table-wrap:hover,
-.page[data-page="journal"] .journal-calendar-wrap:hover {
-  border-color: rgba(15, 23, 42, 0.16);
+.page[data-page="journal"] .journal-calendar-wrap:hover,
+.page[data-page="today"] .today-calendar-wrap:hover {
+  border-color: var(--border-strong);
   transform: translateY(-1px);
-  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.10);
+  box-shadow: var(--shadow-lg);
 }
 
 .page[data-page="today"] .kpi > *,
@@ -10758,15 +10896,26 @@ body.light-mode .app-topbar {
   flex-direction: column;
   gap: 0;
   background: linear-gradient(165deg, rgba(13,14,22,0.95), rgba(10,12,20,0.92));
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
   border-radius: var(--r);
   transition: border-color 0.3s, transform 0.3s, box-shadow 0.3s;
 }
 
 .page[data-page="today"] .kpi:hover {
-  border-color: rgba(0,229,255,0.2);
+  border-color: var(--border-glow);
   transform: translateY(-2px);
-  box-shadow: 0 8px 28px rgba(0,0,0,0.25), 0 0 0 1px rgba(0,229,255,0.06) inset;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.25), 0 0 0 1px var(--border-glow) inset;
+}
+
+body.light-mode .page[data-page="today"] .kpi {
+  background: #fff;
+  border-color: #e7eaf0;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+}
+
+body.light-mode .page[data-page="today"] .kpi:hover {
+  border-color: rgba(15, 23, 42, 0.16);
+  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.10);
 }
 
 /* ---------- Label ligne supérieure ---------- */
@@ -10833,15 +10982,15 @@ body.light-mode .app-topbar {
 }
 
 .page[data-page="today"] .pill-win {
-  color: var(--win, #34d399);
-  background: rgba(52,211,153,0.08);
-  border: 1px solid rgba(52,211,153,0.15);
+  color: var(--win);
+  background: var(--win-bg);
+  border: 1px solid var(--win-border);
 }
 
 .page[data-page="today"] .pill-loss {
-  color: var(--loss, #f87171);
-  background: rgba(248,113,113,0.08);
-  border: 1px solid rgba(248,113,113,0.15);
+  color: var(--loss);
+  background: var(--loss-bg);
+  border: 1px solid var(--loss-border);
 }
 
 /* ---------- Winrate bar ---------- */
@@ -10849,7 +10998,7 @@ body.light-mode .app-topbar {
   margin-top: 10px;
   height: 4px;
   border-radius: 2px;
-  background: rgba(255,255,255,0.04);
+  background: var(--border-soft, rgba(255,255,255,0.04));
   overflow: hidden;
 }
 
@@ -10857,14 +11006,14 @@ body.light-mode .app-topbar {
   display: block;
   height: 100%;
   border-radius: 2px;
-  background: linear-gradient(90deg, #34d399, #60a5fa);
+  background: linear-gradient(90deg, var(--win), var(--cyan));
   transform-origin: left;
   transition: transform 0.6s var(--ease);
 }
 
 /* ---------- RR bar ---------- */
 .page[data-page="today"] #kpiRRBar {
-  background: linear-gradient(90deg, #f87171, #fbbf24, #34d399);
+  background: linear-gradient(90deg, var(--loss), var(--amber), var(--win));
 }
 
 /* ---------- Sparkline ---------- */
@@ -10880,7 +11029,7 @@ body.light-mode .app-topbar {
   height: 42px;
   display: block;
   border-radius: 6px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+  background: var(--surface-hover);
   overflow: visible;
 }
 
@@ -10953,8 +11102,8 @@ body.light-mode .app-topbar {
 }
 
 .page[data-page="today"] .today-grid {
-  flex: 1;
-  min-height: 0;
+   flex: 1;
+   min-height: 0;
 }
 
 .page[data-page="today"] .today-grid .panel,
@@ -10991,7 +11140,7 @@ body.light-mode .app-topbar {
   align-items: center;
   justify-content: space-between;
   padding: 0 0 14px;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid var(--border);
   margin-bottom: 12px;
 }
 
@@ -11008,7 +11157,7 @@ body.light-mode .app-topbar {
 .page[data-page="today"] .today-log-panel .cta-add {
   width: auto;
   margin: 0;
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid var(--border);
   background: transparent;
   color: var(--text-dim);
   font-family: "JetBrains Mono", monospace;
@@ -11028,7 +11177,7 @@ body.light-mode .app-topbar {
 .page[data-page="today"] .today-log-panel .cta-add:hover {
   color: var(--text);
   border-color: var(--border-strong);
-  background: rgba(255,255,255,0.04);
+  background: var(--surface-hover);
 }
 
 .page[data-page="today"] .today-log-panel .cta-add svg {
@@ -11047,6 +11196,7 @@ body.light-mode .app-topbar {
   border: 1px solid var(--border);
   border-radius: var(--r);
   padding: 16px 16px 8px;
+  box-shadow: var(--shadow-sm);
 }
 
 .page[data-page="today"] .today-calendar-wrap {
@@ -11060,7 +11210,7 @@ body.light-mode .app-topbar {
   justify-content: space-between;
   margin-bottom: 10px;
   padding-bottom: 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid var(--border);
 }
 
 .today-calendar-title {
@@ -11075,51 +11225,228 @@ body.light-mode .app-topbar {
 .today-calendar-month {
   font-family: "JetBrains Mono", monospace;
   font-size: 12px;
-  color: var(--text-dim);
+  color: var(--text-muted);
   letter-spacing: 0.02em;
 }
 
-/* Today calendar inherits .calendar-head and .calendar-grid from journal styles */
+/* ============================================================
+   TODAY calendar — shared sizing (both themes)
+   ============================================================ */
+
 .page[data-page="today"] .today-calendar-wrap .calendar-head {
   padding: 0 2px 6px;
+  color: var(--text-muted);
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 10px;
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 850;
 }
 
 .page[data-page="today"] .today-calendar-wrap .calendar-head div {
   font-size: 10px;
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
 
 .page[data-page="today"] .today-calendar-wrap .calendar-grid {
-  gap: 3px;
+  gap: 4px;
 }
 
-/* Slimmer day cells in the Today calendar */
 .page[data-page="today"] .today-calendar-wrap .day {
   min-height: 44px;
   padding: 4px 3px;
-  border-radius: 8px;
+  border-radius: 14px;
 }
 
 .page[data-page="today"] .today-calendar-wrap .day-num {
   font-size: 10px;
+  font-weight: 750;
 }
 
 .page[data-page="today"] .today-calendar-wrap .day-metric-pnl {
   font-size: clamp(11px, 1vw, 14px);
+  letter-spacing: -0.04em;
 }
 
 .page[data-page="today"] .today-calendar-wrap .day-metric-trades {
   font-size: 16px;
 }
 
-.page[data-page="today"] .today-calendar-wrap .day-dots {
-  gap: 2px;
-  margin-top: 1px;
+.page[data-page="today"] .today-calendar-wrap .day-metric-sub {
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 9px;
 }
 
-.page[data-page="today"] .today-calendar-wrap .day-dot {
-  width: 3px;
-  height: 3px;
+.page[data-page="today"] .today-calendar-wrap .day-dots { gap: 2px; margin-top: 1px; }
+.page[data-page="today"] .today-calendar-wrap .day-dot   { width: 3px; height: 3px; }
+
+/* ============================================================
+   TODAY calendar — DARK theme overrides
+   ============================================================ */
+
+.page[data-page="today"] .today-calendar-wrap .day-metric-pnl.pos { color: var(--win); }
+.page[data-page="today"] .today-calendar-wrap .day-metric-pnl.neg { color: var(--loss); }
+.page[data-page="today"] .today-calendar-wrap .day-metric-pnl.flat { color: var(--text); }
+.page[data-page="today"] .today-calendar-wrap .day-dot.win  { background: var(--win); }
+.page[data-page="today"] .today-calendar-wrap .day-dot.loss { background: var(--loss); }
+
+/* ============================================================
+   TODAY calendar — LIGHT theme overrides
+   ============================================================ */
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap {
+  background: #fff;
+  border-color: #e7eaf0;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+}
+
+body.light-mode .today-calendar-head {
+  border-bottom-color: #e7eaf0;
+}
+
+body.light-mode .today-calendar-title {
+  color: #111827;
+}
+
+body.light-mode .today-calendar-month {
+  color: #98a1af;
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .calendar-head {
+  color: #98a1af;
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .calendar-head div {
+  color: #98a1af;
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day {
+  background: #fff;
+  border-color: #e7eaf0;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day::before {
+  display: none;
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day:hover {
+  transform: translateY(-2px);
+  border-color: rgba(15, 23, 42, 0.16);
+  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day:active {
+  border-color: rgba(15, 23, 42, 0.18);
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.10);
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.other-month { opacity: 0.42; }
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-num {
+  color: #4b5563;
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-metric { text-shadow: none; }
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-metric-pnl.pos { color: var(--win); text-shadow: none; }
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-metric-pnl.neg { color: var(--loss); text-shadow: none; }
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-metric-pnl.flat { color: #111827; text-shadow: none; }
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-metric-trades {
+  color: #111827;
+  text-shadow: none;
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-metric-sub {
+  color: #98a1af;
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.win-1 { background: rgba(232, 255, 222, 0.55); border-color: rgba(45, 122, 19, 0.10); }
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.win-2 { background: rgba(232, 255, 222, 0.72); border-color: rgba(45, 122, 19, 0.16); }
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.win-3 { background: rgba(232, 255, 222, 0.88); border-color: rgba(45, 122, 19, 0.24); }
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.win-4 { background: rgba(200, 240, 185, 0.95); border-color: rgba(45, 122, 19, 0.35); }
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.win   { background: rgba(232, 255, 222, 0.90); border-color: rgba(45, 122, 19, 0.18); }
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.loss-1 { background: rgba(255, 229, 234, 0.55); border-color: rgba(180, 35, 60, 0.10); }
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.loss-2 { background: rgba(255, 229, 234, 0.72); border-color: rgba(180, 35, 60, 0.16); }
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.loss-3 { background: rgba(255, 229, 234, 0.88); border-color: rgba(180, 35, 60, 0.24); }
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.loss-4 { background: rgba(255, 210, 215, 0.95); border-color: rgba(180, 35, 60, 0.35); }
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.loss   { background: rgba(255, 229, 234, 0.92); border-color: rgba(180, 35, 60, 0.18); }
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.win:hover,
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.win-1:hover,
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.win-2:hover,
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.win-3:hover,
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.win-4:hover {
+  border-color: rgba(45, 122, 19, 0.30);
+  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.loss:hover,
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.loss-1:hover,
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.loss-2:hover,
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.loss-3:hover,
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.loss-4:hover {
+  border-color: rgba(180, 35, 60, 0.30);
+  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.today {
+  border-color: rgba(8, 145, 178, 0.45);
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06), 0 0 0 2px rgba(8, 145, 178, 0.15);
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.today .day-num,
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-stack-indicator {
+  background: #eef1f6;
+  color: #626b7a;
+  border: 1px solid #e3e7ee;
+  box-shadow: none;
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.today .day-num {
+  background: rgba(8, 145, 178, 0.15);
+  color: #0891b2;
+  border: 1px solid rgba(8, 145, 178, 0.25);
+  box-shadow: none;
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-stack-indicator.trades {
+  color: #201106;
+  background: rgba(245, 184, 75, 0.22);
+  border-color: rgba(245, 184, 75, 0.4);
+  box-shadow: none;
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-dot.win  { background: var(--win); box-shadow: none; }
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-dot.loss { background: var(--loss); box-shadow: none; }
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-empty-mark {
+  background: rgba(15, 23, 42, 0.12);
+  box-shadow: none;
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.is-weekend {
+  background: rgba(0, 0, 0, 0.015);
+  border-color: rgba(0, 0, 0, 0.04);
+}
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.is-weekend:hover {
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .mode-both .day-mix-inline {
+  border-radius: 9px;
+  background: #eef1f6;
+  border-color: #e3e7ee;
+}
+body.light-mode .page[data-page="today"] .today-calendar-wrap .mode-both .day-mix-slash {
+  color: rgba(15, 23, 42, 0.25);
+}
+body.light-mode .page[data-page="today"] .today-calendar-wrap .mode-both .day-metric-trades {
+  color: #111827;
+  text-shadow: none;
 }
 
 /* ---- 039_pretext_greeting.css ---- */
@@ -12132,22 +12459,21 @@ body.light-mode .main {
 }
 
 /* ---- 045_today_context_widget.css ---- */
-/* ---- Dashboard day context widget (Apple light card) ---- */
+/* ---- Dashboard day context widget ---- */
 
-/* Apple-style white card — overrides dark theme completely */
 .today-context-widget {
   grid-column: 1 / -1;
   position: relative;
   padding: 20px 24px;
-  background: #ffffff;
-  border: 1px solid #e5e5ea;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 14px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  transition: box-shadow 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+  box-shadow: var(--shadow-xs);
+  transition: box-shadow 0.25s var(--ease), border-color 0.25s var(--ease);
 }
 
 .today-context-widget:hover {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.10);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Head section */
@@ -12158,7 +12484,7 @@ body.light-mode .main {
   gap: 18px;
   margin-bottom: 16px;
   padding-bottom: 14px;
-  border-bottom: 1px solid #e5e5ea;
+  border-bottom: 1px solid var(--border);
 }
 
 .today-context-kicker {
@@ -12166,7 +12492,7 @@ body.light-mode .main {
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
-  color: #0066d9;
+  color: var(--cyan);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -12174,12 +12500,12 @@ body.light-mode .main {
 }
 
 .today-context-kicker svg {
-  color: #0066d9;
+  color: var(--cyan);
 }
 
 .today-context-head h3 {
   margin: 0;
-  color: #1d1d1f;
+  color: var(--text);
   font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -12198,19 +12524,17 @@ body.light-mode .main {
 .today-context-widget .day-inline-field select {
   height: 34px;
   border-radius: 10px;
-  border: 1px solid #d2d2d7;
-  background: #f5f5f7;
-  color: #1d1d1f;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
   font-size: 13px;
   padding: 0 10px;
-  transition: border-color 0.2s cubic-bezier(0.25, 0.1, 0.25, 1),
-              box-shadow 0.2s cubic-bezier(0.25, 0.1, 0.25, 1),
-              background 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease), background 0.2s var(--ease);
 }
 
 .today-context-widget .day-inline-field input::placeholder,
 .today-context-widget .day-inline-field select::placeholder {
-  color: #aeaeb2;
+  color: var(--text-faint);
   font-style: italic;
 }
 
@@ -12225,12 +12549,10 @@ body.light-mode .main {
   gap: 48px;
 }
 
-/* Centrer verticalement le bloc Biais HTF dans la grille */
 .today-context-bias {
   align-self: center;
 }
 
-/* Bias pills container */
 .today-context-bias .pills {
   display: grid;
   gap: 8px;
@@ -12240,7 +12562,7 @@ body.light-mode .main {
 .today-context-widget .day-context-field label {
   display: block;
   margin-bottom: 14px;
-  color: #6e6e73;
+  color: var(--text-muted);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -12252,19 +12574,17 @@ body.light-mode .main {
   width: 100%;
   min-height: 58px;
   border-radius: 10px;
-  border: 1px solid #d2d2d7;
-  background: #f5f5f7;
-  color: #1d1d1f;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
   font-size: 13px;
   padding: 10px 12px;
   resize: vertical;
-  transition: border-color 0.2s cubic-bezier(0.25, 0.1, 0.25, 1),
-              box-shadow 0.2s cubic-bezier(0.25, 0.1, 0.25, 1),
-              background 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease), background 0.2s var(--ease);
 }
 
 .today-context-widget .day-context-field textarea::placeholder {
-  color: #aeaeb2;
+  color: var(--text-faint);
   font-style: italic;
 }
 
@@ -12273,9 +12593,9 @@ body.light-mode .main {
 .today-context-widget .day-inline-field input:focus,
 .today-context-widget .day-inline-field select:focus {
   outline: none;
-  border-color: rgba(0, 197, 220, 0.6);
-  background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(0, 197, 220, 0.12);
+  border-color: var(--cyan);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.12);
 }
 
 /* Pill choice base */
@@ -12285,54 +12605,58 @@ body.light-mode .main {
   min-height: 38px;
   justify-content: center;
   border-radius: 10px;
-  border: 1px solid #d2d2d7;
-  background: #f5f5f7;
-  color: #86868b;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-muted);
   font-size: 13px;
   font-weight: 500;
   padding: 6px 14px;
   cursor: pointer;
-  transition: border-color 0.2s cubic-bezier(0.25, 0.1, 0.25, 1),
-              background 0.2s cubic-bezier(0.25, 0.1, 0.25, 1),
-              color 0.2s cubic-bezier(0.25, 0.1, 0.25, 1),
-              box-shadow 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: border-color 0.2s var(--ease), background 0.2s var(--ease), color 0.2s var(--ease), box-shadow 0.2s var(--ease);
   user-select: none;
 }
 
 .today-context-widget .day-context-field .pill-choice:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--surface-hover);
 }
 
 /* Neutral / default active */
 .today-context-widget .day-context-field .pill-choice.active {
-  color: #0066d9;
-  border-color: rgba(0, 122, 255, 0.25);
-  background: rgba(0, 122, 255, 0.08);
-  box-shadow: inset 0 0 0 1px rgba(0, 122, 255, 0.15);
+  color: var(--cyan);
+  border-color: var(--border-glow);
+  background: rgba(56, 211, 238, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(56, 211, 238, 0.15);
+}
+
+body.light-mode .today-context-widget .day-context-field .pill-choice.active {
+  color: #0891b2;
+  border-color: rgba(8, 145, 178, 0.35);
+  background: rgba(8, 145, 178, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(8, 145, 178, 0.12);
 }
 
 /* Bullish (lime/green) active */
 .today-context-widget .day-context-field .pill-choice.lime.active {
-  color: #1d7a3e;
-  border-color: rgba(52, 199, 89, 0.30);
-  background: rgba(52, 199, 89, 0.10);
-  box-shadow: inset 0 0 0 1px rgba(52, 199, 89, 0.15);
+  color: var(--win);
+  border-color: var(--win-border);
+  background: var(--win-bg);
+  box-shadow: inset 0 0 0 1px var(--win-border);
 }
 
 .today-context-widget .day-context-field .pill-choice.lime:hover {
-  background: rgba(52, 199, 89, 0.05);
+  background: var(--surface-hover);
 }
 
 /* Bearish (rose/red) active */
 .today-context-widget .day-context-field .pill-choice.rose.active {
-  color: #b91c1c;
-  border-color: rgba(255, 69, 58, 0.30);
-  background: rgba(255, 69, 58, 0.10);
-  box-shadow: inset 0 0 0 1px rgba(255, 69, 58, 0.15);
+  color: var(--loss);
+  border-color: var(--loss-border);
+  background: var(--loss-bg);
+  box-shadow: inset 0 0 0 1px var(--loss-border);
 }
 
 .today-context-widget .day-context-field .pill-choice.rose:hover {
-  background: rgba(255, 69, 58, 0.05);
+  background: var(--surface-hover);
 }
 
 /* Notes section */

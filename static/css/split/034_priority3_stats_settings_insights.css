@@ -204,6 +204,44 @@
   box-shadow: 0 0 0 3px rgba(56, 211, 238, 0.08);
 }
 
+/* API key input with toggle */
+.settings-api-input-wrap {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.settings-api-input-wrap .settings-input {
+  border: none;
+  border-radius: 0;
+  min-height: 36px;
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+}
+.settings-api-toggle {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  margin-right: 4px;
+  color: var(--text-faint);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.settings-api-toggle:hover {
+  color: var(--text-color);
+  background: var(--hover-bg);
+}
+.settings-api-toggle.is-visible {
+  color: var(--accent, #2563eb);
+}
+
 .settings-switch {
   min-height: 40px;
   margin-top: 8px;

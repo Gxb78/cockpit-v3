@@ -29,8 +29,10 @@ async function renderPerformance() {
     if (!hasData) return;
   }
 
-  $("#statStreakCur").textContent  = s.streak || 0;
-  $("#statStreakBest").textContent = s.best_streak || 0;
+  var streakCur  = $("#statStreakCur");
+  var streakBest = $("#statStreakBest");
+  if (streakCur)  streakCur.textContent  = s.streak || 0;
+  if (streakBest) streakBest.textContent = s.best_streak || 0;
 
   var animate = state.settings && state.settings.preferences && state.settings.preferences.animations !== false;
 

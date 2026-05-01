@@ -170,3 +170,117 @@
   opacity: 0.9;
   font-weight: 700;
 }
+
+/* ============================================================
+   LIGHT THEME — calendar cells
+   ============================================================ */
+
+body.light-mode .day {
+  background: #fff;
+  border-color: #e7eaf0;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+  transition: transform 0.18s var(--ease), border-color 0.18s var(--ease), box-shadow 0.18s var(--ease);
+}
+body.light-mode .day::before { display: none; }
+body.light-mode .day:hover {
+  transform: translateY(-2px);
+  border-color: rgba(15, 23, 42, 0.16);
+  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
+}
+body.light-mode .day:active {
+  border-color: rgba(15, 23, 42, 0.18);
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.10);
+}
+body.light-mode .day.other-month { opacity: 0.42; }
+body.light-mode .day.is-weekend { background: rgba(0,0,0,0.015); border-color: rgba(0,0,0,0.04); }
+body.light-mode .day.is-weekend:hover { border-color: rgba(0,0,0,0.08); }
+
+body.light-mode .day.win {
+  background: rgba(232, 255, 222, 0.90);
+  border-color: rgba(45, 122, 19, 0.18);
+}
+body.light-mode .day.win:hover {
+  border-color: rgba(45, 122, 19, 0.30);
+  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
+}
+body.light-mode .day.win-1 { background: rgba(232, 255, 222, 0.55); border-color: rgba(45, 122, 19, 0.10); }
+body.light-mode .day.win-2 { background: rgba(232, 255, 222, 0.72); border-color: rgba(45, 122, 19, 0.16); }
+body.light-mode .day.win-3 { background: rgba(232, 255, 222, 0.88); border-color: rgba(45, 122, 19, 0.24); }
+body.light-mode .day.win-4 { background: rgba(200, 240, 185, 0.95); border-color: rgba(45, 122, 19, 0.35); }
+body.light-mode .day.win-1:hover,
+body.light-mode .day.win-2:hover,
+body.light-mode .day.win-3:hover,
+body.light-mode .day.win-4:hover { border-color: rgba(45, 122, 19, 0.30); box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12); }
+
+body.light-mode .day.loss {
+  background: rgba(255, 229, 234, 0.92);
+  border-color: rgba(180, 35, 60, 0.18);
+}
+body.light-mode .day.loss:hover {
+  border-color: rgba(180, 35, 60, 0.30);
+  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
+}
+body.light-mode .day.loss-1 { background: rgba(255, 229, 234, 0.55); border-color: rgba(180, 35, 60, 0.10); }
+body.light-mode .day.loss-2 { background: rgba(255, 229, 234, 0.72); border-color: rgba(180, 35, 60, 0.16); }
+body.light-mode .day.loss-3 { background: rgba(255, 229, 234, 0.88); border-color: rgba(180, 35, 60, 0.24); }
+body.light-mode .day.loss-4 { background: rgba(255, 210, 215, 0.95); border-color: rgba(180, 35, 60, 0.35); }
+body.light-mode .day.loss-1:hover,
+body.light-mode .day.loss-2:hover,
+body.light-mode .day.loss-3:hover,
+body.light-mode .day.loss-4:hover { border-color: rgba(180, 35, 60, 0.30); box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12); }
+
+body.light-mode .day.today {
+  border-color: rgba(8, 145, 178, 0.45);
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06), 0 0 0 2px rgba(8, 145, 178, 0.15);
+}
+body.light-mode .day.today .day-num {
+  background: rgba(8, 145, 178, 0.15);
+  color: #0891b2;
+  border: 1px solid rgba(8, 145, 178, 0.25);
+  box-shadow: none;
+}
+body.light-mode .day-num {
+  color: #4b5563;
+}
+body.light-mode .day-metric { text-shadow: none; }
+body.light-mode .day-metric-pnl { font-weight: 900; }
+body.light-mode .day-metric-pnl.pos { color: var(--win); text-shadow: none; }
+body.light-mode .day-metric-pnl.neg { color: var(--loss); text-shadow: none; }
+body.light-mode .day-metric-pnl.flat { color: #111827; text-shadow: none; }
+body.light-mode .day-dot.win { background: var(--win); box-shadow: none; }
+body.light-mode .day-dot.loss { background: var(--loss); box-shadow: none; }
+body.light-mode .day-empty-mark { background: rgba(15, 23, 42, 0.12); box-shadow: none; }
+body.light-mode .day-stack-indicator {
+  background: #eef1f6;
+  color: #626b7a;
+  border: 1px solid #e3e7ee;
+  box-shadow: none;
+}
+body.light-mode .day-stack-indicator.trades {
+  color: #201106;
+  background: rgba(245, 184, 75, 0.22);
+  border-color: rgba(245, 184, 75, 0.4);
+  box-shadow: none;
+}
+body.light-mode .mode-trades .day-metric-trades {
+  color: #111827;
+  text-shadow: none;
+}
+body.light-mode .mode-both .day-mix-inline {
+  background: #eef1f6;
+  border-color: #e3e7ee;
+}
+body.light-mode .mode-both .day-mix-slash {
+  color: rgba(15, 23, 42, 0.25);
+}
+body.light-mode .mode-both .day-metric-trades {
+  color: #111827;
+  text-shadow: none;
+}
+body.light-mode .day-metric-sub {
+  color: var(--text-muted);
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 10px;
+}
+body.light-mode .day-dots { gap: 3px; }

@@ -50,10 +50,32 @@ function goPage(pageName) {
     updateJournalControlsVisibility();
     updateJournalTableSortUI();
     updateCalendarMonthFocusToggleUI();
+    if (state.journalFocusDate) {
+      var fd = parseDateKey(state.journalFocusDate);
+      if (fd) {
+        state.currentMonth = fd;
+        state.journalCustomFrom = state.journalFocusDate;
+        state.journalCustomTo = state.journalFocusDate;
+        state.journalRangeMode = "custom";
+        var m = monthRange(fd);
+        setJournalCustomRange(state.journalFocusDate, state.journalFocusDate, { persist: true, reload: false });
+      }
+      state.journalFocusDate = null;
+    }
     loadMonth();
     initJournalFilters();
   }
-  if (pageName === "stats")   { updateBreakdownSortUI(); renderPerformance(); }
+  if (pageName === "stats") {
+    // Rendre le template stats dans la section (une seule fois)
+    var statsSection = document.querySelector('.page[data-page="stats"]');
+    var statsTmpl = document.getElementById("statsTemplate");
+    if (statsSection && statsTmpl && !statsSection._rendered) {
+      statsSection.appendChild(statsTmpl.content.cloneNode(true));
+      statsSection._rendered = true;
+    }
+    updateBreakdownSortUI();
+    renderPerformance();
+  }
   if (pageName === "today")   { renderToday(); renderTodayCalendar(); }
   if (pageName === "settings") openSettingsPage();
 }

@@ -627,7 +627,10 @@ function renderTodayCalendar() {
       if (!dayEl || dayEl.dataset.otherMonth === "1") return;
       var key = dayEl.dataset.date;
       if (!key) return;
-      if (typeof wizOpen === "function") wizOpen({ date: key });
+      if (typeof goPage === "function") {
+        state.journalFocusDate = key;
+        goPage("journal");
+      }
     });
     grid.addEventListener("keydown", function(e) {
       if (e.key !== "Enter" && e.key !== " ") return;

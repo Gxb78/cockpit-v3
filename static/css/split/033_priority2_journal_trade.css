@@ -177,7 +177,7 @@
   border-radius: 999px;
 }
 
-.calendar-head {
+.page[data-page="journal"] .calendar-head {
   padding: 3px 5px 6px;
   color: #98a1af;
   letter-spacing: 0;
@@ -187,11 +187,11 @@
   font-weight: 850;
 }
 
-.calendar-grid {
+.page[data-page="journal"] .calendar-grid {
   gap: 5px;
 }
 
-.day {
+.page[data-page="journal"] .day {
   border-radius: 18px;
   background: #fff;
   border-color: #e7eaf0;
@@ -199,47 +199,52 @@
   transition: transform 0.18s var(--ease), border-color 0.18s var(--ease), box-shadow 0.18s var(--ease);
 }
 
-.day::before {
+.page[data-page="journal"] .day::before {
   display: none;
 }
 
-.day:hover {
+.page[data-page="journal"] .day:hover {
   transform: translateY(-2px);
   border-color: rgba(15, 23, 42, 0.16);
   box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
 }
 
-/* PnL intensity bands — win (4 levels based on quartile, .win = fallback) */
-.day.win-1 { background: rgba(232, 255, 222, 0.55); border-color: rgba(45, 122, 19, 0.10); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
-.day.win-2 { background: rgba(232, 255, 222, 0.72); border-color: rgba(45, 122, 19, 0.16); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
-.day.win-3 { background: rgba(232, 255, 222, 0.88); border-color: rgba(45, 122, 19, 0.24); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
-.day.win-4 { background: rgba(200, 240, 185, 0.95); border-color: rgba(45, 122, 19, 0.35); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.08); }
-.day.win   { background: rgba(232, 255, 222, 0.90); border-color: rgba(45, 122, 19, 0.18); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
+.page[data-page="journal"] .day.win-1 { background: rgba(232, 255, 222, 0.55); border-color: rgba(45, 122, 19, 0.10); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
+.page[data-page="journal"] .day.win-2 { background: rgba(232, 255, 222, 0.72); border-color: rgba(45, 122, 19, 0.16); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
+.page[data-page="journal"] .day.win-3 { background: rgba(232, 255, 222, 0.88); border-color: rgba(45, 122, 19, 0.24); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
+.page[data-page="journal"] .day.win-4 { background: rgba(200, 240, 185, 0.95); border-color: rgba(45, 122, 19, 0.35); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.08); }
+.page[data-page="journal"] .day.win   { background: rgba(232, 255, 222, 0.90); border-color: rgba(45, 122, 19, 0.18); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
 
-/* PnL intensity bands — loss */
-.day.loss-1 { background: rgba(255, 229, 234, 0.55); border-color: rgba(180, 35, 60, 0.10); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
-.day.loss-2 { background: rgba(255, 229, 234, 0.72); border-color: rgba(180, 35, 60, 0.16); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
-.day.loss-3 { background: rgba(255, 229, 234, 0.88); border-color: rgba(180, 35, 60, 0.24); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
-.day.loss-4 { background: rgba(255, 210, 215, 0.95); border-color: rgba(180, 35, 60, 0.35); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.08); }
-.day.loss   { background: rgba(255, 229, 234, 0.92); border-color: rgba(180, 35, 60, 0.18); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
+.page[data-page="journal"] .day.loss-1 { background: rgba(255, 229, 234, 0.55); border-color: rgba(180, 35, 60, 0.10); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
+.page[data-page="journal"] .day.loss-2 { background: rgba(255, 229, 234, 0.72); border-color: rgba(180, 35, 60, 0.16); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
+.page[data-page="journal"] .day.loss-3 { background: rgba(255, 229, 234, 0.88); border-color: rgba(180, 35, 60, 0.24); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
+.page[data-page="journal"] .day.loss-4 { background: rgba(255, 210, 215, 0.95); border-color: rgba(180, 35, 60, 0.35); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.08); }
+.page[data-page="journal"] .day.loss   { background: rgba(255, 229, 234, 0.92); border-color: rgba(180, 35, 60, 0.18); box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06); }
 
-/* Hover — same hover for all win/loss bands */
-.day.win:hover, .day.win-1:hover, .day.win-2:hover, .day.win-3:hover, .day.win-4:hover {
+.page[data-page="journal"] .day.win:hover,
+.page[data-page="journal"] .day.win-1:hover,
+.page[data-page="journal"] .day.win-2:hover,
+.page[data-page="journal"] .day.win-3:hover,
+.page[data-page="journal"] .day.win-4:hover {
   border-color: rgba(45, 122, 19, 0.30);
   box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
 }
-.day.loss:hover, .day.loss-1:hover, .day.loss-2:hover, .day.loss-3:hover, .day.loss-4:hover {
+.page[data-page="journal"] .day.loss:hover,
+.page[data-page="journal"] .day.loss-1:hover,
+.page[data-page="journal"] .day.loss-2:hover,
+.page[data-page="journal"] .day.loss-3:hover,
+.page[data-page="journal"] .day.loss-4:hover {
   border-color: rgba(180, 35, 60, 0.30);
   box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
 }
 
-.day.today {
-  border-color: rgba(0, 197, 220, 0.45);
-  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06), 0 0 0 2px rgba(0, 197, 220, 0.15);
+.page[data-page="journal"] .day.today {
+  border-color: rgba(8, 145, 178, 0.45);
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06), 0 0 0 2px rgba(8, 145, 178, 0.15);
 }
 
-.day.today .day-num,
-.day-stack-indicator {
+.page[data-page="journal"] .day.today .day-num,
+.page[data-page="journal"] .day-stack-indicator {
   background: #eef1f6;
   color: #626b7a;
   border: 1px solid #e3e7ee;
@@ -250,55 +255,55 @@
   white-space: nowrap;
 }
 
-.day-stack-indicator.trades {
+.page[data-page="journal"] .day-stack-indicator.trades {
   color: #201106;
   background: rgba(245, 184, 75, 0.22);
   border-color: rgba(245, 184, 75, 0.4);
 }
 
-.day-num {
+.page[data-page="journal"] .day-num {
   color: #4b5563;
 }
 
-.day-metric {
+.page[data-page="journal"] .day-metric {
   text-shadow: none;
 }
 
-.day-metric-pnl {
+.page[data-page="journal"] .day-metric-pnl {
   font-size: clamp(20px, 1.35vw, 28px);
   letter-spacing: -0.04em;
 }
 
-.day-metric-pnl.pos { color: #2d7a13; text-shadow: none; }
-.day-metric-pnl.neg { color: #b4233c; text-shadow: none; }
-.day-metric-pnl.flat { color: #111827; text-shadow: none; }
+.page[data-page="journal"] .day-metric-pnl.pos { color: var(--win); text-shadow: none; }
+.page[data-page="journal"] .day-metric-pnl.neg { color: var(--loss); text-shadow: none; }
+.page[data-page="journal"] .day-metric-pnl.flat { color: #111827; text-shadow: none; }
 
-.day-dot.win  { background: #2d7a13; box-shadow: none; }
-.day-dot.loss { background: #b4233c; box-shadow: none; }
+.page[data-page="journal"] .day-dot.win  { background: var(--win); box-shadow: none; }
+.page[data-page="journal"] .day-dot.loss { background: var(--loss); box-shadow: none; }
 
-.day-empty-mark {
+.page[data-page="journal"] .day-empty-mark {
   background: rgba(15, 23, 42, 0.12);
   box-shadow: none;
 }
 
-.day:active {
+.page[data-page="journal"] .day:active {
   border-color: rgba(15, 23, 42, 0.18);
   box-shadow: 0 10px 22px rgba(12, 18, 28, 0.10);
 }
 
-.day.today .day-num {
-  background: rgba(0, 197, 220, 0.15);
+.page[data-page="journal"] .day.today .day-num {
+  background: rgba(8, 145, 178, 0.15);
   color: #0891b2;
-  border: 1px solid rgba(0, 197, 220, 0.25);
+  border: 1px solid rgba(8, 145, 178, 0.25);
   box-shadow: none;
 }
 
-.mode-trades .day-metric-trades {
+.page[data-page="journal"] .mode-trades .day-metric-trades {
   font-size: clamp(26px, 1.75vw, 38px);
   color: #111827;
   text-shadow: none;
 }
-.day-metric-suffix {
+.page[data-page="journal"] .day-metric-suffix {
   font-size: 0.45em;
   font-weight: 750;
   color: #98a1af;
@@ -306,22 +311,22 @@
   margin-left: 1px;
 }
 
-.mode-both .day-mix-inline {
+.page[data-page="journal"] .mode-both .day-mix-inline {
   border-radius: 9px;
   background: #eef1f6;
   border-color: #e3e7ee;
 }
 
-.mode-both .day-mix-slash {
+.page[data-page="journal"] .mode-both .day-mix-slash {
   color: rgba(15, 23, 42, 0.25);
 }
 
-.mode-both .day-metric-trades {
+.page[data-page="journal"] .mode-both .day-metric-trades {
   color: #111827;
   text-shadow: none;
 }
 
-.day-metric-sub {
+.page[data-page="journal"] .day-metric-sub {
   color: #98a1af;
   letter-spacing: 0;
   text-transform: none;
@@ -1156,8 +1161,8 @@
    ============================================================ */
 
 /* Weekend header: subtle attenuation */
-.calendar-head > div:nth-child(6),
-.calendar-head > div:nth-child(7) {
+.page[data-page="journal"] .calendar-head > div:nth-child(6),
+.page[data-page="journal"] .calendar-head > div:nth-child(7) {
   opacity: 0.5;
 }
 
@@ -1260,16 +1265,6 @@
 }
 
 /* Weekend cells: lighter bg, subtler borders */
-.day.is-weekend {
-  background: rgba(0,0,0,0.015);
-  border-color: rgba(0,0,0,0.04);
-  box-shadow: none;
-}
-.day.is-weekend:hover {
-  border-color: rgba(0,0,0,0.08);
-  box-shadow: 0 4px 12px rgba(10, 18, 28, 0.04);
-}
-
 /* Calendar empty state — masquer la grille + header */
 .journal-calendar-wrap.cal-empty .calendar-head,
 .journal-calendar-wrap.cal-empty .calendar-grid {
@@ -1277,29 +1272,27 @@
 }
 
 /* Other-month cells: slightly more visible on light background */
-.day.other-month {
+.page[data-page="journal"] .day.other-month {
   opacity: 0.42;
 }
 
-/* Day num: ensure consistent size + weight */
-.day-num {
+.page[data-page="journal"] .day-num {
   font-size: 13px;
   font-weight: 750;
 }
 
-/* Hover: smooth shadow intensification without color shift */
-.day:hover {
+.page[data-page="journal"] .day:hover {
   transform: translateY(-2px);
   border-color: rgba(15, 23, 42, 0.14);
   box-shadow: 0 16px 32px rgba(10, 18, 28, 0.10);
 }
 
-.day.win:hover {
+.page[data-page="journal"] .day.win:hover {
   border-color: rgba(45, 122, 19, 0.28);
   box-shadow: 0 16px 32px rgba(10, 18, 28, 0.10);
 }
 
-.day.loss:hover {
+.page[data-page="journal"] .day.loss:hover {
   border-color: rgba(180, 35, 60, 0.28);
   box-shadow: 0 16px 32px rgba(10, 18, 28, 0.10);
 }

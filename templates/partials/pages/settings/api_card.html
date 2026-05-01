@@ -6,8 +6,14 @@
             <span class="settings-env mono" id="settingsApiEnv">ANTHROPIC_API_KEY</span>
           </div>
           <div class="settings-inline">
-            <input type="text" id="settingsApiKeyMasked" class="settings-input mono" value="" readonly />
+            <div class="settings-api-input-wrap">
+              <input type="password" id="settingsApiKeyMasked" class="settings-input mono" value="" readonly />
+              <button type="button" class="btn-icon settings-api-toggle" id="settingsApiToggle" aria-label="Afficher/masquer la cle" tabindex="-1">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
             <button type="button" class="btn-ghost" id="settingsRefreshApiBtn">Rafraichir</button>
+            <button type="button" class="btn-ghost" id="settingsTestApiBtn">Tester</button>
           </div>
-          <p id="settingsApiHint" class="settings-help" style="color:var(--amber);display:none"></p>
+          <p id="settingsApiResult" class="settings-help" style="display:none"></p>
         </div>

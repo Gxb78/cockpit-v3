@@ -543,9 +543,9 @@ function sanitizeSettings(raw) {
 }
 
 function loadSettingsState() {
+  var defaults = defaultSettingsState();
   try {
     const raw = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || "{}");
-    // Migration: ancien localStorage["theme"] -> preferences.dark_mode
     if (raw.preferences?.dark_mode === undefined) {
       try {
         const legacyTheme = localStorage.getItem("theme");
@@ -553,15 +553,33 @@ function loadSettingsState() {
         if (legacyTheme === "light") raw.preferences.dark_mode = false;
       } catch (_) {}
     }
-    return sanitizeSettings(raw);
+    state.settings = sanitizeSettings(raw);
   } catch {
-    return defaultSettingsState();
+    state.settings = defaults;
   }
+  fetch("/api/user/settings", { credentials: "same-origin" })
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if (!data || !data.settings) return;
+      var merged = Object.assign({}, defaultSettingsState(), data.settings);
+      merged.custom_strategies = normalizeCustomStrategies(merged.custom_strategies || []);
+      state.settings = sanitizeSettings(merged);
+      applySettingsState();
+      try { localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(state.settings)); } catch(_) {}
+    })
+    .catch(function() {});
+  return state.settings;
 }
 
 function saveSettingsState() {
   if (!state.settings) return;
-  localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(state.settings));
+  try { localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(state.settings)); } catch(_) {}
+  fetch("/api/user/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify(state.settings),
+  }).catch(function() {});
 }
 
 function applyProfileSetting() {
@@ -575,6 +593,9 @@ function applyVisualSettings() {
   const prefersAnimations = state.settings?.preferences?.animations !== false;
   document.body.classList.toggle("light-mode", !prefersDark);
   document.body.classList.toggle("reduce-motion", !prefersAnimations);
+  // Sync checkbox Settings si visible
+  var cb = document.getElementById("prefDarkMode");
+  if (cb) cb.checked = prefersDark;
 }
 
 function syncStrategyLabels() {
@@ -760,7 +781,7 @@ async function refreshApiKeyStatus() {
   const status = $("#settingsApiStatus");
   const masked = $("#settingsApiKeyMasked");
   const env = $("#settingsApiEnv");
-  const hint = $("#settingsApiHint");
+  const hint = $("#settingsApiResult");
   if (!status || !masked || !env) return;
   status.textContent = "Chargement...";
   status.className = "settings-badge";
@@ -864,6 +885,47 @@ function bindSettings() {
 
   $("#settingsSavePrefsBtn")?.addEventListener("click", savePreferenceSettings);
   $("#settingsRefreshApiBtn")?.addEventListener("click", refreshApiKeyStatus);
+
+  // Test API key
+  var testBtn = document.getElementById("settingsTestApiBtn");
+  var resultEl = document.getElementById("settingsApiResult");
+  if (testBtn && resultEl) {
+    testBtn.addEventListener("click", async function () {
+      testBtn.disabled = true;
+      testBtn.textContent = "Test en cours...";
+      resultEl.style.display = "none";
+      try {
+        var r = await api("/api/ai/ping", { method: "POST" });
+        resultEl.style.display = "block";
+        if (r.ok) {
+          resultEl.style.color = "var(--green, #34d399)";
+          resultEl.textContent = r.message || "Cle valide.";
+        } else {
+          resultEl.style.color = "var(--red, #f87171)";
+          resultEl.textContent = r.message || "Cle invalide.";
+          if (r.detail) resultEl.textContent += " (" + r.detail + ")";
+        }
+      } catch (err) {
+        resultEl.style.display = "block";
+        resultEl.style.color = "var(--red, #f87171)";
+        resultEl.textContent = "Erreur de connexion au serveur.";
+      } finally {
+        testBtn.disabled = false;
+        testBtn.textContent = "Tester";
+      }
+    });
+  }
+
+  // API key toggle visibility (password ↔ text)
+  var toggleBtn = document.getElementById("settingsApiToggle");
+  var apiInput = document.getElementById("settingsApiKeyMasked");
+  if (toggleBtn && apiInput) {
+    toggleBtn.addEventListener("click", function () {
+      var isPassword = apiInput.type === "password";
+      apiInput.type = isPassword ? "text" : "password";
+      toggleBtn.classList.toggle("is-visible", isPassword);
+    });
+  }
 }
 
 function loadCalendarMetricMode() {
@@ -1950,10 +2012,32 @@ function goPage(pageName) {
     updateJournalControlsVisibility();
     updateJournalTableSortUI();
     updateCalendarMonthFocusToggleUI();
+    if (state.journalFocusDate) {
+      var fd = parseDateKey(state.journalFocusDate);
+      if (fd) {
+        state.currentMonth = fd;
+        state.journalCustomFrom = state.journalFocusDate;
+        state.journalCustomTo = state.journalFocusDate;
+        state.journalRangeMode = "custom";
+        var m = monthRange(fd);
+        setJournalCustomRange(state.journalFocusDate, state.journalFocusDate, { persist: true, reload: false });
+      }
+      state.journalFocusDate = null;
+    }
     loadMonth();
     initJournalFilters();
   }
-  if (pageName === "stats")   { updateBreakdownSortUI(); renderPerformance(); }
+  if (pageName === "stats") {
+    // Rendre le template stats dans la section (une seule fois)
+    var statsSection = document.querySelector('.page[data-page="stats"]');
+    var statsTmpl = document.getElementById("statsTemplate");
+    if (statsSection && statsTmpl && !statsSection._rendered) {
+      statsSection.appendChild(statsTmpl.content.cloneNode(true));
+      statsSection._rendered = true;
+    }
+    updateBreakdownSortUI();
+    renderPerformance();
+  }
   if (pageName === "today")   { renderToday(); renderTodayCalendar(); }
   if (pageName === "settings") openSettingsPage();
 }
@@ -2072,7 +2156,8 @@ function bindCalendarNav() {
   });
   $("#todayJumpBtn")?.addEventListener("click", () => {
     const now = new Date();
-    state.currentMonth = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    state.currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    state.journalViewMode = "month";
     if (state.journalRangeMode === "custom") {
       const m = monthRange(now);
       setJournalCustomRange(m.from, m.to, { persist: true, reload: false });
@@ -2678,15 +2763,17 @@ function renderCalendar(windowDef = null) {
   }
   grid.replaceChildren(fragment);
 
-  // Empty state — soit aucun trade sur la periode, soit filtres ont tout vide
+  // Empty state — seulement si filtres ont tout vide, sinon calendrier reste visible
   var totalTrades = 0;
   Object.keys(byDay).forEach(function (k) { totalTrades += Number(byDay[k].trades || 0); });
   var hasFilters = hasActiveJournalTradeFilters();
   var isEmpty = totalTrades === 0;
+  // Cacher la grille seulement si filtres actifs ET aucun resultat
+  var hideGrid = isEmpty && hasFilters;
   var wrap = document.getElementById("journalCalendarWrap");
-  if (wrap) wrap.classList.toggle("cal-empty", isEmpty);
+  if (wrap) wrap.classList.toggle("cal-empty", hideGrid);
   var emptyEl = document.getElementById("calendarEmptyState");
-  if (isEmpty) {
+  if (hideGrid) {
     if (!emptyEl) {
       emptyEl = document.createElement("div");
       emptyEl.id = "calendarEmptyState";
@@ -2694,8 +2781,7 @@ function renderCalendar(windowDef = null) {
       emptyEl.innerHTML =
         '<div class="empty-state">' +
           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
-          '<span>' + (hasFilters ? 'Aucun trade ne correspond aux filtres actifs.' : 'Aucun trade pour cette periode.') + '</span>' +
-          (hasFilters ? '' : '<span class="empty-cta">Ajouter un trade dans le tableau de bord Today</span>') +
+          '<span>Aucun trade ne correspond aux filtres actifs.</span>' +
         "</div>";
       grid.parentNode.insertBefore(emptyEl, grid.nextSibling);
     }
@@ -2831,11 +2917,9 @@ function dayCell(dt, byDay, otherMonth, today) {
   const el   = document.createElement("div");
   el.dataset.date = key;
   el.dataset.otherMonth = otherMonth ? "1" : "0";
-  el.dataset.weekday = String(dt.getDay());
   el.className = "day" + (otherMonth ? " other-month" : "") + (key === today ? " today" : "");
   el.setAttribute("role", "button");
   el.setAttribute("tabindex", otherMonth ? "-1" : "0");
-  if (dt.getDay() === 0 || dt.getDay() === 6) el.classList.add("is-weekend");
   el.classList.add(`day-mode-${mode}`);
   const band = _pnlBand(info?.pnl, _calPnLThresholds);
   if (band) el.classList.add(band);
@@ -3279,16 +3363,20 @@ async function saveDayContext(isNew) {
       $("#deleteBtn")?.classList.remove("hidden");
       var _ab = $("#addTradeBtn");
       if (_ab) { _ab.disabled = false; _ab.title = ""; }
-      $("#modalTitle").textContent = `${saved.instrument} - ${saved.date}`;
+      if ($("#entryModal") && !$("#entryModal").classList.contains("hidden")) {
+        $("#modalTitle").textContent = `${saved.instrument} - ${saved.date}`;
+      }
       // Pour une création, tous les champs sont "changés"
       changedFields = Object.keys(fullPayload).filter(function(k) { return fullPayload[k] != null && fullPayload[k] !== ''; });
     } else {
       saved = await api(`/api/days/${activeId}`,
         { method: "PUT", body: JSON.stringify(payload) });
       if (payload.date || payload.instrument) {
+if ($("#entryModal") && !$("#entryModal").classList.contains("hidden") && (payload.date || payload.instrument)) {
         const curDate = $("#entryDate").value;
         const curInstr = $("#entryInstrument").value;
         $("#modalTitle").textContent = `${curInstr} - ${curDate}`;
+      }
       }
     }
     state.modalDataDirty = true;
@@ -5061,8 +5149,10 @@ async function renderPerformance() {
     if (!hasData) return;
   }
 
-  $("#statStreakCur").textContent  = s.streak || 0;
-  $("#statStreakBest").textContent = s.best_streak || 0;
+  var streakCur  = $("#statStreakCur");
+  var streakBest = $("#statStreakBest");
+  if (streakCur)  streakCur.textContent  = s.streak || 0;
+  if (streakBest) streakBest.textContent = s.best_streak || 0;
 
   var animate = state.settings && state.settings.preferences && state.settings.preferences.animations !== false;
 
@@ -7965,7 +8055,10 @@ function renderTodayCalendar() {
       if (!dayEl || dayEl.dataset.otherMonth === "1") return;
       var key = dayEl.dataset.date;
       if (!key) return;
-      if (typeof wizOpen === "function") wizOpen({ date: key });
+      if (typeof goPage === "function") {
+        state.journalFocusDate = key;
+        goPage("journal");
+      }
     });
     grid.addEventListener("keydown", function(e) {
       if (e.key !== "Enter" && e.key !== " ") return;
@@ -9583,7 +9676,7 @@ function _udpEnsure() {
     '<div class="udp-panel" role="dialog" aria-modal="true" aria-label="Selection de date">' +
       '<aside class="udp-side">' +
         '<div class="udp-side-title">Raccourcis</div>' +
-        '<button type="button" data-shortcut="today">Aujourd hui</button>' +
+        '<button type="button" data-shortcut="today">Aujourd&#39;hui</button>' +
         '<button type="button" data-shortcut="yesterday">Hier</button>' +
         '<button type="button" data-shortcut="7d">7 derniers jours</button>' +
         '<button type="button" data-shortcut="30d">30 derniers jours</button>' +
@@ -10749,6 +10842,13 @@ function renderJournalDayTrades(dateKey, days) {
   var items = collectJournalDayTrades(days);
   if (!items.length) { closeJournalDayTrades(); return; }
 
+  // Preserver l'etat des flips avant de detruire le DOM
+  var flipped = {};
+  wrap.querySelectorAll('.journal-flip-card.is-flipped').forEach(function (c) {
+    var tid = c.dataset.tradeId;
+    if (tid) flipped[tid] = true;
+  });
+
   _journalDayTradeCache = {};
   _journalDayTradeDays  = {};
   items.forEach(function (item) {
@@ -10771,6 +10871,14 @@ function renderJournalDayTrades(dateKey, days) {
       }).join("")}
     </div>
   `;
+
+  // Restaurer les flips preserves
+  if (Object.keys(flipped).length) {
+    Object.keys(flipped).forEach(function (tid) {
+      var card = wrap.querySelector('.journal-flip-card[data-trade-id="' + tid + '"]');
+      if (card) card.classList.add('is-flipped');
+    });
+  }
 
   var firstCard = wrap.querySelector(".journal-flip-card");
   if (firstCard) firstCard.focus({ preventScroll: true });

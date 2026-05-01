@@ -124,15 +124,17 @@ function renderCalendar(windowDef = null) {
   }
   grid.replaceChildren(fragment);
 
-  // Empty state — soit aucun trade sur la periode, soit filtres ont tout vide
+  // Empty state — seulement si filtres ont tout vide, sinon calendrier reste visible
   var totalTrades = 0;
   Object.keys(byDay).forEach(function (k) { totalTrades += Number(byDay[k].trades || 0); });
   var hasFilters = hasActiveJournalTradeFilters();
   var isEmpty = totalTrades === 0;
+  // Cacher la grille seulement si filtres actifs ET aucun resultat
+  var hideGrid = isEmpty && hasFilters;
   var wrap = document.getElementById("journalCalendarWrap");
-  if (wrap) wrap.classList.toggle("cal-empty", isEmpty);
+  if (wrap) wrap.classList.toggle("cal-empty", hideGrid);
   var emptyEl = document.getElementById("calendarEmptyState");
-  if (isEmpty) {
+  if (hideGrid) {
     if (!emptyEl) {
       emptyEl = document.createElement("div");
       emptyEl.id = "calendarEmptyState";
@@ -140,8 +142,7 @@ function renderCalendar(windowDef = null) {
       emptyEl.innerHTML =
         '<div class="empty-state">' +
           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
-          '<span>' + (hasFilters ? 'Aucun trade ne correspond aux filtres actifs.' : 'Aucun trade pour cette periode.') + '</span>' +
-          (hasFilters ? '' : '<span class="empty-cta">Ajouter un trade dans le tableau de bord Today</span>') +
+          '<span>Aucun trade ne correspond aux filtres actifs.</span>' +
         "</div>";
       grid.parentNode.insertBefore(emptyEl, grid.nextSibling);
     }
@@ -277,11 +278,9 @@ function dayCell(dt, byDay, otherMonth, today) {
   const el   = document.createElement("div");
   el.dataset.date = key;
   el.dataset.otherMonth = otherMonth ? "1" : "0";
-  el.dataset.weekday = String(dt.getDay());
   el.className = "day" + (otherMonth ? " other-month" : "") + (key === today ? " today" : "");
   el.setAttribute("role", "button");
   el.setAttribute("tabindex", otherMonth ? "-1" : "0");
-  if (dt.getDay() === 0 || dt.getDay() === 6) el.classList.add("is-weekend");
   el.classList.add(`day-mode-${mode}`);
   const band = _pnlBand(info?.pnl, _calPnLThresholds);
   if (band) el.classList.add(band);

@@ -79,7 +79,7 @@ async function refreshApiKeyStatus() {
   const status = $("#settingsApiStatus");
   const masked = $("#settingsApiKeyMasked");
   const env = $("#settingsApiEnv");
-  const hint = $("#settingsApiHint");
+  const hint = $("#settingsApiResult");
   if (!status || !masked || !env) return;
   status.textContent = "Chargement...";
   status.className = "settings-badge";
@@ -183,6 +183,47 @@ function bindSettings() {
 
   $("#settingsSavePrefsBtn")?.addEventListener("click", savePreferenceSettings);
   $("#settingsRefreshApiBtn")?.addEventListener("click", refreshApiKeyStatus);
+
+  // Test API key
+  var testBtn = document.getElementById("settingsTestApiBtn");
+  var resultEl = document.getElementById("settingsApiResult");
+  if (testBtn && resultEl) {
+    testBtn.addEventListener("click", async function () {
+      testBtn.disabled = true;
+      testBtn.textContent = "Test en cours...";
+      resultEl.style.display = "none";
+      try {
+        var r = await api("/api/ai/ping", { method: "POST" });
+        resultEl.style.display = "block";
+        if (r.ok) {
+          resultEl.style.color = "var(--green, #34d399)";
+          resultEl.textContent = r.message || "Cle valide.";
+        } else {
+          resultEl.style.color = "var(--red, #f87171)";
+          resultEl.textContent = r.message || "Cle invalide.";
+          if (r.detail) resultEl.textContent += " (" + r.detail + ")";
+        }
+      } catch (err) {
+        resultEl.style.display = "block";
+        resultEl.style.color = "var(--red, #f87171)";
+        resultEl.textContent = "Erreur de connexion au serveur.";
+      } finally {
+        testBtn.disabled = false;
+        testBtn.textContent = "Tester";
+      }
+    });
+  }
+
+  // API key toggle visibility (password ↔ text)
+  var toggleBtn = document.getElementById("settingsApiToggle");
+  var apiInput = document.getElementById("settingsApiKeyMasked");
+  if (toggleBtn && apiInput) {
+    toggleBtn.addEventListener("click", function () {
+      var isPassword = apiInput.type === "password";
+      apiInput.type = isPassword ? "text" : "password";
+      toggleBtn.classList.toggle("is-visible", isPassword);
+    });
+  }
 }
 
 function loadCalendarMetricMode() {

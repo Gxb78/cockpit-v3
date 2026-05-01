@@ -9,15 +9,26 @@
   flex-direction: column;
   gap: 0;
   background: linear-gradient(165deg, rgba(13,14,22,0.95), rgba(10,12,20,0.92));
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
   border-radius: var(--r);
   transition: border-color 0.3s, transform 0.3s, box-shadow 0.3s;
 }
 
 .page[data-page="today"] .kpi:hover {
-  border-color: rgba(0,229,255,0.2);
+  border-color: var(--border-glow);
   transform: translateY(-2px);
-  box-shadow: 0 8px 28px rgba(0,0,0,0.25), 0 0 0 1px rgba(0,229,255,0.06) inset;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.25), 0 0 0 1px var(--border-glow) inset;
+}
+
+body.light-mode .page[data-page="today"] .kpi {
+  background: #fff;
+  border-color: #e7eaf0;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+}
+
+body.light-mode .page[data-page="today"] .kpi:hover {
+  border-color: rgba(15, 23, 42, 0.16);
+  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.10);
 }
 
 /* ---------- Label ligne supérieure ---------- */
@@ -84,15 +95,15 @@
 }
 
 .page[data-page="today"] .pill-win {
-  color: var(--win, #34d399);
-  background: rgba(52,211,153,0.08);
-  border: 1px solid rgba(52,211,153,0.15);
+  color: var(--win);
+  background: var(--win-bg);
+  border: 1px solid var(--win-border);
 }
 
 .page[data-page="today"] .pill-loss {
-  color: var(--loss, #f87171);
-  background: rgba(248,113,113,0.08);
-  border: 1px solid rgba(248,113,113,0.15);
+  color: var(--loss);
+  background: var(--loss-bg);
+  border: 1px solid var(--loss-border);
 }
 
 /* ---------- Winrate bar ---------- */
@@ -100,7 +111,7 @@
   margin-top: 10px;
   height: 4px;
   border-radius: 2px;
-  background: rgba(255,255,255,0.04);
+  background: var(--border-soft, rgba(255,255,255,0.04));
   overflow: hidden;
 }
 
@@ -108,14 +119,14 @@
   display: block;
   height: 100%;
   border-radius: 2px;
-  background: linear-gradient(90deg, #34d399, #60a5fa);
+  background: linear-gradient(90deg, var(--win), var(--cyan));
   transform-origin: left;
   transition: transform 0.6s var(--ease);
 }
 
 /* ---------- RR bar ---------- */
 .page[data-page="today"] #kpiRRBar {
-  background: linear-gradient(90deg, #f87171, #fbbf24, #34d399);
+  background: linear-gradient(90deg, var(--loss), var(--amber), var(--win));
 }
 
 /* ---------- Sparkline ---------- */
@@ -131,7 +142,7 @@
   height: 42px;
   display: block;
   border-radius: 6px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+  background: var(--surface-hover);
   overflow: visible;
 }
 
@@ -204,8 +215,8 @@
 }
 
 .page[data-page="today"] .today-grid {
-  flex: 1;
-  min-height: 0;
+   flex: 1;
+   min-height: 0;
 }
 
 .page[data-page="today"] .today-grid .panel,
@@ -242,7 +253,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 0 14px;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid var(--border);
   margin-bottom: 12px;
 }
 
@@ -259,7 +270,7 @@
 .page[data-page="today"] .today-log-panel .cta-add {
   width: auto;
   margin: 0;
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid var(--border);
   background: transparent;
   color: var(--text-dim);
   font-family: "JetBrains Mono", monospace;
@@ -279,7 +290,7 @@
 .page[data-page="today"] .today-log-panel .cta-add:hover {
   color: var(--text);
   border-color: var(--border-strong);
-  background: rgba(255,255,255,0.04);
+  background: var(--surface-hover);
 }
 
 .page[data-page="today"] .today-log-panel .cta-add svg {
@@ -298,6 +309,7 @@
   border: 1px solid var(--border);
   border-radius: var(--r);
   padding: 16px 16px 8px;
+  box-shadow: var(--shadow-sm);
 }
 
 .page[data-page="today"] .today-calendar-wrap {
@@ -311,7 +323,7 @@
   justify-content: space-between;
   margin-bottom: 10px;
   padding-bottom: 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid var(--border);
 }
 
 .today-calendar-title {
@@ -326,49 +338,226 @@
 .today-calendar-month {
   font-family: "JetBrains Mono", monospace;
   font-size: 12px;
-  color: var(--text-dim);
+  color: var(--text-muted);
   letter-spacing: 0.02em;
 }
 
-/* Today calendar inherits .calendar-head and .calendar-grid from journal styles */
+/* ============================================================
+   TODAY calendar — shared sizing (both themes)
+   ============================================================ */
+
 .page[data-page="today"] .today-calendar-wrap .calendar-head {
   padding: 0 2px 6px;
+  color: var(--text-muted);
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 10px;
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 850;
 }
 
 .page[data-page="today"] .today-calendar-wrap .calendar-head div {
   font-size: 10px;
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
 
 .page[data-page="today"] .today-calendar-wrap .calendar-grid {
-  gap: 3px;
+  gap: 4px;
 }
 
-/* Slimmer day cells in the Today calendar */
 .page[data-page="today"] .today-calendar-wrap .day {
   min-height: 44px;
   padding: 4px 3px;
-  border-radius: 8px;
+  border-radius: 14px;
 }
 
 .page[data-page="today"] .today-calendar-wrap .day-num {
   font-size: 10px;
+  font-weight: 750;
 }
 
 .page[data-page="today"] .today-calendar-wrap .day-metric-pnl {
   font-size: clamp(11px, 1vw, 14px);
+  letter-spacing: -0.04em;
 }
 
 .page[data-page="today"] .today-calendar-wrap .day-metric-trades {
   font-size: 16px;
 }
 
-.page[data-page="today"] .today-calendar-wrap .day-dots {
-  gap: 2px;
-  margin-top: 1px;
+.page[data-page="today"] .today-calendar-wrap .day-metric-sub {
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 9px;
 }
 
-.page[data-page="today"] .today-calendar-wrap .day-dot {
-  width: 3px;
-  height: 3px;
+.page[data-page="today"] .today-calendar-wrap .day-dots { gap: 2px; margin-top: 1px; }
+.page[data-page="today"] .today-calendar-wrap .day-dot   { width: 3px; height: 3px; }
+
+/* ============================================================
+   TODAY calendar — DARK theme overrides
+   ============================================================ */
+
+.page[data-page="today"] .today-calendar-wrap .day-metric-pnl.pos { color: var(--win); }
+.page[data-page="today"] .today-calendar-wrap .day-metric-pnl.neg { color: var(--loss); }
+.page[data-page="today"] .today-calendar-wrap .day-metric-pnl.flat { color: var(--text); }
+.page[data-page="today"] .today-calendar-wrap .day-dot.win  { background: var(--win); }
+.page[data-page="today"] .today-calendar-wrap .day-dot.loss { background: var(--loss); }
+
+/* ============================================================
+   TODAY calendar — LIGHT theme overrides
+   ============================================================ */
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap {
+  background: #fff;
+  border-color: #e7eaf0;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+}
+
+body.light-mode .today-calendar-head {
+  border-bottom-color: #e7eaf0;
+}
+
+body.light-mode .today-calendar-title {
+  color: #111827;
+}
+
+body.light-mode .today-calendar-month {
+  color: #98a1af;
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .calendar-head {
+  color: #98a1af;
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .calendar-head div {
+  color: #98a1af;
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day {
+  background: #fff;
+  border-color: #e7eaf0;
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06);
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day::before {
+  display: none;
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day:hover {
+  transform: translateY(-2px);
+  border-color: rgba(15, 23, 42, 0.16);
+  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day:active {
+  border-color: rgba(15, 23, 42, 0.18);
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.10);
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.other-month { opacity: 0.42; }
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-num {
+  color: #4b5563;
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-metric { text-shadow: none; }
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-metric-pnl.pos { color: var(--win); text-shadow: none; }
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-metric-pnl.neg { color: var(--loss); text-shadow: none; }
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-metric-pnl.flat { color: #111827; text-shadow: none; }
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-metric-trades {
+  color: #111827;
+  text-shadow: none;
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-metric-sub {
+  color: #98a1af;
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.win-1 { background: rgba(232, 255, 222, 0.55); border-color: rgba(45, 122, 19, 0.10); }
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.win-2 { background: rgba(232, 255, 222, 0.72); border-color: rgba(45, 122, 19, 0.16); }
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.win-3 { background: rgba(232, 255, 222, 0.88); border-color: rgba(45, 122, 19, 0.24); }
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.win-4 { background: rgba(200, 240, 185, 0.95); border-color: rgba(45, 122, 19, 0.35); }
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.win   { background: rgba(232, 255, 222, 0.90); border-color: rgba(45, 122, 19, 0.18); }
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.loss-1 { background: rgba(255, 229, 234, 0.55); border-color: rgba(180, 35, 60, 0.10); }
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.loss-2 { background: rgba(255, 229, 234, 0.72); border-color: rgba(180, 35, 60, 0.16); }
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.loss-3 { background: rgba(255, 229, 234, 0.88); border-color: rgba(180, 35, 60, 0.24); }
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.loss-4 { background: rgba(255, 210, 215, 0.95); border-color: rgba(180, 35, 60, 0.35); }
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.loss   { background: rgba(255, 229, 234, 0.92); border-color: rgba(180, 35, 60, 0.18); }
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.win:hover,
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.win-1:hover,
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.win-2:hover,
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.win-3:hover,
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.win-4:hover {
+  border-color: rgba(45, 122, 19, 0.30);
+  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.loss:hover,
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.loss-1:hover,
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.loss-2:hover,
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.loss-3:hover,
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.loss-4:hover {
+  border-color: rgba(180, 35, 60, 0.30);
+  box-shadow: 0 18px 38px rgba(10, 18, 28, 0.12);
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.today {
+  border-color: rgba(8, 145, 178, 0.45);
+  box-shadow: 0 10px 22px rgba(12, 18, 28, 0.06), 0 0 0 2px rgba(8, 145, 178, 0.15);
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.today .day-num,
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-stack-indicator {
+  background: #eef1f6;
+  color: #626b7a;
+  border: 1px solid #e3e7ee;
+  box-shadow: none;
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.today .day-num {
+  background: rgba(8, 145, 178, 0.15);
+  color: #0891b2;
+  border: 1px solid rgba(8, 145, 178, 0.25);
+  box-shadow: none;
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-stack-indicator.trades {
+  color: #201106;
+  background: rgba(245, 184, 75, 0.22);
+  border-color: rgba(245, 184, 75, 0.4);
+  box-shadow: none;
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-dot.win  { background: var(--win); box-shadow: none; }
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-dot.loss { background: var(--loss); box-shadow: none; }
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day-empty-mark {
+  background: rgba(15, 23, 42, 0.12);
+  box-shadow: none;
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.is-weekend {
+  background: rgba(0, 0, 0, 0.015);
+  border-color: rgba(0, 0, 0, 0.04);
+}
+body.light-mode .page[data-page="today"] .today-calendar-wrap .day.is-weekend:hover {
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+body.light-mode .page[data-page="today"] .today-calendar-wrap .mode-both .day-mix-inline {
+  border-radius: 9px;
+  background: #eef1f6;
+  border-color: #e3e7ee;
+}
+body.light-mode .page[data-page="today"] .today-calendar-wrap .mode-both .day-mix-slash {
+  color: rgba(15, 23, 42, 0.25);
+}
+body.light-mode .page[data-page="today"] .today-calendar-wrap .mode-both .day-metric-trades {
+  color: #111827;
+  text-shadow: none;
 }

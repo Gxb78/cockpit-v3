@@ -87,16 +87,20 @@ async function saveDayContext(isNew) {
       $("#deleteBtn")?.classList.remove("hidden");
       var _ab = $("#addTradeBtn");
       if (_ab) { _ab.disabled = false; _ab.title = ""; }
-      $("#modalTitle").textContent = `${saved.instrument} - ${saved.date}`;
+      if ($("#entryModal") && !$("#entryModal").classList.contains("hidden")) {
+        $("#modalTitle").textContent = `${saved.instrument} - ${saved.date}`;
+      }
       // Pour une création, tous les champs sont "changés"
       changedFields = Object.keys(fullPayload).filter(function(k) { return fullPayload[k] != null && fullPayload[k] !== ''; });
     } else {
       saved = await api(`/api/days/${activeId}`,
         { method: "PUT", body: JSON.stringify(payload) });
       if (payload.date || payload.instrument) {
+if ($("#entryModal") && !$("#entryModal").classList.contains("hidden") && (payload.date || payload.instrument)) {
         const curDate = $("#entryDate").value;
         const curInstr = $("#entryInstrument").value;
         $("#modalTitle").textContent = `${curInstr} - ${curDate}`;
+      }
       }
     }
     state.modalDataDirty = true;

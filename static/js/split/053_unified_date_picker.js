@@ -63,7 +63,7 @@ function _udpEnsure() {
     '<div class="udp-panel" role="dialog" aria-modal="true" aria-label="Selection de date">' +
       '<aside class="udp-side">' +
         '<div class="udp-side-title">Raccourcis</div>' +
-        '<button type="button" data-shortcut="today">Aujourd hui</button>' +
+        '<button type="button" data-shortcut="today">Aujourd&#39;hui</button>' +
         '<button type="button" data-shortcut="yesterday">Hier</button>' +
         '<button type="button" data-shortcut="7d">7 derniers jours</button>' +
         '<button type="button" data-shortcut="30d">30 derniers jours</button>' +

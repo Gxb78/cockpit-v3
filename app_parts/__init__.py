@@ -30,6 +30,7 @@ _PART_FILES = [
     "19_ai_chat.py",                # 19 — IA chat DeepSeek
     "20_ml_engine.py",              # 20 — ML Engine : apprentissage automatique
     "21_routes_ml.py",              # 21 — Routes API ML / insights
+    "22_routes_settings.py",        # 22 — Routes API user settings
 ]
 
 for _part in _PART_FILES:

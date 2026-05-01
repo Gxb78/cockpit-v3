@@ -84,7 +84,8 @@ function bindCalendarNav() {
   });
   $("#todayJumpBtn")?.addEventListener("click", () => {
     const now = new Date();
-    state.currentMonth = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    state.currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    state.journalViewMode = "month";
     if (state.journalRangeMode === "custom") {
       const m = monthRange(now);
       setJournalCustomRange(m.from, m.to, { persist: true, reload: false });

@@ -84,7 +84,7 @@ def init_db():
         FOREIGN KEY (trade_id) REFERENCES trades(id) ON DELETE CASCADE
     );
 
-    CREATE TABLE IF NOT EXISTS knowledge_cards (
+CREATE TABLE IF NOT EXISTS knowledge_cards (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
         kind            TEXT NOT NULL,
         title           TEXT NOT NULL,
@@ -98,6 +98,11 @@ def init_db():
         is_archived     INTEGER DEFAULT 0,
         created_at      TEXT NOT NULL,
         updated_at      TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS user_settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
     );
 
     CREATE INDEX IF NOT EXISTS idx_knowledge_cards_kind   ON knowledge_cards(kind);
@@ -158,6 +163,7 @@ def _run_migrations(con):
         4: _migrate_v3_to_v4,
         5: _migrate_v4_to_v5,
         6: _migrate_v5_to_v6,
+        7: _migrate_v6_to_v7,
     }
 
     for target in sorted(_MIGRATIONS):
@@ -328,5 +334,18 @@ def _migrate_v5_to_v6(con):
     """Migration v6: ajoute le champ leverage sur les trades."""
     _ensure_column(con, "trades", "leverage", "REAL")
     log.info("Migration v6 OK - champ leverage ajoute.")
+
+
+def _migrate_v6_to_v7(con):
+    """Migration v7: cree la table user_settings pour la persistence backend."""
+    tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "user_settings" not in tables:
+        con.execute("""
+            CREATE TABLE user_settings (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        """)
+    log.info("Migration v7 OK - table user_settings creee.")
 
 

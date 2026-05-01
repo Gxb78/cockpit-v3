@@ -594,6 +594,13 @@ function renderJournalDayTrades(dateKey, days) {
   var items = collectJournalDayTrades(days);
   if (!items.length) { closeJournalDayTrades(); return; }
 
+  // Preserver l'etat des flips avant de detruire le DOM
+  var flipped = {};
+  wrap.querySelectorAll('.journal-flip-card.is-flipped').forEach(function (c) {
+    var tid = c.dataset.tradeId;
+    if (tid) flipped[tid] = true;
+  });
+
   _journalDayTradeCache = {};
   _journalDayTradeDays  = {};
   items.forEach(function (item) {
@@ -616,6 +623,14 @@ function renderJournalDayTrades(dateKey, days) {
       }).join("")}
     </div>
   `;
+
+  // Restaurer les flips preserves
+  if (Object.keys(flipped).length) {
+    Object.keys(flipped).forEach(function (tid) {
+      var card = wrap.querySelector('.journal-flip-card[data-trade-id="' + tid + '"]');
+      if (card) card.classList.add('is-flipped');
+    });
+  }
 
   var firstCard = wrap.querySelector(".journal-flip-card");
   if (firstCard) firstCard.focus({ preventScroll: true });
