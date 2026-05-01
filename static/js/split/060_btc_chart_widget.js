@@ -58,6 +58,50 @@
 
   // Auto-refresh periodique : toutes les 15s (petits TF) a 60s (grands TF)
   var refreshTimer = null;
+  var ws = null;
+  var wsReconnectTimer = null;
+  var currentSymbol = 'btcusdt';
+
+  function _connectWs() {
+    if (ws) try { ws.close(); } catch(e) {}
+    var stream = currentSymbol + '@kline_' + currentInterval;
+    var url = 'wss://stream.binance.com:9443/ws/' + stream;
+    try {
+      ws = new WebSocket(url);
+      ws.onmessage = function (msg) {
+        try {
+          var d = JSON.parse(msg.data);
+          var k = d && d.k;
+          if (!k) return;
+          var candle = {
+            time: Math.floor(k.t / 1000),
+            open: parseFloat(k.o),
+            high: parseFloat(k.h),
+            low: parseFloat(k.l),
+            close: parseFloat(k.c),
+            volume: parseFloat(k.v),
+          };
+          var priceEl = document.getElementById('btcChartPrice');
+          if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
+          lastCandleTime = k.t;
+          if (k.x) { _fetchAndRender(); return; }
+          if (series) {
+            try { series.update(candle); } catch(e) {}
+          }
+        } catch(e) {}
+      };
+      ws.onclose = function () {
+        if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = setTimeout(_connectWs, 3000);
+      };
+      ws.onerror = function() {};
+    } catch(e) { console.error('[btc-chart] ws:', e); }
+  }
+
+  function _disconnectWs() {
+    if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+    if (ws) { try { ws.close(); } catch(e) {} ws = null; }
+  }
 
   function _startAutoRefresh() {
     if (refreshTimer) clearInterval(refreshTimer);
@@ -186,6 +230,7 @@
           document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
           btn.classList.add('active');
           currentInterval = btn.dataset.interval;
+          _disconnectWs();
           // Vider le champ custom
           var ci = document.getElementById('btcChartCustom');
           if (ci) ci.value = '';
@@ -205,6 +250,7 @@
           }
           document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
           currentInterval = val;
+          _disconnectWs();
           _fetchAndRender();
         });
         customInput.addEventListener('keydown', function (e) {
@@ -231,6 +277,8 @@
         lastCandleTime = last.time * 1000;
         _startCountdown();
         _startAutoRefresh();
+        _disconnectWs();
+        _connectWs();
         var priceEl = document.getElementById('btcChartPrice');
         if (priceEl) priceEl.textContent = '$' + Number(last.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
         series.setData(candles);

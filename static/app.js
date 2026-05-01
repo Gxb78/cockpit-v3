@@ -10946,6 +10946,50 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   // Auto-refresh periodique : toutes les 15s (petits TF) a 60s (grands TF)
   var refreshTimer = null;
+  var ws = null;
+  var wsReconnectTimer = null;
+  var currentSymbol = 'btcusdt';
+
+  function _connectWs() {
+    if (ws) try { ws.close(); } catch(e) {}
+    var stream = currentSymbol + '@kline_' + currentInterval;
+    var url = 'wss://stream.binance.com:9443/ws/' + stream;
+    try {
+      ws = new WebSocket(url);
+      ws.onmessage = function (msg) {
+        try {
+          var d = JSON.parse(msg.data);
+          var k = d && d.k;
+          if (!k) return;
+          var candle = {
+            time: Math.floor(k.t / 1000),
+            open: parseFloat(k.o),
+            high: parseFloat(k.h),
+            low: parseFloat(k.l),
+            close: parseFloat(k.c),
+            volume: parseFloat(k.v),
+          };
+          var priceEl = document.getElementById('btcChartPrice');
+          if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
+          lastCandleTime = k.t;
+          if (k.x) { _fetchAndRender(); return; }
+          if (series) {
+            try { series.update(candle); } catch(e) {}
+          }
+        } catch(e) {}
+      };
+      ws.onclose = function () {
+        if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = setTimeout(_connectWs, 3000);
+      };
+      ws.onerror = function() {};
+    } catch(e) { console.error('[btc-chart] ws:', e); }
+  }
+
+  function _disconnectWs() {
+    if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+    if (ws) { try { ws.close(); } catch(e) {} ws = null; }
+  }
 
   function _startAutoRefresh() {
     if (refreshTimer) clearInterval(refreshTimer);
@@ -11074,6 +11118,7 @@ TradeEditorController.renderHtml = function (day, trade) {
           document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
           btn.classList.add('active');
           currentInterval = btn.dataset.interval;
+          _disconnectWs();
           // Vider le champ custom
           var ci = document.getElementById('btcChartCustom');
           if (ci) ci.value = '';
@@ -11093,6 +11138,7 @@ TradeEditorController.renderHtml = function (day, trade) {
           }
           document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
           currentInterval = val;
+          _disconnectWs();
           _fetchAndRender();
         });
         customInput.addEventListener('keydown', function (e) {
@@ -11119,6 +11165,8 @@ TradeEditorController.renderHtml = function (day, trade) {
         lastCandleTime = last.time * 1000;
         _startCountdown();
         _startAutoRefresh();
+        _disconnectWs();
+        _connectWs();
         var priceEl = document.getElementById('btcChartPrice');
         if (priceEl) priceEl.textContent = '$' + Number(last.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
         series.setData(candles);
@@ -11165,6 +11213,53 @@ TradeEditorController.renderHtml = function (day, trade) {
   var lastCandleTime = 0;
   var resizeObserver = null;
   var refreshTimer = null;
+  var ws = null;
+  var wsReconnectTimer = null;
+  var currentSymbol = 'BTCUSDT';
+
+  function _connectWs() {
+    if (ws) try { ws.close(); } catch(e) {}
+    var stream = currentSymbol.toLowerCase() + '@kline_' + currentInterval;
+    var url = 'wss://stream.binance.com:9443/ws/' + stream;
+    try {
+      ws = new WebSocket(url);
+      ws.onmessage = function (msg) {
+        try {
+          var d = JSON.parse(msg.data);
+          var k = d && d.k;
+          if (!k) return;
+          var candle = {
+            time: Math.floor(k.t / 1000),
+            open: parseFloat(k.o),
+            high: parseFloat(k.h),
+            low: parseFloat(k.l),
+            close: parseFloat(k.c),
+            volume: parseFloat(k.v),
+          };
+          var priceEl = document.getElementById('chartPrice');
+          if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
+          lastCandleTime = k.t;
+          if (k.x) { _fetchAndRender(); return; }
+          if (candlestickSeries) {
+            try { candlestickSeries.update(candle); } catch(e) {}
+            if (volumeSeries) {
+              try { volumeSeries.update({ time: candle.time, value: candle.volume, color: candle.close >= candle.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' }); } catch(e) {}
+            }
+          }
+        } catch(e) {}
+      };
+      ws.onclose = function () {
+        if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = setTimeout(_connectWs, 3000);
+      };
+      ws.onerror = function() {};
+    } catch(e) { console.error('[chart] ws:', e); }
+  }
+
+  function _disconnectWs() {
+    if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+    if (ws) { try { ws.close(); } catch(e) {} ws = null; }
+  }
 
   var INTERVAL_MS = {
     '1m': 60000, '3m': 180000, '5m': 300000, '15m': 900000,
@@ -11284,6 +11379,7 @@ TradeEditorController.renderHtml = function (day, trade) {
           document.querySelectorAll('.chart-tf-btn').forEach(function (b) { b.classList.remove('active'); });
           btn.classList.add('active');
           currentInterval = btn.dataset.interval;
+          _disconnectWs();
           _fetchAndRender();
         });
       });
@@ -11294,6 +11390,7 @@ TradeEditorController.renderHtml = function (day, trade) {
           document.querySelectorAll('.chart-pair-btn').forEach(function (b) { b.classList.remove('active'); });
           btn.classList.add('active');
           currentSymbol = btn.dataset.symbol;
+          _disconnectWs();
           _fetchAndRender();
         });
       });
@@ -11317,6 +11414,8 @@ TradeEditorController.renderHtml = function (day, trade) {
         lastCandleTime = last.time * 1000;
         _startCountdown();
         _startAutoRefresh();
+        _disconnectWs();
+        _connectWs();
         _updateStats(candles);
 
         candlestickSeries.setData(candles);
