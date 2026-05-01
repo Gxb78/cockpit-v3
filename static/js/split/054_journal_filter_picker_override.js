@@ -6,6 +6,9 @@ function initJournalFilters() {
   var instr = $("#jFilterInstrument");
   if (!from || !to || !instr) return;
 
+  // Quick filter buttons (7j, 30j, 90j, Ce mois)
+  if (typeof _initQuickFilterButtons === "function") _initQuickFilterButtons();
+
   var now = new Date();
   var win = getJournalWindow();
   from.value = win.from || _fmtDate2(new Date(now.getFullYear(), now.getMonth(), 1));

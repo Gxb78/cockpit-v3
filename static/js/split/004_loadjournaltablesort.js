@@ -181,7 +181,7 @@ function setJournalRangeMode(mode, opts = {}) {
 
 // ---------- Nouveaux filtres Journal (style Insights) ----------
 
-function initJournalFilters() {
+function _initQuickFilterButtons() {
   var from = $("#jFilterFrom");
   var to = $("#jFilterTo");
   var instr = $("#jFilterInstrument");

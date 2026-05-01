@@ -221,7 +221,7 @@ function bindWidgetConfig() {
   applyWidgetVisibility();
 }
 
-// ---- Drag & Drop (v6 – Pointer Events + setPointerCapture) ----
+// ---- Drag & Drop v7 — FLIP / transform-only, zero reflow ----
 
 var _dnd = null;
 var _dndRaf = 0;
@@ -262,9 +262,6 @@ function onDndPointerDown(e) {
   _dnd = {
     el: widget,
     board: board,
-    key: widget.dataset.widgetKey,
-    ptrId: e.pointerId,
-    handle: handle,
     startX: e.clientX,
     startY: e.clientY,
     offsetX: e.clientX - rect.left,
@@ -272,9 +269,11 @@ function onDndPointerDown(e) {
     width: rect.width,
     height: rect.height,
     ghost: null,
-    placeholder: null,
     active: false,
-    lastIdx: -2
+    fromIdx: -1,
+    toIdx: -1,
+    items: null,
+    rects: null
   };
 }
 
@@ -283,17 +282,17 @@ function onDndPointerMove(e) {
   if (!_dnd.active) {
     var dx = e.clientX - _dnd.startX;
     var dy = e.clientY - _dnd.startY;
-    if (dx * dx + dy * dy < 25) return;
-    dndStart();
+    if (dx * dx + dy * dy < 36) return;
+    dndStart(e.clientX, e.clientY);
   }
   if (_dnd.active) {
     e.preventDefault();
-    if (!_dndRaf) {
-      _dndRaf = requestAnimationFrame(function() {
-        _dndRaf = 0;
-        if (_dnd && _dnd.active) dndMove(e.clientX, e.clientY);
-      });
-    }
+    var cx = e.clientX, cy = e.clientY;
+    if (_dndRaf) cancelAnimationFrame(_dndRaf);
+    _dndRaf = requestAnimationFrame(function() {
+      _dndRaf = 0;
+      if (_dnd && _dnd.active) dndMove(cx, cy);
+    });
   }
 }
 
@@ -304,46 +303,46 @@ function onDndPointerUp() {
   _dnd = null;
 }
 
-function dndStart() {
+function dndStart(cx, cy) {
   _dnd.active = true;
+  var el = _dnd.el;
+  var board = _dnd.board;
 
-  var ghost = _dnd.el.cloneNode(true);
+  var allItems = dndItems(board);
+  _dnd.items = allItems;
+  _dnd.fromIdx = allItems.indexOf(el);
+  _dnd.toIdx = _dnd.fromIdx;
+  _dnd.rects = allItems.map(function(item) {
+    return item.getBoundingClientRect();
+  });
+
+  var ghost = el.cloneNode(true);
   var gh = ghost.querySelector(".widget-drag-handle");
   if (gh) gh.remove();
   ghost.classList.add("widget-drag-ghost");
-  ghost.style.position = "fixed";
-  ghost.style.zIndex = "10000";
-  ghost.style.width = _dnd.width + "px";
-  ghost.style.height = _dnd.height + "px";
-  ghost.style.left = "0";
-  ghost.style.top = "0";
-  ghost.style.margin = "0";
-  ghost.style.pointerEvents = "none";
-  ghost.style.willChange = "transform";
-  var gx = _dnd.startX - _dnd.offsetX;
-  var gy = _dnd.startY - _dnd.offsetY;
-  ghost.style.transform = "translate(" + gx + "px," + gy + "px) scale(0.96)";
-  ghost.style.opacity = "0.6";
+  ghost.style.cssText = [
+    "position:fixed",
+    "z-index:10000",
+    "left:0", "top:0",
+    "width:" + _dnd.width + "px",
+    "height:" + _dnd.height + "px",
+    "margin:0",
+    "pointer-events:none",
+    "will-change:transform",
+    "transform:translate(" + (_dnd.startX - _dnd.offsetX) + "px," + (_dnd.startY - _dnd.offsetY) + "px) scale(0.97)",
+    "opacity:0.7",
+    "transition:opacity 120ms ease,box-shadow 120ms ease"
+  ].join(";");
   document.body.appendChild(ghost);
   _dnd.ghost = ghost;
 
   requestAnimationFrame(function() {
     if (!_dnd || !_dnd.ghost) return;
-    _dnd.ghost.style.transition = "transform 140ms cubic-bezier(0.34,1.56,0.64,1), opacity 120ms ease, box-shadow 140ms ease";
-    _dnd.ghost.style.transform = "translate(" + gx + "px," + gy + "px) scale(1.03)";
-    _dnd.ghost.style.opacity = "0.95";
+    _dnd.ghost.style.opacity = "0.96";
+    _dnd.ghost.style.boxShadow = "0 24px 70px rgba(0,0,0,0.6),0 0 0 1.5px rgba(0,229,255,0.35)";
   });
 
-  var ph = document.createElement("div");
-  ph.className = "widget-drag-placeholder";
-  ph.style.width = _dnd.width + "px";
-  ph.style.height = _dnd.height + "px";
-  var col = window.getComputedStyle(_dnd.el).gridColumn;
-  if (col && col !== "auto") ph.style.gridColumn = col;
-  _dnd.el.parentNode.insertBefore(ph, _dnd.el);
-  _dnd.placeholder = ph;
-
-  _dnd.el.classList.add("widget-dragging");
+  el.classList.add("widget-dragging");
   document.body.classList.add("is-dragging");
 }
 
@@ -353,57 +352,104 @@ function dndMove(cx, cy) {
   _dnd.ghost.style.transition = "none";
   _dnd.ghost.style.transform = "translate(" + (cx - _dnd.offsetX) + "px," + (cy - _dnd.offsetY) + "px) scale(1.03)";
 
-  var idx = dndInsertionIndex(_dnd.board, cx, cy);
-  if (idx === _dnd.lastIdx) return;
-  _dnd.lastIdx = idx;
+  var newIdx = dndHitTest(_dnd.items, _dnd.rects, _dnd.board, cx, cy, _dnd.fromIdx);
+  if (newIdx === _dnd.toIdx) return;
+  _dnd.toIdx = newIdx;
 
-  var siblings = Array.from(_dnd.board.children).filter(function(el) {
-    return el !== _dnd.placeholder && el !== _dnd.el;
-  });
-  siblings.forEach(function(el) {
-    el.style.transition = "transform 160ms cubic-bezier(0.25, 1, 0.5, 1)";
-  });
+  applyDndShifts();
+}
 
-  var ref = idx === -1 ? null : dndSiblingAt(_dnd.board, idx);
-  if (ref) {
-    _dnd.board.insertBefore(_dnd.placeholder, ref);
-  } else {
-    _dnd.board.appendChild(_dnd.placeholder);
+function dndHitTest(items, rects, board, cx, cy, fromIdx) {
+  var isH = board.dataset.widgetBoard === "today-kpis";
+  var n = items.length;
+
+  for (var i = 0; i < n; i++) {
+    if (i === fromIdx) continue;
+    var r = rects[i];
+    if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) {
+      if (isH) return cx < r.left + r.width / 2 ? i : i + 1;
+      return cy < r.top + r.height / 2 ? i : i + 1;
+    }
+  }
+
+  var best = fromIdx, bestD = Infinity;
+  for (var i = 0; i < n; i++) {
+    if (i === fromIdx) continue;
+    var r = rects[i];
+    var dx = cx - (r.left + r.width / 2);
+    var dy = cy - (r.top + r.height / 2);
+    var d = dx * dx + dy * dy;
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  if (best === fromIdx) return fromIdx;
+  var br = rects[best];
+  if (isH) return cx < br.left + br.width / 2 ? best : best + 1;
+  return cy < br.top + br.height / 2 ? best : best + 1;
+}
+
+function applyDndShifts() {
+  var items = _dnd.items;
+  var rects = _dnd.rects;
+  var from = _dnd.fromIdx;
+  var to = _dnd.toIdx;
+  var isH = _dnd.board.dataset.widgetBoard === "today-kpis";
+  var gap = 14;
+
+  for (var i = 0; i < items.length; i++) {
+    if (i === from) continue;
+    var item = items[i];
+    var shift = 0;
+
+    if (from < to) {
+      if (i > from && i <= to - 1) shift = -1;
+    } else {
+      if (i >= to && i < from) shift = 1;
+    }
+
+    if (shift === 0) {
+      item.style.transition = "transform 200ms cubic-bezier(0.25,1,0.5,1)";
+      item.style.transform = "";
+    } else {
+      var delta = isH
+        ? (shift > 0 ? rects[from].width + gap : -(rects[from].width + gap))
+        : (shift > 0 ? rects[from].height + gap : -(rects[from].height + gap));
+      item.style.transition = "transform 200ms cubic-bezier(0.25,1,0.5,1)";
+      item.style.transform = isH
+        ? "translateX(" + delta + "px)"
+        : "translateY(" + delta + "px)";
+    }
   }
 }
 
 function dndEnd() {
   if (!_dnd) return;
-
   var el = _dnd.el;
   var board = _dnd.board;
-  var ghost = _dnd.ghost;
-  var placeholder = _dnd.placeholder;
+  var from = _dnd.fromIdx;
+  var to = _dnd.toIdx;
+  var items = _dnd.items;
 
-  Array.from(board.children).forEach(function(c) {
-    c.style.transition = "";
+  items.forEach(function(item) {
+    item.style.transition = "";
+    item.style.transform = "";
   });
-
-  board.insertBefore(el, placeholder);
 
   el.classList.remove("widget-dragging");
 
-  el.style.transition = "transform 200ms cubic-bezier(0.34,1.56,0.64,1), opacity 150ms ease";
-  el.style.transform = "scale(1.02)";
-  el.style.opacity = "0.8";
-  requestAnimationFrame(function() {
-    requestAnimationFrame(function() {
-      el.style.transform = "scale(1)";
-      el.style.opacity = "";
-    });
-  });
-  setTimeout(function() {
-    el.style.transition = "";
-    el.style.transform = "";
-  }, 220);
+  if (to !== from && items[to] !== undefined) {
+    if (to > from) {
+      var after = items[to - 1 < from ? to : to - 1];
+      if (after && after.nextSibling) {
+        board.insertBefore(el, after.nextSibling);
+      } else {
+        board.appendChild(el);
+      }
+    } else {
+      board.insertBefore(el, items[to]);
+    }
+  }
 
-  if (ghost) ghost.remove();
-  if (placeholder) placeholder.remove();
+  if (_dnd.ghost) _dnd.ghost.remove();
   document.body.classList.remove("is-dragging");
 
   var order = Array.from(board.children)
@@ -411,55 +457,15 @@ function dndEnd() {
     .filter(Boolean);
   writeWidgetOrder(board.dataset.widgetBoard, order);
   updateDashboardLayout();
+
+  setTimeout(refreshDragHandles, 300);
 }
 
-function dndSiblings(board) {
+function dndItems(board) {
   return Array.from(board.children).filter(function(el) {
     return el && el.dataset && el.dataset.widgetKey
-      && !el.classList.contains("widget-hidden")
-      && !el.classList.contains("widget-drag-placeholder")
-      && !el.classList.contains("widget-dragging");
+      && !el.classList.contains("widget-hidden");
   });
-}
-
-function dndSiblingAt(board, idx) {
-  return dndSiblings(board)[idx] || null;
-}
-
-function dndInsertionIndex(board, cx, cy) {
-  var siblings = dndSiblings(board);
-  var n = siblings.length;
-  if (n === 0) return -1;
-
-  var isH = board.dataset.widgetBoard === "today-kpis";
-
-  for (var i = 0; i < n; i++) {
-    var r = siblings[i].getBoundingClientRect();
-    if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) {
-      if (isH) {
-        return cx < r.left + r.width / 2 ? i : i + 1;
-      } else {
-        return cy < r.top + r.height / 2 ? i : i + 1;
-      }
-    }
-  }
-
-  var bestIdx = -1;
-  var bestDist = Infinity;
-  for (var i = 0; i < n; i++) {
-    var r = siblings[i].getBoundingClientRect();
-    var mcx = r.left + r.width / 2;
-    var mcy = r.top + r.height / 2;
-    var dist = (cx - mcx) * (cx - mcx) + (cy - mcy) * (cy - mcy);
-    if (dist < bestDist) { bestDist = dist; bestIdx = i; }
-  }
-  if (bestIdx === -1) return -1;
-  var br = siblings[bestIdx].getBoundingClientRect();
-  if (isH) {
-    return cx < br.left + br.width / 2 ? bestIdx : bestIdx + 1;
-  } else {
-    return cy < br.top + br.height / 2 ? bestIdx : bestIdx + 1;
-  }
 }
 
 // ---------- Today calendar (mini vue mois courant) ----------
