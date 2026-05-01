@@ -7414,15 +7414,21 @@ function bindWidgetConfig() {
   applyWidgetVisibility();
 }
 
-// ---- Drag & Drop v7 — FLIP / transform-only, zero reflow ----
+// ============================================================
+// Drag & Drop v8 — FLIP + Placeholder DOM
+// Le CSS grid calcule les positions, FLIP anime les deltas.
+// Fonctionne pour tous les widgets quelle que soit leur taille.
+// ============================================================
 
 var _dnd = null;
 var _dndRaf = 0;
+var DND_DEAD_ZONE = 12;
+var DND_LONG_PRESS = 280;
 
 function initWidgetDragDrop() {
   refreshDragHandles();
   document.addEventListener("pointermove", onDndPointerMove, { passive: false });
-  document.addEventListener("pointerup", onDndPointerUp);
+  document.addEventListener("pointerup",   onDndPointerUp);
   document.addEventListener("pointercancel", onDndPointerUp);
 }
 
@@ -7430,10 +7436,6 @@ function refreshDragHandles() {
   if (_dnd) return;
   document.querySelectorAll(".widget-board[data-widget-board] .widget[data-widget-key]").forEach(function(el) {
     if (el.classList.contains("widget-hidden")) return;
-
-    var existing = el.querySelector(".widget-drag-handle");
-    if (existing) existing.remove();
-
     if (el._dndBound) return;
     el._dndBound = true;
 
@@ -7444,7 +7446,6 @@ function refreshDragHandles() {
       if (e.button && e.button !== 0) return;
       if (e.target.closest("input,textarea,button,a,select,[contenteditable]")) return;
       if (_dnd) return;
-
       var widget = el;
       var board = widget.closest(".widget-board[data-widget-board]");
       if (!board) return;
@@ -7457,43 +7458,32 @@ function refreshDragHandles() {
         pressTimer = null;
         if (navigator.vibrate) navigator.vibrate(18);
         widget.classList.remove("is-press-pending");
-
         var rect = widget.getBoundingClientRect();
         _dnd = {
-          el: widget,
-          board: board,
-          startX: pressStartX,
-          startY: pressStartY,
+          el: widget, board: board,
           offsetX: pressStartX - rect.left,
           offsetY: pressStartY - rect.top,
-          width: rect.width,
-          height: rect.height,
-          ghost: null,
-          active: false,
-          fromIdx: -1,
-          toIdx: -1
+          width: rect.width, height: rect.height,
+          ghost: null, placeholder: null,
+          active: false, items: null, lastToIdx: -1
         };
-        dndStart();
-      }, 300);
+        dndStart(pressStartX, pressStartY);
+      }, DND_LONG_PRESS);
     });
 
     el.addEventListener("pointerup", function() {
       if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
       el.classList.remove("is-press-pending");
     });
-
     el.addEventListener("pointercancel", function() {
       if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
       el.classList.remove("is-press-pending");
     });
-
     el.addEventListener("pointermove", function(e) {
       if (!pressTimer) return;
-      var dx = e.clientX - pressStartX;
-      var dy = e.clientY - pressStartY;
-      if (dx * dx + dy * dy > 64) {
-        clearTimeout(pressTimer);
-        pressTimer = null;
+      var dx = e.clientX - pressStartX, dy = e.clientY - pressStartY;
+      if (dx*dx + dy*dy > 100) {
+        clearTimeout(pressTimer); pressTimer = null;
         el.classList.remove("is-press-pending");
       }
     }, { passive: true });
@@ -7518,35 +7508,33 @@ function onDndPointerUp() {
   _dnd = null;
 }
 
-function dndStart() {
+function dndStart(cx, cy) {
   _dnd.active = true;
-  var el = _dnd.el;
-  var board = _dnd.board;
+  var el = _dnd.el, board = _dnd.board;
 
-  var allItems = dndItems(board);
-  _dnd.items = allItems;
-  _dnd.fromIdx = allItems.indexOf(el);
-  _dnd.toIdx = _dnd.fromIdx;
-  _dnd.rects = allItems.map(function(item) {
-    return item.getBoundingClientRect();
-  });
+  var ph = document.createElement("div");
+  ph.className = "widget-drag-placeholder";
+  ph.style.width  = _dnd.width  + "px";
+  ph.style.height = _dnd.height + "px";
+  var cs = window.getComputedStyle(el);
+  ph.style.gridColumn = cs.gridColumn || "";
+  ph.style.gridRow    = cs.gridRow    || "";
+  board.insertBefore(ph, el);
+  _dnd.placeholder = ph;
+
+  el.classList.add("widget-dragging");
 
   var ghost = el.cloneNode(true);
-  var gh = ghost.querySelector(".widget-drag-handle");
-  if (gh) gh.remove();
-  ghost.classList.remove("is-press-pending");
+  ghost.classList.remove("is-press-pending", "widget-dragging");
+  ghost.removeAttribute("data-widget-key");
   ghost.classList.add("widget-drag-ghost");
   ghost.style.cssText = [
-    "position:fixed",
-    "z-index:10000",
-    "left:0", "top:0",
-    "width:" + _dnd.width + "px",
+    "position:fixed","z-index:10000","left:0","top:0",
+    "width:"  + _dnd.width  + "px",
     "height:" + _dnd.height + "px",
-    "margin:0",
-    "pointer-events:none",
-    "will-change:transform",
-    "transform:translate(" + (_dnd.startX - _dnd.offsetX) + "px," + (_dnd.startY - _dnd.offsetY) + "px) scale(0.97)",
-    "opacity:0.7",
+    "margin:0","pointer-events:none","will-change:transform",
+    "transform:translate(" + (cx - _dnd.offsetX) + "px," + (cy - _dnd.offsetY) + "px) scale(0.97)",
+    "opacity:0.75",
     "transition:opacity 120ms ease,box-shadow 120ms ease"
   ].join(";");
   document.body.appendChild(ghost);
@@ -7554,113 +7542,76 @@ function dndStart() {
 
   requestAnimationFrame(function() {
     if (!_dnd || !_dnd.ghost) return;
-    _dnd.ghost.style.opacity = "0.96";
-    _dnd.ghost.style.boxShadow = "0 24px 70px rgba(0,0,0,0.6),0 0 0 1.5px rgba(0,229,255,0.35)";
+    _dnd.ghost.style.opacity   = "0.97";
+    _dnd.ghost.style.transform = "translate(" + (cx - _dnd.offsetX) + "px," + (cy - _dnd.offsetY) + "px) scale(1.04)";
+    _dnd.ghost.style.boxShadow = "0 28px 80px rgba(0,0,0,0.65),0 0 0 1.5px rgba(0,229,255,0.4)";
+    _dnd.ghost.style.transition = "opacity 120ms ease,box-shadow 120ms ease";
   });
 
-  el.classList.add("widget-dragging");
   document.body.classList.add("is-dragging");
+  _dnd.lastToIdx = -1;
 }
 
 function dndMove(cx, cy) {
   if (!_dnd) return;
 
   _dnd.ghost.style.transition = "none";
-  _dnd.ghost.style.transform = "translate(" + (cx - _dnd.offsetX) + "px," + (cy - _dnd.offsetY) + "px) scale(1.03)";
+  _dnd.ghost.style.transform  = "translate(" + (cx - _dnd.offsetX) + "px," + (cy - _dnd.offsetY) + "px) scale(1.04)";
 
-  var newIdx = dndHitTest(_dnd.items, _dnd.rects, _dnd.board, cx, cy, _dnd.fromIdx);
-  if (newIdx === _dnd.toIdx) return;
-  _dnd.toIdx = newIdx;
+  var items = dndItemsWithPlaceholder(_dnd.board, _dnd.placeholder);
+  var newIdx = dndHitTest(items, _dnd.board, cx, cy);
 
-  applyDndShifts();
-}
+  if (newIdx === _dnd.lastToIdx) return;
 
-function dndHitTest(items, rects, board, cx, cy, fromIdx) {
-  var isH = board.dataset.widgetBoard === "today-kpis";
-  var n = items.length;
+  var beforeRects = items.map(function(i) { return i.getBoundingClientRect(); });
 
-  for (var i = 0; i < n; i++) {
-    if (i === fromIdx) continue;
-    var r = rects[i];
-    if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) {
-      if (isH) return cx < r.left + r.width / 2 ? i : i + 1;
-      return cy < r.top + r.height / 2 ? i : i + 1;
-    }
-  }
+  var refNode = newIdx < items.length ? items[newIdx] : null;
+  if (refNode === _dnd.placeholder) return;
+  _dnd.board.insertBefore(_dnd.placeholder, refNode);
+  _dnd.lastToIdx = newIdx;
 
-  var best = fromIdx, bestD = Infinity;
-  for (var i = 0; i < n; i++) {
-    if (i === fromIdx) continue;
-    var r = rects[i];
-    var dx = cx - (r.left + r.width / 2);
-    var dy = cy - (r.top + r.height / 2);
-    var d = dx * dx + dy * dy;
-    if (d < bestD) { bestD = d; best = i; }
-  }
-  if (best === fromIdx) return fromIdx;
-  var br = rects[best];
-  if (isH) return cx < br.left + br.width / 2 ? best : best + 1;
-  return cy < br.top + br.height / 2 ? best : best + 1;
-}
+  var afterRects = items.map(function(i) { return i.getBoundingClientRect(); });
 
-function applyDndShifts() {
-  var items = _dnd.items;
-  var rects = _dnd.rects;
-  var from = _dnd.fromIdx;
-  var to = _dnd.toIdx;
-  var n = items.length;
-  var isH = _dnd.board.dataset.widgetBoard === "today-kpis";
-
-  for (var i = 0; i < n; i++) {
-    if (i === from) continue;
-    var item = items[i];
-    var origPos = i;
-    var simPos = i;
-
-    if (from < to) {
-      if (i > from && i < to) simPos = i - 1;
-    } else if (from > to) {
-      if (i >= to && i < from) simPos = i + 1;
-    }
-
-    if (simPos === origPos) {
+  items.forEach(function(item, i) {
+    if (item === _dnd.placeholder) return;
+    var dx = beforeRects[i].left - afterRects[i].left;
+    var dy = beforeRects[i].top  - afterRects[i].top;
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
       item.style.transition = "transform 200ms cubic-bezier(0.25,1,0.5,1)";
-      item.style.transform = "";
-    } else {
-      var targetRect = rects[simPos];
-      var ownRect = rects[origPos];
-      var dx = isH ? (targetRect.left - ownRect.left) : 0;
-      var dy = isH ? 0 : (targetRect.top - ownRect.top);
-      item.style.transition = "transform 200ms cubic-bezier(0.25,1,0.5,1)";
-      item.style.transform = "translate(" + dx + "px," + dy + "px)";
+      item.style.transform  = "";
+      return;
     }
-  }
+    item.style.transition = "none";
+    item.style.transform  = "translate(" + dx + "px," + dy + "px)";
+    item.getBoundingClientRect();
+    item.style.transition = "transform 200ms cubic-bezier(0.25,1,0.5,1)";
+    item.style.transform  = "";
+  });
 }
 
 function dndEnd() {
   if (!_dnd) return;
-  var el = _dnd.el;
-  var board = _dnd.board;
-  var from = _dnd.fromIdx;
-  var to = _dnd.toIdx;
-  var items = _dnd.items;
+  var el = _dnd.el, board = _dnd.board, ph = _dnd.placeholder;
 
-  items.forEach(function(item) {
-    item.style.transition = "";
-    item.style.transform = "";
+  Array.from(board.children).forEach(function(c) {
+    c.style.transition = ""; c.style.transform = "";
   });
 
   el.classList.remove("widget-dragging");
-  el.style.transition = "";
-  el.style.transform = "";
-
-  if (to !== from && to !== from + 1) {
-    if (to >= items.length) {
-      board.appendChild(el);
-    } else {
-      board.insertBefore(el, items[to]);
-    }
+  el.style.transition = ""; el.style.transform = "";
+  if (ph && ph.parentNode === board) {
+    board.insertBefore(el, ph);
+    ph.remove();
   }
+
+  requestAnimationFrame(function() {
+    el.style.transition = "transform 220ms cubic-bezier(0.34,1.56,0.64,1)";
+    el.style.transform  = "scale(1.03)";
+    setTimeout(function() {
+      el.style.transform = "scale(1)";
+      setTimeout(function() { el.style.transition = ""; el.style.transform = ""; }, 220);
+    }, 30);
+  });
 
   if (_dnd.ghost) _dnd.ghost.remove();
   document.body.classList.remove("is-dragging");
@@ -7670,7 +7621,6 @@ function dndEnd() {
     .filter(Boolean);
   writeWidgetOrder(board.dataset.widgetBoard, order);
   updateDashboardLayout();
-
   setTimeout(refreshDragHandles, 300);
 }
 
@@ -7679,6 +7629,38 @@ function dndItems(board) {
     return el && el.dataset && el.dataset.widgetKey
       && !el.classList.contains("widget-hidden");
   });
+}
+
+function dndItemsWithPlaceholder(board, ph) {
+  return Array.from(board.children).filter(function(el) {
+    if (!el) return false;
+    if (el === ph) return true;
+    return el.dataset && el.dataset.widgetKey && !el.classList.contains("widget-hidden");
+  });
+}
+
+function dndHitTest(items, board, cx, cy) {
+  var isH = board.dataset.widgetBoard === "today-kpis";
+  for (var i = 0; i < items.length; i++) {
+    var r = items[i].getBoundingClientRect();
+    if (cx >= r.left-4 && cx <= r.right+4 && cy >= r.top-4 && cy <= r.bottom+4) {
+      if (isH) {
+        var mX = r.left + r.width / 2;
+        return cx < mX - DND_DEAD_ZONE ? i : (cx > mX + DND_DEAD_ZONE ? i+1 : i);
+      }
+      var mY = r.top + r.height / 2;
+      return cy < mY - DND_DEAD_ZONE ? i : (cy > mY + DND_DEAD_ZONE ? i+1 : i);
+    }
+  }
+  var best = 0, bestD = Infinity;
+  for (var j = 0; j < items.length; j++) {
+    var rj = items[j].getBoundingClientRect();
+    var d = Math.pow(cx-(rj.left+rj.width/2),2) + Math.pow(cy-(rj.top+rj.height/2),2);
+    if (d < bestD) { bestD = d; best = j; }
+  }
+  var br = items[best].getBoundingClientRect();
+  return isH ? (cx < br.left+br.width/2 ? best : best+1)
+             : (cy < br.top+br.height/2 ? best : best+1);
 }
 
 // ---------- Today calendar (mini vue mois courant) ----------
@@ -9653,9 +9635,15 @@ function updateJournalRangeTriggerLabel() {
 var _journalStatsIndex = 0;
 
 var _journalStatsConfig = [
-  { key: "winrate",  label: "Winrate",  fmt: function(v) { return v != null ? v.toFixed(1) + "%" : "--"; } },
-  { key: "pnlAvg",   label: "PnL Moy",  fmt: function(v) { return v != null ? fmtMoney(v) : "--"; } },
-  { key: "rrAvg",    label: "RR Moy",   fmt: function(v) { return v != null ? Number(v).toFixed(2) + "R" : "--"; } },
+  { key: "winrate",    label: "Winrate",     fmt: function(v) { return v != null ? v.toFixed(1) + "%" : "--"; } },
+  { key: "tradesTotal",label: "Trades",      fmt: function(v) { return v != null ? v : "--"; } },
+  { key: "pnlAvg",     label: "PnL Moy",     fmt: function(v) { return v != null ? fmtMoney(v) : "--"; } },
+  { key: "rrAvg",      label: "RR Moy",      fmt: function(v) { return v != null ? Number(v).toFixed(2) + "R" : "--"; } },
+  { key: "profitFactor",label: "Profit Fact", fmt: function(v) { return v != null ? Number(v).toFixed(2) : "--"; } },
+  { key: "pnlTotal",   label: "PnL Total",   fmt: function(v) { return v != null ? fmtMoney(v) : "--"; } },
+  { key: "streak",     label: "Streak",      fmt: function(v) { return v != null ? v : "--"; } },
+  { key: "bestDay",    label: "Best Day",    fmt: function(v) { return v != null ? fmtMoney(v) : "--"; } },
+  { key: "worstDay",   label: "Worst Day",   fmt: function(v) { return v != null ? fmtMoney(v) : "--"; } },
 ];
 
 function computeJournalStats() {
@@ -9664,24 +9652,66 @@ function computeJournalStats() {
   days.forEach(function(day) {
     (day.trades || []).forEach(function(t) { trades.push(t); });
   });
-  if (trades.length === 0) return { winrate: null, pnlAvg: null, rrAvg: null };
+  if (trades.length === 0) return { winrate: null, tradesTotal: 0, pnlAvg: null, rrAvg: null, profitFactor: null, pnlTotal: null, streak: null, bestDay: null, worstDay: null };
 
-  var decided = 0, wins = 0, totalPnl = 0, totalRr = 0, rrCount = 0;
-  trades.forEach(function(t) {
+  var decided = 0, wins = 0, losses = 0, totalPnl = 0, totalRr = 0, rrCount = 0;
+  var dayPnl = {}; // date -> sum
+  var bestStreak = 0, curStreak = 0, lastResult = null;
+  // Sort trades by date for streak computation
+  var sorted = trades.slice().sort(function(a,b) { return (a.id||0) - (b.id||0); });
+
+  sorted.forEach(function(t) {
     var m = deriveTradeMetrics(t);
     if (m.isWin === 1 || m.isWin === 0) {
       decided++;
-      if (m.isWin === 1) wins++;
+      if (m.isWin === 1) wins++; else losses++;
+      if (lastResult === null || m.isWin === lastResult) {
+        curStreak++;
+      } else {
+        curStreak = 1;
+      }
+      lastResult = m.isWin;
+      if (curStreak > bestStreak) bestStreak = curStreak;
     }
     var pnl = m.pnl;
     if (pnl != null) totalPnl += Number(pnl);
     if (m.rr != null) { totalRr += Number(m.rr); rrCount++; }
   });
 
+  // Day-level aggregation for best/worst
+  days.forEach(function(day) {
+    var daySum = 0;
+    (day.trades || []).forEach(function(t) {
+      var m = deriveTradeMetrics(t);
+      if (m.pnl != null) daySum += Number(m.pnl);
+    });
+    dayPnl[day.date] = daySum;
+  });
+  var bestDay = null, worstDay = null;
+  Object.keys(dayPnl).forEach(function(d) {
+    if (bestDay === null || dayPnl[d] > bestDay) bestDay = dayPnl[d];
+    if (worstDay === null || dayPnl[d] < worstDay) worstDay = dayPnl[d];
+  });
+
+  // Profit Factor = sum(wins) / abs(sum(losses))
+  var sumWins = 0, sumLosses = 0;
+  sorted.forEach(function(t) {
+    var m = deriveTradeMetrics(t);
+    if (m.pnl != null && m.pnl > 0) sumWins += Number(m.pnl);
+    if (m.pnl != null && m.pnl < 0) sumLosses += Number(m.pnl);
+  });
+  var profitFactor = sumLosses !== 0 ? sumWins / Math.abs(sumLosses) : (sumWins > 0 ? 999 : null);
+
   return {
     winrate: decided > 0 ? (wins / decided) * 100 : null,
+    tradesTotal: trades.length,
     pnlAvg:  trades.length > 0 ? totalPnl / trades.length : null,
     rrAvg:   rrCount > 0 ? totalRr / rrCount : null,
+    profitFactor: profitFactor,
+    pnlTotal: totalPnl,
+    streak: bestStreak > 1 ? (lastResult === 1 ? bestStreak + "W" : bestStreak + "L") : null,
+    bestDay: bestDay,
+    worstDay: worstDay,
   };
 }
 

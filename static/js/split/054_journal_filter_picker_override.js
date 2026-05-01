@@ -100,9 +100,15 @@ function updateJournalRangeTriggerLabel() {
 var _journalStatsIndex = 0;
 
 var _journalStatsConfig = [
-  { key: "winrate",  label: "Winrate",  fmt: function(v) { return v != null ? v.toFixed(1) + "%" : "--"; } },
-  { key: "pnlAvg",   label: "PnL Moy",  fmt: function(v) { return v != null ? fmtMoney(v) : "--"; } },
-  { key: "rrAvg",    label: "RR Moy",   fmt: function(v) { return v != null ? Number(v).toFixed(2) + "R" : "--"; } },
+  { key: "winrate",    label: "Winrate",     fmt: function(v) { return v != null ? v.toFixed(1) + "%" : "--"; } },
+  { key: "tradesTotal",label: "Trades",      fmt: function(v) { return v != null ? v : "--"; } },
+  { key: "pnlAvg",     label: "PnL Moy",     fmt: function(v) { return v != null ? fmtMoney(v) : "--"; } },
+  { key: "rrAvg",      label: "RR Moy",      fmt: function(v) { return v != null ? Number(v).toFixed(2) + "R" : "--"; } },
+  { key: "profitFactor",label: "Profit Fact", fmt: function(v) { return v != null ? Number(v).toFixed(2) : "--"; } },
+  { key: "pnlTotal",   label: "PnL Total",   fmt: function(v) { return v != null ? fmtMoney(v) : "--"; } },
+  { key: "streak",     label: "Streak",      fmt: function(v) { return v != null ? v : "--"; } },
+  { key: "bestDay",    label: "Best Day",    fmt: function(v) { return v != null ? fmtMoney(v) : "--"; } },
+  { key: "worstDay",   label: "Worst Day",   fmt: function(v) { return v != null ? fmtMoney(v) : "--"; } },
 ];
 
 function computeJournalStats() {
@@ -111,24 +117,66 @@ function computeJournalStats() {
   days.forEach(function(day) {
     (day.trades || []).forEach(function(t) { trades.push(t); });
   });
-  if (trades.length === 0) return { winrate: null, pnlAvg: null, rrAvg: null };
+  if (trades.length === 0) return { winrate: null, tradesTotal: 0, pnlAvg: null, rrAvg: null, profitFactor: null, pnlTotal: null, streak: null, bestDay: null, worstDay: null };
 
-  var decided = 0, wins = 0, totalPnl = 0, totalRr = 0, rrCount = 0;
-  trades.forEach(function(t) {
+  var decided = 0, wins = 0, losses = 0, totalPnl = 0, totalRr = 0, rrCount = 0;
+  var dayPnl = {}; // date -> sum
+  var bestStreak = 0, curStreak = 0, lastResult = null;
+  // Sort trades by date for streak computation
+  var sorted = trades.slice().sort(function(a,b) { return (a.id||0) - (b.id||0); });
+
+  sorted.forEach(function(t) {
     var m = deriveTradeMetrics(t);
     if (m.isWin === 1 || m.isWin === 0) {
       decided++;
-      if (m.isWin === 1) wins++;
+      if (m.isWin === 1) wins++; else losses++;
+      if (lastResult === null || m.isWin === lastResult) {
+        curStreak++;
+      } else {
+        curStreak = 1;
+      }
+      lastResult = m.isWin;
+      if (curStreak > bestStreak) bestStreak = curStreak;
     }
     var pnl = m.pnl;
     if (pnl != null) totalPnl += Number(pnl);
     if (m.rr != null) { totalRr += Number(m.rr); rrCount++; }
   });
 
+  // Day-level aggregation for best/worst
+  days.forEach(function(day) {
+    var daySum = 0;
+    (day.trades || []).forEach(function(t) {
+      var m = deriveTradeMetrics(t);
+      if (m.pnl != null) daySum += Number(m.pnl);
+    });
+    dayPnl[day.date] = daySum;
+  });
+  var bestDay = null, worstDay = null;
+  Object.keys(dayPnl).forEach(function(d) {
+    if (bestDay === null || dayPnl[d] > bestDay) bestDay = dayPnl[d];
+    if (worstDay === null || dayPnl[d] < worstDay) worstDay = dayPnl[d];
+  });
+
+  // Profit Factor = sum(wins) / abs(sum(losses))
+  var sumWins = 0, sumLosses = 0;
+  sorted.forEach(function(t) {
+    var m = deriveTradeMetrics(t);
+    if (m.pnl != null && m.pnl > 0) sumWins += Number(m.pnl);
+    if (m.pnl != null && m.pnl < 0) sumLosses += Number(m.pnl);
+  });
+  var profitFactor = sumLosses !== 0 ? sumWins / Math.abs(sumLosses) : (sumWins > 0 ? 999 : null);
+
   return {
     winrate: decided > 0 ? (wins / decided) * 100 : null,
+    tradesTotal: trades.length,
     pnlAvg:  trades.length > 0 ? totalPnl / trades.length : null,
     rrAvg:   rrCount > 0 ? totalRr / rrCount : null,
+    profitFactor: profitFactor,
+    pnlTotal: totalPnl,
+    streak: bestStreak > 1 ? (lastResult === 1 ? bestStreak + "W" : bestStreak + "L") : null,
+    bestDay: bestDay,
+    worstDay: worstDay,
   };
 }
 
