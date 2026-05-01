@@ -11374,7 +11374,6 @@ body.light-mode .page[data-page="today"] .kpi:hover {
   overflow-y: auto;
 }
 
-.page[data-page="today"].active .today-grid {
 .page[data-page="today"] .page-head {
   flex-shrink: 0;
 }
