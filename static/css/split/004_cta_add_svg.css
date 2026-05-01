@@ -23,6 +23,14 @@
   transform: translateY(-1px);
   box-shadow: var(--glow-cyan);
 }
+body.light-mode .entry-card {
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15,23,42,0.06), 0 0 0 1px rgba(15,23,42,0.04);
+}
+body.light-mode .entry-card:hover {
+  box-shadow: 0 0 0 1px rgba(4,23,43,0.05), 0 12px 20px -8px rgba(0,0,0,0.10), 0 4px 8px -4px rgba(0,0,0,0.06);
+  border-color: var(--cyan);
+}
 .entry-instr {
   font-family: "JetBrains Mono", monospace;
   font-weight: 700;
