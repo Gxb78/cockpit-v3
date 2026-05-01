@@ -1,7 +1,7 @@
 // ---------- Navigation ----------
 
 var PAGE_TITLES = {
-  today:    "Today — COCKPIT Trading Journal",
+  today:    "Dashboard — COCKPIT Trading Journal",
   journal:  "Journal — COCKPIT Trading Journal",
   stats:    "Stats — COCKPIT Trading Journal",
   settings: "Settings — COCKPIT Trading Journal",

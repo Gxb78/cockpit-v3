@@ -221,25 +221,36 @@ function bindWidgetConfig() {
   applyWidgetVisibility();
 }
 
-// ---- Drag & Drop ----
+// ---- Drag & Drop (v4 – RAF + gap detection) ----
 
-var _drag = null; // { el, board, ghost, startX, startY, offsetX, offsetY }
+var _dnd = null;
+var _dndRaf = 0;
+var _dndPending = null;
+
+function initWidgetDragDrop() {
+  refreshDragHandles();
+  document.addEventListener("pointermove", onDndPointerMove, { passive: false });
+  document.addEventListener("pointerup", onDndPointerUp);
+  document.addEventListener("pointercancel", onDndPointerUp);
+}
 
 function refreshDragHandles() {
+  if (_dnd && _dnd.active) return;
   document.querySelectorAll(".widget-board[data-widget-board] .widget[data-widget-key]").forEach(function(el) {
     var existing = el.querySelector(".widget-drag-handle");
-    if (existing) { existing.remove(); }
+    if (existing) existing.remove();
     if (el.classList.contains("widget-hidden")) return;
     var handle = document.createElement("div");
     handle.className = "widget-drag-handle";
-    handle.setAttribute("aria-label", "Deposer pour reorganiser");
+    handle.setAttribute("aria-label", "Drag to reorder");
     handle.innerHTML = '<svg viewBox="0 0 20 8" fill="currentColor"><circle cx="4" cy="2" r="1.2"/><circle cx="4" cy="6" r="1.2"/><circle cx="10" cy="2" r="1.2"/><circle cx="10" cy="6" r="1.2"/><circle cx="16" cy="2" r="1.2"/><circle cx="16" cy="6" r="1.2"/></svg>';
     el.prepend(handle);
-    handle.addEventListener("pointerdown", onDragPointerDown);
+    handle.addEventListener("pointerdown", onDndPointerDown);
   });
 }
 
-function onDragPointerDown(e) {
+function onDndPointerDown(e) {
+  if (_dnd) return;
   if (e.button && e.button !== 0) return;
   var handle = e.currentTarget;
   var widget = handle.closest(".widget[data-widget-key]");
@@ -247,183 +258,446 @@ function onDragPointerDown(e) {
   var board = widget.closest(".widget-board[data-widget-board]");
   if (!board) return;
   e.preventDefault();
-  handle.setPointerCapture(e.pointerId);
-
-  var startX = e.clientX;
-  var startY = e.clientY;
-  var OFF_THRESHOLD = 6;
-  var LONG_PRESS_MS = 160;
-  var timer = null;
-  var dragStarted = false;
-
-  function onMove(ev) {
-    var dx = ev.clientX - startX;
-    var dy = ev.clientY - startY;
-    if (!dragStarted && (Math.abs(dx) > OFF_THRESHOLD || Math.abs(dy) > OFF_THRESHOLD)) {
-      clearTimeout(timer);
-      dragStarted = true;
-      startDrag(widget, board, e.clientX, e.clientY);
-    }
-    if (dragStarted && _drag) moveDrag(ev.clientX, ev.clientY);
-  }
-
-  function onUp(ev) {
-    clearTimeout(timer);
-    handle.removeEventListener("pointermove", onMove);
-    handle.removeEventListener("pointerup", onUp);
-    handle.removeEventListener("pointercancel", onUp);
-    if (dragStarted && _drag) endDrag();
-    if (!dragStarted) {
-      // Long press expired without move — start drag anyway
-    }
-  }
-
-  timer = setTimeout(function() {
-    if (!dragStarted) {
-      dragStarted = true;
-      startDrag(widget, board, startX, startY);
-    }
-  }, LONG_PRESS_MS);
-
-  handle.addEventListener("pointermove", onMove);
-  handle.addEventListener("pointerup", onUp);
-  handle.addEventListener("pointercancel", onUp);
-}
-
-function startDrag(widget, board, cx, cy) {
   var rect = widget.getBoundingClientRect();
-  _drag = {
+  _dnd = {
     el: widget,
     board: board,
     key: widget.dataset.widgetKey,
+    startX: e.clientX,
+    startY: e.clientY,
+    offsetX: e.clientX - rect.left,
+    offsetY: e.clientY - rect.top,
+    width: rect.width,
+    height: rect.height,
     ghost: null,
     placeholder: null,
-    offsetX: cx - rect.left,
-    offsetY: cy - rect.top,
-    siblings: []
+    active: false,
+    targetIdx: -1
   };
+}
 
-  // Ghost: fixed clone that follows the cursor
-  var ghost = widget.cloneNode(true);
+function onDndPointerMove(e) {
+  if (!_dnd) return;
+  if (!_dnd.active) {
+    var dx = e.clientX - _dnd.startX;
+    var dy = e.clientY - _dnd.startY;
+    if (dx * dx + dy * dy < 25) return;
+    dndStart();
+  }
+  if (_dnd.active) {
+    e.preventDefault();
+    _dndPending = { cx: e.clientX, cy: e.clientY };
+    if (!_dndRaf) {
+      _dndRaf = requestAnimationFrame(dndFrame);
+    }
+  }
+}
+
+function dndFrame() {
+  _dndRaf = 0;
+  if (!_dnd || !_dnd.active || !_dndPending) return;
+  dndMove(_dndPending.cx, _dndPending.cy);
+  _dndPending = null;
+}
+
+function onDndPointerUp() {
+  if (_dndRaf) { cancelAnimationFrame(_dndRaf); _dndRaf = 0; }
+  if (!_dnd) return;
+  if (_dnd.active) dndEnd();
+  _dnd = null;
+}
+
+function dndStart() {
+  _dnd.active = true;
+
+  var ghost = _dnd.el.cloneNode(true);
+  var gh = ghost.querySelector(".widget-drag-handle");
+  if (gh) gh.remove();
   ghost.classList.add("widget-drag-ghost");
   ghost.style.position = "fixed";
   ghost.style.zIndex = "10000";
-  ghost.style.width = rect.width + "px";
-  ghost.style.height = rect.height + "px";
-  ghost.style.left = (cx - _drag.offsetX) + "px";
-  ghost.style.top = (cy - _drag.offsetY) + "px";
+  ghost.style.width = _dnd.width + "px";
+  ghost.style.height = _dnd.height + "px";
+  ghost.style.left = "0";
+  ghost.style.top = "0";
+  ghost.style.margin = "0";
   ghost.style.pointerEvents = "none";
-  ghost.style.transition = "box-shadow 0.18s ease, transform 0.18s ease";
+  ghost.style.willChange = "transform";
+  var gx = _dnd.startX - _dnd.offsetX;
+  var gy = _dnd.startY - _dnd.offsetY;
+  ghost.style.transform = "translate(" + gx + "px," + gy + "px) scale(1.02)";
   document.body.appendChild(ghost);
-  _drag.ghost = ghost;
+  _dnd.ghost = ghost;
 
-  // Placeholder: occupies the space
   var ph = document.createElement("div");
   ph.className = "widget-drag-placeholder";
-  ph.style.width = rect.width + "px";
-  ph.style.height = rect.height + "px";
-  widget.parentNode.insertBefore(ph, widget);
-  _drag.placeholder = ph;
+  ph.style.width = _dnd.width + "px";
+  ph.style.height = _dnd.height + "px";
+  _dnd.el.parentNode.insertBefore(ph, _dnd.el);
+  _dnd.placeholder = ph;
 
-  widget.dataset.widgetDragging = "1";
-  widget.style.opacity = "0";
-  widget.style.position = "absolute";
-  widget.style.pointerEvents = "none";
-
-  document.body.style.userSelect = "none";
-  document.body.style.webkitUserSelect = "none";
+  _dnd.el.classList.add("widget-dragging");
+  document.body.classList.add("is-dragging");
 }
 
-function moveDrag(cx, cy) {
-  if (!_drag) return;
-  _drag.ghost.style.left = (cx - _drag.offsetX) + "px";
-  _drag.ghost.style.top = (cy - _drag.offsetY) + "px";
+function dndMove(cx, cy) {
+  var gx = cx - _dnd.offsetX;
+  var gy = cy - _dnd.offsetY;
+  _dnd.ghost.style.transform = "translate(" + gx + "px," + gy + "px) scale(1.02)";
 
-  // Determine drop position
-  var siblings = getVisibleSiblings(_drag.board, _drag.el);
-  var insertBefore = null;
+  var idx = dndInsertionIndex(_dnd.board, cx, cy);
+  if (idx === _dnd.targetIdx) return;
+  _dnd.targetIdx = idx;
 
-  for (var i = 0; i < siblings.length; i++) {
-    var sib = siblings[i];
-    var r = sib.getBoundingClientRect();
-    var midY = r.top + r.height / 2;
-    var midX = r.left + r.width / 2;
-    // For horizontal rows (KPIs), use X center; for grids, use Y then X
-    if (_drag.board.dataset.widgetBoard === "today-kpis") {
-      if (cx < midX) { insertBefore = sib; break; }
-    } else {
-      if (cy < midY || (cy < midY + r.height / 2 && cx < midX)) { insertBefore = sib; break; }
-    }
-  }
-
-  _drag.board.querySelectorAll("[data-widget-drop-before]").forEach(function(el) {
-    el.removeAttribute("data-widget-drop-before");
-  });
-  _drag.board.querySelectorAll("[data-widget-drop-after]").forEach(function(el) {
-    el.removeAttribute("data-widget-drop-after");
-  });
-
-  if (insertBefore) {
-    insertBefore.setAttribute("data-widget-drop-before", "1");
-  } else {
-    var last = siblings[siblings.length - 1];
-    if (last && last !== _drag.el) last.setAttribute("data-widget-drop-after", "1");
-  }
+  var ref = idx === -1 ? null : dndSiblingAt(_dnd.board, idx);
+  _dnd.board.insertBefore(_dnd.placeholder, ref);
 }
 
-function endDrag() {
-  if (!_drag) return;
+function dndEnd() {
+  _dnd.board.insertBefore(_dnd.el, _dnd.placeholder);
 
-  // Determine final position
-  var siblings = getVisibleSiblings(_drag.board, _drag.el);
-  var dropTarget = _drag.board.querySelector("[data-widget-drop-before='1']");
-  if (dropTarget) {
-    _drag.board.insertBefore(_drag.el, dropTarget);
-  } else {
-    // After the last visible widget (or at end)
-    var lastVis = siblings.length ? siblings[siblings.length - 1] : null;
-    if (lastVis && lastVis.nextSibling) {
-      _drag.board.insertBefore(_drag.el, lastVis.nextSibling);
-    } else {
-      _drag.board.appendChild(_drag.el);
-    }
-  }
+  _dnd.el.classList.remove("widget-dragging");
+  if (_dnd.ghost) _dnd.ghost.remove();
+  if (_dnd.placeholder) _dnd.placeholder.remove();
+  document.body.classList.remove("is-dragging");
 
-  // Clean up
-  _drag.el.removeAttribute("data-widget-dragging");
-  _drag.el.style.opacity = "";
-  _drag.el.style.position = "";
-  _drag.el.style.pointerEvents = "";
-  if (_drag.ghost && _drag.ghost.parentNode) _drag.ghost.remove();
-  if (_drag.placeholder && _drag.placeholder.parentNode) _drag.placeholder.remove();
-  _drag.board.querySelectorAll("[data-widget-drop-before]").forEach(function(el) { el.removeAttribute("data-widget-drop-before"); });
-  _drag.board.querySelectorAll("[data-widget-drop-after]").forEach(function(el) { el.removeAttribute("data-widget-drop-after"); });
-
-  document.body.style.userSelect = "";
-  document.body.style.webkitUserSelect = "";
-
-  // Persist order
-  var boardKey = _drag.board.dataset.widgetBoard;
-  var newOrder = Array.from(_drag.board.children)
+  var boardKey = _dnd.board.dataset.widgetBoard;
+  var order = Array.from(_dnd.board.children)
     .map(function(el) { return el.dataset && el.dataset.widgetKey; })
     .filter(Boolean);
-  writeWidgetOrder(boardKey, newOrder);
+  writeWidgetOrder(boardKey, order);
   updateDashboardLayout();
-
-  _drag = null;
 }
 
-function getVisibleSiblings(board, exclude) {
+function dndSiblings(board) {
   return Array.from(board.children).filter(function(el) {
     return el && el.dataset && el.dataset.widgetKey
-      && el !== exclude
       && !el.classList.contains("widget-hidden")
+      && !el.classList.contains("widget-drag-placeholder")
+      && !el.classList.contains("widget-dragging");
+  });
+}
+
+function dndSiblingAt(board, idx) {
+  return dndSiblings(board)[idx] || null;
+}
+
+// Find best insertion index for cursor position (cx, cy).
+// Returns -1 for "append at end".
+// Works for horizontal rows (KPIs) and 2D grids (panels).
+function dndInsertionIndex(board, cx, cy) {
+  var siblings = dndSiblings(board);
+  var n = siblings.length;
+  if (n === 0) return -1;
+
+  var isH = board.dataset.widgetBoard === "today-kpis";
+  var rects = [];
+  for (var i = 0; i < n; i++) {
+    rects.push(siblings[i].getBoundingClientRect());
+  }
+
+  // For each insertion point i (0..n), compute the "gap midpoint"
+  // between the end of item i-1 and the start of item i.
+  // Then find the closest gap midpoint to (cx, cy).
+  var bestGap = -1;
+  var bestDist = Infinity;
+
+  for (var i = 0; i <= n; i++) {
+    var mx, my;
+    if (isH) {
+      // Horizontal: gap midpoints are between right edge of [i-1] and left edge of [i]
+      if (i === 0) {
+        mx = rects[0].left - 2;
+        my = rects[0].top + rects[0].height / 2;
+      } else if (i === n) {
+        mx = rects[n - 1].right + 2;
+        my = rects[n - 1].top + rects[n - 1].height / 2;
+      } else {
+        mx = (rects[i - 1].right + rects[i].left) / 2;
+        my = (rects[i - 1].top + rects[i].top) / 2 + Math.max(rects[i - 1].height, rects[i].height) / 4;
+      }
+      var ddx = cx - mx;
+      var ddy = cy - my;
+      var dist = ddx * ddx + ddy * ddy;
+      if (dist < bestDist) { bestDist = dist; bestGap = i; }
+    } else {
+      // 2D grid: gap midpoint is the geometric center of the space
+      // between item i-1's bottom-right and item i's top-left
+      var gx, gy;
+      if (i === 0) {
+        gx = rects[0].left + rects[0].width / 2;
+        gy = rects[0].top - 4;
+      } else if (i === n) {
+        gx = rects[n - 1].left + rects[n - 1].width / 2;
+        gy = rects[n - 1].bottom + 4;
+      } else {
+        var prevR = rects[i - 1];
+        var currR = rects[i];
+
+        // Same visual row?
+        var sameRow = currR.top < prevR.bottom - 4;
+
+        if (sameRow) {
+          // Gap is between them horizontally
+          gx = (prevR.right + currR.left) / 2;
+          gy = (prevR.top + prevR.bottom) / 2;
+        } else {
+          // Gap is at end of prev row / start of new row
+          // Prefer the gap at the start of the new row
+          gx = currR.left + currR.width / 2;
+          gy = (prevR.bottom + currR.top) / 2;
+        }
+      }
+      var ddx = cx - gx;
+      var ddy = cy - gy;
+      var dist = ddx * ddx + ddy * ddy;
+      if (dist < bestDist) { bestDist = dist; bestGap = i; }
+    }
+  }
+
+  return bestGap === n ? -1 : bestGap;
+}
+
+function refreshDragHandles() {
+  if (_dnd && _dnd.active) return;
+  document.querySelectorAll(".widget-board[data-widget-board] .widget[data-widget-key]").forEach(function(el) {
+    var existing = el.querySelector(".widget-drag-handle");
+    if (existing) existing.remove();
+    if (el.classList.contains("widget-hidden")) return;
+    var handle = document.createElement("div");
+    handle.className = "widget-drag-handle";
+    handle.setAttribute("aria-label", "Drag to reorder");
+    handle.innerHTML = '<svg viewBox="0 0 20 8" fill="currentColor"><circle cx="4" cy="2" r="1.2"/><circle cx="4" cy="6" r="1.2"/><circle cx="10" cy="2" r="1.2"/><circle cx="10" cy="6" r="1.2"/><circle cx="16" cy="2" r="1.2"/><circle cx="16" cy="6" r="1.2"/></svg>';
+    el.prepend(handle);
+    handle.addEventListener("pointerdown", onDndPointerDown);
+  });
+}
+
+function onDndPointerDown(e) {
+  if (_dnd) return;
+  if (e.button && e.button !== 0) return;
+  var handle = e.currentTarget;
+  var widget = handle.closest(".widget[data-widget-key]");
+  if (!widget) return;
+  var board = widget.closest(".widget-board[data-widget-board]");
+  if (!board) return;
+  e.preventDefault();
+  var rect = widget.getBoundingClientRect();
+  _dnd = {
+    el: widget,
+    board: board,
+    key: widget.dataset.widgetKey,
+    startX: e.clientX,
+    startY: e.clientY,
+    offsetX: e.clientX - rect.left,
+    offsetY: e.clientY - rect.top,
+    width: rect.width,
+    height: rect.height,
+    ghost: null,
+    placeholder: null,
+    active: false,
+    lastTarget: undefined
+  };
+}
+
+function onDndPointerMove(e) {
+  if (!_dnd) return;
+  if (!_dnd.active) {
+    var dx = e.clientX - _dnd.startX;
+    var dy = e.clientY - _dnd.startY;
+    if (dx * dx + dy * dy < 25) return;
+    dndStart();
+  }
+  if (_dnd.active) {
+    e.preventDefault();
+    dndMove(e.clientX, e.clientY);
+  }
+}
+
+function onDndPointerUp() {
+  if (!_dnd) return;
+  if (_dnd.active) dndEnd();
+  _dnd = null;
+}
+
+function dndStart() {
+  _dnd.active = true;
+
+  var ghost = _dnd.el.cloneNode(true);
+  var gh = ghost.querySelector(".widget-drag-handle");
+  if (gh) gh.remove();
+  ghost.classList.add("widget-drag-ghost");
+  ghost.style.position = "fixed";
+  ghost.style.zIndex = "10000";
+  ghost.style.width = _dnd.width + "px";
+  ghost.style.height = _dnd.height + "px";
+  ghost.style.left = "0";
+  ghost.style.top = "0";
+  ghost.style.margin = "0";
+  ghost.style.pointerEvents = "none";
+  ghost.style.willChange = "transform";
+  ghost.style.transform = "translate(" + (_dnd.startX - _dnd.offsetX) + "px," + (_dnd.startY - _dnd.offsetY) + "px) scale(1.02)";
+  document.body.appendChild(ghost);
+  _dnd.ghost = ghost;
+  _dnd.ghostX = _dnd.startX - _dnd.offsetX;
+  _dnd.ghostY = _dnd.startY - _dnd.offsetY;
+
+  var ph = document.createElement("div");
+  ph.className = "widget-drag-placeholder";
+  ph.style.width = _dnd.width + "px";
+  ph.style.height = _dnd.height + "px";
+  _dnd.el.parentNode.insertBefore(ph, _dnd.el);
+  _dnd.placeholder = ph;
+
+  _dnd.el.classList.add("widget-dragging");
+  document.body.classList.add("is-dragging");
+}
+
+function dndMove(cx, cy) {
+  if (!_dnd || !_dnd.active) return;
+
+  _dnd.ghostX = cx - _dnd.offsetX;
+  _dnd.ghostY = cy - _dnd.offsetY;
+  _dnd.ghost.style.transform = "translate(" + _dnd.ghostX + "px," + _dnd.ghostY + "px) scale(1.02)";
+
+  var siblings = dndSiblings(_dnd.board);
+  var target = dndTarget(_dnd.board, siblings, cx, cy);
+
+  if (target === _dnd.lastTarget) return;
+  _dnd.lastTarget = target;
+
+  // Cancel any in-progress FLIP animations
+  var items = dndFlipItems();
+  items.forEach(function(el) {
+    el.getAnimations().forEach(function(a) {
+      if (a.effect && a.effect.target === el) a.cancel();
+    });
+  });
+
+  // Record visual positions before DOM change
+  var rects = new Map();
+  items.forEach(function(el) { rects.set(el, el.getBoundingClientRect()); });
+
+  // Move placeholder
+  if (target) {
+    _dnd.board.insertBefore(_dnd.placeholder, target);
+  } else {
+    _dnd.board.appendChild(_dnd.placeholder);
+  }
+
+  // FLIP: animate from old positions to new
+  items.forEach(function(el) {
+    var oldRect = rects.get(el);
+    if (!oldRect) return;
+    var newRect = el.getBoundingClientRect();
+    var dx = oldRect.left - newRect.left;
+    var dy = oldRect.top - newRect.top;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+    el.animate([
+      { transform: "translate(" + dx + "px," + dy + "px)" },
+      { transform: "translate(0,0)" }
+    ], {
+      duration: 240,
+      easing: "cubic-bezier(.22,.92,.32,1)"
+    });
+  });
+}
+
+function dndEnd() {
+  if (!_dnd) return;
+
+  // Cancel any FLIP animations so layout snaps cleanly
+  dndFlipItems().forEach(function(el) {
+    el.getAnimations().forEach(function(a) { a.cancel(); });
+  });
+
+  _dnd.board.insertBefore(_dnd.el, _dnd.placeholder);
+
+  _dnd.el.classList.remove("widget-dragging");
+  if (_dnd.ghost) _dnd.ghost.remove();
+  if (_dnd.placeholder) _dnd.placeholder.remove();
+  document.body.classList.remove("is-dragging");
+
+  var boardKey = _dnd.board.dataset.widgetBoard;
+  var order = Array.from(_dnd.board.children)
+    .map(function(el) { return el.dataset && el.dataset.widgetKey; })
+    .filter(Boolean);
+  writeWidgetOrder(boardKey, order);
+  updateDashboardLayout();
+}
+
+function dndFlipItems() {
+  if (!_dnd || !_dnd.board) return [];
+  return Array.from(_dnd.board.children).filter(function(el) {
+    return el && el.dataset && el.dataset.widgetKey
+      && !el.classList.contains("widget-dragging")
       && !el.classList.contains("widget-drag-placeholder");
   });
 }
 
-function initWidgetDragDrop() {
-  refreshDragHandles();
+function dndSiblings(board) {
+  return Array.from(board.children).filter(function(el) {
+    return el && el.dataset && el.dataset.widgetKey
+      && !el.classList.contains("widget-hidden")
+      && !el.classList.contains("widget-drag-placeholder")
+      && !el.classList.contains("widget-dragging");
+  });
+}
+
+function dndTarget(board, siblings, cx, cy) {
+  var isH = board.dataset.widgetBoard === "today-kpis";
+  if (!siblings.length) return null;
+
+  if (isH) {
+    for (var i = 0; i < siblings.length; i++) {
+      var r = siblings[i].getBoundingClientRect();
+      if (cx < r.left + r.width / 2) return siblings[i];
+    }
+    return null;
+  }
+
+  // 2D grid: find closest insertion point
+  // For each sibling, compute the point where "insert before" transitions
+  // to "insert after" (i.e. the midpoint between this sibling and the next)
+  var rects = [];
+  for (var i = 0; i < siblings.length; i++) {
+    rects.push(siblings[i].getBoundingClientRect());
+  }
+
+  var bestIdx = -1;
+  var bestDist = Infinity;
+
+  for (var i = 0; i < siblings.length; i++) {
+    var r = rects[i];
+
+    // Check if cursor is inside or near this sibling
+    // Use center-of-mass distance with Y weighted heavier
+    var midX = r.left + r.width / 2;
+    var midY = r.top + r.height / 2;
+    var dx = cx - midX;
+    var dy = cy - midY;
+    var dist = dx * dx + dy * dy * 3;
+
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestIdx = i;
+    }
+  }
+
+  if (bestIdx === -1) return null;
+
+  var r = rects[bestIdx];
+  var midX = r.left + r.width / 2;
+  var midY = r.top + r.height / 2;
+
+  // Determine if cursor is "before" or "after" this sibling
+  // "Before" = above midpoint, or same height and to the left
+  if (cy < midY || (cy < midY + r.height * 0.3 && cx < midX)) {
+    return siblings[bestIdx];
+  }
+
+  // "After" this sibling = insert before the next sibling
+  return bestIdx + 1 < siblings.length ? siblings[bestIdx + 1] : null;
 }
 
 // ---------- Today calendar (mini vue mois courant) ----------
