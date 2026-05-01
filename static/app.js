@@ -10972,7 +10972,7 @@ TradeEditorController.renderHtml = function (day, trade) {
           var priceEl = document.getElementById('btcChartPrice');
           if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
           lastCandleTime = k.t;
-          if (k.x) { _fetchAndRender(); return; }
+          if (k.x) { _fetchAndRender(true); return; }
           if (series) {
             try { series.update(candle); } catch(e) {}
           }
@@ -11002,7 +11002,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       var now = Date.now();
       var elapsed = now - lastCandleTime;
       if (elapsed < _getIntervalMs(currentInterval) * 0.95) {
-        _fetchAndRender();
+        _fetchAndRender(true);
       }
     }, interval);
   }
@@ -11151,7 +11151,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
   }
 
-  function _fetchAndRender() {
+  function _fetchAndRender(keepZoom) {
     if (!series) return;
     var url = '/api/market/klines?symbol=BTCUSDT&interval=' + currentInterval + '&limit=200';
     fetch(url)
@@ -11161,7 +11161,6 @@ TradeEditorController.renderHtml = function (day, trade) {
         var candles = data.candles || [];
         if (!candles.length) return;
         var last = candles[candles.length - 1];
-        // Sauvegarder le timestamp de la derniere bougie pour le countdown
         lastCandleTime = last.time * 1000;
         _startCountdown();
         _startAutoRefresh();
@@ -11170,7 +11169,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         var priceEl = document.getElementById('btcChartPrice');
         if (priceEl) priceEl.textContent = '$' + Number(last.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
         series.setData(candles);
-        chart.timeScale().fitContent();
+        if (!keepZoom) chart.timeScale().fitContent();
       })
       .catch(function (err) { console.error('[btc-chart] fetch:', err); });
   }
@@ -11239,7 +11238,7 @@ TradeEditorController.renderHtml = function (day, trade) {
           var priceEl = document.getElementById('chartPrice');
           if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
           lastCandleTime = k.t;
-          if (k.x) { _fetchAndRender(); return; }
+          if (k.x) { _fetchAndRender(true); return; }
           if (candlestickSeries) {
             try { candlestickSeries.update(candle); } catch(e) {}
             if (volumeSeries) {
@@ -11400,7 +11399,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
   }
 
-  function _fetchAndRender() {
+  function _fetchAndRender(keepZoom) {
     if (!candlestickSeries) return;
     var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=500';
     fetch(url)
@@ -11424,7 +11423,7 @@ TradeEditorController.renderHtml = function (day, trade) {
           return { time: c.time, value: c.volume, color: c.close >= c.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' };
         }));
 
-        chart.timeScale().fitContent();
+        if (!keepZoom) chart.timeScale().fitContent();
       })
       .catch(function (err) { console.error('[chart] fetch:', err); });
   }
@@ -11489,7 +11488,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       var now = Date.now();
       var elapsed = now - lastCandleTime;
       if (elapsed < _getIntervalMs(currentInterval) * 0.95) {
-        _fetchAndRender();
+        _fetchAndRender(true);
       }
     }, interval);
   }

@@ -36,7 +36,7 @@
           var priceEl = document.getElementById('chartPrice');
           if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
           lastCandleTime = k.t;
-          if (k.x) { _fetchAndRender(); return; }
+          if (k.x) { _fetchAndRender(true); return; }
           if (candlestickSeries) {
             try { candlestickSeries.update(candle); } catch(e) {}
             if (volumeSeries) {
@@ -197,7 +197,7 @@
     }
   }
 
-  function _fetchAndRender() {
+  function _fetchAndRender(keepZoom) {
     if (!candlestickSeries) return;
     var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=500';
     fetch(url)
@@ -221,7 +221,7 @@
           return { time: c.time, value: c.volume, color: c.close >= c.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' };
         }));
 
-        chart.timeScale().fitContent();
+        if (!keepZoom) chart.timeScale().fitContent();
       })
       .catch(function (err) { console.error('[chart] fetch:', err); });
   }
@@ -286,7 +286,7 @@
       var now = Date.now();
       var elapsed = now - lastCandleTime;
       if (elapsed < _getIntervalMs(currentInterval) * 0.95) {
-        _fetchAndRender();
+        _fetchAndRender(true);
       }
     }, interval);
   }

@@ -84,7 +84,7 @@
           var priceEl = document.getElementById('btcChartPrice');
           if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
           lastCandleTime = k.t;
-          if (k.x) { _fetchAndRender(); return; }
+          if (k.x) { _fetchAndRender(true); return; }
           if (series) {
             try { series.update(candle); } catch(e) {}
           }
@@ -114,7 +114,7 @@
       var now = Date.now();
       var elapsed = now - lastCandleTime;
       if (elapsed < _getIntervalMs(currentInterval) * 0.95) {
-        _fetchAndRender();
+        _fetchAndRender(true);
       }
     }, interval);
   }
@@ -263,7 +263,7 @@
     }
   }
 
-  function _fetchAndRender() {
+  function _fetchAndRender(keepZoom) {
     if (!series) return;
     var url = '/api/market/klines?symbol=BTCUSDT&interval=' + currentInterval + '&limit=200';
     fetch(url)
@@ -273,7 +273,6 @@
         var candles = data.candles || [];
         if (!candles.length) return;
         var last = candles[candles.length - 1];
-        // Sauvegarder le timestamp de la derniere bougie pour le countdown
         lastCandleTime = last.time * 1000;
         _startCountdown();
         _startAutoRefresh();
@@ -282,7 +281,7 @@
         var priceEl = document.getElementById('btcChartPrice');
         if (priceEl) priceEl.textContent = '$' + Number(last.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
         series.setData(candles);
-        chart.timeScale().fitContent();
+        if (!keepZoom) chart.timeScale().fitContent();
       })
       .catch(function (err) { console.error('[btc-chart] fetch:', err); });
   }
