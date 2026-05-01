@@ -1356,11 +1356,13 @@ body.light-mode .theme-toggle:hover { border-color: rgba(0,132,255,0.40); backgr
   display: grid;
   place-items: center;
   cursor: pointer;
-  transition: background 0.14s, border-color 0.14s;
+  color: #626b7a;
+  transition: background 0.14s, border-color 0.14s, color 0.14s;
 }
 .journal-nav-inline .btn-icon:hover {
   background: rgba(0,0,0,0.04);
   border-color: #c5cad4;
+  color: #10131b;
 }
 .journal-nav-inline .btn-icon svg {
   display: block;
