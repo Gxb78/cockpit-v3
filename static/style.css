@@ -8334,7 +8334,7 @@ body.light-mode .app-topbar {
   --magenta: #9333ea;
   background: #f6f7fb;
   color: #111827;
-  padding: 18px;
+  padding: 22px 24px;
   min-height: 100%;
   display: flex;
   flex-direction: column;
