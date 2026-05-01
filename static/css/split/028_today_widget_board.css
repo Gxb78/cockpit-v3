@@ -228,6 +228,12 @@ body.is-dragging {
   overflow: hidden;
 }
 
+/* Trous de grille pour le drag & drop — invisibles, detectables par hit test */
+.widget-hole {
+  pointer-events: none;
+  min-height: 1px;
+}
+
 .widget.drop-target {
   position: relative;
 }
@@ -284,6 +290,11 @@ body.is-dragging {
 .today-grid .widget[data-size="md"]:not(.widget-hidden) {
   grid-column: span 1;
   grid-row: span 1;
+}
+
+.today-grid .widget[data-size="xl"]:not(.widget-hidden) {
+  grid-column: span 1;
+  grid-row: span 3;
 }
 
 .page[data-page="today"] .today-grid[data-visible-count="1"] {

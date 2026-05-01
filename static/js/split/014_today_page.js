@@ -5,7 +5,7 @@ function renderToday() {
   renderTodayContextWidget();
   const today   = todayKey();
   const todayList = state.allDays.filter(d => d.date === today);
-  const recent    = state.allDays.filter(d => d.date !== today).slice(0, 6);
+  const recent    = state.allDays.filter(d => d.date !== today).slice(0, 2);
 
   const todayEl = $("#todayEntries");
   todayEl.innerHTML = "";

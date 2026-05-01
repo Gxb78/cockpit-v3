@@ -15,10 +15,11 @@ var WIDGET_REGISTRY = {
   today_log:           { label: "Recap",             icon: "log",   kind: "panel",  size: "md" },
   today_activity:      { label: "Activite",          icon: "bolt",  kind: "panel",  size: "tall" },
   today_calendar:      { label: "Calendrier",        icon: "cal",   kind: "panel",  size: "md" },
+  today_streak:        { label: "Streak",            icon: "bolt",  kind: "kpi",    size: "sm" },
 };
 
 var WIDGET_DEFAULTS = {
-  "today": ["kpi_total_pnl", "kpi_winrate", "kpi_average_rr", "kpi_trades", "kpi_profit_factor", "kpi_expectancy", "today_context", "today_log", "today_activity", "today_calendar"],
+  "today": ["kpi_total_pnl", "kpi_winrate", "kpi_average_rr", "kpi_trades", "kpi_profit_factor", "kpi_expectancy", "today_context", "today_log", "today_activity", "today_calendar", "today_streak"],
 };
 
 function readWidgetOrder(boardKey) {
@@ -280,6 +281,10 @@ function refreshDragHandles() {
         var centerX = rect.width / 2;
         var centerY = rect.height / 2;
         var SNAP_TO_CENTER = 0.40;
+
+        // Cibles fantomes sur les cellules vides de la grille
+        var holes = _createWidgetHoles(board);
+
         _dnd = {
           el: widget, board: board,
           offsetX: rawOffsetX + (centerX - rawOffsetX) * SNAP_TO_CENTER,
@@ -287,7 +292,8 @@ function refreshDragHandles() {
           width: rect.width, height: rect.height,
           ghost: null,
           active: false,
-          dropRef: null
+          dropRef: null,
+          holes: holes,
         };
         dndStart(pressStartX, pressStartY);
       }, DND_LONG_PRESS);
@@ -326,8 +332,12 @@ function onDndPointerMove(e) {
 function onDndPointerUp() {
   if (_dndRaf) { cancelAnimationFrame(_dndRaf); _dndRaf = 0; }
   if (!_dnd) return;
-  if (_dnd.active) dndEnd();
-  _dnd = null;
+  if (_dnd.active) dndEnd(); // dndEnd nettoie les holes + met _dnd = null
+  else {
+    // Drag pas encore actif — nettoyer les trous manuellement
+    if (_dnd.holes) { _dnd.holes.forEach(function(h) { h.remove(); }); }
+    _dnd = null;
+  }
 }
 
 function dndStart(cx, cy) {
@@ -399,28 +409,22 @@ function dndEnd() {
     var targetBoard = _dnd.targetBoard || target.closest(".widget-board[data-widget-board]");
 
     if (targetBoard === board) {
-      // ── Snapshot AVANT mouvement DOM ──────────────────────────────
-      var snapCol = {}, snapRow = {};
-      Array.from(board.children).forEach(function(c) {
-        var k = c.dataset && c.dataset.widgetKey;
-        if (k) { snapCol[k] = c.style.gridColumnStart; snapRow[k] = c.style.gridRowStart; }
-      });
-
-      // ── Swap DOM ──────────────────────────────────────────────────
-      var placeholder = document.createElement("div");
-      board.insertBefore(placeholder, el);
-      board.insertBefore(el, target);
-      board.insertBefore(target, placeholder);
-      placeholder.remove();
-
-      // ── Échanger les positions CSS (draggé ↔ cible) ───────────────
-      var dk = el.dataset.widgetKey, tk = target.dataset.widgetKey;
-      el.style.gridColumnStart     = snapCol[tk] || "";
-      el.style.gridRowStart        = snapRow[tk] || "";
-      target.style.gridColumnStart = snapCol[dk] || "";
-      target.style.gridRowStart    = snapRow[dk] || "";
-
+      if (target.classList.contains("widget-hole")) {
+        // Déplacer le widget dans le trou — pas de swap DOM
+        var holeCol = parseInt(target.style.gridColumnStart, 10);
+        var holeRow = parseInt(target.style.gridRowStart, 10);
+        el.style.gridColumnStart = holeCol;
+        el.style.gridRowStart    = holeRow;
+      } else {
+        // Swap DOM
+        var placeholder = document.createElement("div");
+        board.insertBefore(placeholder, el);
+        board.insertBefore(el, target);
+        board.insertBefore(target, placeholder);
+        placeholder.remove();
+      }
     } else {
+      // Cross-board
       var ph = document.createComment("swap");
       board.insertBefore(ph, el);
       targetBoard.insertBefore(el, target);
@@ -453,8 +457,7 @@ function dndEnd() {
       .map(function(c) { return c.dataset && c.dataset.widgetKey; }).filter(Boolean);
     writeWidgetOrder(bKey, order);
 
-    // ── Lire les positions APRÈS swap (avec les styles déjà corrects) ──
-    // NE PAS CLEAR — lire directement ce qui est sur les éléments
+    // Snapshot direct des styles inline — PAS de clear, PAS de getComputedStyle
     var pos = {};
     Array.from(b.children).forEach(function(child) {
       var key = child.dataset && child.dataset.widgetKey;
@@ -469,15 +472,78 @@ function dndEnd() {
   });
 
   updateDashboardLayout();
+
+  // Nettoyer les trous
+  if (_dnd.holes) { _dnd.holes.forEach(function(h) { h.remove(); }); _dnd.holes = null; }
+
   setTimeout(refreshDragHandles, 300);
   _dnd = null;
 }
 
 function dndItems(board) {
-  return Array.from(board.children).filter(function(el) {
+  var items = Array.from(board.children).filter(function(el) {
     return el && el.dataset && el.dataset.widgetKey
       && !el.classList.contains("widget-hidden");
   });
+  if (_dnd && _dnd.holes) {
+    _dnd.holes.forEach(function(h) {
+      if (h.parentNode === board) items.push(h);
+    });
+  }
+  return items;
+}
+
+function _createWidgetHoles(board) {
+  var holes = [];
+  var children = Array.from(board.children).filter(function(c) {
+    return c.dataset && c.dataset.widgetKey && !c.classList.contains("widget-hidden");
+  });
+  if (children.length === 0) return holes;
+
+  // Lire la grille actuelle via computed style
+  var boardStyle = window.getComputedStyle(board);
+  var cols = (boardStyle.gridTemplateColumns || "").split(/\s+/).filter(Boolean).length;
+  if (cols === 0) return holes;
+
+  // Collecter les cellules occupees via data-size (plus fiable que gridRowEnd/computed)
+  var occupied = new Set();
+  children.forEach(function(c) {
+    var cs = window.getComputedStyle(c);
+    var col = parseInt(cs.gridColumnStart, 10);
+    var row = parseInt(cs.gridRowStart, 10);
+    if (isNaN(col) || isNaN(row) || col < 1 || row < 1) return;
+
+    var size = c.dataset.size || "";
+    var colSpan = size === "full" ? cols : size === "wide" ? 2 : 1;
+    var rowSpan = size === "tall" ? 2 : 1;
+
+    for (var r = row; r < row + rowSpan; r++) {
+      for (var co = col; co < col + colSpan; co++) {
+        occupied.add(r + ":" + co);
+      }
+    }
+  });
+
+  // Hauteur max = row la plus haute occupee
+  var maxRow = 0;
+  occupied.forEach(function(cell) { var rr = parseInt(cell, 10); if (rr > maxRow) maxRow = rr; });
+  if (maxRow === 0) return holes;
+
+  // Creer un trou pour chaque cellule vide
+  for (var r = 1; r <= maxRow; r++) {
+    for (var co = 1; co <= cols; co++) {
+      if (!occupied.has(r + ":" + co)) {
+        var hole = document.createElement("div");
+        hole.className = "widget-hole";
+        hole.style.gridColumnStart = co;
+        hole.style.gridRowStart = r;
+        hole.style.pointerEvents = "none";
+        board.appendChild(hole);
+        holes.push(hole);
+      }
+    }
+  }
+  return holes;
 }
 
 function dndHitTest(items, ghostLeft, ghostTop, ghostRight, ghostBottom, ghostCX, ghostCY, draggedEl) {

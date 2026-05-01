@@ -136,10 +136,16 @@ function renderKPIs(s) {
   if (expSubEl) expSubEl.textContent = d.numTrades > 0
     ? `${tradesLabel} pris en compte`
     : "$ moyen par trade";
+  // Streak
+  var streakEl = $("#kpiStreak");
+  if (streakEl) streakEl.textContent = s.streak || 0;
+  var streakSub = $("#kpiStreakSub");
+  if (streakSub) {
+    var streakVal = Number(s.streak) || 0;
+    streakSub.textContent = streakVal > 1 ? streakVal + " consecutifs" : "jour";
+  }
 
   renderPnlSparkline();
-  var streakEl = $("#streakCount");
-  if (streakEl) streakEl.textContent = s.streak || 0;
 
   // Remove skeleton loading state
   document.querySelector('[data-widget-board="today"]')?.classList.remove("loading");
