@@ -8069,9 +8069,9 @@ function renderTodayCalendar() {
 
   if (!grid.dataset.bound) {
     grid.dataset.bound = "1";
-    grid.addEventListener("click", function _todayCalClick(e) {
-      console.log("[today] calendar click", e.target);
-      var dayEl = e.target.closest(".day");
+    // Delegation document-level pour garantir la capture
+    document.addEventListener("click", function _todayCalClick(e) {
+      var dayEl = e.target.closest("#todayCalendarGrid .day");
       if (!dayEl || dayEl.dataset.otherMonth === "1") return;
       var key = dayEl.dataset.date;
       if (!key) return;
@@ -8082,15 +8082,6 @@ function renderTodayCalendar() {
         console.warn("[today] goPage not available");
       }
     });
-    // Fallback: capturer au cas ou un element interieur bloquerait
-    grid.addEventListener("click", function(e) {
-      if (e.target.closest(".day")) return;
-      var dayEl = grid.querySelector(".day:hover");
-      if (dayEl) {
-        console.log("[today] fallback click on", dayEl);
-        dayEl.click();
-      }
-    }, true);
     grid.addEventListener("keydown", function(e) {
       if (e.key !== "Enter" && e.key !== " ") return;
       var dayEl = e.target.closest(".day");
