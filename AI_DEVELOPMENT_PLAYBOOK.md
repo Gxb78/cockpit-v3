@@ -400,6 +400,14 @@ Format obligatoire d'une lesson:
 - Fichiers a surveiller: `app_parts/23_routes_market.py`, `static/js/split/060_btc_chart_widget.js`, `static/css/split/061_btc_chart_widget.css`, `templates/partials/pages/today/widgets/011_btc_chart.html`, `static/js/split/047_today_widget_board.js`.
 
 
+### FEATURE-20260501b - Page Chart XXL dediee
+- Nouvelle page accessible via le rail (raccourci C) avec graphique plein ecran.
+- Bougies + histogramme volume, timeframes 5m-1W, paires BTC/ETH.
+- Barre stats O/H/L/C/Vol, countdown bougie, variation.
+- Architecture preparee pour TPO/VWAP/orderflow plus tard.
+- Fichiers: chart.html, 062_chart_page.js, 062_chart_page.css, rail.html, 028_global_keys.js.
+
+
 ### BUG-20260501-12 - Session ajoutee comme etape wizard + champ trade
 - Symptome: impossible de selectionner la session de trading par trade (Asia, London, NY AM, NY PM).
 - Cause racine: le champ `session` existait en DB sur `days` (par jour) mais pas sur `trades` (par trade). Aucune UI pour le saisir par trade.

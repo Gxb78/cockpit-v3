@@ -21,6 +21,7 @@ function bindGlobalKeys() {
       if (e.key === "j" || e.key === "J") { e.preventDefault(); goPage("journal"); }
       if (e.key === "s" || e.key === "S") { e.preventDefault(); goPage("stats"); }
       if (e.key === "g" || e.key === "G") { e.preventDefault(); goPage("settings"); }
+      if (e.key === "c" || e.key === "C") { e.preventDefault(); goPage("chart"); }
       if (e.key === "w" || e.key === "W") {
         e.preventDefault();
         if (state.currentPage !== "journal") goPage("journal");

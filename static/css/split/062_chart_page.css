@@ -1,0 +1,190 @@
+/* ---- 062_chart_page.css ---- */
+
+.page[data-page="chart"].active {
+  display: flex;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+.chart-layout {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ── Top bar ── */
+.chart-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 20px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  gap: 16px;
+}
+
+.chart-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.chart-pair-selector {
+  display: flex;
+  gap: 2px;
+}
+
+.chart-pair-btn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.chart-pair-btn:hover {
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.chart-pair-btn.active {
+  color: var(--cyan);
+  border-color: rgba(56, 211, 238, 0.30);
+  background: rgba(56, 211, 238, 0.06);
+}
+
+.chart-price-info {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.chart-price {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.03em;
+}
+
+.chart-change {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.chart-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chart-timeframes {
+  display: flex;
+  gap: 2px;
+}
+
+.chart-tf-btn {
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.chart-tf-btn:hover {
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+.chart-tf-btn.active {
+  color: var(--cyan);
+  border-color: rgba(56, 211, 238, 0.25);
+  background: rgba(56, 211, 238, 0.06);
+}
+
+.chart-countdown {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-faint);
+  min-width: 36px;
+  text-align: right;
+}
+
+/* ── Main chart ── */
+.chart-main {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.chart-canvas-wrap {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.chart-canvas-wrap > div {
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Bottom bar ── */
+.chart-bottombar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 6px 20px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.chart-bottombar strong {
+  color: var(--text-muted);
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+.chart-bottombar span {
+  color: var(--text-soft);
+}
+
+/* ── Light mode ── */
+body.light-mode .chart-pair-btn.active {
+  color: #0ea5e9;
+  border-color: rgba(14, 165, 233, 0.25);
+  background: rgba(14, 165, 233, 0.05);
+}
+
+body.light-mode .chart-tf-btn.active {
+  color: #0ea5e9;
+  border-color: rgba(14, 165, 233, 0.25);
+  background: rgba(14, 165, 233, 0.05);
+}
+
+/* ── Responsive ── */
+@media (max-width: 760px) {
+  .chart-topbar {
+    flex-wrap: wrap;
+    padding: 6px 12px;
+    gap: 8px;
+  }
+  .chart-topbar-left { flex-wrap: wrap; gap: 10px; }
+  .chart-topbar-right { flex-wrap: wrap; gap: 8px; }
+  .chart-price { font-size: 16px; }
+  .chart-bottombar { flex-wrap: wrap; gap: 12px; padding: 4px 12px; }
+}
