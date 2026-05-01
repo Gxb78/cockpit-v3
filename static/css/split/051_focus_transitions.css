@@ -107,6 +107,32 @@ body.reduce-motion .jedit-scroll.is-revealing .jedit-block {
   transform: none;
 }
 
+/* ---- Sticky header compact (boutons sauver/fermer en scroll) ---- */
+.jedit-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+  padding: 8px 0;
+  margin-bottom: 14px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+  transform: translateY(-6px);
+}
+.jedit-scroll.is-stuck .jedit-sticky {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+body.reduce-motion .jedit-sticky {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 /* ---- Field glow — feedback sauvegarde directement sur le champ ---- */
 
 /* Succes — respiration douce : monte -> pic -> redescend */
