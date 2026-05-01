@@ -1,0 +1,344 @@
+/* =============================================================
+   STATS — Pattern Explorer redesign
+   Inspire d'un terminal de detection de patterns BTC :
+   fond navy profond, hero chart cercle d'or, tiles compactes,
+   gridlines log, breakdowns en liste type sidebar de patterns.
+   ============================================================= */
+
+.page[data-page="stats"].active {
+  position: relative;
+  padding: 28px 28px 60px;
+  background:
+    radial-gradient(1200px 600px at 12% -10%, rgba(56, 96, 220, 0.18), transparent 60%),
+    radial-gradient(900px 500px at 95% 10%, rgba(132, 80, 220, 0.10), transparent 65%),
+    linear-gradient(180deg, #060a1f 0%, #080d2a 38%, #0a0f33 100%);
+  border-radius: 18px;
+  border: 1px solid rgba(120, 180, 255, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 30px 80px rgba(0,0,0,0.6);
+}
+
+/* === Page header — Pattern title style === */
+.page[data-page="stats"] .stats-page-head {
+  align-items: flex-start;
+  gap: 24px;
+  padding: 6px 4px 16px;
+  border-bottom: 1px solid rgba(120, 180, 255, 0.10);
+}
+
+.page[data-page="stats"] .stats-page-head .page-title {
+  font-size: clamp(22px, 2.4vw, 30px);
+  letter-spacing: -0.02em;
+  color: #e7ecff;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.page[data-page="stats"] .stats-page-head .page-title::before {
+  content: "PATTERN";
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  font-weight: 800;
+  padding: 4px 9px;
+  border-radius: 999px;
+  color: #ffd166;
+  background: rgba(255, 209, 102, 0.10);
+  border: 1px solid rgba(255, 209, 102, 0.45);
+  text-shadow: 0 0 10px rgba(255, 209, 102, 0.35);
+}
+
+.page[data-page="stats"] .stats-page-head .accent {
+  background: linear-gradient(90deg, #38d3ee 0%, #6aa9ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.page[data-page="stats"] .stats-page-head .page-subtitle {
+  color: #8ea0c8;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.page[data-page="stats"] .stats-page-head .page-subtitle::before {
+  content: "score 88 · ";
+  color: #ffd166;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+/* === Streak tiles — compact "score chip" look === */
+.page[data-page="stats"] .streak-row {
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.page[data-page="stats"] .streak-tile {
+  background:
+    linear-gradient(135deg, rgba(56, 211, 238, 0.08), rgba(56, 211, 238, 0.02)),
+    rgba(10, 16, 40, 0.85);
+  border: 1px solid rgba(56, 211, 238, 0.18);
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.page[data-page="stats"] .streak-tile.alt {
+  background:
+    linear-gradient(135deg, rgba(255, 209, 102, 0.10), rgba(255, 209, 102, 0.02)),
+    rgba(10, 16, 40, 0.85);
+  border-color: rgba(255, 209, 102, 0.28);
+}
+
+.page[data-page="stats"] .streak-tile .streak-icon {
+  background: rgba(56, 211, 238, 0.14);
+  color: #38d3ee;
+  border: 1px solid rgba(56, 211, 238, 0.30);
+}
+
+.page[data-page="stats"] .streak-tile.alt .streak-icon {
+  background: rgba(255, 209, 102, 0.14);
+  color: #ffd166;
+  border-color: rgba(255, 209, 102, 0.35);
+}
+
+.page[data-page="stats"] .streak-count {
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  letter-spacing: -0.02em;
+}
+
+/* === Period compare grid — bottom-row stat tiles like the screenshot === */
+.page[data-page="stats"] .period-compare-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.page[data-page="stats"] .period-compare-card {
+  background:
+    linear-gradient(180deg, rgba(56, 211, 238, 0.06) 0%, rgba(10, 16, 40, 0) 80%),
+    rgba(10, 16, 40, 0.78);
+  border: 1px solid rgba(120, 180, 255, 0.16);
+  border-radius: 14px;
+  position: relative;
+  overflow: hidden;
+}
+
+.page[data-page="stats"] .period-compare-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #38d3ee, transparent);
+  opacity: 0.5;
+}
+
+.page[data-page="stats"] .period-compare-card.delta {
+  background:
+    linear-gradient(180deg, rgba(255, 209, 102, 0.10) 0%, rgba(10, 16, 40, 0) 80%),
+    rgba(10, 16, 40, 0.78);
+  border-color: rgba(255, 209, 102, 0.40);
+  box-shadow: 0 0 0 1px rgba(255, 209, 102, 0.20) inset, 0 8px 28px rgba(255, 170, 0, 0.10);
+}
+
+.page[data-page="stats"] .period-compare-card.delta::before {
+  background: linear-gradient(90deg, transparent, #ffd166, transparent);
+  opacity: 0.85;
+}
+
+.page[data-page="stats"] .period-compare-card .panel-h h3 {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #8ea0c8;
+  font-weight: 700;
+}
+
+.page[data-page="stats"] .period-main {
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: clamp(26px, 2.2vw, 36px);
+  letter-spacing: -0.04em;
+  color: #38d3ee;
+  text-shadow: 0 0 18px rgba(56, 211, 238, 0.25);
+}
+
+.page[data-page="stats"] .period-compare-card.delta .period-main {
+  color: #ffd166;
+  text-shadow: 0 0 18px rgba(255, 209, 102, 0.30);
+}
+
+.page[data-page="stats"] .period-range {
+  color: #6b7ba0;
+  font-size: 10.5px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+
+.page[data-page="stats"] .period-meta {
+  color: #aab8d8;
+  font-size: 12px;
+}
+
+/* === Hero chart — cercle d'or comme "Next Projected Leg" === */
+.page[data-page="stats"] .stats-main-chart {
+  position: relative;
+  margin-top: 18px;
+  padding: 22px 22px 18px;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 49px,
+      rgba(120, 180, 255, 0.045) 50px
+    ),
+    radial-gradient(800px 300px at 50% 0%, rgba(56, 211, 238, 0.06), transparent 70%),
+    rgba(8, 14, 38, 0.85);
+  border: 1px solid rgba(255, 209, 102, 0.45);
+  border-radius: 16px;
+  box-shadow:
+    0 0 0 1px rgba(255, 209, 102, 0.10) inset,
+    0 18px 60px rgba(0, 0, 0, 0.50),
+    0 0 38px rgba(255, 170, 0, 0.08);
+}
+
+.page[data-page="stats"] .stats-main-chart::before {
+  content: "NEXT PROJECTED LEG";
+  position: absolute;
+  top: -10px;
+  left: 18px;
+  padding: 3px 10px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.20em;
+  color: #ffd166;
+  background: #0a0f33;
+  border: 1px solid rgba(255, 209, 102, 0.55);
+  border-radius: 999px;
+  text-shadow: 0 0 10px rgba(255, 209, 102, 0.40);
+}
+
+.page[data-page="stats"] .stats-main-chart .panel-h h3 {
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: #e7ecff;
+}
+
+.page[data-page="stats"] .stats-main-chart canvas {
+  filter: drop-shadow(0 0 8px rgba(56, 211, 238, 0.15));
+}
+
+/* === Secondary charts grid === */
+.page[data-page="stats"] .stats-chart-grid {
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.page[data-page="stats"] .stats-chart-grid .panel,
+.page[data-page="stats"] .stats-heatmap-panel {
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 39px,
+      rgba(120, 180, 255, 0.035) 40px
+    ),
+    rgba(10, 16, 40, 0.78);
+  border: 1px solid rgba(120, 180, 255, 0.14);
+  border-radius: 14px;
+}
+
+.page[data-page="stats"] .stats-chart-grid .panel-h h3,
+.page[data-page="stats"] .stats-heatmap-panel .panel-h h3 {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #aab8d8;
+  font-weight: 700;
+}
+
+.page[data-page="stats"] .stats-heatmap-panel {
+  margin-top: 18px;
+}
+
+/* === Breakdowns — "pattern sidebar" entries === */
+.page[data-page="stats"] .breakdowns-grid {
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.page[data-page="stats"] .breakdowns-grid .panel {
+  background:
+    linear-gradient(180deg, rgba(56, 96, 220, 0.05), rgba(10, 16, 40, 0)),
+    rgba(10, 16, 40, 0.80);
+  border: 1px solid rgba(120, 180, 255, 0.14);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.page[data-page="stats"] .breakdowns-grid .panel-h {
+  border-bottom: 1px dashed rgba(120, 180, 255, 0.14);
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+}
+
+.page[data-page="stats"] .breakdowns-grid .panel-h h3 {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #8ea0c8;
+  font-weight: 800;
+}
+
+.page[data-page="stats"] .breakdown-list > * {
+  position: relative;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.page[data-page="stats"] .breakdown-list > *:hover {
+  background: rgba(56, 211, 238, 0.05);
+  border-color: rgba(56, 211, 238, 0.20);
+  transform: translateX(2px);
+}
+
+/* Pastille colorée façon UP/DOWN avant chaque ligne breakdown */
+.page[data-page="stats"] .breakdown-list > *::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 8px;
+  background: #38d3ee;
+  box-shadow: 0 0 8px rgba(56, 211, 238, 0.65);
+  vertical-align: middle;
+}
+
+/* === Insights row === */
+.page[data-page="stats"] .insights-row {
+  margin-top: 18px;
+}
+
+/* === Empty state ajusté au fond navy === */
+.page[data-page="stats"] .stats-empty-state {
+  background: rgba(10, 16, 40, 0.55);
+  border: 1px dashed rgba(120, 180, 255, 0.20);
+  border-radius: 16px;
+}
+
+/* === Heatmap : assombrir les cellules vides pour matcher le navy === */
+.page[data-page="stats"] .heatmap .hm-cell[data-l="0"] {
+  background: rgba(120, 180, 255, 0.06);
+}
+
+/* === Responsive === */
+@media (max-width: 900px) {
+  .page[data-page="stats"].active {
+    padding: 18px 14px 40px;
+  }
+  .page[data-page="stats"] .period-compare-grid {
+    grid-template-columns: 1fr;
+  }
+}
