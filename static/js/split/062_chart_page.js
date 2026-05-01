@@ -4,6 +4,8 @@
   var chart = null;
   var candlestickSeries = null;
   var volumeSeries = null;
+  var vwapSeries = null;
+  var activeVwapPeriod = null;
   var currentInterval = '1h';
   var currentSymbol = 'BTCUSDT';
   var countdownTimer = null;
@@ -170,6 +172,21 @@
       });
       resizeObserver.observe(wrap);
 
+      // VWAP indicator buttons
+      document.querySelectorAll('.chart-ind-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var isActive = btn.classList.contains('active');
+          document.querySelectorAll('.chart-ind-btn').forEach(function (b) { b.classList.remove('active'); });
+          if (!isActive) {
+            btn.classList.add('active');
+            activeVwapPeriod = btn.dataset.vwap;
+          } else {
+            activeVwapPeriod = null;
+          }
+          _fetchAndRender(true);
+        });
+      });
+
       // Timeframe buttons
       document.querySelectorAll('.chart-tf-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -195,6 +212,54 @@
     } catch (e) {
       console.error('[chart] createChart error:', e);
     }
+  }
+
+  function _calcAndDrawVwap(candles) {
+    if (!vwapSeries) {
+      vwapSeries = chart.addLineSeries({
+        color: '#f59e0b',
+        lineWidth: 1.5,
+        priceLineVisible: false,
+        lastValueVisible: true,
+      });
+    }
+    if (!activeVwapPeriod || !candles.length) { vwapSeries.setData([]); return; }
+
+    var days = { '1D': 1, '7D': 7, '30D': 30, '90D': 90 }[activeVwapPeriod] || 1;
+    var now = Math.floor(Date.now() / 1000);
+    var windowStart = now - days * 86400;
+
+    // Calculer VWAP cumulatif pour chaque bougie dans la fenêtre
+    var cumTpv = 0, cumVol = 0;
+    var vwapData = [];
+    // D'abord, trouver les bougies dans la fenêtre
+    var inWindow = false;
+    for (var i = 0; i < candles.length; i++) {
+      var c = candles[i];
+      if (!inWindow && c.time >= windowStart) inWindow = true;
+      if (!inWindow) continue;
+      var tp = (c.high + c.low + c.close) / 3;
+      cumTpv += tp * c.volume;
+      cumVol += c.volume;
+      if (cumVol > 0) {
+        vwapData.push({ time: c.time, value: cumTpv / cumVol });
+      }
+    }
+
+    // Si on a trop peu de donnees, utiliser tout ce qu'on a
+    if (!inWindow && candles.length > 0) {
+      for (var i = 0; i < candles.length; i++) {
+        var c = candles[i];
+        var tp = (c.high + c.low + c.close) / 3;
+        cumTpv += tp * c.volume;
+        cumVol += c.volume;
+        if (cumVol > 0) {
+          vwapData.push({ time: c.time, value: cumTpv / cumVol });
+        }
+      }
+    }
+
+    vwapSeries.setData(vwapData);
   }
 
   function _fetchAndRender(keepZoom) {
