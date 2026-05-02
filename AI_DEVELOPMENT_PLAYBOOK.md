@@ -34,11 +34,15 @@ But: avancer vite sans casser l'UX metier, sans casser le flow Midnight, sans re
 
 ### 2.2 Frontend
 - Etat global: `static/js/split/000_state.js`.
-- Wizard trade: `040_wizard_core.js`, `041_wizskip.js`, `042_wizsetdate.js`, `043_wizsetdir.js`, `044_wizreadfileasdataurl.js`, `045_bindwizard.js`.
-- Modale trade: `static/js/split/020_trade_form.js`.
+- **Creation trade (wizard)**: `040_wizard_core.js`, `041_wizskip.js`, `042_wizsetdate.js`, `043_wizsetdir.js`, `044_wizreadfileasdataurl.js`, `045_bindwizard.js`.
+  - Mode compact (clic calendrier): wizard centre 420x520
+  - Mode rail (clic "Nouveau Trade"): wizard rectangle 660x360 ancre au bouton, classe `.wiz-rail-mode`
+- **Edition trade (flip card XXL)**: `056_journal_day_trade_cards.js` (rendu flip cards), `059_trade_editor_controller.js` (editeur inline XXL).
+- **Post-mortem wizard**: `pmWizOpen()` dans wizard core — etape quality/lessons/tags apres cloture.
 - Narration auto-fill: `static/js/split/038_custom_blocks.js`.
 - Journal rendering/data: `004_loadjournaltablesort.js`, `005_setjournalcustomrange.js`, `011_calendar_nav.js`, `012_data_loading.js`, `015_calendar.js`.
-- Templates trade: `templates/partials/overlays/modal/trade_form/*.html`.
+- Templates trade: `templates/partials/overlays/wizard.html` (wizard 11 etapes), `templates/partials/overlays/post_mortem.html` (post-mortem).
+- **Plus de modale d'edition (`#entryModal`)**: l'ancien flux modal a ete supprime en mai 2026. Les fichiers supprimes (a ne pas restaurer) sont listes dans pitfall 55 du skill journal-cockpit-dev.
 
 ### 2.3 Ordre des scripts
 - Les modules JS split doivent rester en ordre numerique dans `templates/partials/overlays/scripts.html`.
@@ -477,9 +481,16 @@ Format obligatoire d'une lesson:
 - Changement: suppression du guard `if (monthInput) return;`, trigger change de `#monthLabelBtn` a `#monthLabel`.
 - Fichiers a surveiller: `static/js/split/011_calendar_nav.js` (bindCalendarMonthPicker), `templates/partials/pages/journal/header.html` (#calendarMonthPicker, #monthLabel, #monthPopover).
 
-### CONVENTION-20260501 - exit_price = TP (consolidation champs)
-- Regle: Dans Cockpit v3, exit_price et take_profit designent la meme chose (le prix de sortie = take-profit). Le backend normalise `exit_price` → `take_profit` dans `05_payload_normalizers.py`. Le frontend affiche le champ `exit_price` sous le label "TP" partout (editeur inline section Niveaux, tableau journal, card back). Le champ `take_profit` / "Target" est supprime de l'editeur pour eviter la confusion. La DB conserve les deux colonnes pour retrocompatibilite.
-- Fichiers a surveiller: `app_parts/05_payload_normalizers.py`, `static/js/split/059_trade_editor_controller.js`, `templates/partials/pages/journal/table.html`, `static/js/split/056_journal_day_trade_cards.js`.
+### CONVENTION-20260501 - exit_price = mapping conditionnel WIN/LOSS (MAJ 2026-05-01)
+- Regle: `exit_price` est mappe conditionnellement selon le resultat du trade. Si WIN → exit_price = take_profit. Si LOSS → exit_price = stop_loss.
+- Le backend (`05_payload_normalizers.py`) derive `is_win` depuis direction + entry vs exit si non fourni explicitement.
+- Le frontend affiche `exit_price` sous le label "TP" dans la section Niveaux de l'editeur XXL, mais le bloc Resultat a un select Statut (Ouvert/Cloture) qui permet de corriger le mapping.
+- `syncExitMapping()` dans `021_rr_preview.js` auto-remplit SL ou TP quand l'utilisateur change isWin.
+- La DB conserve les deux colonnes (`take_profit`, `stop_loss`) pour retrocompatibilite.
+- **Ne JAMAIS afficher exit_price ET take_profit en meme temps** — seul exit_price (label "TP") est visible.
+- Cas particulier: SL=TP → RR preview affiche un avertissement au lieu de 1.00R.
+- Correction du bug: une perte short avec exit_price mais sans TP causait SL=TP=1.00R (nonsensical).
+- Fichiers a surveiller: `app_parts/05_payload_normalizers.py` (normalisation conditionnelle), `static/js/split/021_rr_preview.js` (syncExitMapping), `static/js/split/059_trade_editor_controller.js` (label TP), `templates/partials/pages/journal/table.html`, `static/js/split/056_journal_day_trade_cards.js`, `app_parts/03_core_helpers.py` (skip validation si is_win explicite).
 
 
 

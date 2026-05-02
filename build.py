@@ -126,6 +126,52 @@ if len(sys.argv) > 1 and sys.argv[1] == "--restore":
     restore_splits("templates/partials/overlays/scripts.html", js=True, css=False)
     restore_splits("templates/partials/layout/head_assets_css.html", js=False, css=True)
     print(f"Restored templates to split-file mode (token: {TOKEN})")
+elif len(sys.argv) > 1 and sys.argv[1] == "--watch":
+    import time
+    import os
+
+    def _mtime_map(directory, pattern):
+        """Retourne un dict {filename: mtime} pour tous les fichiers du repertoire."""
+        m = {}
+        for p in sorted((ROOT / directory).glob(pattern), key=lambda p: p.name):
+            try:
+                m[p.name] = p.stat().st_mtime
+            except OSError:
+                pass
+        return m
+
+    js_dir = "static/js/split"
+    css_dir = "static/css/split"
+    print(f"👁️  Watcher actif. Surveillance de {js_dir}/ et {css_dir}/...")
+    print("   Modifie un fichier split → rebuild auto. Ctrl+C pour arreter.\n")
+
+    prev_js = _mtime_map(js_dir, "*.js")
+    prev_css = _mtime_map(css_dir, "*.css")
+
+    while True:
+        time.sleep(1.0)
+        cur_js = _mtime_map(js_dir, "*.js")
+        cur_css = _mtime_map(css_dir, "*.css")
+
+        changed = []
+        for name, mtime in cur_js.items():
+            if name not in prev_js or prev_js[name] != mtime:
+                changed.append(f"js/{name}")
+        for name, mtime in cur_css.items():
+            if name not in prev_css or prev_css[name] != mtime:
+                changed.append(f"css/{name}")
+
+        if changed:
+            print(f"\n📝 Change detecte: {', '.join(changed)}")
+            # Rebuild
+            js_count, js_path = concat("static/js/split", "*.js", "static/app.js", "// ---- {name} ----")
+            css_count, css_path = concat("static/css/split", "*.css", "static/style.css", "/* ---- {name} ---- */")
+            TOKEN = _file_hash(js_path) + _file_hash(css_path)
+            switch_to_bundles("templates/partials/overlays/scripts.html", bundle_js="static/app.js", bundle_css=None)
+            switch_to_bundles("templates/partials/layout/head_assets_css.html", bundle_js=None, bundle_css="static/style.css")
+            print(f"   ✅ Build: {js_count} JS + {css_count} CSS (token: {TOKEN})")
+            prev_js = cur_js
+            prev_css = cur_css
 else:
     js_count, js_path = concat("static/js/split", "*.js", "static/app.js", "// ---- {name} ----")
     css_count, css_path = concat("static/css/split", "*.css", "static/style.css", "/* ---- {name} ---- */")
