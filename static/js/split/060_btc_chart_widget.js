@@ -3,6 +3,7 @@
 (function () {
   var chart = null;
   var series = null;
+  var countdownPriceLine = null;
   var currentInterval = '3m';
   var resizeObserver = null;
   var chartReady = false;
@@ -31,17 +32,14 @@
 
   function _startCountdown() {
     if (countdownTimer) clearInterval(countdownTimer);
-    var el = document.getElementById('btcChartCountdown');
-    if (!el) return;
-
     function tick() {
-      if (!lastCandleTime) { el.textContent = ''; return; }
+      if (!lastCandleTime) { _updateCountdownLabel('—'); return; }
       var now = Date.now();
       var ms = _getIntervalMs(currentInterval);
       var elapsed = now - lastCandleTime;
       var remaining = ms - elapsed;
       if (remaining <= 0) {
-        el.textContent = '0:00';
+        _updateCountdownLabel('0:00');
         // Nouvelle bougie → refresh auto
         _fetchAndRender();
         return;
@@ -49,11 +47,16 @@
       var totalSec = Math.ceil(remaining / 1000);
       var m = Math.floor(totalSec / 60);
       var s = totalSec % 60;
-      el.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+      _updateCountdownLabel(m + ':' + (s < 10 ? '0' : '') + s);
     }
-
     tick();
     countdownTimer = setInterval(tick, 500);
+  }
+
+  function _updateCountdownLabel(timerTxt) {
+    if (!countdownPriceLine) return;
+    if (timerTxt === undefined) timerTxt = '—';
+    try { countdownPriceLine.applyOptions({ title: timerTxt }); } catch(e) {}
   }
 
   // Auto-refresh periodique : toutes les 15s (petits TF) a 60s (grands TF)
@@ -215,6 +218,17 @@
         borderUpColor: '#22c55e',
         wickDownColor: '#ef4444',
         wickUpColor: '#22c55e',
+        lastValueVisible: false,
+      });
+
+      // Label vert avec timer sur le dernier cours
+      countdownPriceLine = series.createPriceLine({
+        price: 0,
+        color: '#22c55e',
+        lineWidth: 1,
+        lineStyle: 2,
+        axisLabelVisible: true,
+        title: '—',
       });
 
       // Resize observer
@@ -285,6 +299,11 @@
         var priceEl = document.getElementById('btcChartPrice');
         if (priceEl) priceEl.textContent = '$' + Number(last.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
         series.setData(candles);
+        // Mettre a jour le label timer sur le dernier cours
+        if (countdownPriceLine) {
+          try { countdownPriceLine.applyOptions({ price: last.close }); } catch(e) {}
+        }
+        _updateCountdownLabel();
         if (!keepZoom) chart.timeScale().fitContent();
       })
       .catch(function (err) { console.error('[btc-chart] fetch:', err); });

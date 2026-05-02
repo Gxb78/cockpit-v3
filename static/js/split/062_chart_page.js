@@ -11,6 +11,7 @@
   var currentSymbol = 'BTCUSDT';
   var countdownTimer = null;
   var lastCandleTime = 0;
+  var lastPrice = 0;
   var resizeObserver = null;
   var refreshTimer = null;
   var ws = null;
@@ -40,20 +41,18 @@
             close: parseFloat(k.c),
             volume: parseFloat(k.v),
           };
+          lastPrice = candle.close;
           var priceEl = document.getElementById('chartPrice');
           if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
           lastCandleTime = k.t;
           if (k.x) { _fetchAndRender(true); return; }
           if (candlestickSeries) {
             try { candlestickSeries.update(candle); } catch(e) {}
-            // Mettre a jour la priceLine du countdown avec le prix live
-            if (countdownPriceLine) {
-              try { countdownPriceLine.applyOptions({ price: candle.close }); } catch(e) {}
-            }
             if (volumeSeries) {
               try { volumeSeries.update({ time: candle.time, value: candle.volume, color: candle.close >= candle.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' }); } catch(e) {}
             }
           }
+          _updateCountdownLabel();
         } catch(e) {}
       };
       ws.onclose = function () {
@@ -161,12 +160,13 @@
         borderUpColor: '#22c55e',
         wickDownColor: '#ef4444',
         wickUpColor: '#22c55e',
+        lastValueVisible: false,
       });
 
-      // Price line pour afficher le countdown sur la ligne de prix
+      // Label vert combinant prix + countdown sur le dernier cours
       countdownPriceLine = candlestickSeries.createPriceLine({
         price: 0,
-        color: 'rgba(0,229,255,0.5)',
+        color: '#22c55e',
         lineWidth: 1,
         lineStyle: 2,
         axisLabelVisible: true,
@@ -300,6 +300,7 @@
 
         var last = candles[candles.length - 1];
         lastCandleTime = last.time * 1000;
+        lastPrice = last.close;
         _startCountdown();
         _startAutoRefresh();
         _disconnectWs();
@@ -312,6 +313,7 @@
         if (countdownPriceLine) {
           try { countdownPriceLine.applyOptions({ price: last.close }); } catch(e) {}
         }
+        _updateCountdownLabel();
 
         volumeSeries.setData(candles.map(function (c) {
           return { time: c.time, value: c.volume, color: c.close >= c.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' };
@@ -352,18 +354,13 @@
 
   function _startCountdown() {
     if (countdownTimer) clearInterval(countdownTimer);
-    var el = document.getElementById('chartCountdown');
-    if (!el) return;
     function tick() {
-      if (!lastCandleTime) { el.textContent = ''; return; }
+      if (!lastCandleTime) { _updateCountdownLabel('—'); return; }
       var now = Date.now();
       var ms = _getIntervalMs(currentInterval);
       var remaining = ms - (now - lastCandleTime);
       if (remaining <= 0) {
-        el.textContent = '0:00';
-        if (countdownPriceLine) {
-          try { countdownPriceLine.applyOptions({ title: '0:00' }); } catch(e) {}
-        }
+        _updateCountdownLabel('0:00');
         _fetchAndRender(true);
         return;
       }
@@ -371,14 +368,20 @@
       var m = Math.floor(totalSec / 60);
       var s = totalSec % 60;
       var txt = m + ':' + (s < 10 ? '0' : '') + s;
-      el.textContent = txt;
-      // Mettre a jour la priceLine sur le dernier prix connu
-      if (countdownPriceLine && candlestickSeries) {
-        try { countdownPriceLine.applyOptions({ title: txt }); } catch(e) {}
-      }
+      _updateCountdownLabel(txt);
     }
     tick();
     countdownTimer = setInterval(tick, 500);
+  }
+
+  function _updateCountdownLabel(timerTxt) {
+    if (!countdownPriceLine) return;
+    // Lire le timer depuis la topbar si pas fourni
+    if (timerTxt === undefined) {
+      var countdownEl = document.getElementById('chartCountdown');
+      timerTxt = countdownEl ? countdownEl.textContent : '—';
+    }
+    try { countdownPriceLine.applyOptions({ title: timerTxt }); } catch(e) {}
   }
 
   function _startAutoRefresh() {
