@@ -2506,7 +2506,7 @@ function renderKPIs(s) {
 
 function renderToday() {
   renderTodayCalendar();
-  renderTodayContextWidget();
+  renderTodayContextWidget(true);
   const today   = todayKey();
   const todayList = state.allDays.filter(d => d.date === today);
   const recent    = state.allDays.filter(d => d.date !== today).slice(0, 2);
@@ -10433,7 +10433,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 (function () {
   var chart = null;
   var series = null;
-  var currentInterval = '1h';
+  var currentInterval = '3m';
   var resizeObserver = null;
   var chartReady = false;
   var countdownTimer = null;
@@ -10488,12 +10488,15 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   // Auto-refresh periodique : toutes les 15s (petits TF) a 60s (grands TF)
   var refreshTimer = null;
+  var currentSymbol = 'btcusdt';
   var ws = null;
   var wsReconnectTimer = null;
-  var currentSymbol = 'btcusdt';
+  var _wsIntentionalClose = false;
 
   function _connectWs() {
-    if (ws) try { ws.close(); } catch(e) {}
+    // Ne pas fermer une connexion en cours d'etablissement
+    if (ws && ws.readyState === WebSocket.CONNECTING) return;
+    if (ws) { _wsIntentionalClose = true; try { ws.close(); } catch(e) {} _wsIntentionalClose = false; }
     var stream = currentSymbol + '@kline_' + currentInterval;
     var url = 'wss://stream.binance.com:9443/ws/' + stream;
     try {
@@ -10521,6 +10524,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         } catch(e) {}
       };
       ws.onclose = function () {
+        if (_wsIntentionalClose) return;
         if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
         wsReconnectTimer = setTimeout(_connectWs, 3000);
       };
@@ -10530,7 +10534,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   function _disconnectWs() {
     if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
-    if (ws) { try { ws.close(); } catch(e) {} ws = null; }
+    if (ws) { _wsIntentionalClose = true; try { ws.close(); } catch(e) {} ws = null; _wsIntentionalClose = false; }
   }
 
   function _startAutoRefresh() {
@@ -10750,7 +10754,8 @@ TradeEditorController.renderHtml = function (day, trade) {
   var volumeSeries = null;
   var vwapSeries = null;
   var activeVwapPeriod = null;
-  var currentInterval = '1h';
+  var countdownPriceLine = null;
+  var currentInterval = '3m';
   var currentSymbol = 'BTCUSDT';
   var countdownTimer = null;
   var lastCandleTime = 0;
@@ -10760,8 +10765,12 @@ TradeEditorController.renderHtml = function (day, trade) {
   var wsReconnectTimer = null;
   var currentSymbol = 'BTCUSDT';
 
+  var _wsIntentionalClose = false;
+
   function _connectWs() {
-    if (ws) try { ws.close(); } catch(e) {}
+    // Ne pas fermer une connexion en cours d'etablissement
+    if (ws && ws.readyState === WebSocket.CONNECTING) return;
+    if (ws) { _wsIntentionalClose = true; try { ws.close(); } catch(e) {} _wsIntentionalClose = false; }
     var stream = currentSymbol.toLowerCase() + '@kline_' + currentInterval;
     var url = 'wss://stream.binance.com:9443/ws/' + stream;
     try {
@@ -10785,6 +10794,10 @@ TradeEditorController.renderHtml = function (day, trade) {
           if (k.x) { _fetchAndRender(true); return; }
           if (candlestickSeries) {
             try { candlestickSeries.update(candle); } catch(e) {}
+            // Mettre a jour la priceLine du countdown avec le prix live
+            if (countdownPriceLine) {
+              try { countdownPriceLine.applyOptions({ price: candle.close }); } catch(e) {}
+            }
             if (volumeSeries) {
               try { volumeSeries.update({ time: candle.time, value: candle.volume, color: candle.close >= candle.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' }); } catch(e) {}
             }
@@ -10792,6 +10805,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         } catch(e) {}
       };
       ws.onclose = function () {
+        if (_wsIntentionalClose) return;
         if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
         wsReconnectTimer = setTimeout(_connectWs, 3000);
       };
@@ -10801,7 +10815,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   function _disconnectWs() {
     if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
-    if (ws) { try { ws.close(); } catch(e) {} ws = null; }
+    if (ws) { _wsIntentionalClose = true; try { ws.close(); } catch(e) {} ws = null; _wsIntentionalClose = false; }
   }
 
   var INTERVAL_MS = {
@@ -10895,6 +10909,16 @@ TradeEditorController.renderHtml = function (day, trade) {
         borderUpColor: '#22c55e',
         wickDownColor: '#ef4444',
         wickUpColor: '#22c55e',
+      });
+
+      // Price line pour afficher le countdown sur la ligne de prix
+      countdownPriceLine = candlestickSeries.createPriceLine({
+        price: 0,
+        color: 'rgba(0,229,255,0.5)',
+        lineWidth: 1,
+        lineStyle: 2,
+        axisLabelVisible: true,
+        title: '—',
       });
 
       volumeSeries = chart.addHistogramSeries({
@@ -11032,6 +11056,11 @@ TradeEditorController.renderHtml = function (day, trade) {
 
         candlestickSeries.setData(candles);
 
+        // Positionner la priceLine du countdown sur le dernier prix
+        if (countdownPriceLine) {
+          try { countdownPriceLine.applyOptions({ price: last.close }); } catch(e) {}
+        }
+
         volumeSeries.setData(candles.map(function (c) {
           return { time: c.time, value: c.volume, color: c.close >= c.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' };
         }));
@@ -11080,13 +11109,21 @@ TradeEditorController.renderHtml = function (day, trade) {
       var remaining = ms - (now - lastCandleTime);
       if (remaining <= 0) {
         el.textContent = '0:00';
-        _fetchAndRender();
+        if (countdownPriceLine) {
+          try { countdownPriceLine.applyOptions({ title: '0:00' }); } catch(e) {}
+        }
+        _fetchAndRender(true);
         return;
       }
       var totalSec = Math.ceil(remaining / 1000);
       var m = Math.floor(totalSec / 60);
       var s = totalSec % 60;
-      el.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+      var txt = m + ':' + (s < 10 ? '0' : '') + s;
+      el.textContent = txt;
+      // Mettre a jour la priceLine sur le dernier prix connu
+      if (countdownPriceLine && candlestickSeries) {
+        try { countdownPriceLine.applyOptions({ title: txt }); } catch(e) {}
+      }
     }
     tick();
     countdownTimer = setInterval(tick, 500);

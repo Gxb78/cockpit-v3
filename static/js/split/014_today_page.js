@@ -2,7 +2,7 @@
 
 function renderToday() {
   renderTodayCalendar();
-  renderTodayContextWidget();
+  renderTodayContextWidget(true);
   const today   = todayKey();
   const todayList = state.allDays.filter(d => d.date === today);
   const recent    = state.allDays.filter(d => d.date !== today).slice(0, 2);

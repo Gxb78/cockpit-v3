@@ -3,7 +3,7 @@
 (function () {
   var chart = null;
   var series = null;
-  var currentInterval = '1h';
+  var currentInterval = '3m';
   var resizeObserver = null;
   var chartReady = false;
   var countdownTimer = null;
@@ -58,12 +58,15 @@
 
   // Auto-refresh periodique : toutes les 15s (petits TF) a 60s (grands TF)
   var refreshTimer = null;
+  var currentSymbol = 'btcusdt';
   var ws = null;
   var wsReconnectTimer = null;
-  var currentSymbol = 'btcusdt';
+  var _wsIntentionalClose = false;
 
   function _connectWs() {
-    if (ws) try { ws.close(); } catch(e) {}
+    // Ne pas fermer une connexion en cours d'etablissement
+    if (ws && ws.readyState === WebSocket.CONNECTING) return;
+    if (ws) { _wsIntentionalClose = true; try { ws.close(); } catch(e) {} _wsIntentionalClose = false; }
     var stream = currentSymbol + '@kline_' + currentInterval;
     var url = 'wss://stream.binance.com:9443/ws/' + stream;
     try {
@@ -91,6 +94,7 @@
         } catch(e) {}
       };
       ws.onclose = function () {
+        if (_wsIntentionalClose) return;
         if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
         wsReconnectTimer = setTimeout(_connectWs, 3000);
       };
@@ -100,7 +104,7 @@
 
   function _disconnectWs() {
     if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
-    if (ws) { try { ws.close(); } catch(e) {} ws = null; }
+    if (ws) { _wsIntentionalClose = true; try { ws.close(); } catch(e) {} ws = null; _wsIntentionalClose = false; }
   }
 
   function _startAutoRefresh() {
