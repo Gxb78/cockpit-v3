@@ -144,7 +144,7 @@ function renderKPIs(s) {
   var streakSub = $("#kpiStreakSub");
   if (streakSub) {
     var streakVal = Number(s.streak) || 0;
-    streakSub.textContent = streakVal > 1 ? streakVal + " consecutifs" : "jour";
+    streakSub.textContent = streakVal > 1 ? streakVal + " consecutifs" : streakVal === 1 ? "jour" : "\u2014";
   }
 
   renderPnlSparkline();

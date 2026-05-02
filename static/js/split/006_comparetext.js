@@ -164,6 +164,16 @@ function bindJournalTradeFilters() {
     timer = setTimeout(() => {
       state.journalTradeFilters.pnlMin = minInput?.value || "";
       state.journalTradeFilters.pnlMax = maxInput?.value || "";
+      // Validation croisee: min ≤ max
+      var minVal = parseFilterNumber(minInput?.value);
+      var maxVal = parseFilterNumber(maxInput?.value);
+      var invalid = minVal != null && maxVal != null && minVal > maxVal;
+      if (minInput) minInput.classList.toggle("jedit-field-error", invalid);
+      if (maxInput) maxInput.classList.toggle("jedit-field-error", invalid);
+      // Message d'erreur
+      var errEl = document.getElementById("pnlRangeError");
+      if (errEl) errEl.classList.toggle("hidden", !invalid);
+      if (invalid) return;  // ne pas appliquer le filtre si invalide
       applyJournalTradeFiltersAndRender();
     }, 140);
   };

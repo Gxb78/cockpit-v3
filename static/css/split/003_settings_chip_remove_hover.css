@@ -129,6 +129,9 @@
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+.widget-board.loading .kpi-value {
+  color: transparent;
+}
 .widget-board.loading .kpi-value > * {
   display: none;
 }

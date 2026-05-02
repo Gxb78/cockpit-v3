@@ -263,9 +263,12 @@
           var val = this.value.trim().toLowerCase();
           // Valider le format (chiffres + une lettre: m/h/d/w/M)
           if (!/^\d+(m|h|d|w|M)$/.test(val)) {
-            this.value = '';
+            this.classList.add("jedit-field-error");
+            this.title = "Format attendu: chiffre + m/h/d/w/M (ex: 45m, 4h, 7d)";
             return;
           }
+          this.classList.remove("jedit-field-error");
+          this.title = "";
           document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
           currentInterval = val;
           _disconnectWs();

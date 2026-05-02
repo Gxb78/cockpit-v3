@@ -1215,6 +1215,9 @@ body.light-mode .theme-toggle:hover { border-color: rgba(0,132,255,0.40); backgr
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+.widget-board.loading .kpi-value {
+  color: transparent;
+}
 .widget-board.loading .kpi-value > * {
   display: none;
 }
@@ -1876,6 +1879,22 @@ body.light-mode .entry-result-chip.loss {
   letter-spacing: 1px;
   color: #98a1af;
   margin-top: 2px;
+}
+.journal-filter-field label {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+
+.journal-filter-error {
+  font-size: 10.5px;
+  color: var(--loss);
+  margin-top: 4px;
+  padding: 2px 0;
 }
 .jfilter-stats-arrow {
   width: 28px;
