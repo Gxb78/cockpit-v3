@@ -406,7 +406,6 @@ function bindJournalDayTrades() {
 
     var card = e.target.closest(".journal-flip-card");
     if (!card || !wrap.contains(card)) return;
-    console.log('[FLIP_CHECK] TradeEditorController.activeTradeId=', TradeEditorController.activeTradeId, 'TradeEditorController.justClosed=', TradeEditorController.justClosed);
     card.classList.toggle("is-flipped");
   });
 
@@ -483,7 +482,6 @@ function bindJournalDayTrades() {
     var card = e.target.closest(".journal-flip-card");
     if (!card || !wrap.contains(card)) return;
     e.preventDefault();
-    console.log('[FLIP_CHECK_KEY] TradeEditorController.activeTradeId=', TradeEditorController.activeTradeId, 'TradeEditorController.justClosed=', TradeEditorController.justClosed);
     card.classList.toggle("is-flipped");
   });
 
