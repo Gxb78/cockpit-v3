@@ -88,10 +88,14 @@ function loadSettingsState() {
   } catch {
     state.settings = defaults;
   }
+  // Snapshot pour detecter les modifications utilisateur pendant le fetch
+  var localSnapshot = JSON.stringify(state.settings);
   fetch("/api/user/settings", { credentials: "same-origin" })
     .then(function(r) { return r.ok ? r.json() : null; })
     .then(function(data) {
       if (!data || !data.settings) return;
+      // Ne pas ecraser si l'utilisateur a modifie entre temps
+      if (JSON.stringify(state.settings) !== localSnapshot) return;
       var merged = Object.assign({}, defaultSettingsState(), data.settings);
       merged.custom_strategies = normalizeCustomStrategies(merged.custom_strategies || []);
       state.settings = sanitizeSettings(merged);
@@ -110,7 +114,9 @@ function saveSettingsState() {
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
     body: JSON.stringify(state.settings),
-  }).catch(function() {});
+  }).catch(function() {
+    toast("Erreur lors de la sauvegarde des réglages", "error");
+  });
 }
 
 function applyProfileSetting() {

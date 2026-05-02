@@ -237,24 +237,6 @@ function setJournalRangeMode(mode, opts = {}) {
   if (reload && state.currentPage === "journal") loadMonth();
 }
 
-// ---------- Nouveaux filtres Journal (style Insights) ----------
-
-function _applyJournalFilter() {
-  var from = $("#jFilterFrom");
-  var to = $("#jFilterTo");
-  var instr = $("#jFilterInstrument");
-  if (!from || !to || !instr) return;
-
-  var fromDate = new Date(from.value + "T00:00:00");
-  var toDate = new Date(to.value + "T00:00:00");
-  var mid = new Date((fromDate.getTime() + toDate.getTime()) / 2);
-  state.currentMonth = mid;
-  state.journalCustomFrom = from.value;
-  state.journalCustomTo = to.value;
-  state.journalRangeMode = "custom";
-  loadMonth();
-}
-
 function _fmtDate2(d) {
   var y = d.getFullYear();
   var m = String(d.getMonth() + 1).padStart(2, "0");

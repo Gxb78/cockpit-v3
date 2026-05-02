@@ -421,8 +421,65 @@ Format obligatoire d'une lesson:
 - Regle: Le theme par defaut est le light mode (`dark_mode: false` dans les defaults). Les ombres light utilisent le pattern 3 couches de Steep. Les border-radius ont ete augmentes (cards 16px, small 12px) inspires de Legend. Les accents warm (--surface-warm, --accent-warm) sont disponibles. Le rail et la topbar ont des overrides light-mode. Le widget contexte jour a ete redesign pour ressembler aux entry-cards (compact, badge instr, hover glow). Les badges resultat (WIN/LOSS) sont minimalistes en light mode (transparents).
 - Fichiers a surveiller: `static/js/split/002_prettify.js`, `static/css/split/000_theme_tokens_base.css`, `static/css/split/032_priority1_app_shell.css`, `static/css/split/048_card_surface.css`, `static/css/split/045_today_context_widget.css`.
 
+### BUG-20260502-01 - Jour sans trade affiche $0.00 et refuse le clic wizard
+- Symptome: un jour qui existe en DB (contexte seul, sans trade) affiche 0,00$ sur la case calendrier. Le clic ouvre openExistingDay() qui recharge le calendrier sans effet visible (pas de flip cards car pas de trades).
+- Cause racine: dayCell() affichait le PnL meme pour `info.trades === 0`. Le click handler appelait openExistingDay() / openPickerForDate() quand tradeCount === 0 au lieu d'ouvrir le wizard.
+- Regle de prevention: dayCell() doit cacher le metric si `info.trades === 0`. Le click handler doit ouvrir le wizard quand `tradeCount === 0`, pas openExistingDay().
+- Test de non-regression: cliquer sur un jour avec entree DB mais 0 trade → le wizard s'ouvre. La case calendrier n'affiche pas 0,00$.
+- Changement: dayCell() ligne 313: `if (info)` → `if (info && info.trades > 0)`. Click handler: affiche renderJournalDayContext() (carte contexte + bouton Nouveau trade) au lieu d'ouvrir directement le wizard. Nouvelle fonction renderJournalDayContext() dans 015_calendar.js + CSS dans 046_journal_day_trade_cards.css.
+- Fichiers a surveiller: `static/js/split/015_calendar.js` (dayCell + bindCalendarGridActions + renderJournalDayContext), `static/css/split/046_journal_day_trade_cards.css` (.journal-day-context-empty).
+
+### BUG-20260502-02 - PnL=0 ecrase par _auto_calc_pnl (impossible d'avoir un trade break-even)
+- Symptome: un trade avec PnL=0 explicite (break-even) voit son PnL recalculé par _auto_calc_pnl() a partir d'entry/exit/size, effaçant le 0 intentionnel.
+- Cause racine: la condition `pnl is not None and pnl != 0` ne distinguait pas "pnl non fourni" (None) de "pnl=0 explicite".
+- Regle de prevention: toujours verifier la presence de la cle dans le dictionnaire avec `"pnl" in payload` plutot que de tester la valeur. Les payloads sans `pnl` n'ont pas la cle; les payloads avec pnl=0 ont la cle.
+- Test de non-regression: envoyer un trade avec `pnl=0` + entry/exit/size → le PnL reste 0 (pas recalculé). Envoyer un trade sans `pnl` → le PnL est calculé a partir d'entry/exit/size.
+- Changement: `if pnl is not None and pnl != 0` → `if "pnl" in payload` dans _auto_calc_pnl().
+- Fichiers a surveiller: `app_parts/03_core_helpers.py` (fonction _auto_calc_pnl).
+
+### BUG-20260502-03 - Ligne morte `payload.get("leverage")` dans _auto_calc_pnl()
+- Symptome: une ligne `payload.get("leverage")` est appelée sans assignation ni usage, résultat ignoré.
+- Cause racine: code mort residuel d'un refactoring, probablement un oubli ou un copier-coller.
+- Regle de prevention: apres chaque refactoring, chercher les appels de fonction dont le retour n'est pas utilisé et qui n'ont pas d'effet de bord. `grep -rn '\.get.*$' app_parts/ | grep -v '='` peut aider.
+- Test de non-regression: lancer les tests existants — la ligne supprimée etait sans effet.
+- Changement: suppression de la ligne `payload.get("leverage")` dans le bloc de retour anticipé.
+- Fichiers a surveiller: `app_parts/03_core_helpers.py` (fonction _auto_calc_pnl).
+
+### BUG-20260502-04 - loadAllDays() et loadStats() avalent les erreurs sans feedback
+- Symptome: les KPIs du dashboard affichent des zeros sans indication que les donnees n'ont pas pu etre chargees. L'utilisateur voit des stats a zero sans comprendre pourquoi.
+- Cause racine: les catch de loadAllDays() et loadStats() utilisaient `console.error(e)` sans toast ni feedback utilisateur.
+- Regle de prevention: toute erreur de chargement de donnees (API call) doit avoir un toast utilisateur. `console.error` seul est insuffisant. `loadMonth()` faisait deja un toast — les deux autres doivent faire pareil.
+- Test de non-regression: simuler une erreur reseau → toast visible.
+- Changement: `catch (e) { console.error(e); }` → `catch (e) { toast(e.message || "...", "error"); }` dans loadAllDays() et loadStats().
+- Fichiers a surveiller: `static/js/split/012_data_loading.js`.
+
+### BUG-20260502-05 - Race condition dans loadSettingsState() (fetch async ecrase les modifs)
+- Symptome: si l'utilisateur modifie un setting avant que le fetch backend de loadSettingsState() ne resolve, sa modification est perdue car le callback du fetch ecrase state.settings.
+- Cause racine: fetch async /api/user/settings resolvait apres le retour de loadSettingsState(). Le callback .then() ecrasait state.settings sans verifier si l'utilisateur avait modifie entre temps.
+- Regle de prevention: dans un pattern "fast localStorage puis async fetch", prendre un snapshot JSON.stringify(state.settings) avant le fetch, et dans le callback, verifier que le snapshot n'a pas change avant d'ecraser.
+- Test de non-regression: modifier un setting → le fetch resolvant apres ne doit pas annuler la modification.
+- Changement: snapshot JSON.stringify() avant fetch, guard `if (JSON.stringify(state.settings) !== localSnapshot) return;` dans le callback.
+- Fichiers a surveiller: `static/js/split/002_prettify.js` (loadSettingsState).
+
+### BUG-20260502-06 - Double definition de _applyJournalFilter() (code mort)
+- Symptome: la fonction _applyJournalFilter() est definie dans 004_loadjournaltablesort.js ET 054_journal_filter_picker_override.js. La premiere est ecrasee par la seconde (054 charge apres 004 dans le bundle).
+- Cause racine: le fichier 004_loadjournaltablesort.js contenait une copie legacy de _applyJournalFilter() qui n'etait jamais appelee (tous les appels sont dans 054).
+- Regle de prevention: avant d'ajouter une fonction avec le meme nom, verifier si elle existe deja dans un fichier charge plus tot. Utiliser `grep -rn 'function _apply' static/js/split/` pour detecter les doublons.
+- Test de non-regression: les filtres journal (date/instrument) fonctionnent toujours.
+- Changement: suppression de la definition morte dans 004_loadjournaltablesort.js.
+- Fichiers a surveiller: `static/js/split/004_loadjournaltablesort.js`, `static/js/split/054_journal_filter_picker_override.js`.
+
+### BUG-20260502-07 - Month picker popover jamais binde a cause d'un return precoce
+- Symptome: le popover #calendarMonthPicker avec selection graphique des mois ne fonctionne pas. Clic sur #monthLabel (le nom du mois) ne fait rien.
+- Cause racine: bindCalendarMonthPicker() avait un guard `if (monthInput) return;` qui sortait immediatement parce que #journalMonthInput existe dans le header. De plus, le trigger etait `#monthLabelBtn` qui n'existe pas dans le template (le bon trigger est `#monthLabel`).
+- Regle de prevention: ne pas blocker un composant UI parce qu'un autre existe. Les deux peuvent coexister (input month natif + popover graphique). Verifier que les IDs references dans le JS existent dans les templates HTML.
+- Test de non-regression: cliquer sur #monthLabel → le popover s'ouvre avec selection de mois et navigation d'annee.
+- Changement: suppression du guard `if (monthInput) return;`, trigger change de `#monthLabelBtn` a `#monthLabel`.
+- Fichiers a surveiller: `static/js/split/011_calendar_nav.js` (bindCalendarMonthPicker), `templates/partials/pages/journal/header.html` (#calendarMonthPicker, #monthLabel, #monthPopover).
+
 ### CONVENTION-20260501 - exit_price = TP (consolidation champs)
 - Regle: Dans Cockpit v3, exit_price et take_profit designent la meme chose (le prix de sortie = take-profit). Le backend normalise `exit_price` → `take_profit` dans `05_payload_normalizers.py`. Le frontend affiche le champ `exit_price` sous le label "TP" partout (editeur inline section Niveaux, tableau journal, card back). Le champ `take_profit` / "Target" est supprime de l'editeur pour eviter la confusion. La DB conserve les deux colonnes pour retrocompatibilite.
 - Fichiers a surveiller: `app_parts/05_payload_normalizers.py`, `static/js/split/059_trade_editor_controller.js`, `templates/partials/pages/journal/table.html`, `static/js/split/056_journal_day_trade_cards.js`.
+
 
 

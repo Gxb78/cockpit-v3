@@ -48,7 +48,7 @@ async function loadAllDays() {
     const qs = new URLSearchParams();
     if (state.statsInstrument !== "ALL") qs.set("instrument", state.statsInstrument);
     state.allDays = await api(`/api/days?${qs}`);
-  } catch (e) { console.error(e); }
+  } catch (e) { toast(e.message || "Erreur chargement jours", "error"); }
 }
 
 /**
@@ -68,7 +68,7 @@ async function loadStats(opts = {}) {
     const s = await api(`/api/stats?${qs}`);
     state._stats = s;
     if (!skipRender) renderKPIs(s);
-  } catch (e) { console.error(e); }
+  } catch (e) { toast(e.message || "Erreur chargement stats", "error"); }
   finally { loading(false); }
 }
 

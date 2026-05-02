@@ -151,11 +151,9 @@ function openMonthPicker() {
 }
 
 function bindCalendarMonthPicker() {
-  const monthInput = $("#journalMonthInput");
-  if (monthInput) return;
-
+  // Le popover picker est binde meme si #journalMonthInput existe
   const wrap = $("#calendarMonthPicker");
-  const trigger = $("#monthLabelBtn");
+  const trigger = $("#monthLabel");
   const pop = $("#monthPopover");
   if (!wrap || !trigger || !pop) return;
 

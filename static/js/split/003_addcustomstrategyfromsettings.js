@@ -89,13 +89,13 @@ async function refreshApiKeyStatus() {
   if (hint) hint.style.display = "none";
   try {
     const s = await api("/api/settings");
-    const isSet = !!s.ai_api_key_present;
+    const isSet = !!s.deepseek?.key_present;
     status.textContent = isSet ? "Configurée" : "Non configurée";
     status.className = `settings-badge ${isSet ? "ok" : "warn"}`;
-    masked.value = s.ai_api_key_masked || "";
-    env.textContent = s.ai_api_key_env || "ANTHROPIC_API_KEY";
-    if (!isSet && hint && s.ai_config_hint) {
-      hint.textContent = s.ai_config_hint;
+    masked.value = s.deepseek?.key_masked || "";
+    env.textContent = s.deepseek?.env_var || "DEEPSEEK_API_KEY";
+    if (!isSet && hint && s.deepseek?.hint) {
+      hint.textContent = s.deepseek.hint;
       hint.style.display = "block";
     }
   } catch {

@@ -36,14 +36,14 @@ function bindCalendarGridActions(grid) {
       renderJournalDayTrades(key, info.days);
       return;
     }
-
-    if (info.days.length === 1) {
-      if (typeof closeJournalDayTrades === "function") closeJournalDayTrades();
-      openExistingDay(info.days[0]);
-      return;
-    }
+    // Aucun trade → afficher le contexte du jour avec bouton Nouveau trade
     if (typeof closeJournalDayTrades === "function") closeJournalDayTrades();
-    openPickerForDate(key, info.days);
+    if (typeof renderJournalDayContext === "function") {
+      renderJournalDayContext(key, info.days);
+    } else {
+      wizOpen({ date: key });
+    }
+    return;
   });
   grid.addEventListener("keydown", (e) => {
     if (e.key !== "Enter" && e.key !== " ") return;
@@ -310,7 +310,7 @@ function dayCell(dt, byDay, otherMonth, today) {
 
   let metricHtml = `<div class="day-center day-center-empty"></div>`;
 
-  if (info) {
+  if (info && info.trades > 0) {
     const pnlClass = info.pnl > 0 ? "pos" : info.pnl < 0 ? "neg" : "flat";
     if (mode === "pnl") {
       metricHtml = `
@@ -348,4 +348,36 @@ function dayCell(dt, byDay, otherMonth, today) {
   }
   el.innerHTML = `<div class="day-num">${dt.getDate()}</div>${metricHtml}${stackHtml}${dotsHtml}`;
   return el;
+}
+
+// ---- Afficher le contexte d'un jour sans trade (contexte seul) ----
+function renderJournalDayContext(dateKey, days) {
+  var wrap = $("#journalDayTrades");
+  if (!wrap) return;
+  bindJournalDayTrades();
+
+  var day = days && days[0];
+  if (!day) { closeJournalDayTrades(); return; }
+
+  wrap.classList.remove("hidden");
+  wrap.dataset.count = "0";
+  wrap.innerHTML = '<div class="journal-day-context-empty">'
+    + '<div class="journal-day-context-head">'
+    +   '<span class="badge-instr">' + escapeHtml(day.instrument || "-") + '</span>'
+    +   '<span class="settings-badge ' + (day.htf_bias === "bullish" ? "ok" : day.htf_bias === "bearish" ? "warn" : "") + '">' + escapeHtml(day.htf_bias || "neutral") + '</span>'
+    +   '<span class="day-date-meta">' + escapeHtml(day.date || "") + '</span>'
+    + '</div>'
+    + '<div class="journal-day-context-notes">'
+    +   escapeHtml(day.daily_notes || day.htf_context || "Aucune note de contexte pour ce jour.")
+    + '</div>'
+    + '<button class="btn-primary" id="journalDayContextAddTrade">+ Nouveau trade</button>'
+    + '</div>';
+
+  var addBtn = document.getElementById("journalDayContextAddTrade");
+  if (addBtn) {
+    addBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      wizOpen({ date: dateKey });
+    });
+  }
 }

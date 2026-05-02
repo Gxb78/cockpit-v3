@@ -567,10 +567,14 @@ function loadSettingsState() {
   } catch {
     state.settings = defaults;
   }
+  // Snapshot pour detecter les modifications utilisateur pendant le fetch
+  var localSnapshot = JSON.stringify(state.settings);
   fetch("/api/user/settings", { credentials: "same-origin" })
     .then(function(r) { return r.ok ? r.json() : null; })
     .then(function(data) {
       if (!data || !data.settings) return;
+      // Ne pas ecraser si l'utilisateur a modifie entre temps
+      if (JSON.stringify(state.settings) !== localSnapshot) return;
       var merged = Object.assign({}, defaultSettingsState(), data.settings);
       merged.custom_strategies = normalizeCustomStrategies(merged.custom_strategies || []);
       state.settings = sanitizeSettings(merged);
@@ -589,7 +593,9 @@ function saveSettingsState() {
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
     body: JSON.stringify(state.settings),
-  }).catch(function() {});
+  }).catch(function() {
+    toast("Erreur lors de la sauvegarde des réglages", "error");
+  });
 }
 
 function applyProfileSetting() {
@@ -809,13 +815,13 @@ async function refreshApiKeyStatus() {
   if (hint) hint.style.display = "none";
   try {
     const s = await api("/api/settings");
-    const isSet = !!s.ai_api_key_present;
+    const isSet = !!s.deepseek?.key_present;
     status.textContent = isSet ? "Configurée" : "Non configurée";
     status.className = `settings-badge ${isSet ? "ok" : "warn"}`;
-    masked.value = s.ai_api_key_masked || "";
-    env.textContent = s.ai_api_key_env || "ANTHROPIC_API_KEY";
-    if (!isSet && hint && s.ai_config_hint) {
-      hint.textContent = s.ai_config_hint;
+    masked.value = s.deepseek?.key_masked || "";
+    env.textContent = s.deepseek?.env_var || "DEEPSEEK_API_KEY";
+    if (!isSet && hint && s.deepseek?.hint) {
+      hint.textContent = s.deepseek.hint;
       hint.style.display = "block";
     }
   } catch {
@@ -1283,24 +1289,6 @@ function setJournalRangeMode(mode, opts = {}) {
   updateJournalControlsVisibility();
   if (persist) localStorage.setItem(JOURNAL_RANGE_MODE_KEY, mode);
   if (reload && state.currentPage === "journal") loadMonth();
-}
-
-// ---------- Nouveaux filtres Journal (style Insights) ----------
-
-function _applyJournalFilter() {
-  var from = $("#jFilterFrom");
-  var to = $("#jFilterTo");
-  var instr = $("#jFilterInstrument");
-  if (!from || !to || !instr) return;
-
-  var fromDate = new Date(from.value + "T00:00:00");
-  var toDate = new Date(to.value + "T00:00:00");
-  var mid = new Date((fromDate.getTime() + toDate.getTime()) / 2);
-  state.currentMonth = mid;
-  state.journalCustomFrom = from.value;
-  state.journalCustomTo = to.value;
-  state.journalRangeMode = "custom";
-  loadMonth();
 }
 
 function _fmtDate2(d) {
@@ -2242,11 +2230,9 @@ function openMonthPicker() {
 }
 
 function bindCalendarMonthPicker() {
-  const monthInput = $("#journalMonthInput");
-  if (monthInput) return;
-
+  // Le popover picker est binde meme si #journalMonthInput existe
   const wrap = $("#calendarMonthPicker");
-  const trigger = $("#monthLabelBtn");
+  const trigger = $("#monthLabel");
   const pop = $("#monthPopover");
   if (!wrap || !trigger || !pop) return;
 
@@ -2337,7 +2323,7 @@ async function loadAllDays() {
     const qs = new URLSearchParams();
     if (state.statsInstrument !== "ALL") qs.set("instrument", state.statsInstrument);
     state.allDays = await api(`/api/days?${qs}`);
-  } catch (e) { console.error(e); }
+  } catch (e) { toast(e.message || "Erreur chargement jours", "error"); }
 }
 
 /**
@@ -2357,7 +2343,7 @@ async function loadStats(opts = {}) {
     const s = await api(`/api/stats?${qs}`);
     state._stats = s;
     if (!skipRender) renderKPIs(s);
-  } catch (e) { console.error(e); }
+  } catch (e) { toast(e.message || "Erreur chargement stats", "error"); }
   finally { loading(false); }
 }
 
@@ -2679,14 +2665,14 @@ function bindCalendarGridActions(grid) {
       renderJournalDayTrades(key, info.days);
       return;
     }
-
-    if (info.days.length === 1) {
-      if (typeof closeJournalDayTrades === "function") closeJournalDayTrades();
-      openExistingDay(info.days[0]);
-      return;
-    }
+    // Aucun trade → afficher le contexte du jour avec bouton Nouveau trade
     if (typeof closeJournalDayTrades === "function") closeJournalDayTrades();
-    openPickerForDate(key, info.days);
+    if (typeof renderJournalDayContext === "function") {
+      renderJournalDayContext(key, info.days);
+    } else {
+      wizOpen({ date: key });
+    }
+    return;
   });
   grid.addEventListener("keydown", (e) => {
     if (e.key !== "Enter" && e.key !== " ") return;
@@ -2953,7 +2939,7 @@ function dayCell(dt, byDay, otherMonth, today) {
 
   let metricHtml = `<div class="day-center day-center-empty"></div>`;
 
-  if (info) {
+  if (info && info.trades > 0) {
     const pnlClass = info.pnl > 0 ? "pos" : info.pnl < 0 ? "neg" : "flat";
     if (mode === "pnl") {
       metricHtml = `
@@ -2991,6 +2977,38 @@ function dayCell(dt, byDay, otherMonth, today) {
   }
   el.innerHTML = `<div class="day-num">${dt.getDate()}</div>${metricHtml}${stackHtml}${dotsHtml}`;
   return el;
+}
+
+// ---- Afficher le contexte d'un jour sans trade (contexte seul) ----
+function renderJournalDayContext(dateKey, days) {
+  var wrap = $("#journalDayTrades");
+  if (!wrap) return;
+  bindJournalDayTrades();
+
+  var day = days && days[0];
+  if (!day) { closeJournalDayTrades(); return; }
+
+  wrap.classList.remove("hidden");
+  wrap.dataset.count = "0";
+  wrap.innerHTML = '<div class="journal-day-context-empty">'
+    + '<div class="journal-day-context-head">'
+    +   '<span class="badge-instr">' + escapeHtml(day.instrument || "-") + '</span>'
+    +   '<span class="settings-badge ' + (day.htf_bias === "bullish" ? "ok" : day.htf_bias === "bearish" ? "warn" : "") + '">' + escapeHtml(day.htf_bias || "neutral") + '</span>'
+    +   '<span class="day-date-meta">' + escapeHtml(day.date || "") + '</span>'
+    + '</div>'
+    + '<div class="journal-day-context-notes">'
+    +   escapeHtml(day.daily_notes || day.htf_context || "Aucune note de contexte pour ce jour.")
+    + '</div>'
+    + '<button class="btn-primary" id="journalDayContextAddTrade">+ Nouveau trade</button>'
+    + '</div>';
+
+  var addBtn = document.getElementById("journalDayContextAddTrade");
+  if (addBtn) {
+    addBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      wizOpen({ date: dateKey });
+    });
+  }
 }
 
 // ---- 016_openpickerfordate.js ----
