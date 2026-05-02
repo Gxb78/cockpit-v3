@@ -40,8 +40,8 @@
       var remaining = ms - elapsed;
       if (remaining <= 0) {
         _updateCountdownLabel('0:00');
-        // Nouvelle bougie → refresh auto
-        _fetchAndRender();
+        // Nouvelle bougie → refresh auto, conserve le zoom
+        _fetchAndRender(true);
         return;
       }
       var totalSec = Math.ceil(remaining / 1000);
@@ -93,6 +93,10 @@
           if (k.x) { _fetchAndRender(true); return; }
           if (series) {
             try { series.update(candle); } catch(e) {}
+          }
+          // Mettre a jour la priceLine du dernier cours en temps reel
+          if (countdownPriceLine) {
+            try { countdownPriceLine.applyOptions({ price: candle.close }); } catch(e) {}
           }
         } catch(e) {}
       };
@@ -219,6 +223,7 @@
         wickDownColor: '#ef4444',
         wickUpColor: '#22c55e',
         lastValueVisible: false,
+        priceLineVisible: false,
       });
 
       // Label vert avec timer sur le dernier cours

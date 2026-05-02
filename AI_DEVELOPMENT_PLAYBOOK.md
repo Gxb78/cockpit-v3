@@ -481,6 +481,48 @@ Format obligatoire d'une lesson:
 - Changement: suppression du guard `if (monthInput) return;`, trigger change de `#monthLabelBtn` a `#monthLabel`.
 - Fichiers a surveiller: `static/js/split/011_calendar_nav.js` (bindCalendarMonthPicker), `templates/partials/pages/journal/header.html` (#calendarMonthPicker, #monthLabel, #monthPopover).
 
+### BUG-20260502-08 - PriceLine du chart pas mise a jour par WebSocket
+- Symptome: la ligne pointillee verte du dernier prix reste figee au dernier fetch periodique (15-60s). Quand le prix monte puis descend, on voit brievement une double ligne (verte figee + rouge par defaut).
+- Cause racine: le WebSocket ne mettait jamais a jour `countdownPriceLine.applyOptions({ price: candle.close })`. La priceLine restait au prix du dernier `_fetchAndRender()`. De plus, `priceLineVisible: true` (defaut de Lightweight Charts) ajoutait sa propre ligne qui change de couleur.
+- Regle de prevention: toujours mettre a jour la priceLine custom DANS le handler WebSocket, pas seulement dans le fetch periodique. Ajouter `priceLineVisible: false` sur la serie candlestick pour eviter la double ligne.
+- Test de non-regression: le WebSocket pousse des mises a jour → la priceLine bouge en temps reel. Pas de double ligne.
+- Changement: `series.createPriceLine({ price: candle.close })` dans ws.onmessage + `priceLineVisible: false` sur les deux series (widget + chart XXL).
+- Fichiers a surveiller: `static/js/split/060_btc_chart_widget.js` (ws.onmessage + createChart), `static/js/split/062_chart_page.js` (idem).
+
+### BUG-20260502-09 - Countdown `_fetchAndRender()` sans keepZoom resetait le zoom
+- Symptome: a l'ouverture d'une nouvelle bougie (timer a 0:00), le zoom utilisateur etait perdu.
+- Cause racine: `_fetchAndRender()` appele sans argument → keepZoom = undefined → `chart.timeScale().fitContent()` resetait le zoom.
+- Regle de prevention: tout auto-refresh (countdown, periodic, WebSocket k.x) doit passer `_fetchAndRender(true)`. Seuls les changements manuels (timeframe, symbole) appellent sans keepZoom.
+- Test de non-regression: zoomer sur le chart → attendre l'ouverture d'une bougie → le zoom est preserve.
+- Changement: `_fetchAndRender(true)` dans le countdown du widget BTC (le chart XXL etait deja correct).
+- Fichiers a surveiller: `static/js/split/060_btc_chart_widget.js` (fonction tick dans _startCountdown).
+
+### BUG-20260502-10 - Fonctions favoris/dupliquer definies dans le mauvais scope
+- Symptome: ReferenceError: _toggleTradeFavorite is not defined au clic sur le coeur.
+- Cause racine: les fonctions ont ete inserees AVANT la fermeture de `journalTradeFlipCardHtml()` rendant leur scope local a la fonction. Inaccessible depuis le click handler.
+- Regle de prevention: quand on ajoute des fonctions a la fin d'un fichier JS, verifier qu'elles sont apres le dernier `}` de la fonction precedente, pas dedans. Toujours verifier le scope dans le bundle build (app.js).
+- Test de non-regression: clic sur coeur → API PUT /api/trades/:id avec tags ['favoris'] → coeur se remplit.
+- Changement: deplacement des deux fonctions apres le `}` fermant de `journalTradeFlipCardHtml()`.
+- Fichiers a surveiller: `static/js/split/056_journal_day_trade_cards.js` (fin du fichier).
+
+### API-20260502-01 - GET /api/trades/favorites
+- Endpoint qui retourne tous les trades avec le tag `favoris` en jointure avec la table `days` pour les champs `day_date` et `day_instrument`.
+- Route: `GET /api/trades/favorites` dans `app_parts/10_routes_trades.py`.
+- La fonction `normalize_trade_response()` preserve les colonnes inconnues (`day_date`, `day_instrument`).
+- Utilise pour le widget Favoris Carousel dans le dashboard Today.
+
+### FEATURE-20260502-01 - Widget Favoris Carousel
+- Nouveau widget `favorites_carousel` dans le dashboard Today.
+- Affiche les trades favoris sous forme de flip cards dans un carousel horizontal.
+- Navigation: fleches (hover), swipe tactile (scroll-snap), points indicateurs.
+- Scroll-snap natif CSS pour le swipe mobile.
+- Lazy render: seules les slides adjacentes sont rendues.
+- Template: `templates/partials/pages/today/widgets/012_favorites_carousel.html`
+- JS: `static/js/split/063_favorites_carousel.js`
+- CSS: `static/css/split/063_favorites_carousel.css`
+- Enregistre dans `WIDGET_REGISTRY` et `WIDGET_DEFAULTS` de `047_today_widget_board.js`.
+- Les utilisateurs existants verront le widget apparaitre en fin de grille (non dans l'ordre sauvegarde localStorage).
+
 ### CONVENTION-20260501 - exit_price = mapping conditionnel WIN/LOSS (MAJ 2026-05-01)
 - Regle: `exit_price` est mappe conditionnellement selon le resultat du trade. Si WIN → exit_price = take_profit. Si LOSS → exit_price = stop_loss.
 - Le backend (`05_payload_normalizers.py`) derive `is_win` depuis direction + entry vs exit si non fourni explicitement.

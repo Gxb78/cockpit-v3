@@ -369,6 +369,22 @@ function bindJournalDayTrades() {
       return;
     }
 
+    // Favoris button
+    var favBtn = e.target.closest("[data-journal-fav]");
+    if (favBtn) {
+      e.stopPropagation();
+      _toggleTradeFavorite(favBtn.dataset.journalFav, favBtn);
+      return;
+    }
+
+    // Dupliquer button
+    var dupBtn = e.target.closest("[data-journal-dup]");
+    if (dupBtn) {
+      e.stopPropagation();
+      _duplicateTrade(dupBtn.dataset.journalDup);
+      return;
+    }
+
     // Back-face icon buttons — don't flip
     if (e.target.closest(".journal-back-icon")) { e.stopPropagation(); return; }
 
@@ -753,11 +769,11 @@ function journalTradeFlipCardHtml(day, trade, idx, deck) {
           <div class="journal-flip-back-scroll" data-trade-id="${tid}">
 
             <div class="journal-back-actions">
-              <button type="button" class="journal-back-icon" aria-label="Trade marque">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>
+              <button type="button" class="journal-back-icon${(trade.tags || []).includes('favoris') ? ' is-active' : ''}" aria-label="Favoris" aria-pressed="${(trade.tags || []).includes('favoris')}" data-journal-fav="${tid}">
+                <svg viewBox="0 0 24 24" fill="${(trade.tags || []).includes('favoris') ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>
               </button>
-              <button type="button" class="journal-back-icon" aria-label="Partager">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.7 15.4 6.3"/><path d="M8.6 13.3l6.8 4.4"/></svg>
+              <button type="button" class="journal-back-icon" aria-label="Dupliquer" data-journal-dup="${tid}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               </button>
               <span class="jcard-save-ind" data-state=""></span>
               <button type="button" class="journal-back-edit" data-journal-trade-edit="${tid}">Editer</button>
@@ -847,4 +863,71 @@ function journalTradeFlipCardHtml(day, trade, idx, deck) {
       </div>
     </article>
   `;
+
+}
+// ---------- Favoris toggle ----------
+function _toggleTradeFavorite(tid, btnEl) {
+  var trade = _journalDayTradeCache[String(tid)];
+  if (!trade) return;
+  var tags = Array.isArray(trade.tags) ? trade.tags.slice() : [];
+  var idx = tags.indexOf('favoris');
+  var isFav = idx !== -1;
+  if (isFav) { tags.splice(idx, 1); } else { tags.push('favoris'); }
+
+  btnEl.classList.toggle('is-active', !isFav);
+  btnEl.setAttribute('aria-pressed', String(!isFav));
+  var svg = btnEl.querySelector('svg');
+  if (svg) svg.setAttribute('fill', !isFav ? 'currentColor' : 'none');
+
+  api('/api/trades/' + tid, {
+    method: 'PUT',
+    body: JSON.stringify({ tags: tags })
+  }).then(function(updated) {
+    _journalDayTradeCache[String(tid)] = updated;
+    _journalSyncStateAfterSave(tid, updated);
+    toast(isFav ? 'Retire des favoris' : 'Ajoute aux favoris', 'success');
+  }).catch(function() {
+    // Rollback visuel
+    btnEl.classList.toggle('is-active', isFav);
+    btnEl.setAttribute('aria-pressed', String(isFav));
+    if (svg) svg.setAttribute('fill', isFav ? 'currentColor' : 'none');
+    toast('Erreur mise a jour favoris', 'error');
+  });
+}
+
+// ---------- Duplicate trade ----------
+function _duplicateTrade(tid) {
+  var trade = _journalDayTradeCache[String(tid)];
+  if (!trade) return;
+
+  // Find the day for this trade
+  var day = _journalDayTradeDays[String(tid)];
+  if (!day) return;
+
+  var tags = Array.isArray(trade.tags) ? trade.tags.slice() : [];
+  if (!tags.includes('copie')) tags.push('copie');
+
+  var payload = {
+    strategy: trade.strategy,
+    direction: trade.direction,
+    entry_price: trade.entry_price,
+    stop_loss: trade.stop_loss,
+    take_profit: trade.take_profit,
+    position_size: trade.position_size,
+    leverage: trade.leverage,
+    session: trade.session,
+    tags: tags,
+    why_trade: trade.why_trade,
+    scenario: trade.scenario
+  };
+
+  api('/api/days/' + day.id + '/trades', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  }).then(function() {
+    _journalRefreshStateDebounced();
+    toast('Trade duplique', 'success');
+  }).catch(function(err) {
+    toast(err && err.message ? err.message : 'Erreur duplication', 'error');
+  });
 }

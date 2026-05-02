@@ -54,6 +54,26 @@ def get_trade(trade_id):
     return jsonify(t)
 
 
+@app.get("/api/trades/favorites")
+def list_favorite_trades():
+    """Retourne tous les trades marques favoris, avec les donnees du jour."""
+    db = get_db()
+    rows = db.execute("""
+        SELECT t.*, d.date as day_date, d.instrument as day_instrument
+        FROM trades t
+        JOIN days d ON d.id = t.day_id
+        WHERE t.tags LIKE '%favoris%'
+        ORDER BY t.created_at DESC
+    """).fetchall()
+    result = []
+    for row in rows:
+        t = row_to_dict(row)
+        normalize_trade_response(t)
+        t["screenshots"] = _fetch_screenshots(t["id"])
+        result.append(t)
+    return jsonify(result)
+
+
 @app.put("/api/trades/<int:trade_id>")
 def update_trade(trade_id):
     data = request.get_json(force=True)

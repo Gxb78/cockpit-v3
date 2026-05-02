@@ -380,6 +380,29 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   height: 16px;
 }
 
+.journal-back-icon.is-active {
+  color: #ef4444;
+  border-color: #ef4444;
+  background: #fff;
+}
+.journal-back-icon.is-active:hover {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.06);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.12);
+}
+
+/* ── Dark mode ── */
+body:not(.light-mode) .journal-back-icon.is-active {
+  color: #ff6b8a;
+  border-color: #ff6b8a;
+  background: transparent;
+}
+body:not(.light-mode) .journal-back-icon.is-active:hover {
+  border-color: #ff6b8a;
+  background: rgba(255, 107, 138, 0.10);
+  box-shadow: 0 4px 12px rgba(255, 107, 138, 0.10);
+}
+
 .journal-back-edit {
   margin-left: auto;
   border: 0;

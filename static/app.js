@@ -6530,10 +6530,11 @@ var WIDGET_REGISTRY = {
   today_calendar:      { label: "Calendrier",        icon: "cal",   kind: "panel",  size: "md" },
   today_streak:        { label: "Streak",            icon: "bolt",  kind: "kpi",    size: "sm" },
   btc_chart:           { label: "BTC Chart",         icon: "chart", kind: "panel",  size: "xl" },
+  favorites_carousel:  { label: "Favoris",           icon: "heart", kind: "panel",  size: "xl" },
 };
 
 var WIDGET_DEFAULTS = {
-  "today": ["kpi_total_pnl", "kpi_winrate", "kpi_average_rr", "kpi_trades", "kpi_profit_factor", "kpi_expectancy", "today_context", "today_log", "today_activity", "today_calendar", "today_streak", "btc_chart"],
+  "today": ["kpi_total_pnl", "kpi_winrate", "kpi_average_rr", "kpi_trades", "kpi_profit_factor", "kpi_expectancy", "today_context", "today_log", "today_activity", "today_calendar", "today_streak", "btc_chart", "favorites_carousel"],
 };
 
 function readWidgetOrder(boardKey) {
@@ -9284,6 +9285,22 @@ function bindJournalDayTrades() {
       return;
     }
 
+    // Favoris button
+    var favBtn = e.target.closest("[data-journal-fav]");
+    if (favBtn) {
+      e.stopPropagation();
+      _toggleTradeFavorite(favBtn.dataset.journalFav, favBtn);
+      return;
+    }
+
+    // Dupliquer button
+    var dupBtn = e.target.closest("[data-journal-dup]");
+    if (dupBtn) {
+      e.stopPropagation();
+      _duplicateTrade(dupBtn.dataset.journalDup);
+      return;
+    }
+
     // Back-face icon buttons — don't flip
     if (e.target.closest(".journal-back-icon")) { e.stopPropagation(); return; }
 
@@ -9668,11 +9685,11 @@ function journalTradeFlipCardHtml(day, trade, idx, deck) {
           <div class="journal-flip-back-scroll" data-trade-id="${tid}">
 
             <div class="journal-back-actions">
-              <button type="button" class="journal-back-icon" aria-label="Trade marque">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>
+              <button type="button" class="journal-back-icon${(trade.tags || []).includes('favoris') ? ' is-active' : ''}" aria-label="Favoris" aria-pressed="${(trade.tags || []).includes('favoris')}" data-journal-fav="${tid}">
+                <svg viewBox="0 0 24 24" fill="${(trade.tags || []).includes('favoris') ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>
               </button>
-              <button type="button" class="journal-back-icon" aria-label="Partager">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.7 15.4 6.3"/><path d="M8.6 13.3l6.8 4.4"/></svg>
+              <button type="button" class="journal-back-icon" aria-label="Dupliquer" data-journal-dup="${tid}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               </button>
               <span class="jcard-save-ind" data-state=""></span>
               <button type="button" class="journal-back-edit" data-journal-trade-edit="${tid}">Editer</button>
@@ -9762,6 +9779,73 @@ function journalTradeFlipCardHtml(day, trade, idx, deck) {
       </div>
     </article>
   `;
+
+}
+// ---------- Favoris toggle ----------
+function _toggleTradeFavorite(tid, btnEl) {
+  var trade = _journalDayTradeCache[String(tid)];
+  if (!trade) return;
+  var tags = Array.isArray(trade.tags) ? trade.tags.slice() : [];
+  var idx = tags.indexOf('favoris');
+  var isFav = idx !== -1;
+  if (isFav) { tags.splice(idx, 1); } else { tags.push('favoris'); }
+
+  btnEl.classList.toggle('is-active', !isFav);
+  btnEl.setAttribute('aria-pressed', String(!isFav));
+  var svg = btnEl.querySelector('svg');
+  if (svg) svg.setAttribute('fill', !isFav ? 'currentColor' : 'none');
+
+  api('/api/trades/' + tid, {
+    method: 'PUT',
+    body: JSON.stringify({ tags: tags })
+  }).then(function(updated) {
+    _journalDayTradeCache[String(tid)] = updated;
+    _journalSyncStateAfterSave(tid, updated);
+    toast(isFav ? 'Retire des favoris' : 'Ajoute aux favoris', 'success');
+  }).catch(function() {
+    // Rollback visuel
+    btnEl.classList.toggle('is-active', isFav);
+    btnEl.setAttribute('aria-pressed', String(isFav));
+    if (svg) svg.setAttribute('fill', isFav ? 'currentColor' : 'none');
+    toast('Erreur mise a jour favoris', 'error');
+  });
+}
+
+// ---------- Duplicate trade ----------
+function _duplicateTrade(tid) {
+  var trade = _journalDayTradeCache[String(tid)];
+  if (!trade) return;
+
+  // Find the day for this trade
+  var day = _journalDayTradeDays[String(tid)];
+  if (!day) return;
+
+  var tags = Array.isArray(trade.tags) ? trade.tags.slice() : [];
+  if (!tags.includes('copie')) tags.push('copie');
+
+  var payload = {
+    strategy: trade.strategy,
+    direction: trade.direction,
+    entry_price: trade.entry_price,
+    stop_loss: trade.stop_loss,
+    take_profit: trade.take_profit,
+    position_size: trade.position_size,
+    leverage: trade.leverage,
+    session: trade.session,
+    tags: tags,
+    why_trade: trade.why_trade,
+    scenario: trade.scenario
+  };
+
+  api('/api/days/' + day.id + '/trades', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  }).then(function() {
+    _journalRefreshStateDebounced();
+    toast('Trade duplique', 'success');
+  }).catch(function(err) {
+    toast(err && err.message ? err.message : 'Erreur duplication', 'error');
+  });
 }
 
 // ---- 057_debug_labels.js ----
@@ -10484,8 +10568,8 @@ TradeEditorController.renderHtml = function (day, trade) {
       var remaining = ms - elapsed;
       if (remaining <= 0) {
         _updateCountdownLabel('0:00');
-        // Nouvelle bougie → refresh auto
-        _fetchAndRender();
+        // Nouvelle bougie → refresh auto, conserve le zoom
+        _fetchAndRender(true);
         return;
       }
       var totalSec = Math.ceil(remaining / 1000);
@@ -10537,6 +10621,10 @@ TradeEditorController.renderHtml = function (day, trade) {
           if (k.x) { _fetchAndRender(true); return; }
           if (series) {
             try { series.update(candle); } catch(e) {}
+          }
+          // Mettre a jour la priceLine du dernier cours en temps reel
+          if (countdownPriceLine) {
+            try { countdownPriceLine.applyOptions({ price: candle.close }); } catch(e) {}
           }
         } catch(e) {}
       };
@@ -10663,6 +10751,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         wickDownColor: '#ef4444',
         wickUpColor: '#22c55e',
         lastValueVisible: false,
+        priceLineVisible: false,
       });
 
       // Label vert avec timer sur le dernier cours
@@ -10836,7 +10925,10 @@ TradeEditorController.renderHtml = function (day, trade) {
               try { volumeSeries.update({ time: candle.time, value: candle.volume, color: candle.close >= candle.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' }); } catch(e) {}
             }
           }
-          _updateCountdownLabel();
+          // Mettre a jour la priceLine du dernier cours en temps reel
+          if (countdownPriceLine) {
+            try { countdownPriceLine.applyOptions({ price: candle.close }); } catch(e) {}
+          }
         } catch(e) {}
       };
       ws.onclose = function () {
@@ -10945,6 +11037,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         wickDownColor: '#ef4444',
         wickUpColor: '#22c55e',
         lastValueVisible: false,
+        priceLineVisible: false,
       });
 
       // Label vert combinant prix + countdown sur le dernier cours
@@ -11212,4 +11305,226 @@ TradeEditorController.renderHtml = function (day, trade) {
   }
 
   window.initChartPage = initChartPage;
+})();
+
+// ---- 063_favorites_carousel.js ----
+// ---------- Favorites carousel widget — Today dashboard ----------
+
+(function () {
+  var currentIndex = 0;
+  var trades = [];
+  var _origGoPage = window.goPage;
+
+  function initFavCarousel() {
+    var track = document.getElementById('favCarouselTrack');
+    var empty = document.getElementById('favCarouselEmpty');
+    var countEl = document.getElementById('favCarouselCount');
+    if (!track) return;
+
+    fetch('/api/trades/favorites')
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        trades = Array.isArray(data) ? data : [];
+        track.innerHTML = '';
+        document.querySelector('.fav-carousel-panel')?.classList.remove('loading');
+
+        if (trades.length === 0) {
+          if (empty) empty.style.display = '';
+          if (countEl) countEl.textContent = '';
+          _updateDots(0);
+          _updateArrows(0);
+          return;
+        }
+
+        if (empty) empty.style.display = 'none';
+        if (countEl) countEl.textContent = trades.length + ' trade' + (trades.length > 1 ? 's' : '');
+
+        trades.forEach(function (trade, idx) {
+          // Construire un objet day synthetique
+          var day = {
+            id: trade.day_id,
+            instrument: trade.day_instrument || '-',
+            date: trade.day_date || trade.created_at?.slice(0, 10) || '',
+          };
+
+          var wrap = document.createElement('div');
+          wrap.className = 'fav-carousel-slide';
+          wrap.dataset.index = idx;
+
+          if (idx === currentIndex && window.journalTradeFlipCardHtml) {
+            var cardHtml = window.journalTradeFlipCardHtml(day, trade, idx + 1, [trade]);
+            wrap.innerHTML = cardHtml;
+          }
+
+          track.appendChild(wrap);
+        });
+
+        // Si on n'a pas pu render la card au moment de la creation (fonction pas encore dispo),
+        // essayer de render la slide courante
+        if (trades.length > 0) {
+          var firstSlide = track.children[0];
+          if (firstSlide && !firstSlide.querySelector('.journal-flip-card')) {
+            _renderSlide(0);
+          }
+        }
+
+        currentIndex = 0;
+        _scrollTo(currentIndex, false);
+        _updateDots(trades.length);
+        _updateArrows(trades.length);
+        _updateCount();
+      })
+      .catch(function (err) {
+        console.error('[fav-carousel] fetch:', err);
+      });
+  }
+
+  function _renderSlide(idx) {
+    var track = document.getElementById('favCarouselTrack');
+    if (!track) return;
+    var slide = track.children[idx];
+    if (!slide || slide.querySelector('.journal-flip-card')) return;
+
+    var trade = trades[idx];
+    if (!trade || !window.journalTradeFlipCardHtml) return;
+
+    var day = {
+      id: trade.day_id,
+      instrument: trade.day_instrument || '-',
+      date: trade.day_date || trade.created_at?.slice(0, 10) || '',
+    };
+
+    var cardHtml = window.journalTradeFlipCardHtml(day, trade, idx + 1, trades);
+    slide.innerHTML = cardHtml;
+  }
+
+  function _scrollTo(idx, smooth) {
+    var wrap = document.getElementById('favCarouselWrap');
+    if (!wrap) return;
+    var slide = wrap.querySelector('.fav-carousel-track')?.children[idx];
+    if (!slide) return;
+    slide.scrollIntoView({
+      behavior: smooth ? 'smooth' : 'instant',
+      block: 'nearest',
+      inline: 'start',
+    });
+    currentIndex = idx;
+  }
+
+  function _updateDots(count) {
+    var dotsEl = document.getElementById('favCarouselDots');
+    if (!dotsEl) return;
+    if (count <= 1) { dotsEl.innerHTML = ''; return; }
+    var html = '';
+    for (var i = 0; i < count; i++) {
+      html += '<button type="button" class="fav-carousel-dot' + (i === currentIndex ? ' is-active' : '') + '" data-dot="' + i + '" aria-label="Slide ' + (i + 1) + '"></button>';
+    }
+    dotsEl.innerHTML = html;
+  }
+
+  function _updateArrows(count) {
+    var left = document.getElementById('favCarouselLeft');
+    var right = document.getElementById('favCarouselRight');
+    if (!left || !right) return;
+    left.style.display = count > 1 ? '' : 'none';
+    right.style.display = count > 1 ? '' : 'none';
+    left.disabled = currentIndex <= 0;
+    right.disabled = currentIndex >= count - 1;
+  }
+
+  function _updateCount() {
+    var countEl = document.getElementById('favCarouselCount');
+    if (!countEl) return;
+    if (trades.length > 1) {
+      countEl.textContent = (currentIndex + 1) + '/' + trades.length;
+    }
+  }
+
+  function _goTo(idx) {
+    if (idx < 0 || idx >= trades.length || idx === currentIndex) return;
+    _renderSlide(idx);
+    _scrollTo(idx, true);
+  }
+
+  function _goNext() { _goTo(currentIndex + 1); }
+  function _goPrev() { _goTo(currentIndex - 1); }
+
+  // ── Navigation events ──
+
+  document.addEventListener('click', function (e) {
+    var left = e.target.closest('#favCarouselLeft');
+    if (left) { e.preventDefault(); _goPrev(); return; }
+
+    var right = e.target.closest('#favCarouselRight');
+    if (right) { e.preventDefault(); _goNext(); return; }
+
+    var dot = e.target.closest('.fav-carousel-dot');
+    if (dot) {
+      var idx = parseInt(dot.dataset.dot, 10);
+      if (!isNaN(idx)) _goTo(idx);
+    }
+  });
+
+  // Scroll-snap observer pour detecter le changement de slide
+  function _setupScrollObserver() {
+    var wrap = document.getElementById('favCarouselWrap');
+    if (!wrap) return;
+    var track = document.getElementById('favCarouselTrack');
+    if (!track) return;
+
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          var idx = parseInt(entry.target.dataset.index, 10);
+          if (!isNaN(idx) && idx !== currentIndex) {
+            currentIndex = idx;
+            _updateDots(trades.length);
+            _updateArrows(trades.length);
+            _updateCount();
+            // Lazy render les slides adjacents
+            _renderSlide(idx - 1);
+            _renderSlide(idx);
+            _renderSlide(idx + 1);
+          }
+        }
+      });
+    }, {
+      root: wrap,
+      threshold: 0.6,
+    });
+
+    Array.from(track.children).forEach(function (slide) {
+      observer.observe(slide);
+    });
+  }
+
+  // ── Hook dans goPage pour init au chargement ──
+
+  if (_origGoPage) {
+    window.goPage = function (pageName) {
+      _origGoPage(pageName);
+      if (pageName === 'today') {
+        // Laisser le temps aux widgets de se mettre en place
+        setTimeout(function () {
+          initFavCarousel();
+          // Puis setup l'observer apres que les slides soient rendues
+          setTimeout(function () {
+            if (trades.length > 0) {
+              _setupScrollObserver();
+              _renderSlide(0);
+              _renderSlide(1);
+            }
+          }, 200);
+        }, 500);
+      }
+    };
+  }
+
+  // ── Aussi au DOMContentLoaded si Today est deja ouvert ──
+  document.addEventListener('DOMContentLoaded', function () {
+    if (document.querySelector('.page[data-page="today"].active')) {
+      setTimeout(initFavCarousel, 600);
+    }
+  });
+
 })();

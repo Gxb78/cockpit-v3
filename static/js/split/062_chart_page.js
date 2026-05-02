@@ -52,7 +52,10 @@
               try { volumeSeries.update({ time: candle.time, value: candle.volume, color: candle.close >= candle.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' }); } catch(e) {}
             }
           }
-          _updateCountdownLabel();
+          // Mettre a jour la priceLine du dernier cours en temps reel
+          if (countdownPriceLine) {
+            try { countdownPriceLine.applyOptions({ price: candle.close }); } catch(e) {}
+          }
         } catch(e) {}
       };
       ws.onclose = function () {
@@ -161,6 +164,7 @@
         wickDownColor: '#ef4444',
         wickUpColor: '#22c55e',
         lastValueVisible: false,
+        priceLineVisible: false,
       });
 
       // Label vert combinant prix + countdown sur le dernier cours

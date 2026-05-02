@@ -1,0 +1,240 @@
+/* ---------- Favorites Carousel Widget ---------- */
+
+.fav-carousel-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.fav-carousel-panel .panel-h {
+  flex-shrink: 0;
+}
+
+.fav-carousel-count {
+  font-size: 12px;
+  color: var(--text-muted, #9ca3af);
+  font-weight: 500;
+  margin-left: auto;
+}
+
+/* ── Carousel wrap ── */
+
+.fav-carousel-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  margin: 0 -4px;
+}
+
+.fav-carousel-track {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  height: 100%;
+  gap: 16px;
+  padding: 4px 4px 20px;
+  scroll-padding: 4px;
+}
+
+.fav-carousel-track::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Slides ── */
+
+.fav-carousel-slide {
+  flex: 0 0 92%;
+  scroll-snap-align: start;
+  min-height: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.fav-carousel-slide .journal-flip-card {
+  position: static;
+  width: 100%;
+  max-width: 520px;
+  transform: none;
+  top: auto;
+  left: auto;
+  box-shadow: var(--shadow, 0 2px 6px rgba(0,0,0,0.06));
+}
+
+.fav-carousel-slide .journal-flip-card.is-flipped {
+  transform: none;
+}
+
+.fav-carousel-slide .journal-flip-inner {
+  min-height: 380px;
+}
+
+/* ── Arrows ── */
+
+.fav-carousel-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 5;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border, #e5e9f0);
+  background: var(--surface, #fff);
+  color: var(--text, #111827);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  box-shadow: var(--shadow-sm, 0 2px 6px rgba(0,0,0,0.08));
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.fav-carousel-wrap:hover .fav-carousel-arrow:not([disabled]) {
+  opacity: 1;
+}
+
+.fav-carousel-arrow[disabled] {
+  opacity: 0.2;
+  cursor: default;
+}
+
+.fav-carousel-arrow:hover:not([disabled]) {
+  transform: translateY(-50%) scale(1.08);
+  border-color: var(--accent, #0891b2);
+  color: var(--accent, #0891b2);
+}
+
+.fav-carousel-arrow svg {
+  width: 18px;
+  height: 18px;
+}
+
+.fav-carousel-arrow--left {
+  left: 8px;
+}
+
+.fav-carousel-arrow--right {
+  right: 8px;
+}
+
+/* ── Dots ── */
+
+.fav-carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 0 0;
+  flex-shrink: 0;
+}
+
+.fav-carousel-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--border, #d1d5db);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.fav-carousel-dot:hover {
+  background: var(--text-muted, #9ca3af);
+  transform: scale(1.2);
+}
+
+.fav-carousel-dot.is-active {
+  background: var(--accent, #0891b2);
+  width: 18px;
+  border-radius: 3px;
+}
+
+/* ── Empty state ── */
+
+.fav-carousel-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 40px 20px;
+  color: var(--text-muted, #9ca3af);
+  text-align: center;
+}
+
+.fav-carousel-empty svg {
+  opacity: 0.4;
+  margin-bottom: 4px;
+}
+
+.fav-carousel-empty p {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text, #111827);
+}
+
+.fav-carousel-empty span {
+  font-size: 12px;
+}
+
+/* ── Loading ── */
+
+.fav-carousel-panel.loading .fav-carousel-wrap {
+  min-height: 220px;
+}
+
+.fav-carousel-panel.loading .fav-carousel-track::after {
+  content: '';
+  display: block;
+  width: 90%;
+  height: 380px;
+  margin: auto;
+  border-radius: var(--r, 16px);
+  background: var(--surface-2, #f3f4f6);
+  animation: shimmer 1.6s infinite;
+}
+
+@keyframes shimmer {
+  0% { opacity: 1; }
+  50% { opacity: 0.4; }
+  100% { opacity: 1; }
+}
+
+/* ── Light mode ── */
+
+body.light-mode .fav-carousel-arrow {
+  background: #ffffff;
+  border-color: #e5e9f0;
+  box-shadow: 0 1px 3px rgba(15,23,42,0.06);
+}
+
+body.light-mode .fav-carousel-dot {
+  background: #d1d5db;
+}
+
+body.light-mode .fav-carousel-dot.is-active {
+  background: #0891b2;
+}
+
+/* ── Dark mode ── */
+
+body:not(.light-mode) .fav-carousel-arrow {
+  background: var(--surface-2, #1f2937);
+  border-color: var(--border, #374151);
+  color: var(--text, #f3f4f6);
+}
+
+body:not(.light-mode) .fav-carousel-dot {
+  background: #4b5563;
+}
+
+body:not(.light-mode) .fav-carousel-dot.is-active {
+  background: #06b6d4;
+}
