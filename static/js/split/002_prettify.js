@@ -121,8 +121,12 @@ function saveSettingsState() {
 
 function applyProfileSetting() {
   const pseudo = state.settings?.profile?.pseudo || "trader";
+  const h = new Date().getHours();
+  const salutation = h < 6 ? "Bonne nuit" : h < 12 ? "Bonjour" : h < 18 ? "Bon après-midi" : h < 22 ? "Bonsoir" : "Bonne nuit";
   const greeting = $("#todayGreeting");
   if (greeting) greeting.textContent = pseudo;
+  const sal = $("#todaySalutation");
+  if (sal) sal.textContent = salutation;
 }
 
 function applyVisualSettings() {

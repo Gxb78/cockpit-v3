@@ -21,7 +21,7 @@ var _jcardFieldFocused = false;
     if (!wrap.contains(e.target)) return;
     closeJournalTradeEditor();
     window._consumeClick = true;
-    setTimeout(function() { window._consumeClick = false; }, 1000);
+    setTimeout(function() { window._consumeClick = false; }, 0);
     e.stopImmediatePropagation();
     e.preventDefault();
   }, true);
@@ -787,7 +787,7 @@ function journalTradeFlipCardHtml(day, trade, idx, deck) {
                   value="${trade.stop_loss != null ? escapeHtml(String(trade.stop_loss)) : ''}" placeholder="—"/>
               </div>
               <div>
-                <span>TP</span>
+                <span>Sortie</span>
                 <input class="jcard-field" type="number" step="0.01" data-field="exit_price"
                   value="${trade.exit_price != null ? escapeHtml(String(trade.exit_price)) : ''}" placeholder="—"/>
               </div>

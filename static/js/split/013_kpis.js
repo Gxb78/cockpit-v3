@@ -105,7 +105,8 @@ function renderKPIs(s) {
   const pnlEl = $("#kpiPnl");
   pnlEl.textContent = fmtMoney(d.totalPnl);
   pnlEl.style.color = d.totalPnl >= 0 ? "var(--win)" : "var(--loss)";
-  $("#kpiWinrate").textContent = `${(s.winrate || 0).toFixed(1)}%`;
+  var wrEl = $("#kpiWinrate");
+  if (wrEl) wrEl.textContent = d.numTrades > 0 ? `${(s.winrate || 0).toFixed(1)}%` : "\u2014";
   $("#kpiWins").textContent = `${s.wins}W`;
   $("#kpiLosses").textContent = `${s.losses}L`;
   $("#kpiWinrateBar").style.transform = `scaleX(${Math.min(s.winrate || 0, 100) / 100})`;
@@ -125,10 +126,11 @@ function renderKPIs(s) {
     : "Aucun trade enregistre";
 
   let pfText = "\u2014";
-  if (d.profitFactor === Infinity) pfText = "\u221E";
+  let pfTitle = "";
+  if (d.profitFactor === Infinity) { pfText = "\u221E"; pfTitle = "Aucune perte enregistree"; }
   else if (Number.isFinite(d.profitFactor)) pfText = d.profitFactor.toFixed(2);
   var pfEl = $("#kpiProfitFactor");
-  if (pfEl) pfEl.textContent = pfText;
+  if (pfEl) { pfEl.textContent = pfText; pfEl.title = pfTitle; }
 
   var expEl = $("#kpiExpectancy");
   if (expEl) expEl.textContent = d.expectancy == null ? "\u2014" : fmtMoney(d.expectancy);

@@ -600,8 +600,12 @@ function saveSettingsState() {
 
 function applyProfileSetting() {
   const pseudo = state.settings?.profile?.pseudo || "trader";
+  const h = new Date().getHours();
+  const salutation = h < 6 ? "Bonne nuit" : h < 12 ? "Bonjour" : h < 18 ? "Bon après-midi" : h < 22 ? "Bonsoir" : "Bonne nuit";
   const greeting = $("#todayGreeting");
   if (greeting) greeting.textContent = pseudo;
+  const sal = $("#todaySalutation");
+  if (sal) sal.textContent = salutation;
 }
 
 function applyVisualSettings() {
@@ -2455,7 +2459,8 @@ function renderKPIs(s) {
   const pnlEl = $("#kpiPnl");
   pnlEl.textContent = fmtMoney(d.totalPnl);
   pnlEl.style.color = d.totalPnl >= 0 ? "var(--win)" : "var(--loss)";
-  $("#kpiWinrate").textContent = `${(s.winrate || 0).toFixed(1)}%`;
+  var wrEl = $("#kpiWinrate");
+  if (wrEl) wrEl.textContent = d.numTrades > 0 ? `${(s.winrate || 0).toFixed(1)}%` : "\u2014";
   $("#kpiWins").textContent = `${s.wins}W`;
   $("#kpiLosses").textContent = `${s.losses}L`;
   $("#kpiWinrateBar").style.transform = `scaleX(${Math.min(s.winrate || 0, 100) / 100})`;
@@ -2475,10 +2480,11 @@ function renderKPIs(s) {
     : "Aucun trade enregistre";
 
   let pfText = "\u2014";
-  if (d.profitFactor === Infinity) pfText = "\u221E";
+  let pfTitle = "";
+  if (d.profitFactor === Infinity) { pfText = "\u221E"; pfTitle = "Aucune perte enregistree"; }
   else if (Number.isFinite(d.profitFactor)) pfText = d.profitFactor.toFixed(2);
   var pfEl = $("#kpiProfitFactor");
-  if (pfEl) pfEl.textContent = pfText;
+  if (pfEl) { pfEl.textContent = pfText; pfEl.title = pfTitle; }
 
   var expEl = $("#kpiExpectancy");
   if (expEl) expEl.textContent = d.expectancy == null ? "\u2014" : fmtMoney(d.expectancy);
@@ -8920,7 +8926,7 @@ var _jcardFieldFocused = false;
     if (!wrap.contains(e.target)) return;
     closeJournalTradeEditor();
     window._consumeClick = true;
-    setTimeout(function() { window._consumeClick = false; }, 1000);
+    setTimeout(function() { window._consumeClick = false; }, 0);
     e.stopImmediatePropagation();
     e.preventDefault();
   }, true);
@@ -9686,7 +9692,7 @@ function journalTradeFlipCardHtml(day, trade, idx, deck) {
                   value="${trade.stop_loss != null ? escapeHtml(String(trade.stop_loss)) : ''}" placeholder="—"/>
               </div>
               <div>
-                <span>TP</span>
+                <span>Sortie</span>
                 <input class="jcard-field" type="number" step="0.01" data-field="exit_price"
                   value="${trade.exit_price != null ? escapeHtml(String(trade.exit_price)) : ''}" placeholder="—"/>
               </div>
