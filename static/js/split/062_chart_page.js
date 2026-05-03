@@ -13,7 +13,7 @@
 
   // VWAP
   var vwapSeries = null;
-  var activeVwapPeriod = null;
+  var activeVwapPeriod = localStorage.getItem('chartVwapPeriod') || null;
 
   // State
   var countdownPriceLine = null;
@@ -242,7 +242,13 @@
           lastCandleTime = k.t;
           if (k.x) { _fetchAndRender(true); return; }
           if (candlestickSeries) {
-            try { candlestickSeries.update(candle); } catch(e) {}
+            try {
+              if (chartStyle === 'candlestick') {
+                candlestickSeries.update(candle);
+              } else {
+                candlestickSeries.update({ time: candle.time, value: candle.close });
+              }
+            } catch(e) {}
             if (volumeSeries) {
               try { volumeSeries.update({ time: candle.time, value: candle.volume, color: candle.close >= candle.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' }); } catch(e) {}
             }
@@ -338,7 +344,7 @@
           secondsVisible: false,
           borderVisible: false,
         },
-        handleScroll: { vertTouchDrag: false },
+        handleScroll: { vertTouchDrag: true, horzTouchDrag: true, pressedMouseMove: true },
       });
 
       // Candlestick series
@@ -504,6 +510,7 @@
           activeVwapPeriod = period;
           vwapToggle.classList.add('active');
         }
+        try { localStorage.setItem('chartVwapPeriod', activeVwapPeriod || ''); } catch(e) {}
         vwapDropdown.classList.add('hidden');
         _fetchAndRender(true);
       });
@@ -516,31 +523,55 @@
       return;
     }
     var days = { '1D': 1, '7D': 7, '30D': 30, '90D': 90 }[activeVwapPeriod] || 1;
-    var now = Math.floor(Date.now() / 1000);
-    var cutoff = now - days * 86400;
-    var cumTpv = 0, cumVol = 0;
-    for (var i = 0; i < candles.length; i++) {
-      var c = candles[i];
-      if (c.time < cutoff) continue;
-      var tp = (c.high + c.low + c.close) / 3;
-      cumTpv += tp * c.volume;
-      cumVol += c.volume;
-    }
-    if (cumVol === 0) {
-      if (vwapSeries) { try { chart.removeSeries(vwapSeries); } catch(e) {} vwapSeries = null; }
-      return;
-    }
-    var vwap = cumTpv / cumVol;
-    if (!vwapSeries) {
-      vwapSeries = chart.addLineSeries({
-        color: '#f59e0b',
-        lineWidth: 1.5,
-        priceLineVisible: false,
-        lastValueVisible: true,
-        crosshairMarkerVisible: false,
+    // Choisir l'intervalle de fetch adapté à la période
+    var fetchInterval = '1h';
+    if (days >= 7 && days <= 14) fetchInterval = '1h';
+    else if (days <= 90) fetchInterval = '4h';
+    else fetchInterval = '1d';
+    // Calculer le nombre de bougies nécessaires (marge +10)
+    var intervalMinutes = { '1m':1,'3m':3,'5m':5,'15m':15,'30m':30,'1h':60,'2h':120,'4h':240,'6h':360,'8h':480,'12h':720,'1d':1440,'3d':4320,'1w':10080,'1M':43200 };
+    var minPerCandle = intervalMinutes[fetchInterval] || 60;
+    var needed = Math.ceil(days * 1440 / minPerCandle) + 10;
+    needed = Math.max(needed, 100); // minimum 100 bougies
+
+    // Fetch data au bon intervalle
+    var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + fetchInterval + '&limit=' + needed;
+    fetch(url)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error || !data.candles || !data.candles.length) {
+          if (vwapSeries) { try { chart.removeSeries(vwapSeries); } catch(e) {} vwapSeries = null; }
+          return;
+        }
+        var vwapCandles = data.candles;
+        var now = Math.floor(Date.now() / 1000);
+        var cutoff = now - days * 86400;
+        var cumTpv = 0, cumVol = 0;
+        var vwapData = [];
+        for (var i = 0; i < vwapCandles.length; i++) {
+          var c = vwapCandles[i];
+          if (c.time < cutoff) continue;
+          var tp = (c.high + c.low + c.close) / 3;
+          cumTpv += tp * c.volume;
+          cumVol += c.volume;
+          if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
+        }
+        if (!vwapData.length) {
+          if (vwapSeries) { try { chart.removeSeries(vwapSeries); } catch(e) {} vwapSeries = null; }
+          return;
+        }
+        if (!vwapSeries) {
+          vwapSeries = chart.addLineSeries({
+            color: '#f59e0b', lineWidth: 1.5, priceLineVisible: false,
+            lastValueVisible: true, crosshairMarkerVisible: false,
+            title: 'VWAP ' + activeVwapPeriod,
+          });
+        }
+        vwapSeries.setData(vwapData);
+      })
+      .catch(function () {
+        if (vwapSeries) { try { chart.removeSeries(vwapSeries); } catch(e) {} vwapSeries = null; }
       });
-    }
-    vwapSeries.setData(candles.map(function (c) { return { time: c.time, value: vwap }; }));
   }
 
   // ── TIMEFRAMES ──
@@ -815,6 +846,7 @@
       localStorage.setItem('chartDefInterval', currentInterval);
       localStorage.setItem('chartDefSymbol', currentSymbol);
       localStorage.setItem('chartDefStyle', chartStyle);
+      localStorage.setItem('chartVwapPeriod', activeVwapPeriod || '');
     } catch(e) {}
   }
 
@@ -829,13 +861,15 @@
   function _fetchAndRender(keepZoom) {
     if (!candlestickSeries) return;
 
-    // Sauvegarder le zoom utilisateur avant refresh
+    // Sauvegarder le zoom utilisateur avant refresh (en temps ET en logique)
     var savedRange = null;
+    var savedLogical = null;
     if (keepZoom && chart && chart.timeScale()) {
       try { savedRange = chart.timeScale().getVisibleRange(); } catch(e) {}
+      try { savedLogical = chart.timeScale().getVisibleLogicalRange(); } catch(e) {}
     }
 
-    var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=500';
+    var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=10000';
     fetch(url)
       .then(function (r) { return r.json(); })
       .then(function (data) {
@@ -852,7 +886,7 @@
         _connectWs();
         _updateStats(candles);
 
-        candlestickSeries.setData(candles);
+        candlestickSeries.setData(chartStyle === 'candlestick' ? candles : candles.map(function (c) { return { time: c.time, value: c.close }; }));
 
         // VWAP
         _calcAndDrawVwap(candles);
@@ -877,9 +911,14 @@
 
         if (!keepZoom) chart.timeScale().fitContent();
 
-        // Restaurer le zoom utilisateur apres setData (robustesse)
-        if (keepZoom && savedRange) {
-          try { chart.timeScale().setVisibleRange(savedRange); } catch(e) {}
+        // Restaurer le zoom utilisateur apres setData (logique d'abord, temps en fallback)
+        if (keepZoom) {
+          // Le logical range est plus stable que le time range car base sur l'index
+          if (savedLogical) {
+            try { chart.timeScale().setVisibleLogicalRange(savedLogical); } catch(e) {}
+          } else if (savedRange) {
+            try { chart.timeScale().setVisibleRange(savedRange); } catch(e) {}
+          }
         }
       })
       .catch(function (err) { console.error('[chart] fetch:', err); });

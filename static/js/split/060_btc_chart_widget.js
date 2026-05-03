@@ -14,6 +14,7 @@
   // Indicator series
   var indicatorSeries = {};
   var rsiSeries = null;
+  var vwapSeries = null;
 
   var INTERVAL_MS = {
     '1m': 60000, '3m': 180000, '5m': 300000, '15m': 900000,
@@ -37,6 +38,12 @@
         if (indSettings[k]) Object.assign(indSettings[k], saved[k]);
       });
     }
+  } catch(e) {}
+
+  // VWAP period synced from chart page
+  var activeVwapPeriod = null;
+  try {
+    activeVwapPeriod = localStorage.getItem('chartVwapPeriod') || null;
   } catch(e) {}
 
   function _getIntervalMs(interval) {
@@ -195,6 +202,61 @@
         rsiSeries.setData(rsiData);
       } catch(e) { console.error('[btc-chart] RSI:', e); }
     }
+  }
+
+  // ── VWAP ──
+  function _calcAndDrawVwap(candles) {
+    if (!activeVwapPeriod || !candles || !candles.length) {
+      if (vwapSeries) { try { chart.removeSeries(vwapSeries); } catch(e) {} vwapSeries = null; }
+      return;
+    }
+    var days = { '1D': 1, '7D': 7, '30D': 30, '90D': 90 }[activeVwapPeriod] || 1;
+    var fetchInterval = '1h';
+    if (days >= 7 && days <= 14) fetchInterval = '1h';
+    else if (days <= 90) fetchInterval = '4h';
+    else fetchInterval = '1d';
+    var intervalMinutes = { '1m':1,'3m':3,'5m':5,'15m':15,'30m':30,'1h':60,'2h':120,'4h':240,'6h':360,'8h':480,'12h':720,'1d':1440,'3d':4320,'1w':10080,'1M':43200 };
+    var minPerCandle = intervalMinutes[fetchInterval] || 60;
+    var needed = Math.ceil(days * 1440 / minPerCandle) + 10;
+    needed = Math.max(needed, 100);
+
+    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + fetchInterval + '&limit=' + needed;
+    fetch(url)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error || !data.candles || !data.candles.length) {
+          if (vwapSeries) { try { chart.removeSeries(vwapSeries); } catch(e) {} vwapSeries = null; }
+          return;
+        }
+        var vwapCandles = data.candles;
+        var now = Math.floor(Date.now() / 1000);
+        var cutoff = now - days * 86400;
+        var cumTpv = 0, cumVol = 0;
+        var vwapData = [];
+        for (var i = 0; i < vwapCandles.length; i++) {
+          var c = vwapCandles[i];
+          if (c.time < cutoff) continue;
+          var tp = (c.high + c.low + c.close) / 3;
+          cumTpv += tp * c.volume;
+          cumVol += c.volume;
+          if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
+        }
+        if (!vwapData.length) {
+          if (vwapSeries) { try { chart.removeSeries(vwapSeries); } catch(e) {} vwapSeries = null; }
+          return;
+        }
+        if (!vwapSeries) {
+          vwapSeries = chart.addLineSeries({
+            color: '#f59e0b', lineWidth: 1.5, priceLineVisible: false,
+            lastValueVisible: true, crosshairMarkerVisible: false,
+            title: 'VWAP ' + activeVwapPeriod,
+          });
+        }
+        vwapSeries.setData(vwapData);
+      })
+      .catch(function () {
+        if (vwapSeries) { try { chart.removeSeries(vwapSeries); } catch(e) {} vwapSeries = null; }
+      });
   }
 
   // ── TIMER ──
@@ -367,13 +429,14 @@
         crosshair: { mode: 0 },
         rightPriceScale: {
           borderColor: isLight ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.08)',
+          borderVisible: false,
         },
         timeScale: {
           borderColor: isLight ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.08)',
           timeVisible: true,
           secondsVisible: false,
         },
-        handleScroll: { vertTouchDrag: false },
+        handleScroll: { vertTouchDrag: true, horzTouchDrag: true, pressedMouseMove: true },
       });
 
       series = chart.addCandlestickSeries({
@@ -441,65 +504,23 @@
         });
       }
 
-      // ── DRAWING TOOLS ──
-      _initWidgetDrawings();
-
     } catch (e) {
       console.error('[btc-chart] createChart error:', e);
     }
   }
 
-  function _initWidgetDrawings() {
-    if (!window.ChartDrawings || !chart || !series) return;
-    var container = document.getElementById('btcChartContainer');
-    if (!container) return;
-
-    var toolbar = document.getElementById('drawToolbarWidget');
-    if (!toolbar) return;
-
-    var tools = window.ChartDrawings.tools;
-    toolbar.innerHTML = '';
-    tools.forEach(function (t) {
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'draw-toolbar-btn' + (t.id === 'cursor' ? ' is-active' : '');
-      btn.dataset.tool = t.id;
-      btn.dataset.label = t.label;
-      btn.textContent = t.icon;
-      btn.addEventListener('click', function () {
-        toolbar.querySelectorAll('.draw-toolbar-btn').forEach(function (b) { b.classList.remove('is-active'); });
-        btn.classList.add('is-active');
-        window.ChartDrawings.setTool(t.id);
-      });
-      toolbar.appendChild(btn);
-    });
-
-    var clearBtn = document.createElement('button');
-    clearBtn.type = 'button';
-    clearBtn.className = 'draw-toolbar-btn draw-clear';
-    clearBtn.dataset.label = 'Tout effacer';
-    clearBtn.textContent = '✕';
-    clearBtn.addEventListener('click', function () {
-      if (confirm('Effacer tous les dessins ?')) {
-        window.ChartDrawings.clearAll();
-      }
-    });
-    toolbar.appendChild(clearBtn);
-
-    var isLight = document.body.classList.contains('light-mode');
-    window.ChartDrawings.init(chart, series, container, isLight);
-  }
-
   function _fetchAndRender(keepZoom) {
     if (!series) return;
 
-    // Sauvegarder le zoom utilisateur avant refresh
+    // Sauvegarder le zoom utilisateur avant refresh (en temps ET en logique)
     var savedRange = null;
+    var savedLogical = null;
     if (keepZoom && chart && chart.timeScale()) {
       try { savedRange = chart.timeScale().getVisibleRange(); } catch(e) {}
+      try { savedLogical = chart.timeScale().getVisibleLogicalRange(); } catch(e) {}
     }
 
-    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + currentInterval + '&limit=200';
+    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + currentInterval + '&limit=5000';
     fetch(url)
       .then(function (r) { return r.json(); })
       .then(function (data) {
@@ -519,15 +540,22 @@
         // Indicators
         _renderIndicators(candles);
 
+        // VWAP
+        _calcAndDrawVwap(candles);
+
         if (countdownPriceLine) {
           try { countdownPriceLine.applyOptions({ price: last.close }); } catch(e) {}
         }
         _updateCountdownLabel();
         if (!keepZoom) chart.timeScale().fitContent();
 
-        // Restaurer le zoom utilisateur apres setData
-        if (keepZoom && savedRange) {
-          try { chart.timeScale().setVisibleRange(savedRange); } catch(e) {}
+        // Restaurer le zoom utilisateur apres setData (logique d'abord, temps en fallback)
+        if (keepZoom) {
+          if (savedLogical) {
+            try { chart.timeScale().setVisibleLogicalRange(savedLogical); } catch(e) {}
+          } else if (savedRange) {
+            try { chart.timeScale().setVisibleRange(savedRange); } catch(e) {}
+          }
         }
       })
       .catch(function (err) { console.error('[btc-chart] fetch:', err); });

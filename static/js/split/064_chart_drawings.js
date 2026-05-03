@@ -67,6 +67,7 @@
     sessions: [], // session zone configs
     activeTool: 'cursor',
     isDrawing: false, dragStart: null, previewPoint: null,
+    selectedIndex: -1, // -1 = none, >=0 = editing an existing drawing
     toolOptions: {
       color: '#06b6d4', fillColor: '#06b6d4', opacity: 0.3,
       lineWidth: 1.5, lineStyle: 'solid',
@@ -119,15 +120,47 @@
   function _toPixel(time, price) {
     var x = state.chart.timeScale().timeToCoordinate(time);
     var y = state.series.priceToCoordinate(price);
+    // Si timeToCoordinate echoue (temps au-dela des donnees), calculer via le ratio temps/pixel
+    if (x == null && state.chart && state.chart.timeScale()) {
+      try {
+        var vr = state.chart.timeScale().getVisibleRange();
+        if (vr && vr.from != null && vr.to != null) {
+          var lx = state.chart.timeScale().timeToCoordinate(vr.from);
+          var rx = state.chart.timeScale().timeToCoordinate(vr.to);
+          if (lx != null && rx != null && rx !== lx) {
+            // Inverser le calcul: (time - vr.from) * (pixels / time) + offset gauche
+            var pxPerTime = (rx - lx) / (vr.to - vr.from);
+            x = lx + (time - vr.from) * pxPerTime;
+          }
+        }
+      } catch(e) {}
+    }
     if (x == null || y == null) return null;
     return { x: x, y: y };
   }
 
   function _toTimePrice(clientX, clientY) {
     var rect = state.container.getBoundingClientRect();
-    var tp = state.chart.timeScale().coordinateToTime(clientX - rect.left);
-    var pp = state.series.coordinateToPrice(clientY - rect.top);
-    if (tp == null || pp == null) return null;
+    var x = clientX - rect.left;
+    var y = clientY - rect.top;
+    var tp = state.chart.timeScale().coordinateToTime(x);
+    var pp = state.series.coordinateToPrice(y);
+    if (pp == null) return null;
+    // Si clic au-dela du temps visible (dans le futur/droite), prendre le bord droit de la time scale
+    if (tp == null) {
+      try {
+        var vr = state.chart.timeScale().getVisibleRange();
+        if (vr && vr.from != null && vr.to != null) {
+          var lx = state.chart.timeScale().timeToCoordinate(vr.from);
+          var rx = state.chart.timeScale().timeToCoordinate(vr.to);
+          if (lx != null && rx != null && rx !== lx) {
+            var timePerPx = (vr.to - vr.from) / (rx - lx);
+            tp = vr.from + (x - lx) * timePerPx;
+          }
+        }
+      } catch(e) {}
+    }
+    if (tp == null) return null;
     return { time: tp, price: pp };
   }
 
@@ -257,6 +290,7 @@
   // ── TOOL MANAGEMENT ──
 
   function setActiveTool(toolId) {
+    state.selectedIndex = -1; // clear selection on tool change
     state.activeTool = toolId || 'cursor';
     state.isDrawing = false; state.dragStart = null; state.previewPoint = null;
     if (toolId === 'horizontal' || toolId === 'horizontalray' || toolId === 'vertical') {
@@ -280,11 +314,13 @@
   // ── OPTIONS UI ──
 
   function _syncOptionsUI() {
-    var panel = document.getElementById('drawOptionsPanel');
-    if (panel) {
-      if (state.activeTool === 'cursor') { panel.classList.add('hidden'); }
-      else { panel.classList.remove('hidden'); }
-    }
+    ['drawOptionsPanel', 'drawOptionsPanelWidget'].forEach(function (id) {
+      var panel = document.getElementById(id);
+      if (panel) {
+        if (state.activeTool === 'cursor') { panel.classList.add('hidden'); }
+        else { panel.classList.remove('hidden'); }
+      }
+    });
 
     _setVal('drawColorPick', state.toolOptions.color);
     _setVal('drawFillColor', state.toolOptions.fillColor);
@@ -365,17 +401,54 @@
     state.toolOptions.extendLeft = gc('drawExtLeft');
     state.toolOptions.extendRight = gc('drawExtRight');
     state.toolOptions.text = gv('drawText') || '';
+
+    // Apply to selected drawing (live edit)
+    if (state.selectedIndex >= 0 && state.selectedIndex < state.drawings.length) {
+      var d = state.drawings[state.selectedIndex];
+      d.color = state.toolOptions.color;
+      d.fillColor = state.toolOptions.fillColor;
+      d.lineWidth = state.toolOptions.lineWidth;
+      d.lineStyle = state.toolOptions.lineStyle;
+      d.opacity = state.toolOptions.opacity;
+      d.extendLeft = state.toolOptions.extendLeft;
+      d.extendRight = state.toolOptions.extendRight;
+      d.text = state.toolOptions.text;
+      // Fib levels preserved — only sync top-level props
+      _saveDrawings();
+      _renderAll();
+    }
   }
 
   // ── EVENTS ──
 
+  var _renderRaf = null;
+  function _scheduleRender() {
+    if (_renderRaf) return;
+    _renderRaf = requestAnimationFrame(function () {
+      _renderRaf = null;
+      _renderAll();
+    });
+  }
+
   function _bindEvents() {
     if (!state.canvas) return;
-    state.canvas.addEventListener('mousedown', _onMouseDown);
+    state.canvas.addEventListener('click', _onCanvasClick);
     state.canvas.addEventListener('mousemove', _onMouseMove);
-    state.canvas.addEventListener('mouseup', _onMouseUp);
     state.canvas.addEventListener('mouseleave', _onMouseLeave);
     state.canvas.addEventListener('dblclick', _onDblClick);
+
+    // Redessiner quand la souris bouge sur le chart (couvre axe des prix, crosshair, etc.)
+    if (state.chart && typeof state.chart.subscribeCrosshairMove === 'function') {
+      state.chart.subscribeCrosshairMove(_scheduleRender);
+    }
+
+    // Redessiner immediatement sur tout mouvement souris dans le conteneur (couvre drag axe des prix)
+    if (state.container) {
+      state.container.addEventListener('mousemove', function () {
+        requestAnimationFrame(function () { _renderAll(); });
+      }, { passive: true });
+      state.container.addEventListener('wheel', function () { requestAnimationFrame(function () { _renderAll(); }); }, { passive: true });
+    }
 
     document.addEventListener('change', function (e) {
       if (e.target.closest('#drawOptionsPanel')) _readOptionsFromUI();
@@ -396,16 +469,24 @@
       if (e.target.id === 'drawTemplateDelete') _onTemplateDelete();
     });
 
-    // Keyboard: Ctrl+Z for undo
+    // Keyboard: Ctrl+Z for undo + Escape to deselect
     document.addEventListener('keydown', function (e) {
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         e.preventDefault();
         undo();
       }
+      if (e.key === 'Escape' && state.selectedIndex >= 0) {
+        _deselectDrawing();
+      }
     });
 
     if (state.chart && state.chart.timeScale()) {
-      state.chart.timeScale().subscribeVisibleTimeRangeChange(function () { _resizeCanvas(); _renderAll(); });
+      state.chart.timeScale().subscribeVisibleTimeRangeChange(function () {
+        try { _resizeCanvas(); _renderAll(); } catch(e) { console.error('[draw] timeRange:', e); }
+      });
+      state.chart.timeScale().subscribeVisibleLogicalRangeChange(function () {
+        try { _resizeCanvas(); _renderAll(); } catch(e) { console.error('[draw] logicalRange:', e); }
+      });
     }
 
     // Redraw on window resize
@@ -458,42 +539,93 @@
     if (current) sel.value = current;
   }
 
-  function _onMouseDown(e) {
+  function _onCanvasClick(e) {
     if (state.activeTool === 'cursor') return;
     _readOptionsFromUI();
     var tp = _toTimePrice(e.clientX, e.clientY);
     if (!tp) return;
-    state.dragStart = { time: tp.time, price: tp.price };
-    state.isDrawing = true; state.previewPoint = null;
+
+    var tool = state.activeTool;
+    var isOnePoint = (tool === 'horizontal' || tool === 'horizontalray' || tool === 'vertical' || tool === 'text');
+
+    // If editing an existing drawing, clicking elsewhere deselects
+    if (state.selectedIndex >= 0 && state.selectedIndex < state.drawings.length) {
+      _deselectDrawing();
+      // If user clicked on a different drawing, select that one instead
+      var hitIdx = _hitTestIndex(tp.time, tp.price);
+      if (hitIdx >= 0 && hitIdx !== state.selectedIndex) {
+        _selectDrawing(hitIdx);
+        return;
+      }
+      return;
+    }
+
+    // Hit test: clicking on existing drawing enters edit mode
+    if (!state.isDrawing) {
+      var hitIdx = _hitTestIndex(tp.time, tp.price);
+      if (hitIdx >= 0) {
+        _selectDrawing(hitIdx);
+        return;
+      }
+    }
+
+    // Otherwise, creation flow
+    if (!state.isDrawing) {
+      // First click: start drawing
+      state.dragStart = { time: tp.time, price: tp.price };
+      state.isDrawing = true;
+      state.previewPoint = null;
+      // For 1-point tools, finalize immediately
+      if (isOnePoint) { _finalizeDrawing(tp); }
+    } else {
+      // Second click: finalize drawing
+      _finalizeDrawing(tp);
+    }
   }
 
-  function _onMouseMove(e) {
-    if (state.isDrawing && state.dragStart) {
-      var tp = _toTimePrice(e.clientX, e.clientY);
-      if (tp) { state.previewPoint = { time: tp.time, price: tp.price }; _renderAll(); }
+  function _selectDrawing(idx) {
+    if (idx < 0 || idx >= state.drawings.length) return;
+    _cancelDrawing();
+    state.selectedIndex = idx;
+    var d = state.drawings[idx];
+    // Sync tool options to match the selected drawing
+    state.toolOptions.color = d.color || '#06b6d4';
+    state.toolOptions.fillColor = d.fillColor || '#06b6d4';
+    state.toolOptions.lineWidth = d.lineWidth || 1.5;
+    state.toolOptions.lineStyle = d.lineStyle || 'solid';
+    state.toolOptions.opacity = d.opacity !== undefined ? d.opacity : 0.3;
+    state.toolOptions.extendLeft = d.extendLeft || false;
+    state.toolOptions.extendRight = d.extendRight !== false;
+    state.toolOptions.text = d.text || '';
+    if (d.fibLevels) {
+      Object.keys(state.toolOptions.fibLevels).forEach(function (k) {
+        state.toolOptions.fibLevels[k] = d.fibLevels[k] !== false;
+      });
     }
-    if (state.activeTool === 'cursor') {
-      var tp = _toTimePrice(e.clientX, e.clientY);
-      if (tp && state.canvas) state.canvas.style.cursor = _hitTest(tp.time, tp.price) ? 'pointer' : '';
-    }
+    _syncOptionsUI();
+    _renderAll();
+    if (typeof toast === 'function') toast('Dessin sélectionné — modifie les options en direct', 'info');
   }
 
-  function _onMouseUp(e) {
-    if (!state.isDrawing || !state.dragStart) return;
-    _readOptionsFromUI();
-    var tp = _toTimePrice(e.clientX, e.clientY);
-    if (!tp) { _cancelDrawing(); return; }
+  function _deselectDrawing() {
+    if (state.selectedIndex < 0) return;
+    state.selectedIndex = -1;
+    _syncOptionsUI();
+    _renderAll();
+  }
+
+  function _finalizeDrawing(tp) {
+    if (!state.dragStart) { _cancelDrawing(); return; }
     var p1 = state.dragStart, p2 = { time: tp.time, price: tp.price };
-
     var tool = state.activeTool, drawing = null;
 
     switch (tool) {
       case 'box':
-        if (p1.time === p2.time && p1.price === p2.price) { _cancelDrawing(); return; }
+        if (p1.time === p2.time && p1.price === p2.price) { _cancelDrawing(); _renderAll(); return; }
         drawing = _createDrawing('box', [p1, p2]);
         break;
       case 'trendline':
-        if (p1.time === p2.time && p1.price === p2.price) { _cancelDrawing(); return; }
+        if (p1.time === p2.time && p1.price === p2.price) { _cancelDrawing(); _renderAll(); return; }
         drawing = _createDrawing('trendline', [p1, p2]);
         break;
       case 'horizontal':
@@ -506,7 +638,7 @@
         drawing = _createDrawing('vertical', [p1]);
         break;
       case 'fibonacci':
-        if (p1.time === p2.time && p1.price === p2.price) { _cancelDrawing(); return; }
+        if (p1.time === p2.time && p1.price === p2.price) { _cancelDrawing(); _renderAll(); return; }
         drawing = _createDrawing('fibonacci', [p1, p2]);
         break;
       case 'text':
@@ -520,9 +652,36 @@
     }
     _cancelDrawing();
     _renderAll();
+
+    // Auto-exit to cursor mode
+    setActiveTool('cursor');
+    // Update toolbar button active state
+    var toolbar = document.getElementById('drawToolbar');
+    if (toolbar) {
+      toolbar.querySelectorAll('.draw-toolbar-btn').forEach(function (b) {
+        b.classList.toggle('is-active', b.dataset.tool === 'cursor');
+      });
+    }
+    var widgetToolbar = document.getElementById('drawToolbarWidget');
+    if (widgetToolbar) {
+      widgetToolbar.querySelectorAll('.draw-toolbar-btn').forEach(function (b) {
+        b.classList.toggle('is-active', b.dataset.tool === 'cursor');
+      });
+    }
   }
 
-  function _onMouseLeave() { state.previewPoint = null; if (state.isDrawing) _cancelDrawing(); _renderAll(); }
+  function _onMouseMove(e) {
+    if (state.isDrawing && state.dragStart) {
+      var tp = _toTimePrice(e.clientX, e.clientY);
+      if (tp) { state.previewPoint = { time: tp.time, price: tp.price }; _renderAll(); }
+    }
+    if (state.activeTool === 'cursor') {
+      var tp = _toTimePrice(e.clientX, e.clientY);
+      if (tp && state.canvas) state.canvas.style.cursor = _hitTest(tp.time, tp.price) ? 'pointer' : '';
+    }
+  }
+
+  function _onMouseLeave() { state.previewPoint = null; _renderAll(); }
 
   function _onDblClick(e) {
     if (state.activeTool !== 'cursor') return;
@@ -562,21 +721,40 @@
     var ctx = state.ctx; if (!ctx || !state.canvas) return;
     ctx.clearRect(0, 0, state.canvas.width, state.canvas.height);
     _renderSessions();
-    for (var i = 0; i < state.drawings.length; i++) _renderDrawing(state.drawings[i]);
+    for (var i = 0; i < state.drawings.length; i++) { _renderDrawing(state.drawings[i], i); _drawSelectionIndicators(state.drawings[i], i); }
     if (state.dragStart && state.previewPoint && state.activeTool !== 'cursor') {
       _renderPreview(state.activeTool, state.dragStart, state.previewPoint);
     }
   }
 
-  function _renderDrawing(d) {
+  function _drawSelectionIndicators(d, index) {
+    if (index !== state.selectedIndex || !d.points) return;
+    var ctx = state.ctx;
+    ctx.save();
+    for (var p = 0; p < d.points.length; p++) {
+      var px = _toPixel(d.points[p].time, d.points[p].price);
+      if (!px) continue;
+      // Outer glow ring
+      ctx.beginPath(); ctx.arc(px.x, px.y, 6, 0, Math.PI * 2);
+      ctx.strokeStyle = '#06b6d4'; ctx.lineWidth = 2;
+      ctx.shadowColor = '#06b6d4'; ctx.shadowBlur = 8;
+      ctx.stroke();
+      // Inner dot
+      ctx.beginPath(); ctx.arc(px.x, px.y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = '#06b6d4'; ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function _renderDrawing(d, index) {
     switch (d.type) {
-      case 'box':          _drawBox(d.points, d); break;
-      case 'trendline':    _drawLine(d.points, d); break;
-      case 'horizontal':   _drawHorizLine(d.points[0], d); break;
-      case 'horizontalray':_drawHorizRay(d.points[0], d); break;
-      case 'vertical':     _drawVertLine(d.points[0], d); break;
-      case 'fibonacci':    _drawFibonacci(d); break;
-      case 'text':         _drawText(d.points[0], d); break;
+      case 'box':          _drawBox(d.points, d, index); break;
+      case 'trendline':    _drawLine(d.points, d, index); break;
+      case 'horizontal':   _drawHorizLine(d.points[0], d, index); break;
+      case 'horizontalray':_drawHorizRay(d.points[0], d, index); break;
+      case 'vertical':     _drawVertLine(d.points[0], d, index); break;
+      case 'fibonacci':    _drawFibonacci(d, index); break;
+      case 'text':         _drawText(d.points[0], d, index); break;
     }
   }
 

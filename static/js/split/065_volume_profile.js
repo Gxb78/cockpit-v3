@@ -50,7 +50,25 @@
         state.chart.timeScale().subscribeVisibleTimeRangeChange(function () {
           _renderVP();
         });
+        state.chart.timeScale().subscribeVisibleLogicalRangeChange(function () {
+          _renderVP();
+        });
       } catch (e) {}
+    }
+
+    // Redessiner immediatement sur tout mouvement souris dans le conteneur
+    if (state.container) {
+      var _lastVpRender = 0;
+      try {
+        state.container.addEventListener('mousemove', function () {
+          var now = Date.now();
+          if (now - _lastVpRender > 16) {
+            _lastVpRender = now;
+            requestAnimationFrame(function () { _renderVP(); });
+          }
+        }, { passive: true });
+        state.container.addEventListener('wheel', function () { requestAnimationFrame(function () { _renderVP(); }); }, { passive: true });
+      } catch(e) {}
     }
 
     _renderVP();
