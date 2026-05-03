@@ -1,3 +1,4 @@
+@layer components {
 /* ---- 048_card_surface.css ---- */
 /* CardSurface primitive — centralise radius, shadow, border, fond, hover, focus, entree animation.
    Utilisation: ajouter les classes CSS au HTML, supprimer les duplications dans les autres fichiers. */
@@ -72,4 +73,5 @@ body.light-mode .card-surface--warm {
 @keyframes cardSurfaceIn {
   from { opacity: 0; transform: translateY(12px) scale(0.98); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
+}
 }

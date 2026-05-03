@@ -1,3 +1,4 @@
+@layer components {
 .wiz-card:hover { border-color: var(--border-strong); background: var(--surface-2); transform: translateY(-2px); }
 .wiz-card.active { border-color: var(--cyan); background: rgba(0, 229, 255, 0.07); box-shadow: var(--glow-cyan); }
 .wiz-card-icon { font-size: 1.4rem; line-height: 1; }
@@ -140,4 +141,4 @@
 }
 .wiz-stdv-input:focus { border-color: var(--cyan); }
 .wiz-stdv-hint { font-size: 0.74rem; color: var(--text-faint); }
-
+}

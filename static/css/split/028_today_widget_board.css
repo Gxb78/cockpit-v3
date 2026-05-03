@@ -1,3 +1,4 @@
+@layer layout {
 /* ---- Widget config dropdown ---- */
 
 .widget-dropdown {
@@ -359,4 +360,5 @@ body.is-dragging {
   .page[data-page="today"] .today-grid .widget[data-size="wide"]:not(.widget-hidden) {
     grid-column: 1;
   }
+}
 }

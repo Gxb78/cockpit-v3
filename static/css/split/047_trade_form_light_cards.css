@@ -1,3 +1,4 @@
+@layer widgets {
 /* ---- 047_trade_form_light_cards.css ---- */
 /* Light Apple-inspired card style for the trade form (inline + wizard).
    Matches the design tokens from 046_journal_day_trade_cards.css.
@@ -993,4 +994,5 @@
   .wiz-body {
     padding: 16px 16px 8px;
   }
+}
 }

@@ -1,3 +1,4 @@
+@layer components {
 .day:hover::before { opacity: 1; }
 .day:hover {
   border-color: rgba(0,229,255,0.35);
@@ -291,3 +292,4 @@ body.light-mode .day-metric-sub {
   font-size: 10px;
 }
 body.light-mode .day-dots { gap: 3px; }
+}

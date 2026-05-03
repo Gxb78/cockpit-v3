@@ -1,3 +1,4 @@
+@layer components {
 .instr-chip:hover { color: var(--text); background: rgba(255,255,255,0.03); }
 .instr-chip.active {
   color: var(--text);
@@ -248,4 +249,5 @@ body.light-mode .theme-toggle:hover { border-color: rgba(0,132,255,0.40); backgr
   height: 14px;
   display: grid;
   place-items: center;
+}
 }

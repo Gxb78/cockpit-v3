@@ -1,3 +1,4 @@
+@layer widgets {
 /* ============================================================
    KPI UPGRADE — version premium pour la page Today
    ============================================================ */
@@ -585,4 +586,5 @@ body.light-mode .page[data-page="today"] .today-calendar-wrap .mode-both .day-mi
 body.light-mode .page[data-page="today"] .today-calendar-wrap .mode-both .day-metric-trades {
   color: #111827;
   text-shadow: none;
+}
 }

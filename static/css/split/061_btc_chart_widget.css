@@ -1,3 +1,4 @@
+@layer components {
 /* ---- 061_btc_chart_widget.css ---- */
 
 .btc-chart-widget {
@@ -146,4 +147,5 @@ body.light-mode .btc-chart-controls .btn-icon.active {
 
 body.light-mode .btc-chart-custom {
   border-color: rgba(15, 23, 42, 0.12);
+}
 }

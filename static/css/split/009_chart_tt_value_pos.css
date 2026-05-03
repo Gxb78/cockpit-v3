@@ -1,3 +1,4 @@
+@layer components {
 .chart-tt-value.pos { color: var(--win); }
 .chart-tt-value.neg { color: var(--loss); }
 
@@ -153,4 +154,5 @@
   text-align: right;
   width: 26px;
   font-weight: 600;
+}
 }

@@ -1,3 +1,4 @@
+@layer components {
 /* ---- 041_day_modal_cockpit.css ---- */
 /* Light cockpit shell for the day modal — card aesthetic. */
 
@@ -345,4 +346,5 @@
     grid-column: 1;
     grid-row: auto;
   }
+}
 }

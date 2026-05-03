@@ -1,3 +1,4 @@
+@layer components {
 .btn-add-trade svg { width: 12px; height: 12px; }
 .btn-add-trade:hover {
   background: rgba(0, 229, 255, 0.15);
@@ -46,19 +47,6 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   overflow: hidden;
 }
-.trade-card-shot {
-  width: 100%;
-  height: 230px;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  cursor: zoom-in;
-  transition: transform 0.35s var(--ease), filter 0.25s var(--ease);
-}
-.trade-card:hover .trade-card-shot {
-  transform: scale(1.015);
-  filter: brightness(1.06);
-}
 .trade-card-media-overlay {
   position: absolute;
   inset: 0;
@@ -70,68 +58,12 @@
   background: radial-gradient(circle at 20% 10%, rgba(0, 229, 255, 0.12), rgba(0, 0, 0, 0) 55%), rgba(10, 12, 22, 0.98);
   min-height: 150px;
 }
-.trade-card-shot-empty {
-  height: 150px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  letter-spacing: 0.4px;
-  color: var(--text-faint);
-  text-transform: uppercase;
-}
-
-.trade-card-media-top,
-.trade-card-media-bottom {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-.trade-card-media-top { top: 12px; }
-.trade-card-media-bottom { bottom: 12px; }
 
 .trade-chip {
   max-width: 100%;
   text-transform: uppercase;
 }
 .trade-chip-num { padding: 4px 9px; color: var(--text-soft); }
-.trade-chip-strategy {
-  padding: 4px 10px;
-  max-width: 70%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.trade-chip-strategy.midnight_model {
-  border-color: rgba(180, 0, 255, 0.35);
-  color: #cc8bff;
-}
-.trade-chip-strategy.london_model {
-  border-color: rgba(0, 229, 255, 0.35);
-  color: var(--cyan);
-}
-.trade-chip-strategy.ny_model {
-  border-color: rgba(255, 170, 0, 0.35);
-  color: var(--amber);
-}
-
-.trade-direction {
-  letter-spacing: 0.7px;
-  text-transform: uppercase;
-}
-.trade-direction.long {
-  color: var(--win);
-  border-color: rgba(136, 255, 90, 0.45);
-  background: rgba(15, 43, 18, 0.60);
-}
-.trade-direction.short {
-  color: var(--loss);
-  border-color: rgba(255, 78, 107, 0.45);
-  background: rgba(50, 13, 20, 0.62);
-}
 
 .trade-result {
   font-size: 10px;
@@ -154,26 +86,6 @@
   border-color: rgba(255, 78, 107, 0.42);
   background: rgba(62, 14, 25, 0.64);
 }
-
-/* Body */
-.trade-card-body {
-  padding: 14px 14px 13px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.trade-card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-.trade-card-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-soft);
-  letter-spacing: -0.1px;
-}
 .trade-pnl {
   font-family: "JetBrains Mono", monospace;
   font-variant-numeric: tabular-nums;
@@ -184,35 +96,6 @@
 }
 .trade-pnl.pos { color: var(--win); }
 .trade-pnl.neg { color: var(--loss); }
-
-.trade-card-kpis {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-.trade-kpi {
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 10px;
-  padding: 7px 8px;
-}
-.trade-kpi span {
-  display: block;
-  font-size: 9px;
-  color: var(--text-faint);
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  margin-bottom: 4px;
-}
-.trade-kpi strong {
-  display: block;
-  font-family: "JetBrains Mono", monospace;
-  font-size: 11.5px;
-  color: var(--text);
-  letter-spacing: -0.15px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 .trade-card-foot {
   display: flex;
@@ -252,9 +135,7 @@
 }
 
 @media (max-width: 920px) {
-  .trade-card-shot { height: 205px; }
   .trade-card-media { min-height: 205px; }
-  .trade-card-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* Perf mode while modal scrolls */
@@ -265,14 +146,7 @@
   box-shadow: none;
 }
 
-#entryModal.is-scrolling .trade-card-shot,
-#entryModal.is-scrolling .trade-card:hover .trade-card-shot {
-  transform: none;
-  filter: none;
-}
-
 #entryModal.is-scrolling .trade-chip,
-#entryModal.is-scrolling .trade-direction,
 #entryModal.is-scrolling .trade-result {
   backdrop-filter: none;
 }
@@ -315,3 +189,4 @@
 }
 .trade-rr-bar .fill-track .fill.pos { background: var(--win); }
 .trade-rr-bar .fill-track .fill.neg { background: var(--loss); }
+}

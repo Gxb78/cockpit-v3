@@ -1,3 +1,4 @@
+@layer widgets {
 /* ============================================================
    PRIORITY 3 STATS + INSIGHTS + SETTINGS
    Secondary workspace polish and responsive cleanup.
@@ -490,4 +491,5 @@
   .settings-danger-row .btn-danger {
     align-self: flex-end;
   }
+}
 }

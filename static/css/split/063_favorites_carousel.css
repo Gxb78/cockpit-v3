@@ -1,3 +1,4 @@
+@layer widgets {
 /* ============================================================
    063 — Favorites Carousel Widget
    Carousel mechanics only. Card recto/verso styled by 056_journal_day_trade_cards.css
@@ -179,4 +180,5 @@
     var(--surface-2) 75%);
   background-size: 200% 100%;
   animation: fav-shimmer 1.6s ease-in-out infinite;
+}
 }

@@ -1,3 +1,4 @@
+@layer components {
 .settings-chip-remove:hover { color: var(--loss); }
 .settings-empty {
   color: var(--text-faint);
@@ -254,4 +255,5 @@
   background: linear-gradient(135deg, rgba(0,229,255,0.14), rgba(255,46,196,0.10));
   transform: translateY(-2px);
   box-shadow: 0 12px 30px rgba(0,229,255,0.20);
+}
 }

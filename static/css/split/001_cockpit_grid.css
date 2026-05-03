@@ -1,3 +1,4 @@
+@layer layout {
 /* ---------- Cockpit grid ---------- */
 
 .cockpit {
@@ -107,10 +108,7 @@
 .nav-item:focus-visible,
 .instr-chip:focus-visible,
 .btn-icon:focus-visible,
-.tpl-item:focus-visible {
-  outline: 2px solid var(--cyan);
-  outline-offset: 2px;
-}
+/* .tpl-item:focus-visible removed — dead code (templates system retired) */
 .nav-item .kbd {
   margin-left: auto;
   font-family: "JetBrains Mono", monospace;
@@ -406,4 +404,5 @@
 
 .jfilter-stats-arrow svg {
   display: block;
+}
 }

@@ -4,6 +4,13 @@
    Single source of truth for dark + light palettes.
    ============================================================= */
 
+/* ---- Layer hierarchy (CSS Cascade Layers) ---- */
+/* Lower layers are overridden by higher layers. Unlayered CSS beats all. */
+@layer reset, design, layout, components, widgets, utilities;
+
+@layer reset {
+/* ---- Base styles ---- */
+
 * { box-sizing: border-box; }
 
 .sr-only {
@@ -27,7 +34,9 @@ a:focus-visible:not(:focus-visible),
   outline-offset: 2px;
 }
 button:active:not(:disabled) { transform: scale(0.97); }
+}
 
+@layer design {
 /* ---------- Dark theme (default) ---------- */
 
 :root {
@@ -421,8 +430,10 @@ body.light-mode .aurora::before {
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+}
 
 /* ---- 001_cockpit_grid.css ---- */
+@layer layout {
 /* ---------- Cockpit grid ---------- */
 
 .cockpit {
@@ -532,10 +543,7 @@ body.light-mode .aurora::before {
 .nav-item:focus-visible,
 .instr-chip:focus-visible,
 .btn-icon:focus-visible,
-.tpl-item:focus-visible {
-  outline: 2px solid var(--cyan);
-  outline-offset: 2px;
-}
+/* .tpl-item:focus-visible removed — dead code (templates system retired) */
 .nav-item .kbd {
   margin-left: auto;
   font-family: "JetBrains Mono", monospace;
@@ -832,8 +840,10 @@ body.light-mode .aurora::before {
 .jfilter-stats-arrow svg {
   display: block;
 }
+}
 
 /* ---- 002_instr_chip_hover.css ---- */
+@layer components {
 .instr-chip:hover { color: var(--text); background: rgba(255,255,255,0.03); }
 .instr-chip.active {
   color: var(--text);
@@ -1085,8 +1095,10 @@ body.light-mode .theme-toggle:hover { border-color: rgba(0,132,255,0.40); backgr
   display: grid;
   place-items: center;
 }
+}
 
 /* ---- 003_settings_chip_remove_hover.css ---- */
+@layer components {
 .settings-chip-remove:hover { color: var(--loss); }
 .settings-empty {
   color: var(--text-faint);
@@ -1344,8 +1356,10 @@ body.light-mode .theme-toggle:hover { border-color: rgba(0,132,255,0.40); backgr
   transform: translateY(-2px);
   box-shadow: 0 12px 30px rgba(0,229,255,0.20);
 }
+}
 
 /* ---- 004_cta_add_svg.css ---- */
+@layer components {
 .cta-add svg { width: 18px; height: 18px; color: var(--cyan); transition: transform 0.25s var(--ease-bouncy); }
 .cta-add:hover svg { transform: scale(1.1) rotate(-5deg); }
 
@@ -1522,8 +1536,10 @@ body.light-mode .entry-result-chip.loss {
   letter-spacing: 1px;
   margin-top: 4px;
 }
+}
 
 /* ---- 005_journal_toolbar_filters.css ---- */
+@layer components {
 /* ---------- Journal header ---------- */
 
 .journal-page-head {
@@ -2051,8 +2067,10 @@ body.light-mode .entry-result-chip.loss {
   color: var(--rose, #ff4e6b);
   border-color: rgba(255,78,107,0.3);
 }
+}
 
 /* ---- 006_btn_icon_svg.css ---- */
+@layer components {
 .btn-icon svg { width: 14px; height: 14px; }
 .btn-icon:active {
   transform: scale(0.88);
@@ -2543,8 +2561,10 @@ input[type="date"]:hover {
     overflow: auto;
   }
 }
+}
 
 /* ---- 007_day_hover_before.css ---- */
+@layer components {
 .day:hover::before { opacity: 1; }
 .day:hover {
   border-color: rgba(0,229,255,0.35);
@@ -2838,8 +2858,10 @@ body.light-mode .day-metric-sub {
   font-size: 10px;
 }
 body.light-mode .day-dots { gap: 3px; }
+}
 
 /* ---- 008_day_mode_trades_day_metric_sub.css ---- */
+@layer components {
 .day-mode-trades .day-metric-sub { font-size: 11.5px; letter-spacing: 1.2px; color: #a6d6e6; }
 .day-mode-both .day-metric-pnl {
   font-size: clamp(26px, 1.78vw, 36px);
@@ -3069,8 +3091,10 @@ body.light-mode .day-dots { gap: 3px; }
   font-size: 12px;
   font-weight: 700;
 }
+}
 
 /* ---- 009_chart_tt_value_pos.css ---- */
+@layer components {
 .chart-tt-value.pos { color: var(--win); }
 .chart-tt-value.neg { color: var(--loss); }
 
@@ -3227,8 +3251,10 @@ body.light-mode .day-dots { gap: 3px; }
   width: 26px;
   font-weight: 600;
 }
+}
 
 /* ---- 010_heatmap_row_labels_span.css ---- */
+@layer components {
 .heatmap-row-labels span { line-height: 12px; }
 
 .heatmap {
@@ -3390,8 +3416,10 @@ body.light-mode .day-dots { gap: 3px; }
   color: var(--text-muted);
   font-size: 12px;
 }
+}
 
 /* ---- 011_stats_rr_distribution.css ---- */
+@layer components {
 /* RR distribution as small bar chart */
 .rr-dist {
   display: flex;
@@ -3487,8 +3515,10 @@ body.light-mode .day-dots { gap: 3px; }
   .stats-chart-grid { grid-template-columns: 1fr; }
   .period-compare-grid { grid-template-columns: 1fr; }
 }
+}
 
 /* ---- 013_field_input_disabled_placeholder.css ---- */
+@layer components {
 .field input:disabled::placeholder { color: var(--text-faint); font-style: normal; }
 
 .select-wrapper { position: relative; }
@@ -3656,8 +3686,10 @@ body.light-mode .day-dots { gap: 3px; }
   opacity: 0;
   transition: opacity 0.2s, background 0.2s;
 }
+}
 
 /* ---- 014_shot_hover_shot_x.css ---- */
+@layer components {
 .shot:hover .shot-x { opacity: 1; }
 .shot-x:hover { background: var(--loss); }
 
@@ -3802,8 +3834,10 @@ body.light-mode .day-dots { gap: 3px; }
   font-size: 15px;
   font-weight: 500;
 }
+}
 
 /* ---- 015_cmdk_input_placeholder.css ---- */
+@layer components {
 .cmdk-input::placeholder { color: var(--text-faint); }
 .cmdk-results {
   max-height: 60vh;
@@ -3970,8 +4004,10 @@ body.light-mode .day-dots { gap: 3px; }
   border-radius: 999px;
 }
 *::-webkit-scrollbar-thumb:hover { background: rgba(0,229,255,0.30); }
+}
 
 /* ---- 016_trade_form_block_system.css ---- */
+@layer components {
 /* ============================================================
    BLOCK SYSTEM (Phase 2)
    ============================================================ */
@@ -4175,8 +4211,10 @@ body.light-mode .day-dots { gap: 3px; }
   transition: color, border-color, background 0.15s;
   font-size: 10px;
 }
+}
 
 /* ---- 017_field_toggle_svg.css ---- */
+@layer components {
 .field-toggle svg { width: 11px; height: 11px; }
 .field-toggle:hover { color: var(--cyan); border-color: var(--cyan); background: rgba(0,229,255,0.06); }
 .field-toggle.active { color: var(--cyan); border-color: var(--cyan); background: rgba(0,229,255,0.10); }
@@ -4299,117 +4337,11 @@ body.light-mode .day-dots { gap: 3px; }
   /* backdrop-filter removed for perf */
   letter-spacing: 0.2px;
 }
-.templates-btn:hover { color: var(--cyan); border-color: rgba(0,229,255,0.4); background: rgba(0,229,255,0.07); box-shadow: 0 4px 14px rgba(0,229,255,0.10); }
-.templates-btn svg { width: 12px; height: 12px; }
-
-.templates-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  min-width: 280px;
-  max-height: 360px;
-  overflow-y: auto;
-  background: var(--surface-solid);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-sm);
-  box-shadow: var(--shadow);
-  padding: 6px;
-  z-index: 30;
-  animation: popIn 0.18s var(--ease-bouncy);
+/* Note: .templates-btn / .templates-menu removed — dead code */
 }
 
 /* ---- 018_templates_menu_hidden.css ---- */
-.templates-menu.hidden { display: none; }
-.templates-menu-section {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--text-faint);
-  text-transform: uppercase;
-  letter-spacing: 1.2px;
-  padding: 8px 10px 4px;
-}
-.tpl-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 10px;
-  border-radius: 8px;
-  color: var(--text-soft);
-  font-size: 12.5px;
-  cursor: pointer;
-  transition: background 0.12s;
-  border: none;
-  background: transparent;
-  width: 100%;
-  text-align: left;
-}
-.tpl-item:hover { background: rgba(0,229,255,0.06); color: var(--text); }
-.tpl-item:focus-visible {
-  outline: 2px solid var(--cyan);
-  outline-offset: 2px;
-}
-.tpl-item .tpl-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tpl-item .tpl-x {
-  width: 18px; height: 18px;
-  display: grid;
-  place-items: center;
-  color: var(--text-faint);
-  border-radius: 4px;
-  font-size: 10px;
-  transition: color, background, border-color 0.15s;
-}
-.tpl-item .tpl-x:hover { color: var(--loss); background: var(--loss-bg); }
-.tpl-item .tpl-icon {
-  width: 18px; height: 18px;
-  color: var(--cyan);
-  display: grid;
-  place-items: center;
-}
-.tpl-item .tpl-icon svg { width: 12px; height: 12px; }
-.tpl-empty {
-  padding: 12px 14px;
-  font-size: 12px;
-  color: var(--text-muted);
-  text-align: center;
-}
-.tpl-divider { height: 1px; background: var(--border); margin: 6px 4px; }
-
-/* Save-template prompt (inline modal) */
-.tpl-prompt {
-  position: fixed;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  z-index: 700;
-  background: rgba(7,7,13,0.7);
-  backdrop-filter: blur(8px);
-  animation: fadeIn 0.15s;
-}
-.tpl-prompt.hidden { display: none; }
-.tpl-prompt-box {
-  background: var(--surface-solid);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r);
-  padding: 22px 24px;
-  width: min(420px, 92vw);
-  box-shadow: var(--shadow-lg);
-  animation: popIn 0.22s var(--ease-bouncy);
-}
-.tpl-prompt-box h3 { margin: 0 0 14px; font-size: 15px; font-weight: 700; }
-.tpl-prompt-box input {
-  width: 100%;
-  background: rgba(0,0,0,0.3);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  padding: 10px 12px;
-  font-size: 13px;
-  outline: none;
-  margin-bottom: 16px;
-}
-.tpl-prompt-box input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(0,229,255,0.12); }
-.tpl-prompt-actions { display: flex; gap: 8px; justify-content: flex-end; }
-
+@layer components {
 /* Desktop workspace refinement:
    reduce vertical footprint and keep scroll mainly inside center column. */
 @media (min-width: 761px) {
@@ -4522,8 +4454,10 @@ body.light-mode .day-dots { gap: 3px; }
   .day-metric-sub { font-size: 9px; letter-spacing: 0.6px; }
   .day-mode-both .day-metric-sub { font-size: 9.8px; }
 }
+}
 
 /* ---- 019_narration_panel.css ---- */
+@layer components {
 /* ============================================================
    NARRATION AUTO-FILL
    ============================================================ */
@@ -4689,8 +4623,10 @@ body.light-mode .day-dots { gap: 3px; }
   cursor: not-allowed;
   transform: none;
 }
+}
 
 /* ---- 020_narration_parse_btn_svg.css ---- */
+@layer components {
 .narration-parse-btn svg { width: 14px; height: 14px; }
 
 .narration-source {
@@ -4877,8 +4813,10 @@ body.light-mode .day-dots { gap: 3px; }
   cursor: pointer;
   transition: color, background, border-color 0.2s var(--ease);
 }
+}
 
 /* ---- 021_btn_add_trade_svg.css ---- */
+@layer components {
 .btn-add-trade svg { width: 12px; height: 12px; }
 .btn-add-trade:hover {
   background: rgba(0, 229, 255, 0.15);
@@ -4927,19 +4865,6 @@ body.light-mode .day-dots { gap: 3px; }
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   overflow: hidden;
 }
-.trade-card-shot {
-  width: 100%;
-  height: 230px;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  cursor: zoom-in;
-  transition: transform 0.35s var(--ease), filter 0.25s var(--ease);
-}
-.trade-card:hover .trade-card-shot {
-  transform: scale(1.015);
-  filter: brightness(1.06);
-}
 .trade-card-media-overlay {
   position: absolute;
   inset: 0;
@@ -4951,68 +4876,12 @@ body.light-mode .day-dots { gap: 3px; }
   background: radial-gradient(circle at 20% 10%, rgba(0, 229, 255, 0.12), rgba(0, 0, 0, 0) 55%), rgba(10, 12, 22, 0.98);
   min-height: 150px;
 }
-.trade-card-shot-empty {
-  height: 150px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  letter-spacing: 0.4px;
-  color: var(--text-faint);
-  text-transform: uppercase;
-}
-
-.trade-card-media-top,
-.trade-card-media-bottom {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-.trade-card-media-top { top: 12px; }
-.trade-card-media-bottom { bottom: 12px; }
 
 .trade-chip {
   max-width: 100%;
   text-transform: uppercase;
 }
 .trade-chip-num { padding: 4px 9px; color: var(--text-soft); }
-.trade-chip-strategy {
-  padding: 4px 10px;
-  max-width: 70%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.trade-chip-strategy.midnight_model {
-  border-color: rgba(180, 0, 255, 0.35);
-  color: #cc8bff;
-}
-.trade-chip-strategy.london_model {
-  border-color: rgba(0, 229, 255, 0.35);
-  color: var(--cyan);
-}
-.trade-chip-strategy.ny_model {
-  border-color: rgba(255, 170, 0, 0.35);
-  color: var(--amber);
-}
-
-.trade-direction {
-  letter-spacing: 0.7px;
-  text-transform: uppercase;
-}
-.trade-direction.long {
-  color: var(--win);
-  border-color: rgba(136, 255, 90, 0.45);
-  background: rgba(15, 43, 18, 0.60);
-}
-.trade-direction.short {
-  color: var(--loss);
-  border-color: rgba(255, 78, 107, 0.45);
-  background: rgba(50, 13, 20, 0.62);
-}
 
 .trade-result {
   font-size: 10px;
@@ -5035,26 +4904,6 @@ body.light-mode .day-dots { gap: 3px; }
   border-color: rgba(255, 78, 107, 0.42);
   background: rgba(62, 14, 25, 0.64);
 }
-
-/* Body */
-.trade-card-body {
-  padding: 14px 14px 13px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.trade-card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-.trade-card-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-soft);
-  letter-spacing: -0.1px;
-}
 .trade-pnl {
   font-family: "JetBrains Mono", monospace;
   font-variant-numeric: tabular-nums;
@@ -5065,35 +4914,6 @@ body.light-mode .day-dots { gap: 3px; }
 }
 .trade-pnl.pos { color: var(--win); }
 .trade-pnl.neg { color: var(--loss); }
-
-.trade-card-kpis {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-.trade-kpi {
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 10px;
-  padding: 7px 8px;
-}
-.trade-kpi span {
-  display: block;
-  font-size: 9px;
-  color: var(--text-faint);
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  margin-bottom: 4px;
-}
-.trade-kpi strong {
-  display: block;
-  font-family: "JetBrains Mono", monospace;
-  font-size: 11.5px;
-  color: var(--text);
-  letter-spacing: -0.15px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 .trade-card-foot {
   display: flex;
@@ -5133,9 +4953,7 @@ body.light-mode .day-dots { gap: 3px; }
 }
 
 @media (max-width: 920px) {
-  .trade-card-shot { height: 205px; }
   .trade-card-media { min-height: 205px; }
-  .trade-card-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* Perf mode while modal scrolls */
@@ -5146,14 +4964,7 @@ body.light-mode .day-dots { gap: 3px; }
   box-shadow: none;
 }
 
-#entryModal.is-scrolling .trade-card-shot,
-#entryModal.is-scrolling .trade-card:hover .trade-card-shot {
-  transform: none;
-  filter: none;
-}
-
 #entryModal.is-scrolling .trade-chip,
-#entryModal.is-scrolling .trade-direction,
 #entryModal.is-scrolling .trade-result {
   backdrop-filter: none;
 }
@@ -5196,8 +5007,10 @@ body.light-mode .day-dots { gap: 3px; }
 }
 .trade-rr-bar .fill-track .fill.pos { background: var(--win); }
 .trade-rr-bar .fill-track .fill.neg { background: var(--loss); }
+}
 
 /* ---- 022a_wizard_backdrop.css ---- */
+@layer components {
 /* ============================================================
    WIZARD — Scenario (modal, non fullscreen)
    ============================================================ */
@@ -5229,8 +5042,10 @@ body.light-mode .day-dots { gap: 3px; }
   margin: 0;
   border-radius: var(--r-lg);
 }
+}
 
 /* ---- 023_wiz_hidden.css ---- */
+@layer utilities {
 .wiz.hidden { display: none !important; }
 
 /* Panel — the actual modal box */
@@ -5380,8 +5195,10 @@ body.light-mode .day-dots { gap: 3px; }
   transition: color, background, border-color 0.16s var(--ease);
   display: flex; flex-direction: column; align-items: center; gap: 5px;
 }
+}
 
 /* ---- 024_wiz_card_hover.css ---- */
+@layer components {
 .wiz-card:hover { border-color: var(--border-strong); background: var(--surface-2); transform: translateY(-2px); }
 .wiz-card.active { border-color: var(--cyan); background: rgba(0, 229, 255, 0.07); box-shadow: var(--glow-cyan); }
 .wiz-card-icon { font-size: 1.4rem; line-height: 1; }
@@ -5524,8 +5341,10 @@ body.light-mode .day-dots { gap: 3px; }
 }
 .wiz-stdv-input:focus { border-color: var(--cyan); }
 .wiz-stdv-hint { font-size: 0.74rem; color: var(--text-faint); }
+}
 
 /* ---- 025_wizard_steps_ui.css ---- */
+@layer components {
 /* ============================================================
    WIZARD — Taille reduite 420×520
    ============================================================ */
@@ -5829,8 +5648,10 @@ body.light-mode .day-dots { gap: 3px; }
   opacity: 0.65;
   cursor: wait;
 }
+}
 
 /* ---- 028_today_widget_board.css ---- */
+@layer layout {
 /* ---- Widget config dropdown ---- */
 
 .widget-dropdown {
@@ -6193,8 +6014,10 @@ body.is-dragging {
     grid-column: 1;
   }
 }
+}
 
 /* ---- 029_empty_state.css ---- */
+@layer widgets {
 /* ---------- Empty states ---------- */
 .empty-state {
   display: flex;
@@ -6226,8 +6049,10 @@ body.is-dragging {
   max-width: 320px;
 }
 .calendar-empty-state.hidden { display: none; }
+}
 
 /* ---- 030_ai_chat.css ---- */
+@layer components {
 /* ---------- AI Chat (inside right panel) ---------- */
 
 /* Override side-right-body grid for chat layout */
@@ -6704,8 +6529,10 @@ body.is-dragging {
 .ai-chat-img-remove:hover {
   background: rgba(255,70,70,0.25);
 }
+}
 
 /* ---- 031_day_context.css ---- */
+@layer components {
 /* =============================================================
    DAY CONTEXT CARD — Modern · Compact · Dark + Light theme
    ============================================================= */
@@ -7135,8 +6962,10 @@ body.light-mode .day-inline-field select:focus {
     margin-left: 0;
   }
 }
+}
 
 /* ---- 031_insights.css ---- */
+@layer components {
 /* ---- 031_insights.css ---- Profil & Insights ML — Cockpit theme --- */
 
 /* ============= LAYOUT ============= */
@@ -7621,8 +7450,10 @@ body.light-mode .day-inline-field select:focus {
   .profile-stat:nth-child(2)::before { display: none; }
   .profile-stat:nth-child(4)::before { display: none; }
 }
+}
 
 /* ---- 032_priority1_app_shell.css ---- */
+@layer layout {
 /* ============================================================
    PRIORITY 1 APP SHELL
    Calm trading-desk frame, persistent top bar and mobile nav.
@@ -7789,99 +7620,7 @@ body.light-mode .brand-mark {
   box-shadow: inset 0 0 0 1px rgba(14, 165, 233, 0.20);
 }
 
-.app-topbar__identity {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-}
-
-.app-topbar__identity::before {
-  content: "";
-  width: 9px;
-  height: 38px;
-  border-radius: 99px;
-  background: var(--cyan);
-  box-shadow: 0 0 22px rgba(56, 211, 238, 0.22);
-  flex-shrink: 0;
-}
-
-.app-topbar__eyebrow {
-  display: none;
-}
-
-.app-topbar__title {
-  margin: 0;
-  color: var(--text);
-  font-size: 20px;
-  line-height: 1.15;
-  font-weight: 760;
-  letter-spacing: 0;
-}
-
-.app-topbar__subtitle {
-  margin: 4px 0 0;
-  color: var(--text-muted);
-  font-size: 12.5px;
-  line-height: 1.35;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: min(56vw, 640px);
-}
-
-.app-topbar__actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.shell-action {
-  height: 38px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 0 13px;
-  border-radius: 9px;
-  border: 1px solid var(--border);
-  background: rgba(255,255,255,0.035);
-  color: var(--text-soft);
-  font-size: 12.5px;
-  font-weight: 680;
-  line-height: 1;
-  transition: color 0.16s var(--ease), background 0.16s var(--ease), border-color 0.16s var(--ease), transform 0.16s var(--ease);
-}
-
-.shell-action:hover {
-  color: var(--text);
-  background: rgba(255,255,255,0.06);
-  border-color: var(--border-strong);
-}
-
-.shell-action svg {
-  width: 15px;
-  height: 15px;
-  flex-shrink: 0;
-}
-
-.shell-action kbd {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 2px 5px;
-  color: var(--text-faint);
-  background: rgba(0,0,0,0.16);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 10px;
-  font-weight: 650;
-}
-
-.shell-action--icon {
-  width: 38px;
-  padding: 0;
-}
+/* ---------- App Shell — legacy dead code removed ---------- */
 
 .shell-action--primary {
   border-color: rgba(56, 211, 238, 0.36);
@@ -8066,8 +7805,10 @@ body.light-mode .brand-mark {
     font-size: 9.5px;
   }
 }
+}
 
 /* ---- 033_priority2_journal_trade.css ---- */
+@layer components {
 /* ============================================================
    PRIORITY 2 JOURNAL + TRADE CREATION
    Light theme — harmonized with flip-card aesthetic.
@@ -9568,8 +9309,10 @@ body.light-mode .brand-mark {
 
 /* Midnight coach intro — muted text */
 .midnight-coach-intro { color: #6b7280; }
+}
 
 /* ---- 034_priority3_stats_settings_insights.css ---- */
+@layer widgets {
 /* ============================================================
    PRIORITY 3 STATS + INSIGHTS + SETTINGS
    Secondary workspace polish and responsive cleanup.
@@ -10063,8 +9806,10 @@ body.light-mode .brand-mark {
     align-self: flex-end;
   }
 }
+}
 
 /* ---- 035_priority4_overlays_menus.css ---- */
+@layer widgets {
 /* ============================================================
    PRIORITY 4 OVERLAYS + MENUS
    Command palette, assistant drawer, toasts, lightbox and pickers.
@@ -10343,16 +10088,7 @@ body.light-mode .brand-mark {
   border-radius: 9px;
 }
 
-.tpl-prompt-box,
-.templates-menu {
-  border-radius: 12px;
-  box-shadow: 0 24px 68px rgba(0,0,0,0.48);
-}
-
-.tpl-item {
-  min-height: 38px;
-  border-radius: 9px;
-}
+/* .tpl-prompt-box, .templates-menu, .tpl-item removed — dead code (templates system retired) */
 
 @media (max-width: 760px) {
   .cmdk {
@@ -10399,8 +10135,10 @@ body.light-mode .brand-mark {
     right: min(360px, 92vw);
   }
 }
+}
 
 /* ---- 036_plan_po3_flow.css ---- */
+@layer components {
 /* ---- Plan PO3 guided trade flow ---- */
 
 .plan-rule-card,
@@ -10533,8 +10271,10 @@ body.light-mode .brand-mark {
     grid-template-columns: 1fr;
   }
 }
+}
 
 /* ---- 037_spotlight_today.css ---- */
+@layer components {
 /* ============================================================
    Ambient surfaces - pages Today et Journal
    Light theme — subtle depth grid on light bg.
@@ -10634,8 +10374,10 @@ body.light-mode .brand-mark {
   position: relative;
   z-index: 1;
 }
+}
 
 /* ---- 038_kpi_upgrade.css ---- */
+@layer widgets {
 /* ============================================================
    KPI UPGRADE — version premium pour la page Today
    ============================================================ */
@@ -11224,8 +10966,10 @@ body.light-mode .page[data-page="today"] .today-calendar-wrap .mode-both .day-me
   color: #111827;
   text-shadow: none;
 }
+}
 
 /* ---- 041_day_modal_cockpit.css ---- */
+@layer components {
 /* ---- 041_day_modal_cockpit.css ---- */
 /* Light cockpit shell for the day modal — card aesthetic. */
 
@@ -11574,8 +11318,10 @@ body.light-mode .page[data-page="today"] .today-calendar-wrap .mode-both .day-me
     grid-row: auto;
   }
 }
+}
 
 /* ---- 042_unified_date_picker.css ---- */
+@layer components {
 /* ---- 042_unified_date_picker.css ---- */
 
 .visually-hidden-date {
@@ -11814,8 +11560,10 @@ body.light-mode .page[data-page="today"] .today-calendar-wrap .mode-both .day-me
   .udp-inputs { grid-template-columns: 1fr; }
   .udp-arrow { display: none; }
 }
+}
 
 /* ---- 044_interactive_empty_background.css ---- */
+@layer widgets {
 /* ---- 044_surface_backgrounds.css ---- */
 /* Background gradients for cockpit & main surfaces */
 
@@ -11835,8 +11583,10 @@ body.light-mode .cockpit,
 body.light-mode .main {
   background: rgba(246, 247, 251, 0.78);
 }
+}
 
 /* ---- 045_today_context_widget.css ---- */
+@layer components {
 /* ---- Dashboard day context widget ---- */
 /* Style: entry-card (compact, instrument badge, clean) */
 
@@ -12068,8 +11818,10 @@ body.light-mode .tc-bias-pills .pill-choice.rose.active {
     flex-wrap: wrap;
   }
 }
+}
 
 /* ---- 046_journal_day_trade_cards.css ---- */
+@layer components {
 /* ---- Journal floating trade review cards: modern travel-card style ---- */
 
 .journal-day-trades {
@@ -13440,8 +13192,10 @@ body.light-mode .journal-day-context-empty .btn-primary {
   background: var(--accent-warm, #5d2a1a);
   color: #fff;
 }
+}
 
 /* ---- 047_trade_form_light_cards.css ---- */
+@layer widgets {
 /* ---- 047_trade_form_light_cards.css ---- */
 /* Light Apple-inspired card style for the trade form (inline + wizard).
    Matches the design tokens from 046_journal_day_trade_cards.css.
@@ -14438,8 +14192,10 @@ body.light-mode .journal-day-context-empty .btn-primary {
     padding: 16px 16px 8px;
   }
 }
+}
 
 /* ---- 048_card_surface.css ---- */
+@layer components {
 /* ---- 048_card_surface.css ---- */
 /* CardSurface primitive — centralise radius, shadow, border, fond, hover, focus, entree animation.
    Utilisation: ajouter les classes CSS au HTML, supprimer les duplications dans les autres fichiers. */
@@ -14515,8 +14271,10 @@ body.light-mode .card-surface--warm {
   from { opacity: 0; transform: translateY(12px) scale(0.98); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
+}
 
 /* ---- 049_metric_pill.css ---- */
+@layer components {
 /* ---- 049_metric_pill.css ---- */
 /* MetricPill primitive — PnL, RR, WIN/LOSS, instrument, direction.
    Variantes: neutral (default), win, loss, cyan, muted.
@@ -14621,8 +14379,10 @@ body.light-mode .card-surface--warm {
   --mp-border: #e3e7ee;
   --mp-color: #98a1af;
 }
+}
 
 /* ---- 050_trade_hero_card.css ---- */
+@layer components {
 /* ---- 050_trade_hero_card.css ---- */
 /* Reusable TradeHeroCard primitive — consistent structure across contexts.
    Dark theme defaults. Light theme variants scoped to .journal-flip-face / #entryModal. */
@@ -15058,8 +14818,10 @@ body.light-mode .card-surface--warm {
   transform: none;
   filter: none;
 }
+}
 
 /* ---- 051_focus_transitions.css ---- */
+@layer components {
 /* ---- Focus mode — transition card → editeur ---- */
 /* Animate depuis TradeEditorController.open() / close() */
 
@@ -15260,8 +15022,10 @@ select.jedit-field-error {
   box-shadow: 0 0 0 2.5px rgba(248, 113, 113, 0.28), 0 0 14px rgba(248, 113, 113, 0.08);
   color: #dc2626 !important;
 }
+}
 
 /* ---- 052_stats_pattern_explorer.css ---- */
+@layer components {
 /* =============================================================
    STATS — Pattern Explorer redesign
    Inspire d'un terminal de detection de patterns BTC :
@@ -15623,8 +15387,10 @@ select.jedit-field-error {
     grid-template-columns: 1fr;
   }
 }
+}
 
 /* ---- 061_btc_chart_widget.css ---- */
+@layer components {
 /* ---- 061_btc_chart_widget.css ---- */
 
 .btc-chart-widget {
@@ -15774,8 +15540,10 @@ body.light-mode .btc-chart-controls .btn-icon.active {
 body.light-mode .btc-chart-custom {
   border-color: rgba(15, 23, 42, 0.12);
 }
+}
 
 /* ---- 062_chart_page.css ---- */
+@layer components {
 /* ---- 062_chart_page.css ---- */
 
 .page[data-page="chart"].active {
@@ -16506,8 +16274,10 @@ body.light-mode .chart-ind-badge.rsi {
 
 /* VP overlay — sits beneath drawings canvas */
 .vp-overlay { z-index: 9; }
+}
 
 /* ---- 063_favorites_carousel.css ---- */
+@layer widgets {
 /* ============================================================
    063 — Favorites Carousel Widget
    Carousel mechanics only. Card recto/verso styled by 056_journal_day_trade_cards.css
@@ -16690,8 +16460,10 @@ body.light-mode .chart-ind-badge.rsi {
   background-size: 200% 100%;
   animation: fav-shimmer 1.6s ease-in-out infinite;
 }
+}
 
 /* ---- 064_chart_drawings.css ---- */
+@layer components {
 /* ---------- Chart Drawing Toolbar ---------- */
 
 .draw-toolbar {
@@ -17219,4 +16991,5 @@ body.light-mode .draw-toolbar--inline {
 .draw-lock-btn[data-locked="true"] {
   background: rgba(245, 158, 11, 0.12);
   border-color: #f59e0b;
+}
 }

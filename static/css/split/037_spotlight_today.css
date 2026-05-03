@@ -1,3 +1,4 @@
+@layer components {
 /* ============================================================
    Ambient surfaces - pages Today et Journal
    Light theme — subtle depth grid on light bg.
@@ -96,4 +97,5 @@
 .page[data-page="journal"] .journal-table-wrap > * {
   position: relative;
   z-index: 1;
+}
 }

@@ -1,3 +1,4 @@
+@layer components {
 /* ---------- AI Chat (inside right panel) ---------- */
 
 /* Override side-right-body grid for chat layout */
@@ -473,4 +474,5 @@
 }
 .ai-chat-img-remove:hover {
   background: rgba(255,70,70,0.25);
+}
 }

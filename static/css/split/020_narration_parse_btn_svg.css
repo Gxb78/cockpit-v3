@@ -1,3 +1,4 @@
+@layer components {
 .narration-parse-btn svg { width: 14px; height: 14px; }
 
 .narration-source {
@@ -183,4 +184,5 @@
   letter-spacing: 0.2px;
   cursor: pointer;
   transition: color, background, border-color 0.2s var(--ease);
+}
 }

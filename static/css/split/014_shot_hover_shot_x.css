@@ -1,3 +1,4 @@
+@layer components {
 .shot:hover .shot-x { opacity: 1; }
 .shot-x:hover { background: var(--loss); }
 
@@ -141,4 +142,5 @@
   color: var(--text);
   font-size: 15px;
   font-weight: 500;
+}
 }

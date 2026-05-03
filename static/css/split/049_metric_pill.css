@@ -1,3 +1,4 @@
+@layer components {
 /* ---- 049_metric_pill.css ---- */
 /* MetricPill primitive — PnL, RR, WIN/LOSS, instrument, direction.
    Variantes: neutral (default), win, loss, cyan, muted.
@@ -101,4 +102,5 @@
   --mp-bg: transparent;
   --mp-border: #e3e7ee;
   --mp-color: #98a1af;
+}
 }

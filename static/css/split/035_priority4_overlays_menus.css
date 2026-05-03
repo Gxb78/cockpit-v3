@@ -1,3 +1,4 @@
+@layer widgets {
 /* ============================================================
    PRIORITY 4 OVERLAYS + MENUS
    Command palette, assistant drawer, toasts, lightbox and pickers.
@@ -276,16 +277,7 @@
   border-radius: 9px;
 }
 
-.tpl-prompt-box,
-.templates-menu {
-  border-radius: 12px;
-  box-shadow: 0 24px 68px rgba(0,0,0,0.48);
-}
-
-.tpl-item {
-  min-height: 38px;
-  border-radius: 9px;
-}
+/* .tpl-prompt-box, .templates-menu, .tpl-item removed — dead code (templates system retired) */
 
 @media (max-width: 760px) {
   .cmdk {
@@ -331,4 +323,5 @@
   body.ai-panel-open .ai-panel-handle {
     right: min(360px, 92vw);
   }
+}
 }

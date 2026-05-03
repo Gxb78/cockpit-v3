@@ -1,3 +1,4 @@
+@layer components {
 /* ---- Journal floating trade review cards: modern travel-card style ---- */
 
 .journal-day-trades {
@@ -1367,4 +1368,5 @@ body.light-mode .journal-day-context-empty {
 body.light-mode .journal-day-context-empty .btn-primary {
   background: var(--accent-warm, #5d2a1a);
   color: #fff;
+}
 }

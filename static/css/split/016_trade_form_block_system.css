@@ -1,3 +1,4 @@
+@layer components {
 /* ============================================================
    BLOCK SYSTEM (Phase 2)
    ============================================================ */
@@ -200,4 +201,5 @@
   cursor: pointer;
   transition: color, border-color, background 0.15s;
   font-size: 10px;
+}
 }

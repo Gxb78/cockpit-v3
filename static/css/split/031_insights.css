@@ -1,3 +1,4 @@
+@layer components {
 /* ---- 031_insights.css ---- Profil & Insights ML — Cockpit theme --- */
 
 /* ============= LAYOUT ============= */
@@ -481,4 +482,5 @@
   .profile-banner { grid-template-columns: repeat(2, 1fr); }
   .profile-stat:nth-child(2)::before { display: none; }
   .profile-stat:nth-child(4)::before { display: none; }
+}
 }

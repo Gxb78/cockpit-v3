@@ -1,3 +1,4 @@
+@layer components {
 /* ---- 042_unified_date_picker.css ---- */
 
 .visually-hidden-date {
@@ -235,4 +236,5 @@
   .udp-calendars,
   .udp-inputs { grid-template-columns: 1fr; }
   .udp-arrow { display: none; }
+}
 }

@@ -1,3 +1,4 @@
+@layer components {
 /* ---- Dashboard day context widget ---- */
 /* Style: entry-card (compact, instrument badge, clean) */
 
@@ -228,4 +229,5 @@ body.light-mode .tc-bias-pills .pill-choice.rose.active {
   .tc-head {
     flex-wrap: wrap;
   }
+}
 }

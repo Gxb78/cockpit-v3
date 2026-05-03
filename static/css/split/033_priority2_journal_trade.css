@@ -1,3 +1,4 @@
+@layer components {
 /* ============================================================
    PRIORITY 2 JOURNAL + TRADE CREATION
    Light theme — harmonized with flip-card aesthetic.
@@ -1498,3 +1499,4 @@
 
 /* Midnight coach intro — muted text */
 .midnight-coach-intro { color: #6b7280; }
+}

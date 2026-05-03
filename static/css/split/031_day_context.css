@@ -1,3 +1,4 @@
+@layer components {
 /* =============================================================
    DAY CONTEXT CARD — Modern · Compact · Dark + Light theme
    ============================================================= */
@@ -426,4 +427,5 @@ body.light-mode .day-inline-field select:focus {
     width: 100%;
     margin-left: 0;
   }
+}
 }

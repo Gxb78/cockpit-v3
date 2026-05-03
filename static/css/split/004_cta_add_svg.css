@@ -1,3 +1,4 @@
+@layer components {
 .cta-add svg { width: 18px; height: 18px; color: var(--cyan); transition: transform 0.25s var(--ease-bouncy); }
 .cta-add:hover svg { transform: scale(1.1) rotate(-5deg); }
 
@@ -174,4 +175,4 @@ body.light-mode .entry-result-chip.loss {
   letter-spacing: 1px;
   margin-top: 4px;
 }
-
+}

@@ -1,3 +1,4 @@
+@layer components {
 /* ---- 062_chart_page.css ---- */
 
 .page[data-page="chart"].active {
@@ -728,3 +729,4 @@ body.light-mode .chart-ind-badge.rsi {
 
 /* VP overlay — sits beneath drawings canvas */
 .vp-overlay { z-index: 9; }
+}

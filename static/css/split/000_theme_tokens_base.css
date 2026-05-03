@@ -3,6 +3,13 @@
    Single source of truth for dark + light palettes.
    ============================================================= */
 
+/* ---- Layer hierarchy (CSS Cascade Layers) ---- */
+/* Lower layers are overridden by higher layers. Unlayered CSS beats all. */
+@layer reset, design, layout, components, widgets, utilities;
+
+@layer reset {
+/* ---- Base styles ---- */
+
 * { box-sizing: border-box; }
 
 .sr-only {
@@ -26,7 +33,9 @@ a:focus-visible:not(:focus-visible),
   outline-offset: 2px;
 }
 button:active:not(:disabled) { transform: scale(0.97); }
+}
 
+@layer design {
 /* ---------- Dark theme (default) ---------- */
 
 :root {
@@ -419,4 +428,5 @@ body.light-mode .aurora::before {
 @keyframes loadingSlide {
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
 }

@@ -1,3 +1,4 @@
+@layer components {
 .btn-icon svg { width: 14px; height: 14px; }
 .btn-icon:active {
   transform: scale(0.88);
@@ -488,4 +489,4 @@ input[type="date"]:hover {
     overflow: auto;
   }
 }
-
+}

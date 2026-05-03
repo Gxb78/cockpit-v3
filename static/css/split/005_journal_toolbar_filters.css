@@ -1,3 +1,4 @@
+@layer components {
 /* ---------- Journal header ---------- */
 
 .journal-page-head {
@@ -524,4 +525,5 @@
 .journal-filter-reset:hover {
   color: var(--rose, #ff4e6b);
   border-color: rgba(255,78,107,0.3);
+}
 }

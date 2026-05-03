@@ -1,3 +1,4 @@
+@layer components {
 /* RR distribution as small bar chart */
 .rr-dist {
   display: flex;
@@ -93,4 +94,4 @@
   .stats-chart-grid { grid-template-columns: 1fr; }
   .period-compare-grid { grid-template-columns: 1fr; }
 }
-
+}

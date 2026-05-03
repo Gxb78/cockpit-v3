@@ -1,3 +1,4 @@
+@layer components {
 /* =============================================================
    STATS — Pattern Explorer redesign
    Inspire d'un terminal de detection de patterns BTC :
@@ -358,4 +359,5 @@
   .page[data-page="stats"] .period-compare-grid {
     grid-template-columns: 1fr;
   }
+}
 }

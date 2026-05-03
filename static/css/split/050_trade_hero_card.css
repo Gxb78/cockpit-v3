@@ -1,3 +1,4 @@
+@layer components {
 /* ---- 050_trade_hero_card.css ---- */
 /* Reusable TradeHeroCard primitive — consistent structure across contexts.
    Dark theme defaults. Light theme variants scoped to .journal-flip-face / #entryModal. */
@@ -432,4 +433,5 @@
 #entryModal.is-scrolling .thc--card:hover .thc-shot {
   transform: none;
   filter: none;
+}
 }

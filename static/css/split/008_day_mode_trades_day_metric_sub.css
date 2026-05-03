@@ -1,3 +1,4 @@
+@layer components {
 .day-mode-trades .day-metric-sub { font-size: 11.5px; letter-spacing: 1.2px; color: #a6d6e6; }
 .day-mode-both .day-metric-pnl {
   font-size: clamp(26px, 1.78vw, 36px);
@@ -226,4 +227,5 @@
   font-family: "JetBrains Mono", monospace;
   font-size: 12px;
   font-weight: 700;
+}
 }

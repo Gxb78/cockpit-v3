@@ -1,3 +1,4 @@
+@layer components {
 /* ---------- Chart Drawing Toolbar ---------- */
 
 .draw-toolbar {
@@ -525,4 +526,5 @@ body.light-mode .draw-toolbar--inline {
 .draw-lock-btn[data-locked="true"] {
   background: rgba(245, 158, 11, 0.12);
   border-color: #f59e0b;
+}
 }

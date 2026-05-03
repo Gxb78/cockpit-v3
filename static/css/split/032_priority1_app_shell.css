@@ -1,3 +1,4 @@
+@layer layout {
 /* ============================================================
    PRIORITY 1 APP SHELL
    Calm trading-desk frame, persistent top bar and mobile nav.
@@ -164,99 +165,7 @@ body.light-mode .brand-mark {
   box-shadow: inset 0 0 0 1px rgba(14, 165, 233, 0.20);
 }
 
-.app-topbar__identity {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-}
-
-.app-topbar__identity::before {
-  content: "";
-  width: 9px;
-  height: 38px;
-  border-radius: 99px;
-  background: var(--cyan);
-  box-shadow: 0 0 22px rgba(56, 211, 238, 0.22);
-  flex-shrink: 0;
-}
-
-.app-topbar__eyebrow {
-  display: none;
-}
-
-.app-topbar__title {
-  margin: 0;
-  color: var(--text);
-  font-size: 20px;
-  line-height: 1.15;
-  font-weight: 760;
-  letter-spacing: 0;
-}
-
-.app-topbar__subtitle {
-  margin: 4px 0 0;
-  color: var(--text-muted);
-  font-size: 12.5px;
-  line-height: 1.35;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: min(56vw, 640px);
-}
-
-.app-topbar__actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.shell-action {
-  height: 38px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 0 13px;
-  border-radius: 9px;
-  border: 1px solid var(--border);
-  background: rgba(255,255,255,0.035);
-  color: var(--text-soft);
-  font-size: 12.5px;
-  font-weight: 680;
-  line-height: 1;
-  transition: color 0.16s var(--ease), background 0.16s var(--ease), border-color 0.16s var(--ease), transform 0.16s var(--ease);
-}
-
-.shell-action:hover {
-  color: var(--text);
-  background: rgba(255,255,255,0.06);
-  border-color: var(--border-strong);
-}
-
-.shell-action svg {
-  width: 15px;
-  height: 15px;
-  flex-shrink: 0;
-}
-
-.shell-action kbd {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 2px 5px;
-  color: var(--text-faint);
-  background: rgba(0,0,0,0.16);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 10px;
-  font-weight: 650;
-}
-
-.shell-action--icon {
-  width: 38px;
-  padding: 0;
-}
+/* ---------- App Shell — legacy dead code removed ---------- */
 
 .shell-action--primary {
   border-color: rgba(56, 211, 238, 0.36);
@@ -440,4 +349,5 @@ body.light-mode .brand-mark {
   .rail .nav-item {
     font-size: 9.5px;
   }
+}
 }
