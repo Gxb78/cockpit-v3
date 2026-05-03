@@ -1103,21 +1103,9 @@
   }
 
   function _updateCountdownLabel(timerTxt) {
-    // Remplacer le priceLine LWC (cree des erreurs rAF internes)
-    // par un element DOM directement
-    var el = document.getElementById('chartCountdownDisplay');
-    if (!el) {
-      var wrap = document.getElementById('chartCanvasWrap');
-      if (!wrap) return;
-      el = document.createElement('span');
-      el.id = 'chartCountdownDisplay';
-      el.style.cssText = 'position:absolute;top:10px;right:16px;z-index:20;font-size:11px;font-weight:700;font-family:monospace;color:var(--text-muted,#6b7280);pointer-events:none';
-      wrap.appendChild(el);
-    }
-    if (timerTxt === undefined) {
-      timerTxt = el.textContent || '—';
-    }
-    el.textContent = timerTxt;
+    if (!countdownPriceLine || !chart) return;
+    if (timerTxt === undefined) timerTxt = '—';
+    try { countdownPriceLine.applyOptions({ title: timerTxt }); } catch(e) {}
   }
 
   // ── AUTO REFRESH ──
