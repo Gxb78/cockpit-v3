@@ -35,7 +35,6 @@
   var ws = null;
   var wsReconnectTimer = null;
   var _wsIntentionalClose = false;
-  var _lastCandles = null; // dernieres bougies fetchees (pour VWAP 1D/7D temps reel)
 
   // Settings state
   var indSettings = {
@@ -614,6 +613,7 @@
   var VWAP_COLORS = { '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
   var VWAP_INTERVALS = { '1D': '1h', '7D': '1h', '30D': '4h', '90D': '1d' };
   var VWAP_DAYS = { '1D': 1, '7D': 7, '30D': 30, '90D': 90 };
+  var VWAP_LIMITS = { '1D': 24, '7D': 168, '30D': 190, '90D': 100 };
   var INTERVAL_MINUTES = { '1m':1,'3m':3,'5m':5,'15m':15,'30m':30,'1h':60,'2h':120,'4h':240,'6h':360,'8h':480,'12h':720,'1d':1440,'3d':4320,'1w':10080,'1M':43200 };
 
   function _removeVwapSeries(key) {
@@ -667,15 +667,9 @@
         callback();
       }
 
-      // 1D et 7D : utiliser les bougies du chart (temps reel, fluide)
-      if ((period === '1D' || period === '7D') && _lastCandles && _lastCandles.length) {
-        _computeVwap(_lastCandles, function () {});
-        return;
-      }
-
-      // 30D et 90D : fetch au bon intervalle
+      // Toutes les periodes fetchent leurs donnees — pas de raccourci _lastCandles
       var minPerCandle = INTERVAL_MINUTES[fetchInterval] || 60;
-      var needed = Math.max(Math.ceil(days * 1440 / minPerCandle) + 10, 100);
+      var needed = VWAP_LIMITS[period] || Math.max(Math.ceil(days * 1440 / minPerCandle) + 10, 100);
       var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + fetchInterval + '&limit=' + needed;
       fetch(url)
         .then(function (r) { return r.json(); })
