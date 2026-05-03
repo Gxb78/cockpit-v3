@@ -223,9 +223,9 @@
     Object.keys(vwapSeriesMap).forEach(function (k) {
       if (activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
     });
-    if (!activeVwapPeriods.length) return;
+    if (!activeVwapPeriods.length) return Promise.resolve();
     // Skip si un appel est deja en vol (evite la cascade auto-refresh)
-    if (_vwapInFlight) return;
+    if (_vwapInFlight) return Promise.resolve();
     _vwapInFlight = true;
 
     // Helper: compute VWAP from candleArray pour une periode donnee
@@ -291,11 +291,13 @@
         });
     });
 
-    // Fin du VWAP — pas de restore zoom (le zoom principal le gere)
-    Promise.all(fetches).finally(function () {
+    // Fin du VWAP — retourner la promesse pour chainer le zoom apres
+    return Promise.all(fetches).finally(function () {
       _vwapInFlight = false;
     });
   }
+
+  function _noop() {}
 
   // ── TIMER ──
 
@@ -654,19 +656,22 @@
         _renderIndicators(candles);
 
         // VWAP
-        _calcAndDrawVwap();
+        var zoomTarget = null;
+        if (savedTarget) {
+          zoomTarget = savedTarget;
+        } else if (!keepZoom) {
+          var total = candles.length;
+          zoomTarget = { from: Math.max(0, total - 100), to: total + 15 };
+        }
+        _calcAndDrawVwap().finally(function () {
+          // Appliquer le zoom APRES les VWAP pour eviter l'auto-expand LWC
+          if (zoomTarget) _applyZoomWithRetry(zoomTarget);
+        });
 
         if (countdownPriceLine) {
           try { countdownPriceLine.applyOptions({ price: last.close }); } catch(e) {}
         }
         _updateCountdownLabel();
-        // Appliquer le zoom avec rAF-retry (verification convergente)
-        if (savedTarget) {
-          _applyZoomWithRetry(savedTarget);
-        } else if (!keepZoom) {
-          var total = candles.length;
-          _applyZoomWithRetry({ from: Math.max(0, total - 100), to: total + 15 });
-        }
         setTimeout(function() {
           try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
         }, 50);

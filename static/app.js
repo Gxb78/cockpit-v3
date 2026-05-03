@@ -11250,9 +11250,9 @@ TradeEditorController.renderHtml = function (day, trade) {
     Object.keys(vwapSeriesMap).forEach(function (k) {
       if (activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
     });
-    if (!activeVwapPeriods.length) return;
+    if (!activeVwapPeriods.length) return Promise.resolve();
     // Skip si un appel est deja en vol (evite la cascade auto-refresh)
-    if (_vwapInFlight) return;
+    if (_vwapInFlight) return Promise.resolve();
     _vwapInFlight = true;
 
     // Helper: compute VWAP from candleArray pour une periode donnee
@@ -11318,11 +11318,13 @@ TradeEditorController.renderHtml = function (day, trade) {
         });
     });
 
-    // Fin du VWAP — pas de restore zoom (le zoom principal le gere)
-    Promise.all(fetches).finally(function () {
+    // Fin du VWAP — retourner la promesse pour chainer le zoom apres
+    return Promise.all(fetches).finally(function () {
       _vwapInFlight = false;
     });
   }
+
+  function _noop() {}
 
   // ── TIMER ──
 
@@ -11681,19 +11683,22 @@ TradeEditorController.renderHtml = function (day, trade) {
         _renderIndicators(candles);
 
         // VWAP
-        _calcAndDrawVwap();
+        var zoomTarget = null;
+        if (savedTarget) {
+          zoomTarget = savedTarget;
+        } else if (!keepZoom) {
+          var total = candles.length;
+          zoomTarget = { from: Math.max(0, total - 100), to: total + 15 };
+        }
+        _calcAndDrawVwap().finally(function () {
+          // Appliquer le zoom APRES les VWAP pour eviter l'auto-expand LWC
+          if (zoomTarget) _applyZoomWithRetry(zoomTarget);
+        });
 
         if (countdownPriceLine) {
           try { countdownPriceLine.applyOptions({ price: last.close }); } catch(e) {}
         }
         _updateCountdownLabel();
-        // Appliquer le zoom avec rAF-retry (verification convergente)
-        if (savedTarget) {
-          _applyZoomWithRetry(savedTarget);
-        } else if (!keepZoom) {
-          var total = candles.length;
-          _applyZoomWithRetry({ from: Math.max(0, total - 100), to: total + 15 });
-        }
         setTimeout(function() {
           try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
         }, 50);
@@ -12428,9 +12433,9 @@ TradeEditorController.renderHtml = function (day, trade) {
     Object.keys(vwapSeriesMap).forEach(function (k) {
       if (activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
     });
-    if (!activeVwapPeriods.length) return;
+    if (!activeVwapPeriods.length) return Promise.resolve();
     // Skip si un appel est deja en vol (cascade auto-refresh)
-    if (_vwapInFlight) return;
+    if (_vwapInFlight) return Promise.resolve();
     _vwapInFlight = true;
 
     // Helper: compute cumulative VWAP from candles for one period
@@ -12496,8 +12501,8 @@ TradeEditorController.renderHtml = function (day, trade) {
         });
     });
 
-    // Fin du VWAP — pas de restore zoom (le zoom principal le gere)
-    Promise.all(fetches).finally(function () {
+    // Fin du VWAP — retourner la promesse pour chainer le zoom apres
+    return Promise.all(fetches).finally(function () {
       _vwapInFlight = false;
     });
   }
@@ -12831,7 +12836,36 @@ TradeEditorController.renderHtml = function (day, trade) {
         candlestickSeries.setData(chartStyle === 'candlestick' ? candles : candles.map(function (c) { return { time: c.time, value: c.close }; }));
 
         // VWAP
-        _calcAndDrawVwap();
+        var zoomTarget = null;
+        if (savedTarget) {
+          zoomTarget = savedTarget;
+        } else if (!keepZoom) {
+          var total = candles.length;
+          zoomTarget = { from: Math.max(0, total - 100), to: total + 15 };
+        }
+        _calcAndDrawVwap().finally(function () {
+          // Appliquer le zoom APRES les VWAP pour eviter l'auto-expand LWC
+          if (zoomTarget) {
+            _applyZoomWithRetry(zoomTarget);
+            // One-shot: LWC notifie quand le layout est pret → on re-applique pour confirmation
+            var _firstTotal = zoomTarget.to - 15; // recalculer total depuis zoomTarget
+            var _zoomHandler = function() {
+              if (chart && chart.timeScale()) {
+                if (!_userIsInteracting) {
+                  try {
+                    chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, _firstTotal - 80), to: _firstTotal + 8 });
+                  } catch(e) {}
+                }
+                try { chart.timeScale().unsubscribeVisibleLogicalRangeChange(_zoomHandler); } catch(e) {}
+              }
+            };
+            try { chart.timeScale().subscribeVisibleLogicalRangeChange(_zoomHandler); } catch(e) {}
+            // Timeout de securite
+            setTimeout(function() {
+              try { chart.timeScale().unsubscribeVisibleLogicalRangeChange(_zoomHandler); } catch(e) {}
+            }, 2000);
+          }
+        });
 
         // Volume Profile (passe les bougies pour recalcul)
         if (window.VolumeProfile) {
@@ -12851,28 +12885,6 @@ TradeEditorController.renderHtml = function (day, trade) {
           return { time: c.time, value: c.volume, color: c.close >= c.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' };
         }));
 
-        // Appliquer le zoom avec rAF-retry (verification convergente)
-        if (savedTarget) {
-          // Restaurer le zoom d'avant le fetch (WS/refresh)
-          _applyZoomWithRetry(savedTarget);
-        } else if (!keepZoom) {
-          // Premier chargement : centrer sur les dernieres bougies
-          var total = candles.length;
-          var firstTotal = total;
-          _applyZoomWithRetry({ from: Math.max(0, total - 100), to: total + 15 });
-          // One-shot: LWC notifie quand le layout est pret → on re-applique pour confirmation
-          var _zoomHandler = function() {
-            if (chart && chart.timeScale()) {
-              if (!_userIsInteracting) {
-                try {
-                  chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, firstTotal - 80), to: firstTotal + 8 });
-                } catch(e) {}
-              }
-              chart.timeScale().unsubscribeVisibleLogicalRangeChange(_zoomHandler);
-            }
-          };
-          chart.timeScale().subscribeVisibleLogicalRangeChange(_zoomHandler);
-        }
         // Unlock vertical scroll by disabling autoScale AFTER data is visible
         setTimeout(function() {
           try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
