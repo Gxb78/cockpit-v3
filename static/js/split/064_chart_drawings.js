@@ -731,7 +731,9 @@
       if (tp) { state.previewPoint = { time: tp.time, price: tp.price }; _renderAll(); }
     }
     if (state.activeTool === 'cursor') {
-      var tp = _snapPoint(_toTimePrice(e.clientX, e.clientY), e.clientX);
+      // Pas de snap ici — _snapPoint appelle dataByIndex() dans LWC
+      // et peut destabiliser le rendu s'il est appele trop souvent
+      var tp = _toTimePrice(e.clientX, e.clientY);
       if (tp && state.canvas) state.canvas.style.cursor = _hitTest(tp.time, tp.price) ? 'pointer' : '';
     }
   }
