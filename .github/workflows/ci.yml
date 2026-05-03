@@ -62,8 +62,8 @@ for root, dirs, files in os.walk('.'):
                     print(f'  ⚠️  MOJIBAKE: {path}')
             except Exception:
                 pass
-print('  ✅ Encodage OK')
-"
+          print('  ✅ Encodage OK')
+          "
 
       - name: Playbook guardrails
         run: python -m unittest tests.test_playbook_lessons_guardrails -v

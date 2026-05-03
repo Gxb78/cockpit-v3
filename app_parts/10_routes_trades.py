@@ -106,7 +106,10 @@ def update_trade(trade_id):
 
 @app.delete("/api/trades/<int:trade_id>")
 def delete_trade(trade_id):
-    db    = get_db()
+    db = get_db()
+    # Vérifier que le trade existe
+    if not db.execute("SELECT id FROM trades WHERE id=?", (trade_id,)).fetchone():
+        return jsonify({"error": "trade not found"}), 404
     shots = db.execute("SELECT filename FROM trade_screenshots WHERE trade_id=?", (trade_id,)).fetchall()
     for s in shots:
         try:
@@ -149,6 +152,8 @@ def batch_delete_trades():
     raw_ids = data.get("ids", [])
     if not isinstance(raw_ids, list) or not raw_ids:
         return jsonify({"error": "ids requis: liste d'entiers"}), 400
+    if len(raw_ids) > 500:
+        return jsonify({"error": "maximum 500 IDs par batch"}), 400
     ids = []
     for v in raw_ids:
         try:
@@ -166,8 +171,8 @@ def batch_delete_trades():
             (SCREENSHOTS_DIR / s["filename"]).unlink(missing_ok=True)
         except Exception:
             pass
-    db.execute(f"DELETE FROM trades WHERE id IN ({placeholders})", ids)
-    deleted = len(ids)
+    cur = db.execute(f"DELETE FROM trades WHERE id IN ({placeholders})", ids)
+    deleted = cur.rowcount
     db.commit()
     return jsonify({"ok": True, "deleted": deleted})
 

@@ -15,75 +15,208 @@ MAX_PER_REQUEST = 1000
 MAX_TOTAL_TRADES = 8000
 _MAX_PAGES = 8
 
+# === Market Service — klines cache + stale fallback ===
 
-@app.get("/api/market/klines")
-def market_klines():
-    """Proxy les klines Binance (bougies chandeliers).
+_KLINES_SYMBOL_WHITELIST = frozenset({"BTCUSDT", "ETHUSDT", "SOLUSDT"})
+_KLINES_INTERVAL_WHITELIST = frozenset({
+    "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"
+})
+_KLINES_MAX_LIMIT = 1000
+_KLINES_CACHE_TTL = 30  # 30s
+_KLINES_CACHE_MAX_KEYS = 100
+_klines_cache = {}
 
-    Query params:
-      symbol   (str) : paire (defaut BTCUSDT)
-      interval (str) : 1m, 5m, 15m, 1h, 4h, 1d (defaut 1h)
-      limit    (int) : nb bougies max (defaut 1000, pas de limite haute)
-      startTime(int) : timestamp ms optionnel pour paginer
+
+def _klines_cache_key(symbol, interval, limit, start_time):
+    return f"{symbol}:{interval}:{limit}:{start_time}"
+
+
+def _klines_purge():
+    if len(_klines_cache) <= _KLINES_CACHE_MAX_KEYS:
+        return
+    now = _time_mod.time()
+    expired = [k for k, v in _klines_cache.items() if (now - v["ts"]) >= _KLINES_CACHE_TTL]
+    for k in expired:
+        del _klines_cache[k]
+    if len(_klines_cache) > _KLINES_CACHE_MAX_KEYS:
+        sorted_keys = sorted(_klines_cache.keys(), key=lambda k: _klines_cache[k]["ts"])
+        for k in sorted_keys[:len(_klines_cache) - _KLINES_CACHE_MAX_KEYS]:
+            del _klines_cache[k]
+
+
+def _fetch_klines_page(url):
+    """Fetch une page de klines Binance. Retourne (batch_or_None, error_json_or_None)."""
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Journal/1.0"})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            raw = resp.read().decode("utf-8")
+            batch = _json.loads(raw)
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")[:200]
+        return None, ({"error": f"Binance HTTP {e.code}: {detail}"}, e.code)
+    except urllib.error.URLError as e:
+        return None, ({"error": f"Erreur reseau: {e.reason}"}, 502)
+    except Exception as e:
+        return None, ({"error": str(e)}, 500)
+    if not isinstance(batch, list):
+        return None, ({"error": "Format inattendu Binance"}, 502)
+    return batch, None
+
+
+def _normalize_candle(k):
+    """Normalise une kline Binance en notre format."""
+    return {
+        "time": k[0] // 1000,
+        "open": float(k[1]),
+        "high": float(k[2]),
+        "low": float(k[3]),
+        "close": float(k[4]),
+        "volume": float(k[5]),
+    }
+
+
+def _dedupe_klines(candles):
+    """Deduplique les bougies par open time (timestamp ms)."""
+    seen = set()
+    result = []
+    for c in candles:
+        t = c["time"]
+        if t in seen:
+            continue
+        seen.add(t)
+        result.append(c)
+    return result
+
+
+def fetch_klines(symbol, interval, limit, start_time=None):
+    """Fetch klines avec cache, stale fallback, pagination dedupee.
+
+    Retourne un dict avec le nouveau contrat :
+      { symbol, interval, candles, source, cache, upstream_error }
+    En cas d'erreur avec cache dispo, retourne le cache stale.
     """
-    symbol = request.args.get("symbol", "BTCUSDT").upper().strip()
-    interval = request.args.get("interval", "1h").strip()
-    desired = _parse_int_param("limit", 1000)
-    start_time = _parse_int_param("startTime")
+    now = _time_mod.time()
 
-    all_candles = []
+    # Whitelists
+    if symbol not in _KLINES_SYMBOL_WHITELIST:
+        return {"error": f"Symbole non supporte: {symbol}. Supportes: {', '.join(sorted(_KLINES_SYMBOL_WHITELIST))}"}, 400
+    if interval not in _KLINES_INTERVAL_WHITELIST:
+        return {"error": f"Intervalle non supporte: {interval}"}, 400
+
+    # Clamp limit
+    limit = max(1, min(limit, _KLINES_MAX_LIMIT))
+
+    # Cache lookup
+    cache_key = _klines_cache_key(symbol, interval, limit, start_time)
+    cached = _klines_cache.get(cache_key)
+    if cached and (now - cached["ts"]) < _KLINES_CACHE_TTL:
+        # Cache hit fresh — retourner directement
+        resp = dict(cached["response"])
+        resp["cache"]["hit"] = True
+        resp["cache"]["age"] = int(now - cached["ts"])
+        return resp, 200
+
+    # Pagination
+    all_raw = []
     current_start = start_time
+    upstream_error = None
 
-    while len(all_candles) < desired:
-        fetch = min(MAX_PER_REQUEST, desired - len(all_candles))
-        url = (
-            f"{BINANCE_API}/api/v3/klines"
-            f"?symbol={symbol}&interval={interval}&limit={fetch}"
-        )
+    while len(all_raw) < limit:
+        fetch = min(MAX_PER_REQUEST, limit - len(all_raw))
+        url = f"{BINANCE_API}/api/v3/klines?symbol={symbol}&interval={interval}&limit={fetch}"
         if current_start:
             url += f"&startTime={current_start}"
 
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Journal/1.0"})
-            with urllib.request.urlopen(req, timeout=3) as resp:
-                raw = resp.read().decode("utf-8")
-                batch = _json.loads(raw)
-        except urllib.error.HTTPError as e:
-            if all_candles:
-                break
-            return jsonify({"error": f"Binance HTTP {e.code}: {e.reason}"}), e.code
-        except urllib.error.URLError as e:
-            log.warning("Binance URLError (%s %s limit=%s): %s", symbol, interval, fetch, e.reason)
-            if all_candles:
-                break
-            return jsonify({"error": f"Erreur reseau: {e.reason}"}), 502
-        except Exception as e:
-            if all_candles:
-                break
-            return jsonify({"error": str(e)}), 500
+        batch, err = _fetch_klines_page(url)
+        if err:
+            upstream_error = err[0].get("error", str(err[0]))
+            # Stale fallback: si on a du cache, le retourner avec flag stale
+            if cached:
+                resp = dict(cached["response"])
+                resp["source"] = "cache"
+                resp["cache"]["hit"] = True
+                resp["cache"]["stale"] = True
+                resp["cache"]["age"] = int(now - cached["ts"])
+                resp["upstream_error"] = upstream_error
+                return resp, 200
+            # Sinon, propager l'erreur
+            return err[0], err[1]
 
         if not batch:
             break
 
-        all_candles.extend(batch)
-        current_start = batch[-1][0]
+        all_raw.extend(batch)
 
-    candles = []
-    for k in all_candles:
-        candles.append({
-            "time": k[0] // 1000,
-            "open": float(k[1]),
-            "high": float(k[2]),
-            "low":  float(k[3]),
-            "close": float(k[4]),
-            "volume": float(k[5]),
-        })
+        # Next page: dernier open_time + interval_ms pour éviter les doublons
+        # L'open_time est batch[-1][0], l'interval en ms
+        interval_ms = _interval_to_ms(interval)
+        current_start = batch[-1][0] + interval_ms
 
-    return jsonify({
+        if len(batch) < fetch:
+            break
+
+    # Normaliser et dédupliquer
+    candles = [_normalize_candle(k) for k in all_raw]
+    candles = _dedupe_klines(candles)
+
+    source = "cache" if cached else "binance"
+    age = int(now - cached["ts"]) if cached else 0
+
+    response_data = {
         "symbol": symbol,
         "interval": interval,
         "candles": candles,
-    })
+        "source": source,
+        "cache": {
+            "hit": bool(cached),
+            "stale": False,
+            "age": age,
+            "ttl": _KLINES_CACHE_TTL,
+        },
+        "upstream_error": upstream_error,
+    }
+
+    # Mettre en cache
+    _klines_cache[cache_key] = {
+        "ts": now,
+        "response": response_data,
+    }
+    _klines_purge()
+
+    return response_data, 200
+
+
+def _interval_to_ms(interval):
+    """Convertit un interval Binance en millisecondes."""
+    unit = interval[-1]
+    val = int(interval[:-1])
+    mult = {"m": 60000, "h": 3600000, "d": 86400000, "w": 604800000, "M": 2592000000}
+    return val * mult.get(unit, 60000)
+
+
+@app.get("/api/market/klines")
+def market_klines():
+    """Proxy les klines Binance (bougies chandeliers) avec cache + stale fallback.
+
+    Query params:
+      symbol    (str) : paire (defaut BTCUSDT, whitelist)
+      interval  (str) : 1m..1M (defaut 1h, whitelist)
+      limit     (int) : nb bougies max (defaut 100, max 1000)
+      startTime (int) : timestamp ms optionnel pour paginer
+    """
+    symbol = request.args.get("symbol", "BTCUSDT").upper().strip()
+    interval = request.args.get("interval", "1h").strip()
+    try:
+        limit = _parse_int_param("limit", 100)
+        start_time = _parse_int_param("startTime")
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    data, status = fetch_klines(symbol, interval, limit, start_time)
+    if status != 200 and isinstance(data, dict) and "error" in data:
+        return jsonify(data), status
+
+    return jsonify(data), 200
 
 
 # =====================================================================

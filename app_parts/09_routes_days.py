@@ -129,6 +129,9 @@ def update_day(day_id):
 @app.delete("/api/days/<int:day_id>")
 def delete_day(day_id):
     db = get_db()
+    # Vérifier que le jour existe
+    if not db.execute("SELECT id FROM days WHERE id=?", (day_id,)).fetchone():
+        return jsonify({"error": "day not found"}), 404
     # Supprimer les fichiers de screenshots en cascade
     shots = db.execute("""
         SELECT ts.filename FROM trade_screenshots ts

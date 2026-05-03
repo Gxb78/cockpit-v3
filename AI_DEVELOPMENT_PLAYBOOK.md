@@ -851,3 +851,17 @@ Cette section documente les features ajoutées, les conventions établies, et le
 - Regle de prevention: Toujours `threaded=True` sur `app.run()` en dev. En prod, utiliser waitress/gunicorn.
 - Test de non-regression: Lancer le serveur, charger la page → `app.js` doit charger en <500ms meme si Binance est down.
 - Fichiers a surveiller: app_parts/18_launcher.py
+
+### BUG-20260506-07 — Pagination klines par `batch[-1][0]` cause doublons
+- Symptome: des bougies en double apparaissent dans les donnees klines paginees (meme open_time).
+- Cause racine: `current_start = batch[-1][0]` réutilise l'open_time de la dernière bougie comme startTime de la page suivante. Binance inclusive start → la derniere bougie est fetchée deux fois.
+- Regle de prevention: TOUJOURS paginer les klines par `last_open_time + interval_ms`. Ajouter une dedupe par open_time en post-traitement.
+- Test de non-regression: fetch 150 bougies de 1h → les 150 doivent avoir des open_time uniques et consecutifs.
+- Fichiers a surveiller: app_parts/23_routes_market.py
+
+### BUG-20260507-01 — DELETE routes sans check existence → 200 OK meme si rien supprime
+- Symptome: `delete_day(999)` et `delete_trade(999)` retournaient `{"ok": true}` 200 pour des IDs inexistants.
+- Cause racine: les routes DELETE executaient directement le SQL sans SELECT prealable.
+- Regle de prevention: TOUJOURS verifier l'existence avec `SELECT id` avant DELETE sur des ressources individuelles. Pour les batchs, utiliser `cur.rowcount` au lieu de `len(ids)`.
+- Test de non-regression: `DELETE /api/days/999999` → 404. `DELETE /api/trades/999999` → 404. `DELETE /api/trades/batch` avec 501 IDs → 400.
+- Fichiers a surveiller: app_parts/09_routes_days.py, app_parts/10_routes_trades.py

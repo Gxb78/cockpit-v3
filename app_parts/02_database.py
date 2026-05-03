@@ -6,6 +6,7 @@ def get_db():
         g.db.row_factory = sqlite3.Row
         g.db.execute("PRAGMA journal_mode=WAL")
         g.db.execute("PRAGMA foreign_keys = ON")
+        g.db.execute("PRAGMA busy_timeout=3000")
     return g.db
 
 
@@ -20,6 +21,7 @@ def init_db():
     con = sqlite3.connect(DB_PATH)
     con.execute("PRAGMA journal_mode=WAL")
     con.execute("PRAGMA foreign_keys = ON")
+    con.execute("PRAGMA busy_timeout=3000")
 
     con.executescript("""
     CREATE TABLE IF NOT EXISTS days (
