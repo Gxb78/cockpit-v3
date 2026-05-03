@@ -79,7 +79,7 @@ function buildCmdkItems(query) {
   const q = (query || "").trim().toLowerCase();
   const items = [];
   const actions = [
-    { kind:"action", label:"Nouvelle entree (aujourd'hui)", icon:"plus", run:()=>{ closeCmdk(); wizOpen({ date: todayKey() }); }},
+    { kind:"action", label:"Nouveau trade (aujourd'hui)", icon:"plus", run:()=>{ closeCmdk(); wizOpen({ date: todayKey() }); }},
     { kind:"action", label:"Aller a Today",                 icon:"home", run:()=>{ closeCmdk(); goPage("today"); }},
     { kind:"action", label:"Journal (calendrier)",          icon:"cal",  run:()=>{ closeCmdk(); goPage("journal"); }},
     { kind:"action", label:"Journal en vue semaine",        icon:"cal",  run:()=>{ closeCmdk(); goPage("journal"); setJournalViewMode("week", { persist:true, reload:true }); }},
