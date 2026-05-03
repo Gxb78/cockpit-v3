@@ -66,8 +66,27 @@
 .fav-carousel-slide .journal-flip-card {
   width: 100%;
   max-width: 440px;
-  height: 320px;
+  height: 340px;
+  min-height: 0;
   cursor: pointer;
+}
+/* La capture est trop grande dans le carousel : on la reduit */
+.fav-carousel-slide .journal-trade-shot {
+  height: 160px;
+  flex: 0 0 auto;
+  border-radius: 16px;
+}
+/* Remonte les badges du haut (top:31px → 14px) */
+.fav-carousel-slide .journal-flip-top {
+  top: 14px;
+  left: 14px;
+  right: 14px;
+}
+/* Le content remplit l'espace restant, scroll si texte long */
+.fav-carousel-slide .journal-trade-content {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 /* ── Arrows — outside the scrolling track ── */
@@ -152,7 +171,7 @@
 .fav-skeleton {
   width: 100%;
   max-width: 440px;
-  height: 320px;
+  height: 340px;
   border-radius: var(--r-lg);
   background: linear-gradient(90deg,
     var(--surface-2) 25%,
