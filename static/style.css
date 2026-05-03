@@ -15763,6 +15763,7 @@ body.light-mode .btc-chart-controls .btn-icon:hover {
   font-family: "JetBrains Mono", monospace;
   white-space: nowrap;
   z-index: 5;
+  opacity: 0;
   transition: opacity 0.3s;
 }
 .btc-chart-ws-error.hidden { opacity: 0; pointer-events: none; }
