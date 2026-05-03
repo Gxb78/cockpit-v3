@@ -12861,9 +12861,11 @@ TradeEditorController.renderHtml = function (day, trade) {
           // One-shot: LWC notifie quand le layout est pret → on re-applique pour confirmation
           var _zoomHandler = function() {
             if (chart && chart.timeScale()) {
-              try {
-                chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, firstTotal - 80), to: firstTotal });
-              } catch(e) {}
+              if (!_userIsInteracting) {
+                try {
+                  chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, firstTotal - 80), to: firstTotal });
+                } catch(e) {}
+              }
               chart.timeScale().unsubscribeVisibleLogicalRangeChange(_zoomHandler);
             }
           };
