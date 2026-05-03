@@ -339,8 +339,8 @@
     if (!wrap) return;
 
     var isLight = document.body.classList.contains('light-mode');
-    var w = wrap.clientWidth || 900;
-    var h = wrap.clientHeight || 500;
+    var w = container.clientWidth || wrap.clientWidth || 900;
+    var h = container.clientHeight || wrap.clientHeight || 500;
 
     try {
       chart = window.LightweightCharts.createChart(container, {
@@ -425,8 +425,8 @@
       if (resizeObserver) resizeObserver.disconnect();
       resizeObserver = new ResizeObserver(function () {
         if (chart && wrap) {
-          var cw = wrap.clientWidth;
-          var ch = wrap.clientHeight;
+          var cw = container.clientWidth || wrap.clientWidth;
+          var ch = container.clientHeight || wrap.clientHeight;
           if (cw > 0 && ch > 0) chart.applyOptions({ width: cw, height: ch });
           if (window.ChartDrawings && window.ChartDrawings.onResize) {
             window.ChartDrawings.onResize();
@@ -457,8 +457,10 @@
   // ── DRAWING TOOLS ──
 
   function _initDrawingTools() {
-    var wrap = document.getElementById('chartCanvasWrap');
-    if (!wrap || !window.ChartDrawings) return;
+    var chartEl = document.getElementById('chartCanvas');
+    if (!chartEl || !window.ChartDrawings) return;
+    chartEl.style.position = 'relative';
+    chartEl.style.overflow = 'hidden';
 
     // Create toolbar buttons
     var toolbar = document.getElementById('drawToolbar');
@@ -515,7 +517,7 @@
 
     // Init drawing engine
     var isLight = document.body.classList.contains('light-mode');
-    window.ChartDrawings.init(chart, candlestickSeries, wrap, isLight);
+    window.ChartDrawings.init(chart, candlestickSeries, chartEl, isLight);
   }
 
   // ── VOLUME PROFILE ──

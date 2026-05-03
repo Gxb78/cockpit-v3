@@ -456,25 +456,47 @@
 
   // ── EVENTS ──
 
-  // rAF render loop (Option C — lead dev approved)
-  var _renderLoopId = null;
+  // rAF render loop — double rAF pour laisser LWC finir son rendu avant nous
+  var _renderLoopRunning = false;
+  var _rafA = null;
+  var _rafB = null;
   var _interactionTimeout = null;
   var IDLE_DELAY_MS = 200;
 
   function _startRenderLoop() {
-    if (_renderLoopId) return;
-    function loop() {
-      _renderAll();
-      _renderLoopId = requestAnimationFrame(loop);
+    if (_renderLoopRunning) return;
+    _renderLoopRunning = true;
+
+    function tick() {
+      if (!_renderLoopRunning) return;
+
+      _rafA = requestAnimationFrame(function () {
+        _rafA = null;
+        // Deuxieme rAF : LWC a fini ses transforms internes
+        _rafB = requestAnimationFrame(function () {
+          _rafB = null;
+          if (!_renderLoopRunning) return;
+          _resizeCanvas();
+          _renderAll();
+          tick();
+        });
+      });
     }
-    _renderLoopId = requestAnimationFrame(loop);
+
+    tick();
   }
 
   function _stopRenderLoop() {
-    if (_renderLoopId) {
-      cancelAnimationFrame(_renderLoopId);
-      _renderLoopId = null;
-    }
+    _renderLoopRunning = false;
+    if (_rafA) { cancelAnimationFrame(_rafA); _rafA = null; }
+    if (_rafB) { cancelAnimationFrame(_rafB); _rafB = null; }
+    // Dernier rendu stabilise
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        _resizeCanvas();
+        _renderAll();
+      });
+    });
   }
 
   function _scheduleStop() {
