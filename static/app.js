@@ -11582,7 +11582,8 @@ TradeEditorController.renderHtml = function (day, trade) {
           timeVisible: true,
           secondsVisible: false,
           rightOffset: 20,
-          shiftVisibleRangeOnNewBar: true,
+          shiftVisibleRangeOnNewBar: false,
+          lockVisibleTimeRangeOnResize: true,
         },
         handleScroll: { vertTouchDrag: true, horzTouchDrag: true, pressedMouseMove: true },
       });
@@ -12244,7 +12245,8 @@ TradeEditorController.renderHtml = function (day, trade) {
           secondsVisible: false,
           borderVisible: false,
           rightOffset: 20,
-          shiftVisibleRangeOnNewBar: true,
+          shiftVisibleRangeOnNewBar: false,
+          lockVisibleTimeRangeOnResize: true,
         },
         handleScroll: { vertTouchDrag: true, horzTouchDrag: true, pressedMouseMove: true },
       });

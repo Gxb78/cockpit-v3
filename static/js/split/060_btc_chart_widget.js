@@ -555,7 +555,8 @@
           timeVisible: true,
           secondsVisible: false,
           rightOffset: 20,
-          shiftVisibleRangeOnNewBar: true,
+          shiftVisibleRangeOnNewBar: false,
+          lockVisibleTimeRangeOnResize: true,
         },
         handleScroll: { vertTouchDrag: true, horzTouchDrag: true, pressedMouseMove: true },
       });
