@@ -806,3 +806,10 @@ Cette section documente les features ajoutées, les conventions établies, et le
 - Regle de prevention: (1) Toujours stocker le timer ID et clearTimeout dans wizClose() (2) wizClose() doit nettoyer TOUS les résidus d'état (inline styles, classes dynamiques, onclick) (3) _wizClearDraft() en tête de wizOpen() — le draft est crash recovery, jamais repris auto.
 - Test de non-regression: Ouvrir wizard depuis le rail, cliquer sur Suivant/cartes, fermer, rouvrir — doit repartir à l'étape 1. Répéter 3x.
 - Fichiers a surveiller: 040_wizard_core.js, 042_wizsetdate.js, 025_wizard_steps_ui.css
+
+### CONVENTION-20260503-02 - Conflit de namespace `_time` dans le loader partagé
+- Symptome: 500 INTERNAL SERVER ERROR sur `/api/days` et `/api/stats` des l'ouverture du journal. TypeError: 'module' object is not callable sur `_time()` dans le rate limiter.
+- Cause racine: `03_core_helpers.py` fait `from time import time as _time` (la fonction). `23_routes_market.py` fait `import time as _time` (le module). Dans le namespace partagé `_NS` du loader, le dernier fichier charge écrase le premier → `_time` devient le module `time`, pas la fonction `time()`.
+- Regle de prevention: NE JAMAIS utiliser `_time` comme alias d'import dans les fichiers app_parts. Utiliser `_time_mod` pour le module (`import time as _time_mod`) et `_time` ou `_time_fn` pour la fonction (`from time import time as _time_fn`). Vérifier avec `grep -n 'import.*as _time' app_parts/*.py` apres ajout d'un fichier.
+- Test de non-regression: Charger le module app_parts → `_time` doit etre callable. Toutes les routes `@ratelimit` doivent repondre 200.
+- Fichiers a surveiller: app_parts/__init__.py, app_parts/03_core_helpers.py, app_parts/23_routes_market.py, app_parts/15_parse_trade.py, app_parts/19_ai_chat.py

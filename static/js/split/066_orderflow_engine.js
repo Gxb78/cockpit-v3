@@ -103,15 +103,20 @@
 
     // Layout zones (mise a jour a chaque resize)
     this.layout = {
-      leftMargin: 10,
-      rightMargin: 10,
       topMargin: 30,
       bottomMargin: 40,
       priceAxisWidth: 60,
       vpWidth: 40,
+      chartLeft: 10,
       chartRight: 0,
       chartWidth: 0,
     };
+
+    // Live WebSocket
+    this._liveEnabled = true;
+    this._liveStatus = 'disconnected';
+    this._lastHistoricalTradeId = 0;
+    this._liveTradesCount = 0;
 
     // Statut
     this._setStatus('ready');
@@ -125,18 +130,13 @@
   OrderflowEngine.prototype._setStatus = function (msg) {
     var el = document.getElementById('ofStatus');
     if (el) {
-      var prefix = '';
-      if (this._isLiveData) prefix = 'LIVE ';
-      else if (this._loading) prefix = '';
-      else if (this._error) prefix = 'ERROR ';
-      else prefix = 'MOCK ';
-      el.textContent = prefix + msg;
-
-      // CSS class pour styling
-      el.classList.toggle('status-live', this._isLiveData);
-      el.classList.toggle('status-mock', !this._isLiveData && !this._loading && !this._error);
-      el.classList.toggle('status-error', !!this._error);
+      el.textContent = msg;
+      el.classList.toggle('status-live', this._liveStatus === 'connected');
+      el.classList.toggle('status-mock', !this._isLiveData && !this._loading && !this._error && this._liveStatus === 'disconnected');
+      el.classList.toggle('status-error', !!this._error || this._liveStatus === 'error');
       el.classList.toggle('status-loading', this._loading);
+      el.classList.toggle('status-reconnecting', this._liveStatus === 'reconnecting');
+      el.classList.toggle('status-live-off', !this._liveEnabled);
     }
   };
 
@@ -153,7 +153,6 @@
     // Mettre à jour les dimensions du canvas (logique)
     this.canvas.width = w * this.dpr;
     this.canvas.height = h * this.dpr;
-    // CSS gère l'affichage
 
     // Mettre à jour les scales
     this.priceScale.height = h;
@@ -163,14 +162,15 @@
 
     this._dirty = true;
 
-      // Mettre a jour le layout
-      var lay = this.layout;
-      lay.topMargin = 30;
-      lay.bottomMargin = 40;
-      lay.priceAxisWidth = 60;
-      lay.vpWidth = 40;
-      lay.chartWidth = rw - lay.priceAxisWidth - lay.vpWidth - 15;
-      lay.chartRight = lay.leftMargin + lay.chartWidth;
+    // Mettre a jour le layout — définir une zone chart claire
+    var lay = this.layout;
+    lay.topMargin = 30;
+    lay.bottomMargin = 40;
+    lay.priceAxisWidth = 60;
+    lay.vpWidth = 40;
+    lay.chartLeft = 10;
+    lay.chartRight = w - lay.priceAxisWidth - lay.vpWidth - 15;
+    lay.chartWidth = lay.chartRight - lay.chartLeft;
   };
 
   // ============================================================
@@ -208,8 +208,10 @@
       }
     }, { passive: false });
 
-    // Mouse down — début du drag
+    // Mouse down — début du drag (UNIQUEMENT dans la zone chart)
     c.addEventListener('mousedown', function (e) {
+      var inPriceAxis = e.offsetX > self.layout.chartRight;
+      if (inPriceAxis) return; // ignorer les clics sur l'axe prix
       self.isDragging = true;
       self.dragStart.x = e.offsetX;
       self.dragStart.y = e.offsetY;
@@ -382,6 +384,22 @@
         }, 1500);
       });
     }
+
+    // Live toggle button
+    var liveBtn = document.getElementById('ofLiveBtn');
+    if (liveBtn) {
+      liveBtn.addEventListener('click', function () {
+        self._liveEnabled = !self._liveEnabled;
+        this.classList.toggle('active', self._liveEnabled);
+        this.textContent = self._liveEnabled ? 'Live' : 'Off';
+        if (self._liveEnabled) {
+          self._connectLive();
+        } else {
+          self._disconnectLive();
+        }
+        self._setStatus(self._buildStatus());
+      });
+    }
   };
 
   // ============================================================
@@ -517,8 +535,13 @@
       ps.height = rh;
       ts.width = rw;
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+
+      // Recalculer le layout
+      var lay = this.layout;
+      lay.chartRight = rw - lay.priceAxisWidth - lay.vpWidth - 15;
+      lay.chartWidth = lay.chartRight - lay.chartLeft;
+
       this._dirty = true;
-      // console.log('[OF] resize', rw, rh, 'dpr', this.dpr);
     }
 
     if (!this._dirty) return;
@@ -592,8 +615,8 @@
       var y = this.priceToY(price);
       if (y < this.layout.topMargin || y > h - this.layout.bottomMargin) continue;
       ctx.beginPath();
-      ctx.moveTo(this.timeScale.leftMargin, y);
-      ctx.lineTo(w - 75, y);
+      ctx.moveTo(this.layout.chartLeft, y);
+      ctx.lineTo(this.layout.chartRight, y);
       ctx.stroke();
     }
   };
@@ -639,7 +662,7 @@
 
     for (var t = startTime; t <= ts.endTime; t += stepMs) {
       var x = this.timeToX(t);
-      if (x < ts.leftMargin || x > w - ts.rightMargin) continue;
+      if (x < this.layout.chartLeft || x > this.layout.chartRight) continue;
 
       // Petite marque
       ctx.beginPath();
@@ -679,8 +702,8 @@
 
     // Ligne horizontale
     ctx.beginPath();
-    ctx.moveTo(this.timeScale.leftMargin, my);
-    ctx.lineTo(w - 75, my);
+    ctx.moveTo(this.layout.chartLeft, my);
+    ctx.lineTo(this.layout.chartRight, my);
     ctx.stroke();
 
     ctx.restore();
@@ -842,6 +865,15 @@
         self._currentRange = { start: startTime, end: now };
         self._fetchTimestamp = Date.now();
         self._fetchMeta = limits;
+        self._liveTradesCount = 0;
+
+        // Déterminer le dernier ID historique (anti-doublon WS)
+        self._lastHistoricalTradeId = 0;
+        for (var ti = 0; ti < trades.length; ti++) {
+          if (trades[ti].id && trades[ti].id > self._lastHistoricalTradeId) {
+            self._lastHistoricalTradeId = trades[ti].id;
+          }
+        }
 
         // Calculer couverture temporelle
         var firstTime = candles[0] ? candles[0].time : 0;
@@ -853,14 +885,21 @@
         self._fitToData();
         self._dirty = true;
         self._updateStatsPanel();
-        self._setStatus(self._symbol + ' ' + self._interval + ' (' + candles.length + ' candles, ' + trades.length + ' trades, ' + coverageH + 'h)');
+
+        // Connecter le WebSocket si live enabled
+        if (self._liveEnabled) {
+          self._disconnectLive(); // nettoyer avant
+          self._connectLive();
+        }
+        self._setStatus(self._buildStatus());
       })
       .catch(function (err) {
         console.warn('[OF] API error, fallback mock:', err.message);
+        self._disconnectLive();
         self._error = err.message;
         self._isLiveData = false;
         self._loadMockData();
-        self._setStatus('mock (API: ' + err.message + ')');
+        self._setStatus(self._buildStatus());
       });
   };
 
@@ -884,8 +923,89 @@
 
   /** Recharger les donnees (force fetch) */
   OrderflowEngine.prototype.reload = function () {
+    this._disconnectLive();
     OF.DataService.clearCache();
     this.loadData(this._symbol, this._interval);
+  };
+
+  // ============================================================
+  // Live WebSocket
+  // ============================================================
+
+  /** Connecter le stream live */
+  OrderflowEngine.prototype._connectLive = function () {
+    if (this._liveStream) {
+      this._liveStream.disconnect();
+      this._liveStream = null;
+    }
+    var self = this;
+    this._liveStream = Object.create(OF.LiveStream);
+    this._liveStream.connect(this._symbol, function (trade) {
+      self._onLiveTrade(trade);
+    }, function (status) {
+      self._liveStatus = status;
+      self._setStatus(self._buildStatus());
+    });
+  };
+
+  /** Déconnecter le stream live */
+  OrderflowEngine.prototype._disconnectLive = function () {
+    if (this._liveStream) {
+      this._liveStream.disconnect();
+      this._liveStream = null;
+    }
+    this._liveStatus = 'disconnected';
+    this._setStatus(this._buildStatus());
+  };
+
+  /** Handler pour chaque trade live */
+  OrderflowEngine.prototype._onLiveTrade = function (trade) {
+    // Anti-doublon: ignorer si id <= dernier historique
+    if (trade.id && this._lastHistoricalTradeId > 0 && trade.id <= this._lastHistoricalTradeId) return;
+
+    // Mettre à jour le dernier ID
+    if (trade.id && trade.id > this._lastHistoricalTradeId) {
+      this._lastHistoricalTradeId = trade.id;
+    }
+
+    // Ajouter aux rawTrades
+    this._rawTrades.push(trade);
+    this._liveTradesCount++;
+
+    // Trim: garder seulement les trades dans le range visible (+1 candle de marge)
+    var trimBefore = this._currentRange ? this._currentRange.start : (Date.now() - this._requestedRangeMs);
+    var idx = 0;
+    while (idx < this._rawTrades.length - 1 && this._rawTrades[idx].time < trimBefore) {
+      idx++;
+    }
+    if (idx > 0) this._rawTrades.splice(0, idx);
+
+    // Re-agréger — on pourrait optimiser avec update incrémental de la dernière bougie
+    var candles = OF.Aggregator.aggregate(this._rawTrades, this._intervalMs, this._tickSize);
+    this._candles = candles;
+
+    // Marquer dirty + update stats
+    this._dirty = true;
+    this._updateStatsPanel();
+  };
+
+  /** Construire le message de status */
+  OrderflowEngine.prototype._buildStatus = function () {
+    var parts = [this._symbol + ' ' + this._interval];
+    if (this._candles.length > 0) {
+      parts.push(this._candles.length + ' candles');
+    }
+    if (this._liveEnabled && this._liveStatus === 'connected') {
+      parts.push('LIVE');
+      if (this._liveTradesCount > 0) parts.push('+' + this._liveTradesCount);
+    } else if (this._liveEnabled && this._liveStatus === 'reconnecting') {
+      parts.push('LIVE·reconnecting');
+    } else if (this._liveEnabled && this._liveStatus === 'error') {
+      parts.push('LIVE·error');
+    } else if (!this._liveEnabled) {
+      parts.push('LIVE off');
+    }
+    return parts.join(' · ');
   };
 
   /** Mettre a jour le panneau stats — enrichi avec metadata */  
@@ -969,7 +1089,7 @@
 
     this._dirty = true;
     this._updateStatsPanel();
-    this._setStatus(this._symbol + ' ' + this._interval + ' (' + candles.length + ' candles, step ' + this._tickSize + ')');
+    this._setStatus(this._buildStatus());
   };
 
   /** Auto-range suggere selon le timeframe */
@@ -1010,9 +1130,7 @@
     this._tickSize = tickSize;
     this._reaggregate();
     this._updateStatsPanel();
-    var sc = this._stepsConfig[this._symbol];
-    var label = sc ? sc.label + tickSize : '$' + tickSize;
-    this._setStatus(this._symbol + ' ' + this._interval + ' (step: ' + label + ')');
+    this._setStatus(this._buildStatus());
   };
 
   /** Mettre a jour les boutons step selon le symbole */
@@ -1136,7 +1254,7 @@
     this._fitToData();
 
     this._dirty = true;
-    this._setStatus('mock ' + this._candles.length + ' candles');
+    this._setStatus(this._buildStatus());
   };
 
   // ============================================================
@@ -1166,7 +1284,7 @@
       if (c.time < visibleStart - 60000 || c.time > visibleEnd + 60000) continue;
 
       var cx = this.timeToX(c.time);
-      if (cx < -candleW || cx > w + candleW) continue;
+      if (cx < -candleW || cx > this.layout.chartRight) continue;
 
       var yOpen = this.priceToY(c.open);
       var yClose = this.priceToY(c.close);
@@ -1367,6 +1485,142 @@
   };
 
 
+
+  // ============================================================
+  // OF.LiveStream — WebSocket connection to Binance
+  // ============================================================
+
+  var WS_BINANCE = 'wss://stream.binance.com:9443/ws/';
+
+  OF.LiveStream = {
+    _ws: null,
+    _symbol: null,
+    _reconnectTimer: null,
+    _reconnectAttempts: 0,
+    _maxReconnect: 10,
+    _reconnectDelay: 1000, // 1s, doublé à chaque tentative
+    _onTrade: null,
+    _onStatus: null,
+    _status: 'disconnected',
+
+    /** Connect to Binance aggTrade stream */
+    connect: function (symbol, onTrade, onStatus) {
+      this.disconnect();
+      this._symbol = symbol.toLowerCase();
+      this._onTrade = onTrade;
+      this._onStatus = onStatus;
+      this._reconnectAttempts = 0;
+      this._connect();
+    },
+
+    /** Internal connect */
+    _connect: function () {
+      if (!this._symbol) return;
+      var self = this;
+      var url = WS_BINANCE + this._symbol + '@aggTrade';
+
+      try {
+        this._ws = new WebSocket(url);
+      } catch (e) {
+        console.warn('[LiveStream] WS creation failed:', e.message);
+        self._setStatus('error');
+        return;
+      }
+
+      var connTimeout = setTimeout(function () {
+        if (self._ws && self._ws.readyState === WebSocket.CONNECTING) {
+          console.warn('[LiveStream] connection timeout');
+          self._ws.close();
+          self._scheduleReconnect();
+        }
+      }, 5000);
+
+      this._ws.onopen = function () {
+        clearTimeout(connTimeout);
+        self._reconnectAttempts = 0;
+        self._reconnectDelay = 1000;
+        self._setStatus('connected');
+        console.log('[LiveStream] connected to', url);
+      };
+
+      this._ws.onmessage = function (e) {
+        try {
+          var data = JSON.parse(e.data);
+          if (data.e !== 'aggTrade') return;
+          var trade = self._normalize(data);
+          if (self._onTrade) self._onTrade(trade);
+        } catch (err) {
+          // ignore parse errors on non-trade messages
+        }
+      };
+
+      this._ws.onerror = function () {
+        clearTimeout(connTimeout);
+        console.warn('[LiveStream] WS error');
+      };
+
+      this._ws.onclose = function () {
+        clearTimeout(connTimeout);
+        if (self._status === 'disconnected') return; // intentional
+        self._setStatus('reconnecting');
+        self._scheduleReconnect();
+      };
+    },
+
+    /** Normalize Binance aggTrade payload to our format */
+    _normalize: function (data) {
+      return {
+        id: data.a,
+        time: data.T,
+        price: parseFloat(data.p),
+        qty: parseFloat(data.q),
+        side: data.m ? 'sell' : 'buy',
+      };
+    },
+
+    /** Schedule reconnection with exponential backoff */
+    _scheduleReconnect: function () {
+      if (this._reconnectAttempts >= this._maxReconnect) {
+        this._setStatus('error');
+        console.warn('[LiveStream] max reconnects reached');
+        return;
+      }
+      var self = this;
+      var delay = this._reconnectDelay;
+      this._reconnectDelay = Math.min(this._reconnectDelay * 2, 30000);
+      this._reconnectAttempts++;
+      console.log('[LiveStream] reconnect in', delay, 'ms (attempt', this._reconnectAttempts + ')');
+      this._reconnectTimer = setTimeout(function () {
+        self._connect();
+      }, delay);
+    },
+
+    /** Disconnect intentionally */
+    disconnect: function () {
+      if (this._reconnectTimer) {
+        clearTimeout(this._reconnectTimer);
+        this._reconnectTimer = null;
+      }
+      this._reconnectAttempts = 0;
+      this._reconnectDelay = 1000;
+      if (this._ws) {
+        // Ne pas close si CONNECTING — juste oublier
+        if (this._ws.readyState !== WebSocket.CONNECTING) {
+          this._ws.onclose = null; // eviter reconnect auto
+          this._ws.close();
+        }
+        this._ws = null;
+      }
+      this._setStatus('disconnected');
+    },
+
+    _setStatus: function (s) {
+      this._status = s;
+      if (this._onStatus) this._onStatus(s);
+    },
+
+    getStatus: function () { return this._status; },
+  };
 
   // ============================================================
   // OrderflowDataService — fetch trades from API

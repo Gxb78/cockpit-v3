@@ -96,7 +96,7 @@ def market_klines():
 # Notre format normalisé : {id, time, price, qty, side}
 #   side = "sell" si isBuyerMaker (m=True), "buy" sinon
 
-import time as _time
+import time as _time_mod
 
 _SYMBOL_WHITELIST = frozenset({"BTCUSDT", "ETHUSDT", "SOLUSDT"})
 _MAX_TIME_RANGE_MS = 24 * 60 * 60 * 1000  # 24h max par requête
@@ -150,7 +150,7 @@ def market_aggtrades():
     # Clé de cache
     cache_key = f"{symbol}:{start_time}:{end_time}:{limit}"
     cached = _aggtrade_cache.get(cache_key)
-    now = _time.time()
+    now = _time_mod.time()
     if cached and (now - cached["ts"]) < _CACHE_TTL_S:
         return jsonify({
             "symbol": symbol,

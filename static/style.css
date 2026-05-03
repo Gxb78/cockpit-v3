@@ -17606,6 +17606,48 @@ body.light-mode .of-status {
   border-radius: 4px;
 }
 
+.of-status.status-reconnecting {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.10);
+  border: 1px solid rgba(245, 158, 11, 0.15);
+  animation: ofPulse 1.5s ease-in-out infinite;
+}
+
+.of-status.status-live-off {
+  color: #64748b;
+  background: rgba(100, 116, 139, 0.1);
+  border: 1px solid rgba(100, 116, 139, 0.12);
+}
+
+/* ── Live toggle button ── */
+.of-live-btn {
+  padding: 3px 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  background: rgba(10, 10, 15, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--text-faint, #64748b);
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.of-live-btn:hover {
+  color: var(--text-muted, #94a3b8);
+  border-color: rgba(255,255,255,0.2);
+  background: rgba(10, 10, 15, 0.85);
+}
+
+.of-live-btn.active {
+  color: #22c55e;
+  border-color: rgba(34, 197, 94, 0.25);
+  background: rgba(34, 197, 94, 0.08);
+}
+
 /* ── Responsive ── */
 @media (max-width: 760px) {
   .of-topbar {
