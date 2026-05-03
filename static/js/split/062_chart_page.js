@@ -1077,8 +1077,14 @@
       // Ne pas sauvegarder le zoom pendant les 2 premieres secondes (rAF-retry pas converge)
       if (_source === 'user' || Date.now() - _firstFetchMs > 2000) {
         try {
-          var vis = chart.timeScale().getVisibleRange();
-          if (vis) savedTarget = { from: vis.from, to: vis.to };
+          var timeRange = chart.timeScale().getVisibleRange();
+          if (timeRange) {
+            var rangeWidth = timeRange.to - timeRange.from;
+            var barSec = Math.floor(_getIntervalMs(currentInterval) / 1000);
+            if (rangeWidth >= barSec * 80) {
+              savedTarget = { from: timeRange.from, to: timeRange.to };
+            }
+          }
         } catch(e) {}
       }
       try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
@@ -1201,8 +1207,10 @@
         _updateCountdownLabel('0:00');
         if (countdownTimer) clearInterval(countdownTimer);
         countdownTimer = null;
-        // Laisser le WS gérer la fermeture de bougie si actif
+        // Laisser le WS reconnecter sans re-fetcher (preserve le zoom)
         if (!ws || ws.readyState !== WebSocket.OPEN) {
+          // WS en cours de reconnexion — ne pas refetcher
+        } else {
           _fetchAndRender(true, 'auto');
         }
         return;
