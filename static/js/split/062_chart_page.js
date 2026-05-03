@@ -48,19 +48,19 @@
 
   function _applyZoomWithRetry(targetRange, maxAttempts) {
     if (!chart || !chart.timeScale()) return;
-    console.log('[ZOOM] _applyZoomWithRetry target=', JSON.stringify(targetRange), 'current=', JSON.stringify(chart.timeScale().getVisibleLogicalRange()));
+    console.log('[ZOOM] _applyZoomWithRetry target=', JSON.stringify(targetRange), 'current=', JSON.stringify(chart.timeScale().getVisibleRange()));
     maxAttempts = maxAttempts || 10;
     var attempts = 0;
     function tryApply() {
       if (++attempts > maxAttempts) {
-        console.warn('[ZOOM] abandon après', attempts, 'tentatives. Range final:', JSON.stringify(chart.timeScale().getVisibleLogicalRange()));
+        console.warn('[ZOOM] abandon après', attempts, 'tentatives. Range final:', JSON.stringify(chart.timeScale().getVisibleRange()));
         return;
       }
       try {
-        chart.timeScale().setVisibleLogicalRange(targetRange);
-        var actual = chart.timeScale().getVisibleLogicalRange();
+        chart.timeScale().setVisibleRange({ from: targetRange.from, to: targetRange.to });
+        var actual = chart.timeScale().getVisibleRange();
         console.log('[ZOOM] tentative', attempts, '→ actual:', JSON.stringify(actual), 'target:', JSON.stringify(targetRange));
-        if (actual && Math.abs(actual.from - targetRange.from) <= 1 && Math.abs(actual.to - targetRange.to) <= 1) {
+        if (actual && Math.abs(actual.from - targetRange.from) <= 60 && Math.abs(actual.to - targetRange.to) <= 60) {
           console.log('[ZOOM] ✅ stabilisé en', attempts, 'tentatives');
           return;
         }
@@ -676,10 +676,10 @@
     if (!chart) return;
     var ts = chart.timeScale();
     var saved;
-    try { saved = ts.getVisibleLogicalRange(); } catch(e) {}
+    try { saved = ts.getVisibleRange(); } catch(e) {}
     series.setData(data);
     if (saved) {
-      try { ts.setVisibleLogicalRange(saved); } catch(e) {}
+      try { ts.setVisibleRange({ from: saved.from, to: saved.to }); } catch(e) {}
     }
   }
 
@@ -689,10 +689,10 @@
       try {
         var ts = chart.timeScale();
         var saved;
-        try { saved = ts.getVisibleLogicalRange(); } catch(e2) {}
+        try { saved = ts.getVisibleRange(); } catch(e2) {}
         s.applyOptions({ visible: false, lastValueVisible: false });
         s.setData([]);
-        if (saved) { try { ts.setVisibleLogicalRange(saved); } catch(e2) {} }
+        if (saved) { try { ts.setVisibleRange({ from: saved.from, to: saved.to }); } catch(e2) {} }
       } catch(e) {}
     }
   }
@@ -778,7 +778,7 @@
 
       // Appliquer le zoom PENDANT que shiftVisibleRangeOnNewBar est encore false
       if (zoomTarget && chart && chart.timeScale()) {
-        try { chart.timeScale().setVisibleLogicalRange(zoomTarget); } catch(e) {}
+        try { chart.timeScale().setVisibleRange({ from: zoomTarget.from, to: zoomTarget.to }); } catch(e) {}
       }
 
       try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true }); } catch(e) {}
@@ -1089,7 +1089,7 @@
       // Ne pas sauvegarder le zoom pendant les 2 premieres secondes (rAF-retry pas converge)
       if (_source === 'user' || Date.now() - _firstFetchMs > 2000) {
         try {
-          var vis = chart.timeScale().getVisibleLogicalRange();
+          var vis = chart.timeScale().getVisibleRange();
           if (vis) savedTarget = { from: vis.from, to: vis.to };
         } catch(e) {}
       }
@@ -1122,8 +1122,11 @@
         if (savedTarget) {
           zoomTarget = savedTarget;
         } else if (!keepZoom) {
-          var total = candles.length;
-          zoomTarget = { from: Math.max(0, total - 100), to: total + 15 };
+          // Premier chargement : calculer en timestamps (invariant VWAP)
+          var firstIdx = Math.max(0, candles.length - 100);
+          var fromTime = candles[firstIdx].time;
+          var toTime = candles[candles.length - 1].time + Math.floor(_getIntervalMs(currentInterval) / 1000) * 15;
+          zoomTarget = { from: fromTime, to: toTime };
         }
         var _firstTotal = zoomTarget ? zoomTarget.to - 15 : 0;
         if (!_lastVwapFetch || Date.now() - _lastVwapFetch > 300000) {
