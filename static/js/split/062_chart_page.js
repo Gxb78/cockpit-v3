@@ -1085,25 +1085,7 @@
           _lastVwapFetch = Date.now();
           _calcAndDrawVwap().finally(function () {
             _isFetching = false;
-            if (zoomTarget) {
-              _applyZoomWithRetry(zoomTarget);
-              // One-shot: LWC notifie quand le layout est pret → on re-applique pour confirmation
-              var _zoomHandler = function() {
-                if (_vwapDrawing) return;
-                if (chart && chart.timeScale()) {
-                  if (!_userIsInteracting) {
-                    try {
-                      chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, _firstTotal - 80), to: _firstTotal + 8 });
-                    } catch(e) {}
-                  }
-                  try { chart.timeScale().unsubscribeVisibleLogicalRangeChange(_zoomHandler); } catch(e) {}
-                }
-              };
-              try { chart.timeScale().subscribeVisibleLogicalRangeChange(_zoomHandler); } catch(e) {}
-              setTimeout(function() {
-                try { chart.timeScale().unsubscribeVisibleLogicalRangeChange(_zoomHandler); } catch(e) {}
-              }, 2000);
-            }
+            if (zoomTarget) _applyZoomWithRetry(zoomTarget);
           });
         } else {
           _isFetching = false;
