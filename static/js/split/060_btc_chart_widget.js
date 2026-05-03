@@ -285,7 +285,10 @@
 
   function _startCountdown() {
     if (countdownTimer) clearInterval(countdownTimer);
+    // Petit delai pour laisser LWC finir son rendu initial
+    setTimeout(function () {
     function tick() {
+      if (!countdownPriceLine) { _updateCountdownLabel('—'); return; }
       if (!lastCandleTime) { _updateCountdownLabel('—'); return; }
       var now = Date.now();
       var ms = _getIntervalMs(currentInterval);
@@ -305,10 +308,11 @@
     }
     tick();
     countdownTimer = setInterval(tick, 500);
+    }, 300);
   }
 
   function _updateCountdownLabel(timerTxt) {
-    if (!countdownPriceLine) return;
+    if (!countdownPriceLine || !chart) return;
     if (timerTxt === undefined) timerTxt = '—';
     try { countdownPriceLine.applyOptions({ title: timerTxt }); } catch(e) {}
   }

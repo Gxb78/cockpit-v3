@@ -1075,14 +1075,15 @@
   }
 
   // ── COUNTDOWN ──
-
   function _startCountdown() {
     if (countdownTimer) clearInterval(countdownTimer);
+    setTimeout(function () {
     function tick() {
       if (!lastCandleTime) { _updateCountdownLabel('—'); return; }
       var now = Date.now();
       var ms = _getIntervalMs(currentInterval);
-      var remaining = ms - (now - lastCandleTime);
+      var elapsed = now - lastCandleTime;
+      var remaining = ms - elapsed;
       if (remaining <= 0) {
         _updateCountdownLabel('0:00');
         if (countdownTimer) clearInterval(countdownTimer);
@@ -1098,10 +1099,11 @@
     }
     tick();
     countdownTimer = setInterval(tick, 500);
+    }, 300);
   }
 
   function _updateCountdownLabel(timerTxt) {
-    if (!countdownPriceLine) return;
+    if (!countdownPriceLine || !chart) return;
     if (timerTxt === undefined) {
       var countdownEl = document.getElementById('chartCountdown');
       timerTxt = countdownEl ? countdownEl.textContent : '—';
