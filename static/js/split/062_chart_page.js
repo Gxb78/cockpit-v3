@@ -668,20 +668,7 @@
   var INTERVAL_MINUTES = { '1m':1,'3m':3,'5m':5,'15m':15,'30m':30,'1h':60,'2h':120,'4h':240,'6h':360,'8h':480,'12h':720,'1d':1440,'3d':4320,'1w':10080,'1M':43200 };
   // ── VWAP (multi-periode) ──
   var _vwapInFlight = false;
-  var _vwapDrawing = false;
   var _lastVwapFetch = 0;
-
-  /** setData avec snapshot/restore synchrone du range (evite drift LWC) */
-  function _safeSetData(series, data) {
-    if (!chart) return;
-    var ts = chart.timeScale();
-    var saved;
-    try { saved = ts.getVisibleRange(); } catch(e) {}
-    series.setData(data);
-    if (saved) {
-      try { ts.setVisibleRange({ from: saved.from, to: saved.to }); } catch(e) {}
-    }
-  }
 
   function _removeVwapSeries(key) {
     var s = vwapSeriesMap[key];
@@ -707,11 +694,6 @@
     // Skip si un appel est deja en vol (cascade auto-refresh)
     if (_vwapInFlight) return Promise.resolve();
     _vwapInFlight = true;
-    _vwapDrawing = true;
-
-    // Bloque l'auto-expand LWC pendant les setData VWAP
-    try { chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
-    try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
 
     // Helper: compute cumulative VWAP from candles for one period
     function _computeVwap(period, candleArray) {
@@ -736,7 +718,7 @@
       var s = vwapSeriesMap[period];
       if (s) {
         s.applyOptions({ visible: true, color: color, title: label, lastValueVisible: true });
-        _safeSetData(s, vwapData);
+        s.setData(vwapData);
       }
     }
 
@@ -774,15 +756,11 @@
     // Fin du VWAP — appliquer le zoom, puis restaurer l'auto-shift
     return Promise.all(fetches).finally(function () {
       _vwapInFlight = false;
-      _vwapDrawing = false;
 
-      // Appliquer le zoom PENDANT que shiftVisibleRangeOnNewBar est encore false
+      // Appliquer le zoom synchrone (timestamps invariants)
       if (zoomTarget && chart && chart.timeScale()) {
         try { chart.timeScale().setVisibleRange({ from: zoomTarget.from, to: zoomTarget.to }); } catch(e) {}
       }
-
-      try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true }); } catch(e) {}
-      try { chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
 
       // rAF-retry pour les micro-shifts residuels
       if (zoomTarget) _applyZoomWithRetry(zoomTarget);

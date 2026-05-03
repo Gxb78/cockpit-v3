@@ -17,8 +17,6 @@
   var vwapSeriesMap = {};
   var activeVwapPeriods = [];
   try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) activeVwapPeriods = s; } catch(e) {}
-  // Flag anti-boucle VWAP → RANGE CHANGE → VWAP
-  var _vwapDrawing = false;
   var _lastVwapFetch = 0;
   var VWAP_COLORS = { '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
   var VWAP_INTERVALS = { '1D': '1h', '7D': '1h', '30D': '4h', '90D': '1d' };
@@ -216,18 +214,6 @@
   // ── VWAP (multi-periode) ──
   var _vwapInFlight = false;
 
-  /** setData avec snapshot/restore synchrone du range (evite drift LWC) */
-  function _safeSetData(series, data) {
-    if (!chart) return;
-    var ts = chart.timeScale();
-    var saved;
-    try { saved = ts.getVisibleRange(); } catch(e) {}
-    series.setData(data);
-    if (saved) {
-      try { ts.setVisibleRange({ from: saved.from, to: saved.to }); } catch(e) {}
-    }
-  }
-
   function _removeVwapSeries(key) {
     var s = vwapSeriesMap[key];
     if (s) {
@@ -253,13 +239,6 @@
     // Skip si un appel est deja en vol (evite la cascade auto-refresh)
     if (_vwapInFlight) return Promise.resolve();
     _vwapInFlight = true;
-    _vwapDrawing = true;
-
-    // Bloque l'auto-expand LWC pendant les setData VWAP
-    try { chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
-    try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
-    console.log('[VWAP] séries pré-créées:', Object.keys(vwapSeriesMap));
-    console.log('[VWAP] range AVANT fetches:', JSON.stringify(chart.timeScale().getVisibleLogicalRange()));
 
     // Helper: compute VWAP from candleArray pour une periode donnee
     function _computeVwap(period, candleArray) {
@@ -284,7 +263,7 @@
       var s = vwapSeriesMap[period];
       if (s) {
         s.applyOptions({ visible: true, color: color, title: label, lastValueVisible: true });
-        _safeSetData(s, vwapData);
+        s.setData(vwapData);
       }
       console.log('[VWAP] after setData period=', period, 'range=', JSON.stringify(chart.timeScale().getVisibleLogicalRange()));
     }
@@ -321,27 +300,21 @@
         });
     });
 
-    // Fin du VWAP — appliquer le zoom, puis restaurer l'auto-shift
+    // Fin du VWAP — appliquer le zoom
     return Promise.all(fetches).finally(function () {
       _vwapInFlight = false;
-      _vwapDrawing = false;
 
-      // Appliquer le zoom PENDANT que shiftVisibleRangeOnNewBar est encore false
+      // Appliquer le zoom synchrone (timestamps invariants)
       if (zoomTarget && chart && chart.timeScale()) {
         try { chart.timeScale().setVisibleRange({ from: zoomTarget.from, to: zoomTarget.to }); } catch(e) {}
       }
 
-      try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true }); } catch(e) {}
-      try { chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
-
-      console.log('[VWAP] range APRÈS finally:', JSON.stringify(chart.timeScale().getVisibleLogicalRange()));
+      console.log('[VWAP] range APRÈS finally:', JSON.stringify(chart.timeScale().getVisibleRange()));
 
       // rAF-retry pour les micro-shifts residuels
       if (zoomTarget) _applyZoomWithRetry(zoomTarget);
     });
   }
-
-  function _noop() {}
 
   // ── TIMER ──
 
@@ -749,7 +722,6 @@
         // Subscribe aux changements de range pour debug
         try {
           chart.timeScale().subscribeVisibleLogicalRangeChange(function(range) {
-            if (_vwapDrawing) return;
             if (range) console.log('[RANGE CHANGE]', JSON.stringify(range), (new Error()).stack.split('\n').slice(1,4).join(' | '));
           });
         } catch(e) {}
