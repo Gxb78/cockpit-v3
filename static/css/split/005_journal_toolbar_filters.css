@@ -527,3 +527,70 @@
   border-color: rgba(255,78,107,0.3);
 }
 }
+
+/* ---- Responsive Journal filters ---- */
+@media (max-width: 1100px) {
+  .journal-filters {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .journal-filter-group {
+    flex: 1 1 auto;
+    min-width: 120px;
+  }
+  .journal-filter-row {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 760px) {
+  .journal-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .journal-filters-sep { display: none; }
+  .journal-filter-group { width: 100%; }
+  .journal-filter-select,
+  .journal-filter-input {
+    width: 100%;
+    max-width: none;
+  }
+  .journal-filter-stats {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .journal-filter-stats .stat {
+    font-size: 10px;
+  }
+  /* Calendar nav inline */
+  .journal-nav-inline {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .journal-nav-inline .journal-nav-arrows {
+    order: -1;
+  }
+  .journal-table .stat {
+    font-size: 10px;
+    padding: 0 4px;
+  }
+}
+
+/* Settings grid already has responsive at 1100px/760px in 034 */
+/* Dashboard widgets already have responsive at 1100px/760px in 028 */
+
+/* Extra small breakpoint for journal table */
+@media (max-width: 480px) {
+  .journal-table th,
+  .journal-table td {
+    padding: 4px 3px;
+    font-size: 9px;
+  }
+  .journal-table .stat {
+    font-size: 9px;
+  }
+  .journal-table .entry-chip {
+    font-size: 8px;
+    padding: 0 3px;
+  }
+}

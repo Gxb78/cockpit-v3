@@ -367,6 +367,19 @@
     align-items: stretch;
   }
 
+  .settings-panel--hero,
+  .settings-panel--featured {
+    padding: 14px;
+  }
+
+  .settings-grid .panel {
+    padding: 14px;
+  }
+
+  .settings-inline input {
+    width: 100%;
+  }
+
   .stats-sort-field,
   .stats-sort-field .select-wrapper {
     width: 100%;
