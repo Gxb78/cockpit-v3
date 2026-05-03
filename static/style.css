@@ -544,6 +544,9 @@ body.light-mode .aurora::before {
 .instr-chip:focus-visible,
 .btn-icon:focus-visible,
 /* .tpl-item:focus-visible removed — dead code (templates system retired) */
+.nav-item:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.instr-chip:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.btn-icon:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: 6px; }
 .nav-item .kbd {
   margin-left: auto;
   font-family: "JetBrains Mono", monospace;
@@ -841,6 +844,23 @@ body.light-mode .aurora::before {
   display: block;
 }
 }
+
+/* Focus states (keyboard navigation) */
+.entry-card:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 12px; }
+.journal-flip-card:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 16px; }
+.pill-choice:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: 20px; }
+.tag:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: 12px; }
+.settings-chip:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: 12px; }
+.toast-close:focus-visible,
+.close-btn:focus-visible,
+.chart-settings-close:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: 4px; }
+.weekday-header:focus-visible,
+.day:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: 6px; }
+.table-header:focus-visible,
+.journal-row:focus-visible { outline: 2px solid var(--cyan); outline-offset: -1px; }
+.pretrade-item:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: 6px; }
+.kpi:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: var(--r); }
+.card-surface--hoverable:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
 
 /* ---- 002_instr_chip_hover.css ---- */
 @layer components {
@@ -16437,6 +16457,16 @@ body.light-mode .chart-ind-badge.rsi {
 /* VP overlay — sits beneath drawings canvas */
 .vp-overlay { z-index: 9; }
 }
+
+/* Chart focus states */
+.draw-toolbar-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: 6px; }
+.chart-pair-btn:focus-visible,
+.chart-tf-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: 4px; }
+.chart-ind-toggle:focus-visible,
+.chart-settings-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: 4px; }
+.chart-ind-opt:focus-visible { outline: 2px solid var(--cyan); outline-offset: -1px; }
+.fav-carousel-dot:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 50%; }
+.fav-carousel-arrow:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: 50%; }
 
 /* ---- 063_favorites_carousel.css ---- */
 @layer widgets {

@@ -109,6 +109,9 @@
 .instr-chip:focus-visible,
 .btn-icon:focus-visible,
 /* .tpl-item:focus-visible removed — dead code (templates system retired) */
+.nav-item:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.instr-chip:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.btn-icon:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: 6px; }
 .nav-item .kbd {
   margin-left: auto;
   font-family: "JetBrains Mono", monospace;
@@ -406,3 +409,20 @@
   display: block;
 }
 }
+
+/* Focus states (keyboard navigation) */
+.entry-card:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 12px; }
+.journal-flip-card:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 16px; }
+.pill-choice:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: 20px; }
+.tag:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: 12px; }
+.settings-chip:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: 12px; }
+.toast-close:focus-visible,
+.close-btn:focus-visible,
+.chart-settings-close:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: 4px; }
+.weekday-header:focus-visible,
+.day:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: 6px; }
+.table-header:focus-visible,
+.journal-row:focus-visible { outline: 2px solid var(--cyan); outline-offset: -1px; }
+.pretrade-item:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: 6px; }
+.kpi:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: var(--r); }
+.card-surface--hoverable:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }

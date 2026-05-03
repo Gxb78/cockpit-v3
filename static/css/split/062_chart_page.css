@@ -751,3 +751,13 @@ body.light-mode .chart-ind-badge.rsi {
 /* VP overlay — sits beneath drawings canvas */
 .vp-overlay { z-index: 9; }
 }
+
+/* Chart focus states */
+.draw-toolbar-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: 6px; }
+.chart-pair-btn:focus-visible,
+.chart-tf-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: 4px; }
+.chart-ind-toggle:focus-visible,
+.chart-settings-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: 4px; }
+.chart-ind-opt:focus-visible { outline: 2px solid var(--cyan); outline-offset: -1px; }
+.fav-carousel-dot:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 50%; }
+.fav-carousel-arrow:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; border-radius: 50%; }
