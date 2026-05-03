@@ -11626,15 +11626,16 @@ TradeEditorController.renderHtml = function (day, trade) {
         title: '—',
       });
 
-      // Pré-créer les 4 séries VWAP (évite auto-fit addLineSeries pendant fetches)
+      // Pré-créer les 4 séries VWAP — visibles dès le départ avec données vides
       Object.keys(VWAP_COLORS).forEach(function (p) {
         vwapSeriesMap[p] = chart.addLineSeries({
           color: VWAP_COLORS[p], lineWidth: 1.5,
           priceLineVisible: false, lastValueVisible: false,
           crosshairMarkerVisible: false,
           title: 'VWAP ' + p,
-          visible: false,
+          visible: true,
         });
+        vwapSeriesMap[p].setData([]); // données vides = pas de rendu, mais LWC sait que la série existe
       });
 
       if (resizeObserver) resizeObserver.disconnect();
@@ -12298,15 +12299,16 @@ TradeEditorController.renderHtml = function (day, trade) {
         scaleMargins: { top: 0.85, bottom: 0 },
       });
 
-      // Pré-créer les 4 séries VWAP (évite auto-fit addLineSeries pendant fetches)
+      // Pré-créer les 4 séries VWAP — visibles dès le départ avec données vides
       Object.keys(VWAP_COLORS).forEach(function (p) {
         vwapSeriesMap[p] = chart.addLineSeries({
           color: VWAP_COLORS[p], lineWidth: 1.5,
           priceLineVisible: false, lastValueVisible: false,
           crosshairMarkerVisible: false,
           title: 'VWAP ' + p,
-          visible: false,
+          visible: true,
         });
+        vwapSeriesMap[p].setData([]); // données vides = pas de rendu, mais LWC sait que la série existe
       });
 
       // Resize
