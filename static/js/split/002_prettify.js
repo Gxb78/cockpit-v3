@@ -96,10 +96,14 @@ function loadSettingsState() {
       if (!data || !data.settings) return;
       // Ne pas ecraser si l'utilisateur a modifie entre temps
       if (JSON.stringify(state.settings) !== localSnapshot) return;
+      // Ne pas ecraser avec des donnees vides si on a des donnees locales
+      var apiKeys = Object.keys(data.settings);
+      if (apiKeys.length === 0) return;
       var merged = Object.assign({}, defaultSettingsState(), data.settings);
       merged.custom_strategies = normalizeCustomStrategies(merged.custom_strategies || []);
       state.settings = sanitizeSettings(merged);
       applySettingsState();
+      renderSettingsPage();
       try { localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(state.settings)); } catch(_) {}
     })
     .catch(function() {});
@@ -243,8 +247,13 @@ function saveProfileSettings() {
   if (!input || !state.settings) return;
   const pseudo = input.value.trim() || "trader";
   state.settings.profile.pseudo = pseudo;
+  const btn = $("#settingsSaveProfileBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "Enregistrement..."; }
   saveSettingsState();
   applySettingsState();
+  // Mettre a jour le dashboard Today si visible
+  if (state.currentPage === "today" && typeof renderToday === "function") renderToday();
   toast("Profil mis à jour ✓", "success");
+  if (btn) { setTimeout(function() { btn.disabled = false; btn.textContent = "Enregistrer"; }, 1500); }
 }
 

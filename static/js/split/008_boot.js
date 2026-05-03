@@ -7,7 +7,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (cfg && cfg.instruments) INSTRUMENTS = cfg.instruments;
     if (cfg && cfg.strategies) DEFAULT_STRATEGY_VALUES = cfg.strategies;
     if (cfg && cfg.strategy_labels) STRATEGY_LABELS = cfg.strategy_labels;
-    renderInstruments();
+    renderInstruments(); loadInstruments();
     // Cacher le bouton dev restart hors mode DEBUG
     if (cfg && !cfg.debug) {
       var devBtn = document.getElementById("devRestart");
@@ -34,7 +34,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     state.journalCustomTo = def.to;
     localStorage.setItem(JOURNAL_CUSTOM_RANGE_KEY, JSON.stringify({ from: def.from, to: def.to }));
   }
-  state.calendarMonthFocusMode = loadCalendarMonthFocusMode();
   state.breakdownSortMode = loadBreakdownSortMode();
   bindNav();
   bindAiPanelToggle();
@@ -46,7 +45,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindJournalRangeToggle();
   bindJournalTradeFilters();
   bindJournalTableSort();
-  bindCalendarMonthFocusToggle();
   bindBreakdownSort();
   bindFilter();
   bindExport();
@@ -75,7 +73,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   updateJournalTradeFiltersUI();
   updateJournalControlsVisibility();
   updateJournalTableSortUI();
-  updateCalendarMonthFocusToggleUI();
   updateBreakdownSortUI();
   setTodayHeader();
   loadAll();

@@ -163,3 +163,24 @@ def _render_csv(days):
     )
     resp.headers["Content-Type"] = "text/csv; charset=utf-8"
     return resp
+
+
+@app.get("/api/db/info")
+@ratelimit(max_per_minute=10)
+def db_info():
+    import os as _os
+    db_path = str(DB_PATH)
+    size_bytes = DB_PATH.stat().st_size if DB_PATH.exists() else 0
+    if size_bytes < 1024:
+        size_str = f"{size_bytes} o"
+    elif size_bytes < 1024 * 1024:
+        size_str = f"{size_bytes / 1024:.1f} Ko"
+    else:
+        size_str = f"{size_bytes / 1024 / 1024:.1f} Mo"
+    return jsonify({
+        "db_path": db_path,
+        "size_bytes": size_bytes,
+        "size_str": size_str,
+        "num_days": db.execute("SELECT COUNT(*) AS c FROM days").fetchone()["c"],
+        "num_trades": db.execute("SELECT COUNT(*) AS c FROM trades").fetchone()["c"],
+    })

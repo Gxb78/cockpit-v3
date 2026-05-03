@@ -54,11 +54,34 @@
       } catch (e) {}
     }
 
-    // rAF render loop pendant interaction (synchro parfaite axe Y)
+    // rAF render loop pendant interaction (double rAF pour synchro LWC)
     if (state.container) {
       var _vpLoopId = null, _vpTimer = null;
-      function _vpStart() { if (_vpLoopId) return; function l() { _renderVP(); _vpLoopId = requestAnimationFrame(l); } _vpLoopId = requestAnimationFrame(l); }
-      function _vpStop() { if (_vpLoopId) { cancelAnimationFrame(_vpLoopId); _vpLoopId = null; } }
+      function _vpTick() {
+        if (!_vpLoopId) return;
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () {
+            if (!_vpLoopId) return;
+            _resizeCanvas();
+            _renderVP();
+            _vpLoopId = requestAnimationFrame(_vpTick);
+          });
+        });
+      }
+      function _vpStart() {
+        if (_vpLoopId) return;
+        _vpLoopId = requestAnimationFrame(_vpTick);
+      }
+      function _vpStop() {
+        if (_vpLoopId) { cancelAnimationFrame(_vpLoopId); _vpLoopId = null; }
+        // Dernier rendu stabilise
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () {
+            _resizeCanvas();
+            _renderVP();
+          });
+        });
+      }
       try {
         state.container.addEventListener('mousemove', function () {
           _vpStart(); clearTimeout(_vpTimer); _vpTimer = setTimeout(_vpStop, 200);
@@ -94,7 +117,7 @@
     state.canvas = document.createElement('canvas');
     state.canvas.className = 'vp-overlay';
     state.canvas.style.cssText =
-      'position:absolute;inset:0;z-index:9;pointer-events:none;width:100%;height:100%;';
+      'position:absolute;z-index:9;pointer-events:none;';
     // Insert before drawings canvas (z-index 10) so VP is behind tools
     var drawingsCanvas = state.container.querySelector('.draw-overlay');
     if (drawingsCanvas) {
@@ -108,14 +131,43 @@
 
   function _resizeCanvas() {
     var c = state.canvas;
-    if (!c) return;
-    var rect = state.container.getBoundingClientRect();
+    if (!c || !state.container) return;
+    var pane = _getLwcPaneRect();
+    var rect = pane || state.container.getBoundingClientRect();
     var dpr = window.devicePixelRatio || 1;
-    c.width = rect.width * dpr;
-    c.height = rect.height * dpr;
+    c.style.left = rect.left + 'px';
+    c.style.top = rect.top + 'px';
     c.style.width = rect.width + 'px';
     c.style.height = rect.height + 'px';
+    c.width = Math.round(rect.width * dpr);
+    c.height = Math.round(rect.height * dpr);
     if (state.ctx) state.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function _getLwcPaneRect() {
+    if (!state.container) return null;
+    var containerRect = state.container.getBoundingClientRect();
+    var canvases = Array.prototype.slice.call(
+      state.container.querySelectorAll('canvas')
+    ).filter(function (c) {
+      return c !== state.canvas && !c.classList.contains('draw-overlay');
+    });
+    if (!canvases.length) return null;
+    var best = null, bestArea = 0;
+    for (var i = 0; i < canvases.length; i++) {
+      var r = canvases[i].getBoundingClientRect();
+      var area = r.width * r.height;
+      if (r.width > 100 && r.height > 100 && area > bestArea) {
+        best = r; bestArea = area;
+      }
+    }
+    if (!best) return null;
+    return {
+      left: best.left - containerRect.left,
+      top: best.top - containerRect.top,
+      width: best.width,
+      height: best.height,
+    };
   }
 
   function _bindTimeScale() {

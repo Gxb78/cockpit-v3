@@ -162,13 +162,17 @@ function renderCalendar(windowDef = null) {
       emptyEl = document.createElement("div");
       emptyEl.id = "calendarEmptyState";
       emptyEl.className = "calendar-empty-state";
-      emptyEl.innerHTML =
-        '<div class="empty-state">' +
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
-          '<span>Aucun trade ne correspond aux filtres actifs.</span>' +
-        "</div>";
-      grid.parentNode.insertBefore(emptyEl, grid.nextSibling);
     }
+    // Message incluant le terme recherche si actif
+    var searchQ = (state.journalTradeFilters?.search || "").trim();
+    var msg = searchQ
+      ? 'Aucun resultat pour "' + escapeHtml(searchQ) + '".'
+      : "Aucun trade ne correspond aux filtres actifs.";
+    emptyEl.innerHTML =
+      '<div class="empty-state">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
+        "<span>" + msg + "</span>" +
+      "</div>";
     emptyEl.classList.remove("hidden");
   } else if (emptyEl) {
     emptyEl.classList.add("hidden");

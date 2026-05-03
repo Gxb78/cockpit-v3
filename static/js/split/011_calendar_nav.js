@@ -92,6 +92,14 @@ function bindCalendarNav() {
     }
     closeMonthPicker();
     loadMonth();
+    // Feedback visuel : flash sur le controle du mois
+    const wrap = document.getElementById("journalMonthInputWrap");
+    if (wrap) {
+      wrap.classList.remove("journal-month-flash");
+      void wrap.offsetWidth;
+      wrap.classList.add("journal-month-flash");
+      setTimeout(function () { wrap.classList.remove("journal-month-flash"); }, 600);
+    }
   });
 
   $("#journalMonthInput")?.addEventListener("change", (e) => {

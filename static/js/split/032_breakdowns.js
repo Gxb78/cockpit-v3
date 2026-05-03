@@ -4,12 +4,25 @@ function renderBreakdown(selector, data, opts = {}) {
   const c = document.querySelector(selector);
   if (!c) return;
   c.innerHTML = "";
-  const entries = Object.entries(data || {});
+  var panel = c.closest(".panel");
+  if (panel) {
+    var existing = panel.querySelector(".bd-sort-badge");
+    if (!existing) {
+      var h3 = panel.querySelector(".panel-h h3");
+      if (h3) {
+        var badge = document.createElement("span");
+        badge.className = "bd-sort-badge";
+        badge.title = "Cliquer pour changer le tri (selecteur en haut de page)";
+        h3.after(badge);
+      }
+    }
+  }
+  var entries = Object.entries(data || {});
   if (!entries.length) {
     c.innerHTML = `<div class="bd-empty">Pas encore de donnees.</div>`;
     return;
   }
-  const sortMode = state.breakdownSortMode || "count";
+  var sortMode = state.breakdownSortMode || "count";
   entries.sort((a, b) => {
     const av = a[1] || {};
     const bv = b[1] || {};
@@ -34,6 +47,8 @@ function renderBreakdown(selector, data, opts = {}) {
     ? k => `#${String(k || "").trim()}`
     : opts.kind === "plan_error"
     ? k => PLAN_ERROR_LABELS[k] || prettify(k)
+    : opts.kind === "setup"
+    ? k => (k && k !== "null" && k !== "undefined" ? prettify(k) : "Sans stratégie")
     : k => prettify(k);
 
   entries.forEach(([k, v], i) => {
@@ -58,15 +73,23 @@ function renderBreakdown(selector, data, opts = {}) {
     c.appendChild(row);
     requestAnimationFrame(() => { row.querySelector(".fill").style.transform = `scaleX(${Math.min(wr,100)/100})`; });
   });
+  var panel = c.closest(".panel");
+  var badge = panel && panel.querySelector(".bd-sort-badge");
+  if (badge) {
+    var labels = { count: "Nb trades", winrate: "Winrate", avg_rr: "RR moyen", pnl: "PnL" };
+    badge.textContent = "\u2191 " + (labels[sortMode] || sortMode);
+  }
 }
 
 function renderPlanMatrix(matrix, summary) {
   const c = $("#planMatrix");
   if (!c) return;
+  matrix = matrix || {};
+  summary = summary || {};
   const order = ["in_plan_win", "in_plan_loss", "out_of_plan_win", "out_of_plan_loss", "incomplete", "unknown"];
-  const total = order.reduce((sum, key) => sum + Number(matrix?.[key]?.count || 0), 0);
+  const total = order.reduce((sum, key) => sum + Number(matrix[key]?.count || 0), 0);
   if (!total) {
-    c.innerHTML = `<div class="bd-empty">Pas encore de donnees plan.</div>`;
+    c.innerHTML = `<div class="bd-empty">Aucun trade avec plan pour la periode selectionnee.</div>`;
     return;
   }
   const avg = Number(summary?.avg_score || 0);
@@ -130,10 +153,30 @@ function renderRRDist(buckets) {
   const c = $("#rrDist");
   if (!c) return;
   c.innerHTML = "";
+  // Titre
+  var title = document.createElement("div");
+  title.className = "rr-dist-title";
+  title.textContent = "Distribution R:R";
+  c.appendChild(title);
+
+  // Y-axis label + bars container
+  var chartWrap = document.createElement("div");
+  chartWrap.className = "rr-chart-wrap";
+
+  var yLabel = document.createElement("div");
+  yLabel.className = "rr-y-label";
+  yLabel.textContent = "Trades";
+  chartWrap.appendChild(yLabel);
+
+  var barsContainer = document.createElement("div");
+  barsContainer.className = "rr-bars";
+
   const labels = ["<0","0-1","1-2","2-3","3-5","5+"];
   const zones  = ["loss","meh","meh","ok","great","great"];
   const max    = Math.max(1, ...buckets);
-  buckets.forEach((count, i) => {
+
+  labels.forEach((label, i) => {
+    const count = buckets[i] || 0;
     const el = document.createElement("div");
     el.className = "rr-bucket";
     el.innerHTML = `
@@ -142,12 +185,21 @@ function renderRRDist(buckets) {
           ${count > 0 ? `<span class="rr-bar-count">${count}</span>` : ""}
         </div>
       </div>
-      <span class="rr-bucket-label">${labels[i]}</span>`;
-    c.appendChild(el);
+      <span class="rr-bucket-label">${label}</span>`;
+    barsContainer.appendChild(el);
     requestAnimationFrame(() => {
       el.querySelector(".rr-bar").style.transform = `scaleY(${(count/max)})`;
     });
   });
+
+  chartWrap.appendChild(barsContainer);
+  c.appendChild(chartWrap);
+
+  // X-axis label
+  var xLabel = document.createElement("div");
+  xLabel.className = "rr-x-label";
+  xLabel.textContent = "Ratio R:R";
+  c.appendChild(xLabel);
 }
 
 function fmtPeriodRange(fromKey, toKey) {
@@ -182,9 +234,9 @@ function renderPeriodCompare(periodCompare) {
   curRange.textContent = fmtPeriodRange(cur.from, cur.to);
   prevRange.textContent = fmtPeriodRange(prev.from, prev.to);
 
-  curPnl.textContent = fmtMoney(cur.pnl || 0);
-  prevPnl.textContent = fmtMoney(prev.pnl || 0);
-  deltaPnl.textContent = fmtMoney(delta.pnl || 0);
+  curPnl.textContent = cur.pnl != null ? fmtMoney(cur.pnl) : "\u2014";
+  prevPnl.textContent = prev.pnl != null ? fmtMoney(prev.pnl) : "\u2014";
+  deltaPnl.textContent = delta.pnl != null ? fmtMoney(delta.pnl) : "\u2014";
 
   setSignedClass(curPnl, Number(cur.pnl || 0));
   setSignedClass(prevPnl, Number(prev.pnl || 0));

@@ -226,6 +226,64 @@ function bindSettings() {
       toggleBtn.classList.toggle("is-visible", isPassword);
     });
   }
+
+  // API key edit/save
+  var editBtn = document.getElementById("settingsEditApiBtn");
+  var saveBtn = document.getElementById("settingsSaveApiBtn");
+  if (editBtn && saveBtn && apiInput) {
+    editBtn.addEventListener("click", function () {
+      apiInput.readOnly = false;
+      apiInput.value = "";
+      apiInput.focus();
+      editBtn.style.display = "none";
+      saveBtn.style.display = "";
+      saveBtn.classList.remove("hidden");
+    });
+    saveBtn.addEventListener("click", async function () {
+      var key = apiInput.value.trim();
+      if (!key) { toast("Entrez une cle valide", "error"); return; }
+      saveBtn.disabled = true; saveBtn.textContent = "Enregistrement...";
+      try {
+        var r = await fetch("/api/settings/key", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: key, provider: "deepseek" }),
+        });
+        var data = await r.json();
+        if (data.error) { toast(data.error, "error"); return; }
+        toast(data.message || "Cle enregistree", "success");
+        apiInput.readOnly = true;
+        editBtn.style.display = "";
+        saveBtn.style.display = "none";
+        saveBtn.classList.add("hidden");
+        refreshApiKeyStatus();
+      } catch (e) { toast("Erreur: " + e.message, "error"); }
+      finally { saveBtn.disabled = false; saveBtn.textContent = "Enregistrer"; }
+    });
+  }
+
+  // Data card: load DB info
+  loadDbInfo();
+}
+
+function loadDbInfo() {
+  fetch("/api/db/info").then(function (r) { return r.json(); }).then(function (d) {
+    var pathEl = document.getElementById("dbPathDisplay");
+    if (pathEl) pathEl.textContent = d.db_path || "—";
+    var sizeEl = document.getElementById("dbSizeDisplay");
+    if (sizeEl) sizeEl.textContent = d.size_str || "—";
+    var daysEl = document.getElementById("dbDaysCount");
+    if (daysEl) daysEl.textContent = d.num_days != null ? d.num_days : "—";
+    var tradesEl = document.getElementById("dbTradesCount");
+    if (tradesEl) tradesEl.textContent = d.num_trades != null ? d.num_trades : "—";
+  }).catch(function () {});
+  // Export button
+  var exportBtn = document.getElementById("settingsExportBtn");
+  if (exportBtn) {
+    exportBtn.addEventListener("click", function () {
+      window.open("/api/export?format=json", "_blank");
+    });
+  }
 }
 
 function loadCalendarMetricMode() {

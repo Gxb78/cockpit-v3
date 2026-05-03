@@ -1167,6 +1167,22 @@ body.light-mode .theme-toggle:hover { border-color: rgba(0,132,255,0.40); backgr
   margin-top: 6px;
   font-size: 11px;
   color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+/* Tooltip pour KPI (mobile + desktop) */
+.kpi-tooltip {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--amber, #ffb347);
+  background: rgba(255, 170, 0, 0.1);
+  border: 1px solid rgba(255, 170, 0, 0.2);
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: help;
+  white-space: nowrap;
 }
 .kpi-spark-wrap {
   margin-top: 10px;
@@ -1559,16 +1575,49 @@ body.light-mode .entry-result-chip.loss {
   -webkit-appearance: none;
   -moz-appearance: none;
   padding: 0 4px;
+  color: var(--text, #fff);
+  color-scheme: dark;
+  /* Firefox: champs natifs invisibles */
+  -moz-appearance: textfield;
 }
+/* WebKit: cacher le picker et spinner */
 .journal-nav-inline #journalMonthInput::-webkit-calendar-picker-indicator,
 .journal-nav-inline #journalMonthInput::-webkit-inner-spin-button {
   display: none !important;
   -webkit-appearance: none;
   appearance: none;
   margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+}
+/* Firefox: cacher le picker mois */
+.journal-nav-inline #journalMonthInput::-moz-calendar-picker-indicator {
+  display: none !important;
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+  height: 0;
+}
+/* Firefox: couleur du texte dans le champ date/mois */
+@-moz-document url-prefix() {
+  .journal-nav-inline #journalMonthInput {
+    color: var(--text, #fff);
+    background: transparent;
+    text-shadow: none;
+  }
 }
 .journal-nav-inline #journalMonthInput:hover {
-  border-color: #c5cad4;
+  border-color: var(--accent);
+}
+/* Animation flash pour le bouton "Aujourd'hui" */
+.journal-month-flash {
+  animation: journalFlash 0.5s ease-out;
+}
+@keyframes journalFlash {
+  0%   { filter: brightness(1); }
+  30%  { filter: brightness(1.6); }
+  100% { filter: brightness(1); }
 }
 .journal-nav-inline .journal-month-caption {
   display: none;
@@ -1604,27 +1653,6 @@ body.light-mode .entry-result-chip.loss {
   background: var(--border, #e3e7ee);
   flex-shrink: 0;
 }
-
-/* Focus mode buttons */
-#calendarMonthFocusToggle {
-  display: inline-flex;
-  gap: 2px;
-}
-.calendar-month-focus-btn {
-  font-size: 10px;
-  font-weight: 750;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 0;
-  background: transparent;
-  color: #98a1af;
-  cursor: pointer;
-  transition: background 0.14s, color 0.14s;
-}
-.calendar-month-focus-btn:hover { color: #626b7a; }
-.calendar-month-focus-btn.active { background: #08090c; color: #fff; }
 
 /* View / Layout / Range toggles */
 .calendar-view-toggle,
@@ -3227,6 +3255,11 @@ body.light-mode .day-dots { gap: 3px; }
   font-size: 10.5px;
   color: var(--text-muted);
 }
+.hm-legend-label {
+  font-weight: 600;
+  color: var(--text);
+  margin-right: 2px;
+}
 .hm-sample {
   width: 11px; height: 11px;
   border-radius: 2px;
@@ -3320,6 +3353,19 @@ body.light-mode .day-dots { gap: 3px; }
 .bd-bar > .fill.rose { background: linear-gradient(90deg, var(--loss), #e92e4a); box-shadow: 0 0 6px rgba(255,78,107,0.4); }
 .bd-bar > .fill.amber{ background: linear-gradient(90deg, var(--amber), #ff7a00); box-shadow: 0 0 6px rgba(255,170,0,0.4); }
 
+.bd-sort-badge {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  margin-left: 8px;
+  cursor: help;
+  vertical-align: middle;
+}
+
 .bd-empty {
   padding: 14px;
   text-align: center;
@@ -3330,12 +3376,46 @@ body.light-mode .day-dots { gap: 3px; }
 /* ---- 011_stats_rr_distribution.css ---- */
 /* RR distribution as small bar chart */
 .rr-dist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 4px;
+}
+.rr-dist-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: center;
+  margin-bottom: 4px;
+}
+.rr-chart-wrap {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+  height: 140px;
+}
+.rr-y-label {
+  writing-mode: vertical-lr;
+  text-orientation: mixed;
+  font-size: 9px;
+  color: var(--text-faint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+}
+.rr-bars {
+  flex: 1;
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: 8px;
   align-items: end;
-  height: 140px;
-  padding: 0 4px;
+}
+.rr-x-label {
+  font-size: 9px;
+  color: var(--text-faint);
+  text-align: center;
+  margin-top: 2px;
 }
 .rr-bucket {
   display: flex;
@@ -6051,7 +6131,20 @@ body.is-dragging {
 }
 
 .today-grid.today-empty {
-  display: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  border: 1px dashed var(--border, rgba(255,255,255,0.12));
+  border-radius: 16px;
+  margin: 16px 0;
+}
+.today-grid.today-empty::after {
+  content: "Aucun widget visible — ouvre la configuration pour en réactiver.";
+  color: var(--text-muted, #8892a4);
+  font-size: 13px;
+  text-align: center;
+  padding: 20px;
 }
 
 /* ---- Responsive ---- */
@@ -15512,6 +15605,25 @@ body.light-mode .btc-chart-controls .btn-icon {
 body.light-mode .btc-chart-controls .btn-icon:hover {
   background: rgba(15, 23, 42, 0.04);
 }
+
+/* ── WebSocket error indicator ── */
+.btc-chart-ws-error {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  font-size: 11px;
+  font-family: "JetBrains Mono", monospace;
+  white-space: nowrap;
+  z-index: 5;
+  transition: opacity 0.3s;
+}
+.btc-chart-ws-error.hidden { opacity: 0; pointer-events: none; }
+.btc-chart-ws-error.visible { opacity: 1; }
 
 body.light-mode .btc-chart-controls .btn-icon.active {
   border-color: rgba(14, 165, 233, 0.30);

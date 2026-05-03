@@ -54,7 +54,7 @@ function updateJournalRangeToggleUI() {
   if (customLabel) {
     const from = state.journalCustomFrom || "";
     const to = state.journalCustomTo || "";
-    customLabel.textContent = from && to ? `${prettyDateKey(from)} -> ${prettyDateKey(to)}` : "-";
+    customLabel.textContent = from && to ? `${prettyDateKey(from)} -> ${prettyDateKey(to)}` : "Choisir une plage";
   }
 
   const custom = getJournalCustomWindow();
@@ -112,6 +112,11 @@ function updateJournalTradeFiltersUI() {
     } else if (badge) {
       badge.remove();
     }
+  }
+  // Garder <details> ouvert si des filtres avancés sont actifs
+  var details = document.querySelector(".journal-advanced-filters");
+  if (details) {
+    details.open = count > 0;
   }
 }
 
@@ -232,6 +237,7 @@ function setJournalRangeMode(mode, opts = {}) {
     }
   }
   updateJournalRangeToggleUI();
+  updateJournalRangeTriggerLabel();
   updateJournalControlsVisibility();
   if (persist) localStorage.setItem(JOURNAL_RANGE_MODE_KEY, mode);
   if (reload && state.currentPage === "journal") loadMonth();

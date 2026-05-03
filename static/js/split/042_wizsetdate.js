@@ -43,17 +43,17 @@ function wizSelectInstrument(id) {
 function _wizStepSession() {
   var d = wizState.data;
   var sessions = [
-    { id:'asia',    icon:'&#x1F305;', main:'Asia',   sub:'Session asiatique — Tokyo, Sydney' },
-    { id:'london',  icon:'&#x1F1EC;&#x1F1E7;', main:'London', sub:'Session London — Europe' },
-    { id:'ny_am',   icon:'&#x1F5FD;', main:'NY AM',  sub:'Matin New York — ouverture US' },
-    { id:'ny_pm',   icon:'&#x1F303;', main:'NY PM',  sub:'Apres-midi New York — continuation' },
+    { id:'asia',    icon:'&#x1F305;', main:'Asia' },
+    { id:'london',  icon:'&#x1F1EC;&#x1F1E7;', main:'London' },
+    { id:'ny_am',   icon:'&#x1F5FD;', main:'NY AM' },
+    { id:'ny_pm',   icon:'&#x1F303;', main:'NY PM' },
   ];
   var html = '<div class="wiz-question">Dans quelle session ?</div><div class="wiz-cards">';
   sessions.forEach(function(s) {
     html += '<div class="wiz-card' + (d.session===s.id?' active':'') + '" onclick="wizSelectSession(\'' + s.id + '\')">'
       + '<div class="wiz-card-icon">' + s.icon + '</div>'
       + '<div class="wiz-card-main">' + s.main + '</div>'
-      + '<div class="wiz-card-sub">'  + s.sub + '</div>'
+      
       + '</div>';
   });
   return html + '</div>';
@@ -71,16 +71,16 @@ function wizSelectSession(id) {
 function _wizStepStrategy() {
   var d = wizState.data;
   var defaults = [
-    { id:'midnight_model', icon:'&#x1F319;', main:'Midnight Model', sub:'Range overnight &amp; London pre-market' },
-    { id:'london_model',   icon:'&#x1F1EC;&#x1F1E7;', main:'London Model', sub:'Ouverture &amp; session London' },
-    { id:'ny_model',       icon:'&#x1F5FD;', main:'NY Model', sub:'Session New York &amp; continuation' },
+    { id:'midnight_model', icon:'&#x1F319;', main:'Midnight Model' },
+    { id:'london_model',   icon:'&#x1F1EC;&#x1F1E7;', main:'London Model' },
+    { id:'ny_model',       icon:'&#x1F5FD;', main:'NY Model' },
   ];
   var custom = (state?.settings?.custom_strategies || []).map(function(s) {
     return {
       id: String(s.value || '').trim(),
       icon: '&#x2728;',
       main: escapeHtml(String(s.label || s.value || '').trim() || prettify(s.value)),
-      sub: 'Strategie custom',
+
     };
   }).filter(function(s) { return !!s.id; });
   var byId = {};
@@ -95,7 +95,7 @@ function _wizStepStrategy() {
       id: d.strategy,
       icon: '&#x2728;',
       main: escapeHtml(prettify(d.strategy)),
-      sub: 'Strategie detectee',
+
     });
   }
 
@@ -170,7 +170,7 @@ function _wizStepWhyTrade() {
   var d = wizState.data;
   return _wizChip()
     + '<div class="wiz-question">Pourquoi ce trade ?</div>'
-    + '<div class="wiz-hint">' + _wizHint('why_trade') + '</div>'
+    
     + '<textarea class="wiz-textarea lg" id="wizWhyTrade" placeholder="Alignement avec le plan, setup identifie...">' + (d.why_trade||'') + '</textarea>';
 }
 
@@ -180,7 +180,7 @@ function _wizStepWhyEntry() {
   var d = wizState.data;
   return _wizChip()
     + '<div class="wiz-question">Pourquoi cette entree ?</div>'
-    + '<div class="wiz-hint">' + _wizHint('why_entry') + '</div>'
+    
     + '<textarea class="wiz-textarea lg" id="wizWhyEntry" placeholder="Signal declencheur, confirmation, timing...">' + (d.why_entry||'') + '</textarea>';
 }
 
@@ -190,7 +190,7 @@ function _wizStepWhyStopTp() {
   var d = wizState.data;
   return _wizChip()
     + '<div class="wiz-question">Stop &amp; objectif</div>'
-    + '<div class="wiz-hint">' + _wizHint('why_stop_tp') + '</div>'
+    
     + '<div class="wiz-field">'
     +   '<label class="wiz-label">Pourquoi ce stop</label>'
     +   '<textarea class="wiz-textarea" id="wizWhyStop" placeholder="Invalidation du setup, zone de protection...">' + (d.why_stop||'') + '</textarea>'

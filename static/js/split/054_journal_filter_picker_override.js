@@ -7,6 +7,7 @@ function initJournalFilters() {
   if (!from || !to || !instr) return;
 
   var now = new Date();
+  populateInstruments('jFilterInstrument');
   var win = getJournalWindow();
   from.value = win.from || _fmtDate2(new Date(now.getFullYear(), now.getMonth(), 1));
   to.value = win.to || _fmtDate2(now);
@@ -184,10 +185,19 @@ function updateJournalStatsDisplay() {
   var labelEl = $("#jfilterStatsLabel");
   if (!valueEl || !labelEl) return;
 
+  // Loading state: days pas encore charges
+  if (!state.days || state.days.length === 0) {
+    labelEl.textContent = _journalStatsConfig[_journalStatsIndex].label;
+    valueEl.textContent = "...";
+    valueEl.className = "jfilter-stats-loading";
+    return;
+  }
+
   var stats = computeJournalStats();
   var config = _journalStatsConfig[_journalStatsIndex];
   labelEl.textContent = config.label;
   valueEl.textContent = config.fmt(stats[config.key]);
+  valueEl.className = "";
 }
 
 function bindJournalStatsArrows() {

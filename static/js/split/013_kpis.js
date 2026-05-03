@@ -109,14 +109,34 @@ function renderKPIs(s) {
   if (wrEl) wrEl.textContent = d.numTrades > 0 ? `${(s.winrate || 0).toFixed(1)}%` : "\u2014";
   $("#kpiWins").textContent = `${s.wins}W`;
   $("#kpiLosses").textContent = `${s.losses}L`;
-  $("#kpiWinrateBar").style.transform = `scaleX(${Math.min(s.winrate || 0, 100) / 100})`;
+  var wrBar = $("#kpiWinrateBar");
+  if (wrBar) {
+    wrBar.style.transform = "scaleX(" + Math.min(s.winrate || 0, 100) / 100 + ")";
+    wrBar.setAttribute("role", "progressbar");
+    wrBar.setAttribute("aria-valuenow", String(Math.round(s.winrate || 0)));
+    wrBar.setAttribute("aria-valuemin", "0");
+    wrBar.setAttribute("aria-valuemax", "100");
+    wrBar.setAttribute("aria-label", Math.round(s.winrate || 0) + "% winrate");
+  }
 
   if (d.rrCount > 0) {
     $("#kpiRR").textContent = d.avgRR.toFixed(2);
-    $("#kpiRRBar").style.transform = `scaleX(${Math.min((Math.abs(d.avgRR) || 0) / 5 * 100, 100) / 100})`;
+    var rrBar = $("#kpiRRBar");
+    if (rrBar) {
+      rrBar.style.transform = "scaleX(" + Math.min(Math.abs(d.avgRR) || 0, 5) / 5 + ")";
+      rrBar.setAttribute("role", "progressbar");
+      rrBar.setAttribute("aria-valuenow", String(d.avgRR.toFixed(2)));
+      rrBar.setAttribute("aria-valuemin", "0");
+      rrBar.setAttribute("aria-valuemax", "5");
+      rrBar.setAttribute("aria-label", d.avgRR.toFixed(2) + "R moyen");
+    }
   } else {
     $("#kpiRR").textContent = "\u2014";
-    $("#kpiRRBar").style.transform = "scaleX(0)";
+    var rrBar = $("#kpiRRBar");
+    if (rrBar) {
+      rrBar.style.transform = "scaleX(0)";
+      rrBar.removeAttribute("aria-valuenow");
+    }
   }
 
   const tradesLabel = `${d.numTrades} trade${d.numTrades > 1 ? "s" : ""}`;
@@ -126,11 +146,13 @@ function renderKPIs(s) {
     : "Aucun trade enregistre";
 
   let pfText = "\u2014";
-  let pfTitle = "";
-  if (d.profitFactor === Infinity) { pfText = "\u221E"; pfTitle = "Aucune perte enregistree"; }
+  let pfTooltipText = "";
+  if (d.profitFactor === Infinity) { pfText = "\u221E"; pfTooltipText = "Aucune perte enregistree"; }
   else if (Number.isFinite(d.profitFactor)) pfText = d.profitFactor.toFixed(2);
   var pfEl = $("#kpiProfitFactor");
-  if (pfEl) { pfEl.textContent = pfText; pfEl.title = pfTitle; }
+  if (pfEl) { pfEl.textContent = pfText; }
+  var pfTip = $("#pfTooltip");
+  if (pfTip) { pfTip.textContent = pfTooltipText; pfTip.setAttribute("aria-hidden", pfTooltipText ? "false" : "true"); }
 
   var expEl = $("#kpiExpectancy");
   if (expEl) expEl.textContent = d.expectancy == null ? "\u2014" : fmtMoney(d.expectancy);

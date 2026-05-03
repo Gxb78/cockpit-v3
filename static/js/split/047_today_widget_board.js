@@ -140,6 +140,7 @@ function toggleWidgetVisibility(key) {
 }
 
 function resetWidgetVisibility() {
+  if (!confirm("Réinitialiser tous les widgets à leur état par défaut ?")) return;
   writeWidgetVisibility(getWidgetDefaults());
   writeWidgetOrder("today", WIDGET_DEFAULTS["today"]);
   writeWidgetPositions("today", {});
@@ -640,9 +641,8 @@ function renderTodayCalendar() {
       }
       var key = dayEl.dataset.date;
       if (!key) return;
-      if (typeof goPage === "function") {
-        state.journalFocusDate = key;
-        goPage("journal");
+      if (typeof wizOpen === "function") {
+        wizOpen({ date: key });
       }
     });
     grid.addEventListener("keydown", function(e) {

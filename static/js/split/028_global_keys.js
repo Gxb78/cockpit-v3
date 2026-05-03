@@ -22,6 +22,16 @@ function bindGlobalKeys() {
       if (e.key === "s" || e.key === "S") { e.preventDefault(); goPage("stats"); }
       if (e.key === "g" || e.key === "G") { e.preventDefault(); goPage("settings"); }
       if (e.key === "c" || e.key === "C") { e.preventDefault(); goPage("chart"); }
+      if (e.key === "/") {
+        e.preventDefault();
+        var search = document.getElementById("journalFilterSearch");
+        if (search) { search.focus(); search.select(); }
+      }
+      if (e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        var details = document.querySelector(".journal-advanced-filters");
+        if (details) details.open = !details.open;
+      }
       if (e.key === "w" || e.key === "W") {
         e.preventDefault();
         if (state.currentPage !== "journal") goPage("journal");

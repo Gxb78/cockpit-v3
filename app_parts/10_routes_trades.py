@@ -170,3 +170,26 @@ def batch_delete_trades():
     deleted = len(ids)
     db.commit()
     return jsonify({"ok": True, "deleted": deleted})
+
+
+# ── Instruments distincts ──
+
+@app.get("/api/trades/instruments")
+def list_instruments():
+    db = get_db()
+    rows = db.execute(
+        "SELECT DISTINCT instrument FROM days WHERE instrument IS NOT NULL AND instrument != '' ORDER BY instrument"
+    ).fetchall()
+    instruments = [row["instrument"] for row in rows]
+    return jsonify({"ok": True, "instruments": instruments})
+
+
+# ── Recherche full-text ──
+
+@app.get("/api/journal/search")
+def journal_search():
+    q = request.args.get("q", "").strip()
+    if not q or len(q) < 2:
+        return jsonify({"ok": True, "days": []})
+    days = _query_days(search=q)
+    return jsonify({"ok": True, "days": days, "count": len(days)})

@@ -49,7 +49,6 @@ function goPage(pageName) {
     updateJournalTradeFiltersUI();
     updateJournalControlsVisibility();
     updateJournalTableSortUI();
-    updateCalendarMonthFocusToggleUI();
     if (state.journalFocusDate) {
       var fd = parseDateKey(state.journalFocusDate);
       if (fd) {

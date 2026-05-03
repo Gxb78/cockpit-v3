@@ -314,7 +314,20 @@ body.is-dragging {
 }
 
 .today-grid.today-empty {
-  display: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  border: 1px dashed var(--border, rgba(255,255,255,0.12));
+  border-radius: 16px;
+  margin: 16px 0;
+}
+.today-grid.today-empty::after {
+  content: "Aucun widget visible — ouvre la configuration pour en réactiver.";
+  color: var(--text-muted, #8892a4);
+  font-size: 13px;
+  text-align: center;
+  padding: 20px;
 }
 
 /* ---- Responsive ---- */

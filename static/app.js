@@ -49,8 +49,6 @@ const _state = {
   // Journal table sorting
   journalTableSortKey: "date",
   journalTableSortDir: "desc",
-  // Journal monthly focus metric: winrate | pnl | trades
-  calendarMonthFocusMode: "winrate",
   // Stats breakdown sort: count | winrate | avg_rr | pnl
   breakdownSortMode: "count",
 };
@@ -140,26 +138,63 @@ var DEFAULT_STRATEGY_VALUES = Object.keys(STRATEGY_LABELS);
 var INSTRUMENTS = ["BTC", "ETH", "NQ", "ES"];
 
 function renderInstruments() {
-  // Rail buttons
   var rail = document.getElementById("instrList");
   if (rail) {
-    rail.innerHTML = '<button class="instr-chip active" data-instr="ALL" role="tab" aria-selected="true"><span class="dot" aria-hidden="true"></span>Tous</button>' +
-      INSTRUMENTS.map(function (i) {
-        return '<button class="instr-chip" data-instr="' + i + '" role="tab" aria-selected="false"><span class="dot" aria-hidden="true"></span>' + i + "</button>";
-      }).join("");
+    rail.innerHTML = '<button class="instr-chip active" data-instr="ALL" role="tab" aria-selected="true"><span class="dot" aria-hidden="true"></span>Tous</button>';
   }
-  // Day context select
   var ctx = document.getElementById("entryInstrument");
   if (ctx) {
-    ctx.innerHTML = '<option value="">Instrument</option>' +
-      INSTRUMENTS.map(function (i) { return '<option value="' + i + '">' + i + "</option>"; }).join("");
+    ctx.innerHTML = '<option value="">Instrument</option>';
   }
-  // Journal filter select
   var jf = document.getElementById("jFilterInstrument");
   if (jf) {
-    jf.innerHTML = '<option value="ALL">Tous</option>' +
-      INSTRUMENTS.map(function (i) { return '<option value="' + i + '">' + i + "</option>"; }).join("");
+    jf.innerHTML = '<option value="ALL">Tous</option>';
   }
+}
+
+function loadInstruments() {
+  fetch("/api/trades/instruments", { credentials: "same-origin" })
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if (!data || !data.instruments) return;
+      var instrs = data.instruments;
+      var rail = document.getElementById("instrList");
+      if (rail) {
+        rail.innerHTML = '<button class="instr-chip active" data-instr="ALL" role="tab" aria-selected="true"><span class="dot" aria-hidden="true"></span>Tous</button>' +
+          instrs.map(function (i) { return '<button class="instr-chip" data-instr="' + i + '" role="tab" aria-selected="false"><span class="dot" aria-hidden="true"></span>' + i + "</button>"; }).join("");
+      }
+      var ctx = document.getElementById("entryInstrument");
+      if (ctx) {
+        ctx.innerHTML = '<option value="">Instrument</option>' +
+          instrs.map(function (i) { return '<option value="' + i + '">' + i + "</option>"; }).join("");
+      }
+      var jf = document.getElementById("jFilterInstrument");
+      if (jf) {
+        jf.innerHTML = '<option value="ALL">Tous</option>' +
+          instrs.map(function (i) { return '<option value="' + i + '">' + i + "</option>"; }).join("");
+      }
+    })
+    .catch(function() {});
+}
+
+function populateInstruments(selectId) {
+  var sel = document.getElementById(selectId);
+  if (!sel) return;
+  fetch("/api/trades/instruments", { credentials: "same-origin" })
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if (!data || !data.instruments) return;
+      var currentVal = sel.value;
+      while (sel.options.length > 1) sel.remove(1);
+      data.instruments.forEach(function(instr) {
+        var opt = document.createElement("option");
+        opt.value = instr;
+        opt.textContent = instr;
+        sel.appendChild(opt);
+      });
+      if (currentVal) sel.value = currentVal;
+    })
+    .catch(function() {});
 }
 
 const SETTINGS_STORAGE_KEY = "cockpit:settings:v1";
@@ -185,8 +220,6 @@ const JOURNAL_TABLE_SORT_KEYS = new Set([
   "pnl",
   "result",
 ]);
-const CALENDAR_MONTH_FOCUS_MODE_KEY = "cockpit:calendarMonthFocusMode:v1";
-const CALENDAR_MONTH_FOCUS_MODES = new Set(["winrate", "pnl", "trades"]);
 const BREAKDOWN_SORT_KEY = "cockpit:breakdownSortMode:v1";
 const BREAKDOWN_SORT_MODES = new Set(["count", "winrate", "avg_rr", "pnl"]);
 
@@ -375,12 +408,37 @@ function computeMarginUsd(positionSize, leverage, entryPrice) {
  * @param {string} s
  * @returns {string}
  */
+/**
+ * Echappe les caracteres HTML dans une chaine.
+ * @param {string} s
+ * @returns {string}
+ */
 function escapeHtml(s) {
   return String(s || "").replace(/[&<>"']/g, m =>
     ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m])
   );
 }
 
+// ---- Instruments ----
+function populateInstruments(selectId) {
+  var sel = document.getElementById(selectId);
+  if (!sel) return;
+  fetch("/api/trades/instruments", { credentials: "same-origin" })
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if (!data || !data.instruments) return;
+      var currentVal = sel.value;
+      while (sel.options.length > 1) sel.remove(1);
+      data.instruments.forEach(function(instr) {
+        var opt = document.createElement("option");
+        opt.value = instr;
+        opt.textContent = instr;
+        sel.appendChild(opt);
+      });
+      if (currentVal) sel.value = currentVal;
+    })
+    .catch(function() {});
+}
 // ---------- Loading indicator ----------
 
 var _loadingCount = 0;
@@ -575,10 +633,14 @@ function loadSettingsState() {
       if (!data || !data.settings) return;
       // Ne pas ecraser si l'utilisateur a modifie entre temps
       if (JSON.stringify(state.settings) !== localSnapshot) return;
+      // Ne pas ecraser avec des donnees vides si on a des donnees locales
+      var apiKeys = Object.keys(data.settings);
+      if (apiKeys.length === 0) return;
       var merged = Object.assign({}, defaultSettingsState(), data.settings);
       merged.custom_strategies = normalizeCustomStrategies(merged.custom_strategies || []);
       state.settings = sanitizeSettings(merged);
       applySettingsState();
+      renderSettingsPage();
       try { localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(state.settings)); } catch(_) {}
     })
     .catch(function() {});
@@ -722,9 +784,14 @@ function saveProfileSettings() {
   if (!input || !state.settings) return;
   const pseudo = input.value.trim() || "trader";
   state.settings.profile.pseudo = pseudo;
+  const btn = $("#settingsSaveProfileBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "Enregistrement..."; }
   saveSettingsState();
   applySettingsState();
+  // Mettre a jour le dashboard Today si visible
+  if (state.currentPage === "today" && typeof renderToday === "function") renderToday();
   toast("Profil mis à jour ✓", "success");
+  if (btn) { setTimeout(function() { btn.disabled = false; btn.textContent = "Enregistrer"; }, 1500); }
 }
 
 // ---- 003_addcustomstrategyfromsettings.js ----
@@ -956,6 +1023,64 @@ function bindSettings() {
       toggleBtn.classList.toggle("is-visible", isPassword);
     });
   }
+
+  // API key edit/save
+  var editBtn = document.getElementById("settingsEditApiBtn");
+  var saveBtn = document.getElementById("settingsSaveApiBtn");
+  if (editBtn && saveBtn && apiInput) {
+    editBtn.addEventListener("click", function () {
+      apiInput.readOnly = false;
+      apiInput.value = "";
+      apiInput.focus();
+      editBtn.style.display = "none";
+      saveBtn.style.display = "";
+      saveBtn.classList.remove("hidden");
+    });
+    saveBtn.addEventListener("click", async function () {
+      var key = apiInput.value.trim();
+      if (!key) { toast("Entrez une cle valide", "error"); return; }
+      saveBtn.disabled = true; saveBtn.textContent = "Enregistrement...";
+      try {
+        var r = await fetch("/api/settings/key", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: key, provider: "deepseek" }),
+        });
+        var data = await r.json();
+        if (data.error) { toast(data.error, "error"); return; }
+        toast(data.message || "Cle enregistree", "success");
+        apiInput.readOnly = true;
+        editBtn.style.display = "";
+        saveBtn.style.display = "none";
+        saveBtn.classList.add("hidden");
+        refreshApiKeyStatus();
+      } catch (e) { toast("Erreur: " + e.message, "error"); }
+      finally { saveBtn.disabled = false; saveBtn.textContent = "Enregistrer"; }
+    });
+  }
+
+  // Data card: load DB info
+  loadDbInfo();
+}
+
+function loadDbInfo() {
+  fetch("/api/db/info").then(function (r) { return r.json(); }).then(function (d) {
+    var pathEl = document.getElementById("dbPathDisplay");
+    if (pathEl) pathEl.textContent = d.db_path || "—";
+    var sizeEl = document.getElementById("dbSizeDisplay");
+    if (sizeEl) sizeEl.textContent = d.size_str || "—";
+    var daysEl = document.getElementById("dbDaysCount");
+    if (daysEl) daysEl.textContent = d.num_days != null ? d.num_days : "—";
+    var tradesEl = document.getElementById("dbTradesCount");
+    if (tradesEl) tradesEl.textContent = d.num_trades != null ? d.num_trades : "—";
+  }).catch(function () {});
+  // Export button
+  var exportBtn = document.getElementById("settingsExportBtn");
+  if (exportBtn) {
+    exportBtn.addEventListener("click", function () {
+      window.open("/api/export?format=json", "_blank");
+    });
+  }
 }
 
 function loadCalendarMetricMode() {
@@ -1112,7 +1237,7 @@ function updateJournalRangeToggleUI() {
   if (customLabel) {
     const from = state.journalCustomFrom || "";
     const to = state.journalCustomTo || "";
-    customLabel.textContent = from && to ? `${prettyDateKey(from)} -> ${prettyDateKey(to)}` : "-";
+    customLabel.textContent = from && to ? `${prettyDateKey(from)} -> ${prettyDateKey(to)}` : "Choisir une plage";
   }
 
   const custom = getJournalCustomWindow();
@@ -1170,6 +1295,11 @@ function updateJournalTradeFiltersUI() {
     } else if (badge) {
       badge.remove();
     }
+  }
+  // Garder <details> ouvert si des filtres avancés sont actifs
+  var details = document.querySelector(".journal-advanced-filters");
+  if (details) {
+    details.open = count > 0;
   }
 }
 
@@ -1290,6 +1420,7 @@ function setJournalRangeMode(mode, opts = {}) {
     }
   }
   updateJournalRangeToggleUI();
+  updateJournalRangeTriggerLabel();
   updateJournalControlsVisibility();
   if (persist) localStorage.setItem(JOURNAL_RANGE_MODE_KEY, mode);
   if (reload && state.currentPage === "journal") loadMonth();
@@ -1508,6 +1639,9 @@ function compareText(a, b) {
 let _journalRenderRaf = 0;
 let _journalTableRowsCache = [];
 let _journalTableBodyBound = false;
+let _journalTableObserver = null;
+let _journalTableCurrentPage = 0;
+let _journalTableTotalRows = 0;
 
 function scheduleJournalCalendarRender() {
   if (_journalRenderRaf) return;
@@ -1704,7 +1838,24 @@ function bindJournalTradeFilters() {
     var val = (searchInput.value || "").trim();
     searchTimer = setTimeout(function () {
       state.journalTradeFilters.search = val;
-      applyJournalTradeFiltersAndRender();
+      if (val.length >= 2) {
+        fetch("/api/journal/search?q=" + encodeURIComponent(val), { credentials: "same-origin" })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data && data.days) {
+              state._savedDays = state._savedDays || state.days;
+              state.days = data.days;
+              applyJournalTradeFiltersAndRender();
+            }
+          })
+          .catch(function() {});
+      } else {
+        if (val.length === 0 && state._savedDays) {
+          state.days = state._savedDays;
+          state._savedDays = null;
+        }
+        applyJournalTradeFiltersAndRender();
+      }
       // Glow rouge si < 2 chars (sauf vide)
       if (val.length === 1) {
         searchInput.classList.add("search-too-short");
@@ -1783,8 +1934,10 @@ function renderJournalTable() {
   bindJournalTableBodyActions(tbody);
   updateJournalTableSortUI();
   const fragment = document.createDocumentFragment();
+  var pageSize = 100;
+  var visibleRows = rows.slice(0, pageSize);
 
-  rows.forEach((row, idx) => {
+  visibleRows.forEach((row, idx) => {
     const tr = document.createElement("tr");
     tr.dataset.rowIndex = String(idx);
     const pnlClass = row.pnl > 0 ? "pos" : row.pnl < 0 ? "neg" : "";
@@ -1807,51 +1960,51 @@ function renderJournalTable() {
 
   tbody.replaceChildren(fragment);
 
+  // Lazy load : observer l'intersection pour charger les pages suivantes
+  var pageSize = 100;
+  if (_journalTableObserver) _journalTableObserver.disconnect();
+  _journalTableCurrentPage = 0;
+  _journalTableTotalRows = rows.length;
+  if (rows.length > pageSize) {
+    _journalTableCurrentPage = 1; // 1 page deja chargee
+    var sentinel = document.createElement("tr");
+    sentinel.id = "journalTableSentinel";
+    sentinel.innerHTML = '<td colspan="10" style="text-align:center;padding:16px"><span class="muted" style="font-size:11px">Chargement...</span></td>';
+    tbody.appendChild(sentinel);
+    _journalTableObserver = new IntersectionObserver(function (entries) {
+      if (!entries[0].isIntersecting) return;
+      if (_journalTableCurrentPage * pageSize >= _journalTableTotalRows) {
+        _journalTableObserver.disconnect();
+        sentinel.querySelector("td").innerHTML = '<span class="muted" style="font-size:11px">' + _journalTableTotalRows + " trades</span>";
+        return;
+      }
+      var start = _journalTableCurrentPage * pageSize;
+      var end = Math.min(start + pageSize, _journalTableTotalRows);
+      var batch = rows.slice(start, end);
+      var frag = document.createDocumentFragment();
+      batch.forEach(function (row, idx) {
+        var tr = document.createElement("tr");
+        tr.dataset.rowIndex = String(start + idx);
+        var pnlClass = row.pnl > 0 ? "pos" : row.pnl < 0 ? "neg" : "";
+        var dir = row.direction ? row.direction.toUpperCase() : "-";
+        var pnlTxt = row.pnl == null ? "-" : fmtMoney(row.pnl);
+        tr.innerHTML = '<td class="mono">' + escapeHtml(row.date || "-") + '</td><td>' + escapeHtml(wizInstrumentLabel(row.instrument)) + '</td><td>' + escapeHtml(prettify(row.strategy || "")) + '</td><td class="mono ' + (row.direction === 'long' ? 'dir-long' : 'dir-short') + '">' + escapeHtml(dir) + '</td><td class="mono">' + (row.entry_price != null ? Number(row.entry_price).toFixed(2) : "-") + '</td><td class="mono">' + (row.exit_price != null ? Number(row.exit_price).toFixed(2) : "-") + '</td><td class="mono">' + (row.rr != null ? Number(row.rr).toFixed(2) + "R" : "-") + '</td><td class="mono journal-td-pnl ' + pnlClass + '">' + pnlTxt + '</td><td class="mono ' + (row.result || "").toLowerCase() + '">' + escapeHtml(row.result || "-") + "</td>";
+        frag.appendChild(tr);
+      });
+      sentinel.parentNode.insertBefore(frag, sentinel);
+      _journalTableCurrentPage++;
+      var loaded = Math.min(_journalTableCurrentPage * pageSize, _journalTableTotalRows);
+      sentinel.querySelector("td").innerHTML = '<span class="muted" style="font-size:11px">' + loaded + "/" + _journalTableTotalRows + " trades...</span>";
+    }, { rootMargin: "200px" });
+    _journalTableObserver.observe(sentinel);
+  }
+
   const count = rows.length;
   countEl.textContent = `${count} trade${count > 1 ? "s" : ""}`;
   emptyEl.classList.toggle("hidden", count > 0);
 }
 
 // ---- 007_loadcalendarmonthfocusmode.js ----
-function loadCalendarMonthFocusMode() {
-  try {
-    const raw = localStorage.getItem(CALENDAR_MONTH_FOCUS_MODE_KEY);
-    return CALENDAR_MONTH_FOCUS_MODES.has(raw) ? raw : "winrate";
-  } catch {
-    return "winrate";
-  }
-}
-
-function updateCalendarMonthFocusToggleUI() {
-  const root = $("#calendarMonthFocus");
-  if (root) root.dataset.mode = state.calendarMonthFocusMode;
-  $$("#calendarMonthFocusToggle .calendar-month-focus-btn").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.mode === state.calendarMonthFocusMode);
-  });
-}
-
-function setCalendarMonthFocusMode(mode, opts = {}) {
-  const { persist = true, rerender = true } = opts;
-  if (!CALENDAR_MONTH_FOCUS_MODES.has(mode)) return;
-  state.calendarMonthFocusMode = mode;
-  updateCalendarMonthFocusToggleUI();
-  if (persist) localStorage.setItem(CALENDAR_MONTH_FOCUS_MODE_KEY, mode);
-  if (rerender && state.currentPage === "journal") {
-    if (typeof closeJournalDayTrades === "function") closeJournalDayTrades();
-    renderCalendar();
-  }
-}
-
-function bindCalendarMonthFocusToggle() {
-  const wrap = $("#calendarMonthFocusToggle");
-  if (!wrap) return;
-  wrap.addEventListener("click", e => {
-    const btn = e.target.closest(".calendar-month-focus-btn");
-    if (!btn) return;
-    setCalendarMonthFocusMode(btn.dataset.mode, { persist: true, rerender: true });
-  });
-}
-
 function loadBreakdownSortMode() {
   try {
     const raw = localStorage.getItem(BREAKDOWN_SORT_KEY);
@@ -1894,7 +2047,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (cfg && cfg.instruments) INSTRUMENTS = cfg.instruments;
     if (cfg && cfg.strategies) DEFAULT_STRATEGY_VALUES = cfg.strategies;
     if (cfg && cfg.strategy_labels) STRATEGY_LABELS = cfg.strategy_labels;
-    renderInstruments();
+    renderInstruments(); loadInstruments();
     // Cacher le bouton dev restart hors mode DEBUG
     if (cfg && !cfg.debug) {
       var devBtn = document.getElementById("devRestart");
@@ -1921,7 +2074,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     state.journalCustomTo = def.to;
     localStorage.setItem(JOURNAL_CUSTOM_RANGE_KEY, JSON.stringify({ from: def.from, to: def.to }));
   }
-  state.calendarMonthFocusMode = loadCalendarMonthFocusMode();
   state.breakdownSortMode = loadBreakdownSortMode();
   bindNav();
   bindAiPanelToggle();
@@ -1933,7 +2085,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindJournalRangeToggle();
   bindJournalTradeFilters();
   bindJournalTableSort();
-  bindCalendarMonthFocusToggle();
   bindBreakdownSort();
   bindFilter();
   bindExport();
@@ -1962,7 +2113,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   updateJournalTradeFiltersUI();
   updateJournalControlsVisibility();
   updateJournalTableSortUI();
-  updateCalendarMonthFocusToggleUI();
   updateBreakdownSortUI();
   setTodayHeader();
   loadAll();
@@ -2032,7 +2182,6 @@ function goPage(pageName) {
     updateJournalTradeFiltersUI();
     updateJournalControlsVisibility();
     updateJournalTableSortUI();
-    updateCalendarMonthFocusToggleUI();
     if (state.journalFocusDate) {
       var fd = parseDateKey(state.journalFocusDate);
       if (fd) {
@@ -2185,6 +2334,14 @@ function bindCalendarNav() {
     }
     closeMonthPicker();
     loadMonth();
+    // Feedback visuel : flash sur le controle du mois
+    const wrap = document.getElementById("journalMonthInputWrap");
+    if (wrap) {
+      wrap.classList.remove("journal-month-flash");
+      void wrap.offsetWidth;
+      wrap.classList.add("journal-month-flash");
+      setTimeout(function () { wrap.classList.remove("journal-month-flash"); }, 600);
+    }
   });
 
   $("#journalMonthInput")?.addEventListener("change", (e) => {
@@ -2473,14 +2630,34 @@ function renderKPIs(s) {
   if (wrEl) wrEl.textContent = d.numTrades > 0 ? `${(s.winrate || 0).toFixed(1)}%` : "\u2014";
   $("#kpiWins").textContent = `${s.wins}W`;
   $("#kpiLosses").textContent = `${s.losses}L`;
-  $("#kpiWinrateBar").style.transform = `scaleX(${Math.min(s.winrate || 0, 100) / 100})`;
+  var wrBar = $("#kpiWinrateBar");
+  if (wrBar) {
+    wrBar.style.transform = "scaleX(" + Math.min(s.winrate || 0, 100) / 100 + ")";
+    wrBar.setAttribute("role", "progressbar");
+    wrBar.setAttribute("aria-valuenow", String(Math.round(s.winrate || 0)));
+    wrBar.setAttribute("aria-valuemin", "0");
+    wrBar.setAttribute("aria-valuemax", "100");
+    wrBar.setAttribute("aria-label", Math.round(s.winrate || 0) + "% winrate");
+  }
 
   if (d.rrCount > 0) {
     $("#kpiRR").textContent = d.avgRR.toFixed(2);
-    $("#kpiRRBar").style.transform = `scaleX(${Math.min((Math.abs(d.avgRR) || 0) / 5 * 100, 100) / 100})`;
+    var rrBar = $("#kpiRRBar");
+    if (rrBar) {
+      rrBar.style.transform = "scaleX(" + Math.min(Math.abs(d.avgRR) || 0, 5) / 5 + ")";
+      rrBar.setAttribute("role", "progressbar");
+      rrBar.setAttribute("aria-valuenow", String(d.avgRR.toFixed(2)));
+      rrBar.setAttribute("aria-valuemin", "0");
+      rrBar.setAttribute("aria-valuemax", "5");
+      rrBar.setAttribute("aria-label", d.avgRR.toFixed(2) + "R moyen");
+    }
   } else {
     $("#kpiRR").textContent = "\u2014";
-    $("#kpiRRBar").style.transform = "scaleX(0)";
+    var rrBar = $("#kpiRRBar");
+    if (rrBar) {
+      rrBar.style.transform = "scaleX(0)";
+      rrBar.removeAttribute("aria-valuenow");
+    }
   }
 
   const tradesLabel = `${d.numTrades} trade${d.numTrades > 1 ? "s" : ""}`;
@@ -2490,11 +2667,13 @@ function renderKPIs(s) {
     : "Aucun trade enregistre";
 
   let pfText = "\u2014";
-  let pfTitle = "";
-  if (d.profitFactor === Infinity) { pfText = "\u221E"; pfTitle = "Aucune perte enregistree"; }
+  let pfTooltipText = "";
+  if (d.profitFactor === Infinity) { pfText = "\u221E"; pfTooltipText = "Aucune perte enregistree"; }
   else if (Number.isFinite(d.profitFactor)) pfText = d.profitFactor.toFixed(2);
   var pfEl = $("#kpiProfitFactor");
-  if (pfEl) { pfEl.textContent = pfText; pfEl.title = pfTitle; }
+  if (pfEl) { pfEl.textContent = pfText; }
+  var pfTip = $("#pfTooltip");
+  if (pfTip) { pfTip.textContent = pfTooltipText; pfTip.setAttribute("aria-hidden", pfTooltipText ? "false" : "true"); }
 
   var expEl = $("#kpiExpectancy");
   if (expEl) expEl.textContent = d.expectancy == null ? "\u2014" : fmtMoney(d.expectancy);
@@ -2521,6 +2700,7 @@ function renderKPIs(s) {
 // ---------- TODAY page ----------
 
 function renderToday() {
+  applyProfileSetting();
   renderTodayCalendar();
   renderTodayContextWidget(true);
   const today   = todayKey();
@@ -2807,13 +2987,17 @@ function renderCalendar(windowDef = null) {
       emptyEl = document.createElement("div");
       emptyEl.id = "calendarEmptyState";
       emptyEl.className = "calendar-empty-state";
-      emptyEl.innerHTML =
-        '<div class="empty-state">' +
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
-          '<span>Aucun trade ne correspond aux filtres actifs.</span>' +
-        "</div>";
-      grid.parentNode.insertBefore(emptyEl, grid.nextSibling);
     }
+    // Message incluant le terme recherche si actif
+    var searchQ = (state.journalTradeFilters?.search || "").trim();
+    var msg = searchQ
+      ? 'Aucun resultat pour "' + escapeHtml(searchQ) + '".'
+      : "Aucun trade ne correspond aux filtres actifs.";
+    emptyEl.innerHTML =
+      '<div class="empty-state">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
+        "<span>" + msg + "</span>" +
+      "</div>";
     emptyEl.classList.remove("hidden");
   } else if (emptyEl) {
     emptyEl.classList.add("hidden");
@@ -4000,6 +4184,16 @@ function bindGlobalKeys() {
       if (e.key === "s" || e.key === "S") { e.preventDefault(); goPage("stats"); }
       if (e.key === "g" || e.key === "G") { e.preventDefault(); goPage("settings"); }
       if (e.key === "c" || e.key === "C") { e.preventDefault(); goPage("chart"); }
+      if (e.key === "/") {
+        e.preventDefault();
+        var search = document.getElementById("journalFilterSearch");
+        if (search) { search.focus(); search.select(); }
+      }
+      if (e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        var details = document.querySelector(".journal-advanced-filters");
+        if (details) details.open = !details.open;
+      }
       if (e.key === "w" || e.key === "W") {
         e.preventDefault();
         if (state.currentPage !== "journal") goPage("journal");
@@ -4462,12 +4656,25 @@ function renderBreakdown(selector, data, opts = {}) {
   const c = document.querySelector(selector);
   if (!c) return;
   c.innerHTML = "";
-  const entries = Object.entries(data || {});
+  var panel = c.closest(".panel");
+  if (panel) {
+    var existing = panel.querySelector(".bd-sort-badge");
+    if (!existing) {
+      var h3 = panel.querySelector(".panel-h h3");
+      if (h3) {
+        var badge = document.createElement("span");
+        badge.className = "bd-sort-badge";
+        badge.title = "Cliquer pour changer le tri (selecteur en haut de page)";
+        h3.after(badge);
+      }
+    }
+  }
+  var entries = Object.entries(data || {});
   if (!entries.length) {
     c.innerHTML = `<div class="bd-empty">Pas encore de donnees.</div>`;
     return;
   }
-  const sortMode = state.breakdownSortMode || "count";
+  var sortMode = state.breakdownSortMode || "count";
   entries.sort((a, b) => {
     const av = a[1] || {};
     const bv = b[1] || {};
@@ -4492,6 +4699,8 @@ function renderBreakdown(selector, data, opts = {}) {
     ? k => `#${String(k || "").trim()}`
     : opts.kind === "plan_error"
     ? k => PLAN_ERROR_LABELS[k] || prettify(k)
+    : opts.kind === "setup"
+    ? k => (k && k !== "null" && k !== "undefined" ? prettify(k) : "Sans stratégie")
     : k => prettify(k);
 
   entries.forEach(([k, v], i) => {
@@ -4516,15 +4725,23 @@ function renderBreakdown(selector, data, opts = {}) {
     c.appendChild(row);
     requestAnimationFrame(() => { row.querySelector(".fill").style.transform = `scaleX(${Math.min(wr,100)/100})`; });
   });
+  var panel = c.closest(".panel");
+  var badge = panel && panel.querySelector(".bd-sort-badge");
+  if (badge) {
+    var labels = { count: "Nb trades", winrate: "Winrate", avg_rr: "RR moyen", pnl: "PnL" };
+    badge.textContent = "\u2191 " + (labels[sortMode] || sortMode);
+  }
 }
 
 function renderPlanMatrix(matrix, summary) {
   const c = $("#planMatrix");
   if (!c) return;
+  matrix = matrix || {};
+  summary = summary || {};
   const order = ["in_plan_win", "in_plan_loss", "out_of_plan_win", "out_of_plan_loss", "incomplete", "unknown"];
-  const total = order.reduce((sum, key) => sum + Number(matrix?.[key]?.count || 0), 0);
+  const total = order.reduce((sum, key) => sum + Number(matrix[key]?.count || 0), 0);
   if (!total) {
-    c.innerHTML = `<div class="bd-empty">Pas encore de donnees plan.</div>`;
+    c.innerHTML = `<div class="bd-empty">Aucun trade avec plan pour la periode selectionnee.</div>`;
     return;
   }
   const avg = Number(summary?.avg_score || 0);
@@ -4588,10 +4805,30 @@ function renderRRDist(buckets) {
   const c = $("#rrDist");
   if (!c) return;
   c.innerHTML = "";
+  // Titre
+  var title = document.createElement("div");
+  title.className = "rr-dist-title";
+  title.textContent = "Distribution R:R";
+  c.appendChild(title);
+
+  // Y-axis label + bars container
+  var chartWrap = document.createElement("div");
+  chartWrap.className = "rr-chart-wrap";
+
+  var yLabel = document.createElement("div");
+  yLabel.className = "rr-y-label";
+  yLabel.textContent = "Trades";
+  chartWrap.appendChild(yLabel);
+
+  var barsContainer = document.createElement("div");
+  barsContainer.className = "rr-bars";
+
   const labels = ["<0","0-1","1-2","2-3","3-5","5+"];
   const zones  = ["loss","meh","meh","ok","great","great"];
   const max    = Math.max(1, ...buckets);
-  buckets.forEach((count, i) => {
+
+  labels.forEach((label, i) => {
+    const count = buckets[i] || 0;
     const el = document.createElement("div");
     el.className = "rr-bucket";
     el.innerHTML = `
@@ -4600,12 +4837,21 @@ function renderRRDist(buckets) {
           ${count > 0 ? `<span class="rr-bar-count">${count}</span>` : ""}
         </div>
       </div>
-      <span class="rr-bucket-label">${labels[i]}</span>`;
-    c.appendChild(el);
+      <span class="rr-bucket-label">${label}</span>`;
+    barsContainer.appendChild(el);
     requestAnimationFrame(() => {
       el.querySelector(".rr-bar").style.transform = `scaleY(${(count/max)})`;
     });
   });
+
+  chartWrap.appendChild(barsContainer);
+  c.appendChild(chartWrap);
+
+  // X-axis label
+  var xLabel = document.createElement("div");
+  xLabel.className = "rr-x-label";
+  xLabel.textContent = "Ratio R:R";
+  c.appendChild(xLabel);
 }
 
 function fmtPeriodRange(fromKey, toKey) {
@@ -4640,9 +4886,9 @@ function renderPeriodCompare(periodCompare) {
   curRange.textContent = fmtPeriodRange(cur.from, cur.to);
   prevRange.textContent = fmtPeriodRange(prev.from, prev.to);
 
-  curPnl.textContent = fmtMoney(cur.pnl || 0);
-  prevPnl.textContent = fmtMoney(prev.pnl || 0);
-  deltaPnl.textContent = fmtMoney(delta.pnl || 0);
+  curPnl.textContent = cur.pnl != null ? fmtMoney(cur.pnl) : "\u2014";
+  prevPnl.textContent = prev.pnl != null ? fmtMoney(prev.pnl) : "\u2014";
+  deltaPnl.textContent = delta.pnl != null ? fmtMoney(delta.pnl) : "\u2014";
 
   setSignedClass(curPnl, Number(cur.pnl || 0));
   setSignedClass(prevPnl, Number(prev.pnl || 0));
@@ -5789,17 +6035,17 @@ function wizSelectInstrument(id) {
 function _wizStepSession() {
   var d = wizState.data;
   var sessions = [
-    { id:'asia',    icon:'&#x1F305;', main:'Asia',   sub:'Session asiatique — Tokyo, Sydney' },
-    { id:'london',  icon:'&#x1F1EC;&#x1F1E7;', main:'London', sub:'Session London — Europe' },
-    { id:'ny_am',   icon:'&#x1F5FD;', main:'NY AM',  sub:'Matin New York — ouverture US' },
-    { id:'ny_pm',   icon:'&#x1F303;', main:'NY PM',  sub:'Apres-midi New York — continuation' },
+    { id:'asia',    icon:'&#x1F305;', main:'Asia' },
+    { id:'london',  icon:'&#x1F1EC;&#x1F1E7;', main:'London' },
+    { id:'ny_am',   icon:'&#x1F5FD;', main:'NY AM' },
+    { id:'ny_pm',   icon:'&#x1F303;', main:'NY PM' },
   ];
   var html = '<div class="wiz-question">Dans quelle session ?</div><div class="wiz-cards">';
   sessions.forEach(function(s) {
     html += '<div class="wiz-card' + (d.session===s.id?' active':'') + '" onclick="wizSelectSession(\'' + s.id + '\')">'
       + '<div class="wiz-card-icon">' + s.icon + '</div>'
       + '<div class="wiz-card-main">' + s.main + '</div>'
-      + '<div class="wiz-card-sub">'  + s.sub + '</div>'
+      
       + '</div>';
   });
   return html + '</div>';
@@ -5817,16 +6063,16 @@ function wizSelectSession(id) {
 function _wizStepStrategy() {
   var d = wizState.data;
   var defaults = [
-    { id:'midnight_model', icon:'&#x1F319;', main:'Midnight Model', sub:'Range overnight &amp; London pre-market' },
-    { id:'london_model',   icon:'&#x1F1EC;&#x1F1E7;', main:'London Model', sub:'Ouverture &amp; session London' },
-    { id:'ny_model',       icon:'&#x1F5FD;', main:'NY Model', sub:'Session New York &amp; continuation' },
+    { id:'midnight_model', icon:'&#x1F319;', main:'Midnight Model' },
+    { id:'london_model',   icon:'&#x1F1EC;&#x1F1E7;', main:'London Model' },
+    { id:'ny_model',       icon:'&#x1F5FD;', main:'NY Model' },
   ];
   var custom = (state?.settings?.custom_strategies || []).map(function(s) {
     return {
       id: String(s.value || '').trim(),
       icon: '&#x2728;',
       main: escapeHtml(String(s.label || s.value || '').trim() || prettify(s.value)),
-      sub: 'Strategie custom',
+
     };
   }).filter(function(s) { return !!s.id; });
   var byId = {};
@@ -5841,7 +6087,7 @@ function _wizStepStrategy() {
       id: d.strategy,
       icon: '&#x2728;',
       main: escapeHtml(prettify(d.strategy)),
-      sub: 'Strategie detectee',
+
     });
   }
 
@@ -5916,7 +6162,7 @@ function _wizStepWhyTrade() {
   var d = wizState.data;
   return _wizChip()
     + '<div class="wiz-question">Pourquoi ce trade ?</div>'
-    + '<div class="wiz-hint">' + _wizHint('why_trade') + '</div>'
+    
     + '<textarea class="wiz-textarea lg" id="wizWhyTrade" placeholder="Alignement avec le plan, setup identifie...">' + (d.why_trade||'') + '</textarea>';
 }
 
@@ -5926,7 +6172,7 @@ function _wizStepWhyEntry() {
   var d = wizState.data;
   return _wizChip()
     + '<div class="wiz-question">Pourquoi cette entree ?</div>'
-    + '<div class="wiz-hint">' + _wizHint('why_entry') + '</div>'
+    
     + '<textarea class="wiz-textarea lg" id="wizWhyEntry" placeholder="Signal declencheur, confirmation, timing...">' + (d.why_entry||'') + '</textarea>';
 }
 
@@ -5936,7 +6182,7 @@ function _wizStepWhyStopTp() {
   var d = wizState.data;
   return _wizChip()
     + '<div class="wiz-question">Stop &amp; objectif</div>'
-    + '<div class="wiz-hint">' + _wizHint('why_stop_tp') + '</div>'
+    
     + '<div class="wiz-field">'
     +   '<label class="wiz-label">Pourquoi ce stop</label>'
     +   '<textarea class="wiz-textarea" id="wizWhyStop" placeholder="Invalidation du setup, zone de protection...">' + (d.why_stop||'') + '</textarea>'
@@ -6240,7 +6486,7 @@ function _wizStepDirection() {
   var isLong  = d.direction === 'long';
   var isShort = d.direction === 'short';
   return '<div class="wiz-question">Direction</div>'
-    + '<div class="wiz-hint">Dans quel sens prends-tu ce trade ?</div>'
+    
     + '<div class="wiz-direction-toggle">'
     +   '<button class="wiz-dir-btn' + (isLong?' active-long':'') + '" data-dir="long" onclick="wizSetDir(this)">'
     +     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg>Long</button>'
@@ -6735,6 +6981,7 @@ function toggleWidgetVisibility(key) {
 }
 
 function resetWidgetVisibility() {
+  if (!confirm("Réinitialiser tous les widgets à leur état par défaut ?")) return;
   writeWidgetVisibility(getWidgetDefaults());
   writeWidgetOrder("today", WIDGET_DEFAULTS["today"]);
   writeWidgetPositions("today", {});
@@ -7235,9 +7482,8 @@ function renderTodayCalendar() {
       }
       var key = dayEl.dataset.date;
       if (!key) return;
-      if (typeof goPage === "function") {
-        state.journalFocusDate = key;
-        goPage("journal");
+      if (typeof wizOpen === "function") {
+        wizOpen({ date: key });
       }
     });
     grid.addEventListener("keydown", function(e) {
@@ -7972,6 +8218,7 @@ function _closeSelect(trigger, dropdown) {
 
   var _insightsInitialized = false;
   var _insightsToastTimeout = null;
+  var _insightsRefreshing = false;
 
   var INSIGHT_ICONS = {
     best_strategy: { icon: "+", cls: "success" },
@@ -8050,7 +8297,8 @@ function _closeSelect(trigger, dropdown) {
     var n = Math.round((confidence || 0) * 5);
     var s = "";
     for (var i = 0; i < n; i++) s += "*";
-    return '<span class="insight-stars">' + s + "</span>";
+    var label = n + "/5 confiance";
+    return '<span class="insight-stars" aria-label="' + label + '">' + s + "</span>";
   }
 
   function _confidenceClass(confidence) {
@@ -8154,6 +8402,7 @@ function _closeSelect(trigger, dropdown) {
     loading.style.display = "";
     container.style.display = "none";
     container.innerHTML = "";
+    _insightsRefreshing = true;
 
     var params = {};
     if (opts.instrument && opts.instrument !== "ALL") params.instrument = opts.instrument;
@@ -8164,6 +8413,7 @@ function _closeSelect(trigger, dropdown) {
       _fetchApi("/api/ml/profile", params),
       _fetchApi("/api/ml/insights", params),
     ]).then(function (results) {
+      _insightsRefreshing = false;
       var profile = results[0];
       var insightsResp = results[1];
       var patterns = insightsResp.patterns || [];
@@ -8179,6 +8429,7 @@ function _closeSelect(trigger, dropdown) {
       container.innerHTML = html;
       _markSavedCards();
     }).catch(function (err) {
+      _insightsRefreshing = false;
       loading.style.display = "none";
       container.style.display = "grid";
       container.innerHTML = '<div class="insight-empty"><div class="insight-empty__icon">!</div><div class="insight-empty__title">Erreur</div><div class="insight-empty__text">' +
@@ -8267,6 +8518,7 @@ function _closeSelect(trigger, dropdown) {
 
     from.value = _getFirstDayOfMonth();
     to.value = _getTodayStr();
+    populateInstruments('filterInstrument');
 
     var quickBtns = [
       { label: "7j", days: 7 },
@@ -8316,7 +8568,10 @@ function _closeSelect(trigger, dropdown) {
     if (to) to.addEventListener("change", _applyFilter);
     if (instr) instr.addEventListener("change", _applyFilter);
     if (strat) strat.addEventListener("change", _applyFilter);
-    if (refresh) refresh.addEventListener("click", _applyFilter);
+    if (refresh) refresh.addEventListener("click", function () {
+      if (_insightsRefreshing) return;
+      _applyFilter();
+    });
     _applyFilter();
   }
 
@@ -8799,6 +9054,7 @@ function initJournalFilters() {
   if (!from || !to || !instr) return;
 
   var now = new Date();
+  populateInstruments('jFilterInstrument');
   var win = getJournalWindow();
   from.value = win.from || _fmtDate2(new Date(now.getFullYear(), now.getMonth(), 1));
   to.value = win.to || _fmtDate2(now);
@@ -8976,10 +9232,19 @@ function updateJournalStatsDisplay() {
   var labelEl = $("#jfilterStatsLabel");
   if (!valueEl || !labelEl) return;
 
+  // Loading state: days pas encore charges
+  if (!state.days || state.days.length === 0) {
+    labelEl.textContent = _journalStatsConfig[_journalStatsIndex].label;
+    valueEl.textContent = "...";
+    valueEl.className = "jfilter-stats-loading";
+    return;
+  }
+
   var stats = computeJournalStats();
   var config = _journalStatsConfig[_journalStatsIndex];
   labelEl.textContent = config.label;
   valueEl.textContent = config.fmt(stats[config.key]);
+  valueEl.className = "";
 }
 
 function bindJournalStatsArrows() {
@@ -10946,6 +11211,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     var url = 'wss://stream.binance.com:9443/ws/' + stream;
     try {
       ws = new WebSocket(url);
+      ws.onopen = function() { _hideWsError(); };
       ws.onmessage = function (msg) {
         try {
           var d = JSON.parse(msg.data);
@@ -10975,11 +11241,20 @@ TradeEditorController.renderHtml = function (day, trade) {
         if (_wsIntentionalClose) return;
         if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
         wsReconnectTimer = setTimeout(_connectWs, 3000);
+        _showWsError();
       };
-      ws.onerror = function() {};
+      ws.onerror = function() { _showWsError(); };
     } catch(e) { console.error('[btc-chart] ws:', e); }
   }
 
+  function _showWsError() {
+    var el = document.getElementById("btcChartWsStatus");
+    if (el) { el.textContent = "Reconnexion..."; el.className = "btc-chart-ws-error visible"; }
+  }
+  function _hideWsError() {
+    var el = document.getElementById("btcChartWsStatus");
+    if (el) { el.className = "btc-chart-ws-error"; }
+  }
   function _disconnectWs() {
     if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
     if (ws) {
@@ -11885,12 +12160,6 @@ TradeEditorController.renderHtml = function (day, trade) {
           cumTpv += tp * c.volume;
           cumVol += c.volume;
           if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
-        }
-        if (!vwapData.length) { _removeVwapSeries(period); callback(); return; }
-        var _renderRange = null;
-        try { _renderRange = chart.timeScale().getVisibleRange(); } catch(e) {}
-        if (_renderRange && _renderRange.from) {
-          vwapData = vwapData.filter(function (d) { return d.time >= _renderRange.from; });
         }
         if (!vwapData.length) { _removeVwapSeries(period); callback(); return; }
         if (!vwapSeriesMap[period]) {
@@ -14255,11 +14524,34 @@ TradeEditorController.renderHtml = function (day, trade) {
       } catch (e) {}
     }
 
-    // rAF render loop pendant interaction (synchro parfaite axe Y)
+    // rAF render loop pendant interaction (double rAF pour synchro LWC)
     if (state.container) {
       var _vpLoopId = null, _vpTimer = null;
-      function _vpStart() { if (_vpLoopId) return; function l() { _renderVP(); _vpLoopId = requestAnimationFrame(l); } _vpLoopId = requestAnimationFrame(l); }
-      function _vpStop() { if (_vpLoopId) { cancelAnimationFrame(_vpLoopId); _vpLoopId = null; } }
+      function _vpTick() {
+        if (!_vpLoopId) return;
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () {
+            if (!_vpLoopId) return;
+            _resizeCanvas();
+            _renderVP();
+            _vpLoopId = requestAnimationFrame(_vpTick);
+          });
+        });
+      }
+      function _vpStart() {
+        if (_vpLoopId) return;
+        _vpLoopId = requestAnimationFrame(_vpTick);
+      }
+      function _vpStop() {
+        if (_vpLoopId) { cancelAnimationFrame(_vpLoopId); _vpLoopId = null; }
+        // Dernier rendu stabilise
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () {
+            _resizeCanvas();
+            _renderVP();
+          });
+        });
+      }
       try {
         state.container.addEventListener('mousemove', function () {
           _vpStart(); clearTimeout(_vpTimer); _vpTimer = setTimeout(_vpStop, 200);
@@ -14295,7 +14587,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     state.canvas = document.createElement('canvas');
     state.canvas.className = 'vp-overlay';
     state.canvas.style.cssText =
-      'position:absolute;inset:0;z-index:9;pointer-events:none;width:100%;height:100%;';
+      'position:absolute;z-index:9;pointer-events:none;';
     // Insert before drawings canvas (z-index 10) so VP is behind tools
     var drawingsCanvas = state.container.querySelector('.draw-overlay');
     if (drawingsCanvas) {
@@ -14309,14 +14601,43 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   function _resizeCanvas() {
     var c = state.canvas;
-    if (!c) return;
-    var rect = state.container.getBoundingClientRect();
+    if (!c || !state.container) return;
+    var pane = _getLwcPaneRect();
+    var rect = pane || state.container.getBoundingClientRect();
     var dpr = window.devicePixelRatio || 1;
-    c.width = rect.width * dpr;
-    c.height = rect.height * dpr;
+    c.style.left = rect.left + 'px';
+    c.style.top = rect.top + 'px';
     c.style.width = rect.width + 'px';
     c.style.height = rect.height + 'px';
+    c.width = Math.round(rect.width * dpr);
+    c.height = Math.round(rect.height * dpr);
     if (state.ctx) state.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function _getLwcPaneRect() {
+    if (!state.container) return null;
+    var containerRect = state.container.getBoundingClientRect();
+    var canvases = Array.prototype.slice.call(
+      state.container.querySelectorAll('canvas')
+    ).filter(function (c) {
+      return c !== state.canvas && !c.classList.contains('draw-overlay');
+    });
+    if (!canvases.length) return null;
+    var best = null, bestArea = 0;
+    for (var i = 0; i < canvases.length; i++) {
+      var r = canvases[i].getBoundingClientRect();
+      var area = r.width * r.height;
+      if (r.width > 100 && r.height > 100 && area > bestArea) {
+        best = r; bestArea = area;
+      }
+    }
+    if (!best) return null;
+    return {
+      left: best.left - containerRect.left,
+      top: best.top - containerRect.top,
+      width: best.width,
+      height: best.height,
+    };
   }
 
   function _bindTimeScale() {

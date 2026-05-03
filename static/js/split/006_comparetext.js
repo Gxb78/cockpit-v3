@@ -5,6 +5,9 @@ function compareText(a, b) {
 let _journalRenderRaf = 0;
 let _journalTableRowsCache = [];
 let _journalTableBodyBound = false;
+let _journalTableObserver = null;
+let _journalTableCurrentPage = 0;
+let _journalTableTotalRows = 0;
 
 function scheduleJournalCalendarRender() {
   if (_journalRenderRaf) return;
@@ -201,7 +204,24 @@ function bindJournalTradeFilters() {
     var val = (searchInput.value || "").trim();
     searchTimer = setTimeout(function () {
       state.journalTradeFilters.search = val;
-      applyJournalTradeFiltersAndRender();
+      if (val.length >= 2) {
+        fetch("/api/journal/search?q=" + encodeURIComponent(val), { credentials: "same-origin" })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data && data.days) {
+              state._savedDays = state._savedDays || state.days;
+              state.days = data.days;
+              applyJournalTradeFiltersAndRender();
+            }
+          })
+          .catch(function() {});
+      } else {
+        if (val.length === 0 && state._savedDays) {
+          state.days = state._savedDays;
+          state._savedDays = null;
+        }
+        applyJournalTradeFiltersAndRender();
+      }
       // Glow rouge si < 2 chars (sauf vide)
       if (val.length === 1) {
         searchInput.classList.add("search-too-short");
@@ -280,8 +300,10 @@ function renderJournalTable() {
   bindJournalTableBodyActions(tbody);
   updateJournalTableSortUI();
   const fragment = document.createDocumentFragment();
+  var pageSize = 100;
+  var visibleRows = rows.slice(0, pageSize);
 
-  rows.forEach((row, idx) => {
+  visibleRows.forEach((row, idx) => {
     const tr = document.createElement("tr");
     tr.dataset.rowIndex = String(idx);
     const pnlClass = row.pnl > 0 ? "pos" : row.pnl < 0 ? "neg" : "";
@@ -303,6 +325,45 @@ function renderJournalTable() {
   });
 
   tbody.replaceChildren(fragment);
+
+  // Lazy load : observer l'intersection pour charger les pages suivantes
+  var pageSize = 100;
+  if (_journalTableObserver) _journalTableObserver.disconnect();
+  _journalTableCurrentPage = 0;
+  _journalTableTotalRows = rows.length;
+  if (rows.length > pageSize) {
+    _journalTableCurrentPage = 1; // 1 page deja chargee
+    var sentinel = document.createElement("tr");
+    sentinel.id = "journalTableSentinel";
+    sentinel.innerHTML = '<td colspan="10" style="text-align:center;padding:16px"><span class="muted" style="font-size:11px">Chargement...</span></td>';
+    tbody.appendChild(sentinel);
+    _journalTableObserver = new IntersectionObserver(function (entries) {
+      if (!entries[0].isIntersecting) return;
+      if (_journalTableCurrentPage * pageSize >= _journalTableTotalRows) {
+        _journalTableObserver.disconnect();
+        sentinel.querySelector("td").innerHTML = '<span class="muted" style="font-size:11px">' + _journalTableTotalRows + " trades</span>";
+        return;
+      }
+      var start = _journalTableCurrentPage * pageSize;
+      var end = Math.min(start + pageSize, _journalTableTotalRows);
+      var batch = rows.slice(start, end);
+      var frag = document.createDocumentFragment();
+      batch.forEach(function (row, idx) {
+        var tr = document.createElement("tr");
+        tr.dataset.rowIndex = String(start + idx);
+        var pnlClass = row.pnl > 0 ? "pos" : row.pnl < 0 ? "neg" : "";
+        var dir = row.direction ? row.direction.toUpperCase() : "-";
+        var pnlTxt = row.pnl == null ? "-" : fmtMoney(row.pnl);
+        tr.innerHTML = '<td class="mono">' + escapeHtml(row.date || "-") + '</td><td>' + escapeHtml(wizInstrumentLabel(row.instrument)) + '</td><td>' + escapeHtml(prettify(row.strategy || "")) + '</td><td class="mono ' + (row.direction === 'long' ? 'dir-long' : 'dir-short') + '">' + escapeHtml(dir) + '</td><td class="mono">' + (row.entry_price != null ? Number(row.entry_price).toFixed(2) : "-") + '</td><td class="mono">' + (row.exit_price != null ? Number(row.exit_price).toFixed(2) : "-") + '</td><td class="mono">' + (row.rr != null ? Number(row.rr).toFixed(2) + "R" : "-") + '</td><td class="mono journal-td-pnl ' + pnlClass + '">' + pnlTxt + '</td><td class="mono ' + (row.result || "").toLowerCase() + '">' + escapeHtml(row.result || "-") + "</td>";
+        frag.appendChild(tr);
+      });
+      sentinel.parentNode.insertBefore(frag, sentinel);
+      _journalTableCurrentPage++;
+      var loaded = Math.min(_journalTableCurrentPage * pageSize, _journalTableTotalRows);
+      sentinel.querySelector("td").innerHTML = '<span class="muted" style="font-size:11px">' + loaded + "/" + _journalTableTotalRows + " trades...</span>";
+    }, { rootMargin: "200px" });
+    _journalTableObserver.observe(sentinel);
+  }
 
   const count = rows.length;
   countEl.textContent = `${count} trade${count > 1 ? "s" : ""}`;

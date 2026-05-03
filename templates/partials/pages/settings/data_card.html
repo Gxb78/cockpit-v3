@@ -1,0 +1,27 @@
+        <div class="panel card-surface card-surface--sm settings-panel">
+          <div class="panel-h"><h3>Donnees</h3></div>
+          <p class="settings-help">Base de donnees locale, export et maintenance.</p>
+          <div class="settings-meta-row">
+            <span class="settings-label">Base</span>
+            <span class="settings-value mono" id="dbPathDisplay">chargement...</span>
+          </div>
+          <div class="settings-meta-row">
+            <span class="settings-label">Taille</span>
+            <span class="settings-value" id="dbSizeDisplay">—</span>
+          </div>
+          <div class="settings-meta-row">
+            <span class="settings-label">Entrees</span>
+            <span class="settings-value" id="dbDaysCount">—</span>
+            <span class="settings-label" style="margin-left:12px">Trades</span>
+            <span class="settings-value" id="dbTradesCount">—</span>
+          </div>
+          <div class="settings-actions">
+            <button type="button" class="btn-ghost" id="settingsExportBtn">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Exporter en JSON
+            </button>
+          </div>
+          <div class="settings-help" style="margin-top:8px;font-size:11px;color:var(--text-muted);">
+            Les sauvegardes automatiques sont dans <code class="mono">data/backups/</code>.
+          </div>
+        </div>

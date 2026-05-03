@@ -136,3 +136,35 @@ def get_config():
         "strategy_labels": STRATEGY_LABELS,
         "debug": os.environ.get("DEBUG", os.environ.get("FLASK_DEBUG", "0")).strip().lower() in ("1", "true", "yes", "on"),
     })
+
+
+@app.post("/api/settings/key")
+def save_api_key():
+    body = request.get_json(silent=True) or {}
+    raw_key = (body.get("key") or "").strip()
+    provider = (body.get("provider") or "deepseek").strip().lower()
+    if not raw_key:
+        return jsonify({"error": "Cle requise"}), 400
+    env_var = "DEEPSEEK_API_KEY" if provider == "deepseek" else "ANTHROPIC_API_KEY"
+    env_path = BASE_DIR / ".env"
+    try:
+        if env_path.exists():
+            text = env_path.read_text(encoding="utf-8")
+            lines = text.splitlines(keepends=True)
+            found = False
+            new_lines = []
+            for line in lines:
+                if line.strip().startswith(env_var + "="):
+                    new_lines.append(f'{env_var}={raw_key}\n')
+                    found = True
+                else:
+                    new_lines.append(line)
+            if not found:
+                new_lines.append(f'{env_var}={raw_key}\n')
+            env_path.write_text("".join(new_lines), encoding="utf-8")
+        else:
+            env_path.write_text(f'{env_var}={raw_key}\n', encoding="utf-8")
+        os.environ[env_var] = raw_key
+        return jsonify({"ok": True, "message": f"Cle {env_var} mise a jour. Redemarre le serveur pour quil prenne effet."})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

@@ -654,12 +654,6 @@
           if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
         }
         if (!vwapData.length) { _removeVwapSeries(period); callback(); return; }
-        var _renderRange = null;
-        try { _renderRange = chart.timeScale().getVisibleRange(); } catch(e) {}
-        if (_renderRange && _renderRange.from) {
-          vwapData = vwapData.filter(function (d) { return d.time >= _renderRange.from; });
-        }
-        if (!vwapData.length) { _removeVwapSeries(period); callback(); return; }
         if (!vwapSeriesMap[period]) {
           vwapSeriesMap[period] = chart.addLineSeries({
             color: color, lineWidth: 1.5, priceLineVisible: false,

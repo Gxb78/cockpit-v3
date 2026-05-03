@@ -332,6 +332,7 @@
     var url = 'wss://stream.binance.com:9443/ws/' + stream;
     try {
       ws = new WebSocket(url);
+      ws.onopen = function() { _hideWsError(); };
       ws.onmessage = function (msg) {
         try {
           var d = JSON.parse(msg.data);
@@ -361,11 +362,20 @@
         if (_wsIntentionalClose) return;
         if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
         wsReconnectTimer = setTimeout(_connectWs, 3000);
+        _showWsError();
       };
-      ws.onerror = function() {};
+      ws.onerror = function() { _showWsError(); };
     } catch(e) { console.error('[btc-chart] ws:', e); }
   }
 
+  function _showWsError() {
+    var el = document.getElementById("btcChartWsStatus");
+    if (el) { el.textContent = "Reconnexion..."; el.className = "btc-chart-ws-error visible"; }
+  }
+  function _hideWsError() {
+    var el = document.getElementById("btcChartWsStatus");
+    if (el) { el.className = "btc-chart-ws-error"; }
+  }
   function _disconnectWs() {
     if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
     if (ws) {

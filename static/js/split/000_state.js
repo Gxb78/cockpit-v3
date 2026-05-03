@@ -48,8 +48,6 @@ const _state = {
   // Journal table sorting
   journalTableSortKey: "date",
   journalTableSortDir: "desc",
-  // Journal monthly focus metric: winrate | pnl | trades
-  calendarMonthFocusMode: "winrate",
   // Stats breakdown sort: count | winrate | avg_rr | pnl
   breakdownSortMode: "count",
 };

@@ -60,16 +60,49 @@
   -webkit-appearance: none;
   -moz-appearance: none;
   padding: 0 4px;
+  color: var(--text, #fff);
+  color-scheme: dark;
+  /* Firefox: champs natifs invisibles */
+  -moz-appearance: textfield;
 }
+/* WebKit: cacher le picker et spinner */
 .journal-nav-inline #journalMonthInput::-webkit-calendar-picker-indicator,
 .journal-nav-inline #journalMonthInput::-webkit-inner-spin-button {
   display: none !important;
   -webkit-appearance: none;
   appearance: none;
   margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+}
+/* Firefox: cacher le picker mois */
+.journal-nav-inline #journalMonthInput::-moz-calendar-picker-indicator {
+  display: none !important;
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+  height: 0;
+}
+/* Firefox: couleur du texte dans le champ date/mois */
+@-moz-document url-prefix() {
+  .journal-nav-inline #journalMonthInput {
+    color: var(--text, #fff);
+    background: transparent;
+    text-shadow: none;
+  }
 }
 .journal-nav-inline #journalMonthInput:hover {
-  border-color: #c5cad4;
+  border-color: var(--accent);
+}
+/* Animation flash pour le bouton "Aujourd'hui" */
+.journal-month-flash {
+  animation: journalFlash 0.5s ease-out;
+}
+@keyframes journalFlash {
+  0%   { filter: brightness(1); }
+  30%  { filter: brightness(1.6); }
+  100% { filter: brightness(1); }
 }
 .journal-nav-inline .journal-month-caption {
   display: none;
@@ -105,27 +138,6 @@
   background: var(--border, #e3e7ee);
   flex-shrink: 0;
 }
-
-/* Focus mode buttons */
-#calendarMonthFocusToggle {
-  display: inline-flex;
-  gap: 2px;
-}
-.calendar-month-focus-btn {
-  font-size: 10px;
-  font-weight: 750;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 0;
-  background: transparent;
-  color: #98a1af;
-  cursor: pointer;
-  transition: background 0.14s, color 0.14s;
-}
-.calendar-month-focus-btn:hover { color: #626b7a; }
-.calendar-month-focus-btn.active { background: #08090c; color: #fff; }
 
 /* View / Layout / Range toggles */
 .calendar-view-toggle,

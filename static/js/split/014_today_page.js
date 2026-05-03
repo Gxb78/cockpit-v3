@@ -1,6 +1,7 @@
 // ---------- TODAY page ----------
 
 function renderToday() {
+  applyProfileSetting();
   renderTodayCalendar();
   renderTodayContextWidget(true);
   const today   = todayKey();

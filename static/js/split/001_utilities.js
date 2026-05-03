@@ -15,26 +15,63 @@ var DEFAULT_STRATEGY_VALUES = Object.keys(STRATEGY_LABELS);
 var INSTRUMENTS = ["BTC", "ETH", "NQ", "ES"];
 
 function renderInstruments() {
-  // Rail buttons
   var rail = document.getElementById("instrList");
   if (rail) {
-    rail.innerHTML = '<button class="instr-chip active" data-instr="ALL" role="tab" aria-selected="true"><span class="dot" aria-hidden="true"></span>Tous</button>' +
-      INSTRUMENTS.map(function (i) {
-        return '<button class="instr-chip" data-instr="' + i + '" role="tab" aria-selected="false"><span class="dot" aria-hidden="true"></span>' + i + "</button>";
-      }).join("");
+    rail.innerHTML = '<button class="instr-chip active" data-instr="ALL" role="tab" aria-selected="true"><span class="dot" aria-hidden="true"></span>Tous</button>';
   }
-  // Day context select
   var ctx = document.getElementById("entryInstrument");
   if (ctx) {
-    ctx.innerHTML = '<option value="">Instrument</option>' +
-      INSTRUMENTS.map(function (i) { return '<option value="' + i + '">' + i + "</option>"; }).join("");
+    ctx.innerHTML = '<option value="">Instrument</option>';
   }
-  // Journal filter select
   var jf = document.getElementById("jFilterInstrument");
   if (jf) {
-    jf.innerHTML = '<option value="ALL">Tous</option>' +
-      INSTRUMENTS.map(function (i) { return '<option value="' + i + '">' + i + "</option>"; }).join("");
+    jf.innerHTML = '<option value="ALL">Tous</option>';
   }
+}
+
+function loadInstruments() {
+  fetch("/api/trades/instruments", { credentials: "same-origin" })
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if (!data || !data.instruments) return;
+      var instrs = data.instruments;
+      var rail = document.getElementById("instrList");
+      if (rail) {
+        rail.innerHTML = '<button class="instr-chip active" data-instr="ALL" role="tab" aria-selected="true"><span class="dot" aria-hidden="true"></span>Tous</button>' +
+          instrs.map(function (i) { return '<button class="instr-chip" data-instr="' + i + '" role="tab" aria-selected="false"><span class="dot" aria-hidden="true"></span>' + i + "</button>"; }).join("");
+      }
+      var ctx = document.getElementById("entryInstrument");
+      if (ctx) {
+        ctx.innerHTML = '<option value="">Instrument</option>' +
+          instrs.map(function (i) { return '<option value="' + i + '">' + i + "</option>"; }).join("");
+      }
+      var jf = document.getElementById("jFilterInstrument");
+      if (jf) {
+        jf.innerHTML = '<option value="ALL">Tous</option>' +
+          instrs.map(function (i) { return '<option value="' + i + '">' + i + "</option>"; }).join("");
+      }
+    })
+    .catch(function() {});
+}
+
+function populateInstruments(selectId) {
+  var sel = document.getElementById(selectId);
+  if (!sel) return;
+  fetch("/api/trades/instruments", { credentials: "same-origin" })
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if (!data || !data.instruments) return;
+      var currentVal = sel.value;
+      while (sel.options.length > 1) sel.remove(1);
+      data.instruments.forEach(function(instr) {
+        var opt = document.createElement("option");
+        opt.value = instr;
+        opt.textContent = instr;
+        sel.appendChild(opt);
+      });
+      if (currentVal) sel.value = currentVal;
+    })
+    .catch(function() {});
 }
 
 const SETTINGS_STORAGE_KEY = "cockpit:settings:v1";
@@ -60,8 +97,6 @@ const JOURNAL_TABLE_SORT_KEYS = new Set([
   "pnl",
   "result",
 ]);
-const CALENDAR_MONTH_FOCUS_MODE_KEY = "cockpit:calendarMonthFocusMode:v1";
-const CALENDAR_MONTH_FOCUS_MODES = new Set(["winrate", "pnl", "trades"]);
 const BREAKDOWN_SORT_KEY = "cockpit:breakdownSortMode:v1";
 const BREAKDOWN_SORT_MODES = new Set(["count", "winrate", "avg_rr", "pnl"]);
 
@@ -250,12 +285,37 @@ function computeMarginUsd(positionSize, leverage, entryPrice) {
  * @param {string} s
  * @returns {string}
  */
+/**
+ * Echappe les caracteres HTML dans une chaine.
+ * @param {string} s
+ * @returns {string}
+ */
 function escapeHtml(s) {
   return String(s || "").replace(/[&<>"']/g, m =>
     ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m])
   );
 }
 
+// ---- Instruments ----
+function populateInstruments(selectId) {
+  var sel = document.getElementById(selectId);
+  if (!sel) return;
+  fetch("/api/trades/instruments", { credentials: "same-origin" })
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if (!data || !data.instruments) return;
+      var currentVal = sel.value;
+      while (sel.options.length > 1) sel.remove(1);
+      data.instruments.forEach(function(instr) {
+        var opt = document.createElement("option");
+        opt.value = instr;
+        opt.textContent = instr;
+        sel.appendChild(opt);
+      });
+      if (currentVal) sel.value = currentVal;
+    })
+    .catch(function() {});
+}
 // ---------- Loading indicator ----------
 
 var _loadingCount = 0;

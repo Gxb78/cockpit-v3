@@ -544,5 +544,11 @@ Format obligatoire d'une lesson:
 - Test de non-regression: Cliquer sur le 1er mai (jour avec contexte, sans trade) → carte HTF avec infos. Cliquer "+ Creer un trade" → wizard positionnee a cote de la carte.
 - Fichiers a surveiller: `static/js/split/015_calendar.js` (renderJournalDayContext), `static/js/split/040_wizard_core.js` (wizOpen contextCard), `static/css/split/022a_wizard_backdrop.css` (.wiz-context-card).
 
+### BUG-20260504-01 - UX bugs #23-#45 : 23 correctifs UX, accessibilite, performance
 
+- Symptome: Nombreux composants sans etat vide, accessibilite absente (pas d'aria-label, tooltips title inaccessibles mobile), input month deforme sur Firefox/Safari, table journal freeze avec >100 trades, settings ordre illogique, cle API non editable dans l'UI.
+- Cause racine: Approche feature-first sans revue UX systematique ni test cross-browser. Accumulation de patterns "on verra plus tard" pour les placeholders, l'accessibilite et le lazy loading.
+- Regle de prevention: Chaque nouveau composant doit avoir: 1) etat vide explicite, 2) aria-label sur elements visuels, 3) test quick cross-browser (Chrome + Firefox), 4) lazy loading si affichage de listes >100 items. Les settings cards suivent l'ordre logique: Profil→Prefs→Strategies→Tags→API (technique en dernier).
+- Test de non-regression: Table journal >100 trades → scroll infini charge par 100. Input month → meme rendu Chrome/Firefox. Settings → card Donnees affiche path/taille DB. API key → bouton Modifier → saisie → Enregistrer → POST /api/settings/key.
+- Fichiers a surveiller: `static/js/split/006_comparetext.js` (lazy load IntersectionObserver), `static/js/split/013_kpis.js` (ARIA progressbar), `static/js/split/015_calendar.js` (search empty msg), `static/js/split/028_global_keys.js` (shortcuts / et F), `static/js/split/032_breakdowns.js` (sort badge), `static/js/split/047_today_widget_board.js` (confirm reset), `static/js/split/049_insights.js` (debounce + aria-label), `static/css/split/005_journal_toolbar_filters.css` (input month cross-browser), `templates/partials/pages/settings.html` (ordre), `templates/partials/pages/settings/data_card.html` (nouveau), `app_parts/07_routes_pages.py` (POST /api/settings/key), `app_parts/16_export.py` (GET /api/db/info).
 

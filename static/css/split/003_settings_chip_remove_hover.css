@@ -81,6 +81,22 @@
   margin-top: 6px;
   font-size: 11px;
   color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+/* Tooltip pour KPI (mobile + desktop) */
+.kpi-tooltip {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--amber, #ffb347);
+  background: rgba(255, 170, 0, 0.1);
+  border: 1px solid rgba(255, 170, 0, 0.2);
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: help;
+  white-space: nowrap;
 }
 .kpi-spark-wrap {
   margin-top: 10px;

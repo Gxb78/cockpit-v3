@@ -5,6 +5,7 @@
 
   var _insightsInitialized = false;
   var _insightsToastTimeout = null;
+  var _insightsRefreshing = false;
 
   var INSIGHT_ICONS = {
     best_strategy: { icon: "+", cls: "success" },
@@ -83,7 +84,8 @@
     var n = Math.round((confidence || 0) * 5);
     var s = "";
     for (var i = 0; i < n; i++) s += "*";
-    return '<span class="insight-stars">' + s + "</span>";
+    var label = n + "/5 confiance";
+    return '<span class="insight-stars" aria-label="' + label + '">' + s + "</span>";
   }
 
   function _confidenceClass(confidence) {
@@ -187,6 +189,7 @@
     loading.style.display = "";
     container.style.display = "none";
     container.innerHTML = "";
+    _insightsRefreshing = true;
 
     var params = {};
     if (opts.instrument && opts.instrument !== "ALL") params.instrument = opts.instrument;
@@ -197,6 +200,7 @@
       _fetchApi("/api/ml/profile", params),
       _fetchApi("/api/ml/insights", params),
     ]).then(function (results) {
+      _insightsRefreshing = false;
       var profile = results[0];
       var insightsResp = results[1];
       var patterns = insightsResp.patterns || [];
@@ -212,6 +216,7 @@
       container.innerHTML = html;
       _markSavedCards();
     }).catch(function (err) {
+      _insightsRefreshing = false;
       loading.style.display = "none";
       container.style.display = "grid";
       container.innerHTML = '<div class="insight-empty"><div class="insight-empty__icon">!</div><div class="insight-empty__title">Erreur</div><div class="insight-empty__text">' +
@@ -300,6 +305,7 @@
 
     from.value = _getFirstDayOfMonth();
     to.value = _getTodayStr();
+    populateInstruments('filterInstrument');
 
     var quickBtns = [
       { label: "7j", days: 7 },
@@ -349,7 +355,10 @@
     if (to) to.addEventListener("change", _applyFilter);
     if (instr) instr.addEventListener("change", _applyFilter);
     if (strat) strat.addEventListener("change", _applyFilter);
-    if (refresh) refresh.addEventListener("click", _applyFilter);
+    if (refresh) refresh.addEventListener("click", function () {
+      if (_insightsRefreshing) return;
+      _applyFilter();
+    });
     _applyFilter();
   }
 
