@@ -5,7 +5,7 @@ const WIDGET_VIS_PREFIX = "cockpit:widgetVis:";
 const WIDGET_POS_PREFIX = "cockpit:widgetPos:";
 
 var WIDGET_REGISTRY = {
-  kpi_total_pnl:      { label: "Net P&L",          icon: "dollar",  kind: "kpi",    size: "sm" },
+  kpi_total_pnl:      { label: "Net PnL",          icon: "dollar",  kind: "kpi",    size: "sm" },
   kpi_winrate:         { label: "Winrate",           icon: "clock",  kind: "kpi",    size: "sm" },
   kpi_average_rr:      { label: "Avg R",            icon: "trend",  kind: "kpi",    size: "sm" },
   kpi_trades:          { label: "Trades",            icon: "list",  kind: "kpi",    size: "sm" },
