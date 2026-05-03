@@ -307,6 +307,8 @@
       // Appliquer le zoom synchrone (timestamps invariants)
       if (zoomTarget && chart && chart.timeScale()) {
         try { chart.timeScale().setVisibleRange({ from: zoomTarget.from, to: zoomTarget.to }); } catch(e) {}
+        // scrollToRealTime place le dernier bar avec rightOffset natif
+        try { chart.timeScale().scrollToRealTime(); } catch(e) {}
       }
 
       console.log('[VWAP] range APRÈS finally:', JSON.stringify(chart.timeScale().getVisibleRange()));
@@ -389,6 +391,7 @@
       }
       try {
         chart.timeScale().setVisibleRange({ from: targetRange.from, to: targetRange.to });
+        try { chart.timeScale().scrollToRealTime(); } catch(e) {}
         var actual = chart.timeScale().getVisibleRange();
         console.log('[ZOOM] tentative', attempts, '→ actual:', JSON.stringify(actual), 'target:', JSON.stringify(targetRange));
         if (actual && Math.abs(actual.from - targetRange.from) <= tol && Math.abs(actual.to - targetRange.to) <= tol) {
@@ -549,7 +552,7 @@
           borderColor: isLight ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.08)',
           timeVisible: true,
           secondsVisible: false,
-          rightOffset: 0,
+          rightOffset: 20,
           shiftVisibleRangeOnNewBar: true,
         },
         handleScroll: { vertTouchDrag: true, horzTouchDrag: true, pressedMouseMove: true },
@@ -704,7 +707,7 @@
           var intervalSec = Math.floor(_getIntervalMs(currentInterval) / 1000);
           var firstIdx = Math.max(0, candles.length - 100);
           var fromTime = candles[firstIdx].time;
-          var toTime = candles[candles.length - 1].time + intervalSec * 40;
+          var toTime = candles[candles.length - 1].time;
           zoomTarget = { from: fromTime, to: toTime };
         }
         if (!_lastVwapFetch || Date.now() - _lastVwapFetch > 300000) {
