@@ -186,6 +186,20 @@
 .widget-board.loading .kpi-bar { opacity: 0.15; }
 .widget-board.loading .kpi-spark { opacity: 0.12; }
 .widget-board.loading .kpi-sub { color: transparent; }
+/* Persistent error banner (from toast system) */
+.widget-board[data-last-error]::before {
+  content: attr(data-last-error);
+  display: block;
+  padding: 10px 16px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--loss);
+  background: color-mix(in srgb, var(--loss) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--loss) 25%, transparent);
+  border-radius: 8px;
+}
+
 
 /* D-10: error state — subtle warning border + message */
 .widget-board[data-load-error] {
@@ -280,4 +294,18 @@
   transform: translateY(-2px);
   box-shadow: 0 12px 30px rgba(0,229,255,0.20);
 }
+}
+
+/* Persistent error banner (from toast system) */
+.widget-board[data-last-error]::before {
+  content: attr(data-last-error);
+  display: block;
+  padding: 10px 16px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--loss);
+  background: color-mix(in srgb, var(--loss) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--loss) 25%, transparent);
+  border-radius: 8px;
 }

@@ -170,6 +170,8 @@ async function deleteDay() {
     await api(`/api/days/${state.currentDayId}`, { method: "DELETE" });
     state.modalDataDirty = true;
     toast("Journée supprimée", "success");
+    var ctxStatus = document.getElementById("contextStatus");
+    if (ctxStatus) ctxStatus.textContent = "Journée supprimée ✓";
     // Recharger les donnees apres suppression
     if (typeof loadMonth === "function") loadMonth();
     if (typeof loadAll === "function") loadAll();

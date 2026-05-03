@@ -412,6 +412,16 @@ function toast(msg, type) {
   if (t && t.classList.contains("hidden")) {
     _toastShowNext();
   }
+  // Pour les erreurs critiques, ajouter un indicateur persistant sur le widget-board
+  if (type === "error") {
+    var board = document.querySelector('[data-widget-board="today"]');
+    if (board && msg.indexOf("stats") >= 0 || msg.indexOf("API") >= 0 || msg.indexOf("réseau") >= 0 || msg.indexOf("HTTP") >= 0) {
+      board.setAttribute("data-last-error", msg);
+      // Auto-clear apres 10s
+      clearTimeout(board._errTimer);
+      board._errTimer = setTimeout(function() { board.removeAttribute("data-last-error"); }, 10000);
+    }
+  }
 }
 
 // Dismiss manuel
