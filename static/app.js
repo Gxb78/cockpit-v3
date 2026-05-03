@@ -11045,7 +11045,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   var activeVwapPeriods = [];
   try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) activeVwapPeriods = s; } catch(e) {}
   var VWAP_COLORS = { '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
-  var VWAP_INTERVALS = { '1D': '1h', '7D': '1h', '30D': '4h', '90D': '1d' };
+  var VWAP_INTERVALS = { '1D': '3m', '7D': '1h', '30D': '4h', '90D': '1d' };
   var VWAP_DAYS = { '1D': 1, '7D': 7, '30D': 30, '90D': 90 };
   var INTERVAL_MINUTES = { '1m':1,'3m':3,'5m':5,'15m':15,'30m':30,'1h':60,'2h':120,'4h':240,'6h':360,'8h':480,'12h':720,'1d':1440,'3d':4320,'1w':10080,'1M':43200 };
 
@@ -11283,15 +11283,8 @@ TradeEditorController.renderHtml = function (day, trade) {
             title: label,
           });
         }
-        var _lv = vwapData[vwapData.length - 1];
-        if (_lv) vwapData.push({ time: Math.floor(Date.now() / 1000), value: _lv.value });
         vwapSeriesMap[period].setData(vwapData);
         callback();
-      }
-
-      if ((period === '1D' || period === '7D') && _lastCandles && _lastCandles.length) {
-        _computeVwap(_lastCandles, function () {});
-        return;
       }
 
       var needed = Math.max(Math.ceil(days * 1440 / (INTERVAL_MINUTES[fetchInterval] || 60)) + 10, 100);
