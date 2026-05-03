@@ -9,20 +9,20 @@
   var _savedCardCache = null; // cache pour _markSavedCards
 
   var INSIGHT_ICONS = {
-    best_strategy: { icon: "+", cls: "success" },
-    worst_strategy: { icon: "!", cls: "warning" },
-    best_session: { icon: "+", cls: "success" },
-    worst_session: { icon: "!", cls: "warning" },
-    bias_correlation: { icon: "#", cls: "info" },
-    direction_strength: { icon: "+", cls: "success" },
-    lesson_themes: { icon: "#", cls: "info" },
-    execution_quality: { icon: "+", cls: "success" },
-    execution_warning: { icon: "!", cls: "warning" },
-    rr_sweetspot: { icon: "#", cls: "info" },
-    recent_trend: { icon: "#", cls: "info" },
-    stdv_sweetspot: { icon: "+", cls: "success" },
-    thesis_validated: { icon: "+", cls: "success" },
-    thesis_invalid: { icon: "!", cls: "warning" },
+    best_strategy: { icon: "<svg class='ii' viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><circle cx='8' cy='8' r='6'/><polyline points='5 8 7 10 11 6'/></svg>", cls: "success" },
+    worst_strategy: { icon: "<svg class='ii' viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><circle cx='8' cy='8' r='6'/><line x1='8' y1='5' x2='8' y2='8'/><line x1='8' y1='10' x2='8' y2='10.01'/></svg>", cls: "warning" },
+    best_session: { icon: "<svg class='ii' viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><circle cx='8' cy='8' r='6'/><polyline points='5 8 7 10 11 6'/></svg>", cls: "success" },
+    worst_session: { icon: "<svg class='ii' viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><circle cx='8' cy='8' r='6'/><line x1='8' y1='5' x2='8' y2='8'/><line x1='8' y1='10' x2='8' y2='10.01'/></svg>", cls: "warning" },
+    bias_correlation: { icon: "<svg class='ii' viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><circle cx='8' cy='8' r='6'/><line x1='8' y1='7' x2='8' y2='11'/><circle cx='8' cy='5' r='0.5' fill='currentColor' stroke='none'/></svg>", cls: "info" },
+    direction_strength: { icon: "<svg class='ii' viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><circle cx='8' cy='8' r='6'/><polyline points='5 8 7 10 11 6'/></svg>", cls: "success" },
+    lesson_themes: { icon: "<svg class='ii' viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><circle cx='8' cy='8' r='6'/><line x1='8' y1='7' x2='8' y2='11'/><circle cx='8' cy='5' r='0.5' fill='currentColor' stroke='none'/></svg>", cls: "info" },
+    execution_quality: { icon: "<svg class='ii' viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><circle cx='8' cy='8' r='6'/><polyline points='5 8 7 10 11 6'/></svg>", cls: "success" },
+    execution_warning: { icon: "<svg class='ii' viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><circle cx='8' cy='8' r='6'/><line x1='8' y1='5' x2='8' y2='8'/><line x1='8' y1='10' x2='8' y2='10.01'/></svg>", cls: "warning" },
+    rr_sweetspot: { icon: "<svg class='ii' viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><circle cx='8' cy='8' r='6'/><line x1='8' y1='7' x2='8' y2='11'/><circle cx='8' cy='5' r='0.5' fill='currentColor' stroke='none'/></svg>", cls: "info" },
+    recent_trend: { icon: "<svg class='ii' viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><circle cx='8' cy='8' r='6'/><line x1='8' y1='7' x2='8' y2='11'/><circle cx='8' cy='5' r='0.5' fill='currentColor' stroke='none'/></svg>", cls: "info" },
+    stdv_sweetspot: { icon: "<svg class='ii' viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><circle cx='8' cy='8' r='6'/><polyline points='5 8 7 10 11 6'/></svg>", cls: "success" },
+    thesis_validated: { icon: "<svg class='ii' viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><circle cx='8' cy='8' r='6'/><polyline points='5 8 7 10 11 6'/></svg>", cls: "success" },
+    thesis_invalid: { icon: "<svg class='ii' viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><circle cx='8' cy='8' r='6'/><line x1='8' y1='5' x2='8' y2='8'/><line x1='8' y1='10' x2='8' y2='10.01'/></svg>", cls: "warning" },
   };
 
   function _dateKey(d) {
@@ -97,7 +97,7 @@
   }
 
   function _renderInsightCard(pattern) {
-    var def = INSIGHT_ICONS[pattern.kind] || { icon: "-", cls: "info" };
+    var def = INSIGHT_ICONS[pattern.kind] || { icon: "<svg class='ii' viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><circle cx='8' cy='8' r='6'/><line x1='5' y1='8' x2='11' y2='8'/></svg>", cls: "info" };
     var cardCls = "insight-card";
     if (def.cls === "warning") cardCls += " insight-card--warning";
     else if (def.cls === "success") cardCls += " insight-card--success";
@@ -238,10 +238,10 @@
       });
       var items = [];
       strengths.slice(0, 2).forEach(function (s) {
-        items.push('<span class="pretrade-item"><span class="pretrade-item__icon">+</span> ' + _escapeHtml(s.title || "") + "</span>");
+        items.push('<span class="pretrade-item"><span class="pretrade-item__icon success"><svg class=\'ii\' viewBox=\'0 0 16 16\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\'><circle cx=\'8\' cy=\'8\' r=\'6\'/><polyline points=\'5 8 7 10 11 6\'/></svg></span> ' + _escapeHtml(s.title || "") + "</span>");
       });
       warnings.slice(0, 2).forEach(function (w) {
-        items.push('<span class="pretrade-item"><span class="pretrade-item__icon">!</span> ' + _escapeHtml(w.title || "") + "</span>");
+        items.push('<span class="pretrade-item"><span class="pretrade-item__icon warning"><svg class=\'ii\' viewBox=\'0 0 16 16\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\'><circle cx=\'8\' cy=\'8\' r=\'6\'/><line x1=\'8\' y1=\'5\' x2=\'8\' y2=\'8\'/><line x1=\'8\' y1=\'10\' x2=\'8\' y2=\'10.01\'/></svg></span> ' + _escapeHtml(w.title || "") + "</span>");
       });
       if (items.length) {
         container.innerHTML =
