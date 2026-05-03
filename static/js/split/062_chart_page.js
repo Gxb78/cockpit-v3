@@ -50,6 +50,9 @@
     if (!chart || !chart.timeScale()) return;
     console.log('[ZOOM] _applyZoomWithRetry target=', JSON.stringify(targetRange), 'current=', JSON.stringify(chart.timeScale().getVisibleRange()));
     maxAttempts = maxAttempts || 10;
+    // Tolérance = 2 barres de l'intervalle courant (pour 3m → 360s)
+    var barSec = Math.floor(_getIntervalMs(currentInterval) / 1000);
+    var tol = Math.max(60, barSec * 2);
     var attempts = 0;
     function tryApply() {
       if (++attempts > maxAttempts) {
@@ -60,7 +63,7 @@
         chart.timeScale().setVisibleRange({ from: targetRange.from, to: targetRange.to });
         var actual = chart.timeScale().getVisibleRange();
         console.log('[ZOOM] tentative', attempts, '→ actual:', JSON.stringify(actual), 'target:', JSON.stringify(targetRange));
-        if (actual && Math.abs(actual.from - targetRange.from) <= 60 && Math.abs(actual.to - targetRange.to) <= 60) {
+        if (actual && Math.abs(actual.from - targetRange.from) <= tol && Math.abs(actual.to - targetRange.to) <= tol) {
           console.log('[ZOOM] ✅ stabilisé en', attempts, 'tentatives');
           return;
         }
@@ -406,6 +409,8 @@
         },
         handleScroll: { vertTouchDrag: true, horzTouchDrag: true, pressedMouseMove: true },
       });
+
+      window.__lwcChart = chart;
 
       // Candlestick series
       var seriesOpts = {
@@ -1106,7 +1111,7 @@
           var intervalSec = Math.floor(_getIntervalMs(currentInterval) / 1000);
           var firstIdx = Math.max(0, candles.length - 100);
           var fromTime = candles[firstIdx].time;
-          var toTime = candles[candles.length - 1].time + intervalSec * 20;
+          var toTime = candles[candles.length - 1].time + intervalSec * 40;
           zoomTarget = { from: fromTime, to: toTime };
         }
         var _firstTotal = zoomTarget ? zoomTarget.to - 15 : 0;
