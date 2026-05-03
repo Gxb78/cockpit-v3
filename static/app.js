@@ -10757,43 +10757,52 @@ TradeEditorController.renderHtml = function (day, trade) {
       var days = VWAP_DAYS[period] || 1;
       var fetchInterval = VWAP_INTERVALS[period] || '1h';
       var color = VWAP_COLORS[period] || '#f59e0b';
-      var needed = Math.max(Math.ceil(days * 1440 / (INTERVAL_MINUTES[fetchInterval] || 60)) + 10, 100);
       var label = 'VWAP ' + period + ' (' + fetchInterval + ')';
 
+      function _computeVwap(candleArray, callback) {
+        var now = Math.floor(Date.now() / 1000);
+        var todayStart = Math.floor(now / 86400) * 86400;
+        var cutoff = todayStart - (days - 1) * 86400;
+        var cumTpv = 0, cumVol = 0;
+        var vwapData = [];
+        for (var i = 0; i < candleArray.length; i++) {
+          var c = candleArray[i];
+          if (c.time < cutoff) continue;
+          var tp = (c.high + c.low + c.close) / 3;
+          cumTpv += tp * c.volume;
+          cumVol += c.volume;
+          if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
+        }
+        if (!vwapData.length) { _removeVwapSeries(period); callback(); return; }
+        var _renderR = null;
+        try { _renderR = chart.timeScale().getVisibleRange(); } catch(e) {}
+        if (_renderR && _renderR.from) vwapData = vwapData.filter(function (d) { return d.time >= _renderR.from; });
+        if (!vwapData.length) { _removeVwapSeries(period); callback(); return; }
+        if (!vwapSeriesMap[period]) {
+          vwapSeriesMap[period] = chart.addLineSeries({
+            color: color, lineWidth: 1.5, priceLineVisible: false,
+            lastValueVisible: true, crosshairMarkerVisible: false,
+            title: label,
+          });
+        }
+        var _lv = vwapData[vwapData.length - 1];
+        if (_lv) vwapData.push({ time: Math.floor(Date.now() / 1000), value: _lv.value });
+        vwapSeriesMap[period].setData(vwapData);
+        callback();
+      }
+
+      if ((period === '1D' || period === '7D') && _lastCandles && _lastCandles.length) {
+        _computeVwap(_lastCandles, function () {});
+        return;
+      }
+
+      var needed = Math.max(Math.ceil(days * 1440 / (INTERVAL_MINUTES[fetchInterval] || 60)) + 10, 100);
       var url = '/api/market/klines?symbol=BTCUSDT&interval=' + fetchInterval + '&limit=' + needed;
       fetch(url)
         .then(function (r) { return r.json(); })
         .then(function (data) {
           if (data.error || !data.candles || !data.candles.length) { _removeVwapSeries(period); return; }
-          var vwapCandles = data.candles;
-          var now = Math.floor(Date.now() / 1000);
-          var todayStart = Math.floor(now / 86400) * 86400;
-          var cutoff = todayStart - (days - 1) * 86400;
-          var cumTpv = 0, cumVol = 0;
-          var vwapData = [];
-          for (var i = 0; i < vwapCandles.length; i++) {
-            var c = vwapCandles[i];
-            if (c.time < cutoff) continue;
-            var tp = (c.high + c.low + c.close) / 3;
-            cumTpv += tp * c.volume;
-            cumVol += c.volume;
-            if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
-          }
-          if (!vwapData.length) { _removeVwapSeries(period); return; }
-          var _renderR = null;
-          try { _renderR = chart.timeScale().getVisibleRange(); } catch(e) {}
-          if (_renderR && _renderR.from) vwapData = vwapData.filter(function (d) { return d.time >= _renderR.from; });
-          if (!vwapData.length) { _removeVwapSeries(period); return; }
-          if (!vwapSeriesMap[period]) {
-            vwapSeriesMap[period] = chart.addLineSeries({
-              color: color, lineWidth: 1.5, priceLineVisible: false,
-              lastValueVisible: true, crosshairMarkerVisible: false,
-              title: label,
-            });
-          }
-          var _lv = vwapData[vwapData.length - 1];
-          if (_lv) vwapData.push({ time: Math.floor(Date.now() / 1000), value: _lv.value });
-          vwapSeriesMap[period].setData(vwapData);
+          _computeVwap(data.candles, function () {});
         })
         .catch(function () { _removeVwapSeries(period); });
     });
@@ -11072,6 +11081,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         if (data.error) { console.error('[btc-chart]', data.error); return; }
         var candles = data.candles || [];
         if (!candles.length) return;
+        _lastCandles = candles;
         var last = candles[candles.length - 1];
         lastCandleTime = last.time * 1000;
         _startCountdown();
@@ -11169,6 +11179,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   var ws = null;
   var wsReconnectTimer = null;
   var _wsIntentionalClose = false;
+  var _lastCandles = null; // dernieres bougies fetchees (pour VWAP 1D/7D temps reel)
 
   // Settings state
   var indSettings = {
@@ -11644,6 +11655,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         var s = window.VolumeProfile ? window.VolumeProfile.getSettings() : null;
         if (s) {
           document.getElementById('vpActive').checked = !!s.active;
+          toggle.classList.toggle('active', !!s.active);
           document.getElementById('vpBucketSize').value = s.bucketSize;
           document.getElementById('vpPeriod').value = s.period;
           document.getElementById('vpVaPercent').value = s.vaPercent;
@@ -11657,11 +11669,21 @@ TradeEditorController.renderHtml = function (day, trade) {
         }
       }
     });
-    document.addEventListener('click', function () { dropdown.classList.add('hidden'); }, false);
+    document.addEventListener('click', function (e) {
+      if (!dropdown.contains(e.target) && e.target !== toggle) dropdown.classList.add('hidden');
+    }, false);
     // Apply on change
     dropdown.addEventListener('change', function () {
       _readVpSettingsFromUI();
+      // Sync toggle active state
+      var active = document.getElementById('vpActive');
+      toggle.classList.toggle('active', active && active.checked);
     });
+    // Init toggle state from saved settings
+    setTimeout(function () {
+      var s = window.VolumeProfile ? window.VolumeProfile.getSettings() : null;
+      if (s) toggle.classList.toggle('active', !!s.active);
+    }, 100);
   }
 
   function _bindVwap() {
@@ -11723,10 +11745,52 @@ TradeEditorController.renderHtml = function (day, trade) {
       var days = VWAP_DAYS[period] || 1;
       var fetchInterval = VWAP_INTERVALS[period] || '1h';
       var color = VWAP_COLORS[period] || '#f59e0b';
-      var minPerCandle = INTERVAL_MINUTES[fetchInterval] || 60;
-      var needed = Math.max(Math.ceil(days * 1440 / minPerCandle) + 10, 100);
       var label = 'VWAP ' + period + ' (' + fetchInterval + ')';
 
+      // Helper: compute cumulative VWAP from candles
+      function _computeVwap(candleArray, callback) {
+        var now = Math.floor(Date.now() / 1000);
+        var todayStart = Math.floor(now / 86400) * 86400;
+        var cutoff = todayStart - (days - 1) * 86400;
+        var cumTpv = 0, cumVol = 0;
+        var vwapData = [];
+        for (var i = 0; i < candleArray.length; i++) {
+          var c = candleArray[i];
+          if (c.time < cutoff) continue;
+          var tp = (c.high + c.low + c.close) / 3;
+          cumTpv += tp * c.volume;
+          cumVol += c.volume;
+          if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
+        }
+        if (!vwapData.length) { _removeVwapSeries(period); callback(); return; }
+        var _renderRange = null;
+        try { _renderRange = chart.timeScale().getVisibleRange(); } catch(e) {}
+        if (_renderRange && _renderRange.from) {
+          vwapData = vwapData.filter(function (d) { return d.time >= _renderRange.from; });
+        }
+        if (!vwapData.length) { _removeVwapSeries(period); callback(); return; }
+        if (!vwapSeriesMap[period]) {
+          vwapSeriesMap[period] = chart.addLineSeries({
+            color: color, lineWidth: 1.5, priceLineVisible: false,
+            lastValueVisible: true, crosshairMarkerVisible: false,
+            title: label,
+          });
+        }
+        var _lv = vwapData[vwapData.length - 1];
+        if (_lv) vwapData.push({ time: Math.floor(Date.now() / 1000), value: _lv.value });
+        vwapSeriesMap[period].setData(vwapData);
+        callback();
+      }
+
+      // 1D et 7D : utiliser les bougies du chart (temps reel, fluide)
+      if ((period === '1D' || period === '7D') && _lastCandles && _lastCandles.length) {
+        _computeVwap(_lastCandles, function () {});
+        return;
+      }
+
+      // 30D et 90D : fetch au bon intervalle
+      var minPerCandle = INTERVAL_MINUTES[fetchInterval] || 60;
+      var needed = Math.max(Math.ceil(days * 1440 / minPerCandle) + 10, 100);
       var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + fetchInterval + '&limit=' + needed;
       fetch(url)
         .then(function (r) { return r.json(); })
@@ -11735,41 +11799,7 @@ TradeEditorController.renderHtml = function (day, trade) {
             _removeVwapSeries(period);
             return;
           }
-          var vwapCandles = data.candles;
-          var now = Math.floor(Date.now() / 1000);
-          // Calendar-aligned: start of today (00:00 UTC) moins (days-1) jours
-          var todayStart = Math.floor(now / 86400) * 86400;
-          var cutoff = todayStart - (days - 1) * 86400;
-          var cumTpv = 0, cumVol = 0;
-          var vwapData = [];
-          for (var i = 0; i < vwapCandles.length; i++) {
-            var c = vwapCandles[i];
-            if (c.time < cutoff) continue;
-            var tp = (c.high + c.low + c.close) / 3;
-            cumTpv += tp * c.volume;
-            cumVol += c.volume;
-            if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
-          }
-          if (!vwapData.length) { _removeVwapSeries(period); return; }
-          // Capturer le range visible au moment du render (pas au moment du fetch)
-          var _renderRange = null;
-          try { _renderRange = chart.timeScale().getVisibleRange(); } catch(e) {}
-          // Clipper les donnees anciennes qui compriment le price scale
-          if (_renderRange && _renderRange.from) {
-            vwapData = vwapData.filter(function (d) { return d.time >= _renderRange.from; });
-          }
-          if (!vwapData.length) { _removeVwapSeries(period); return; }
-          if (!vwapSeriesMap[period]) {
-            vwapSeriesMap[period] = chart.addLineSeries({
-              color: color, lineWidth: 1.5, priceLineVisible: false,
-              lastValueVisible: true, crosshairMarkerVisible: false,
-              title: label,
-            });
-          }
-          // Prolonger le dernier point jusqu'a maintenant (la bougie en cours est incomplete)
-          var _lastVwap = vwapData[vwapData.length - 1];
-          if (_lastVwap) vwapData.push({ time: Math.floor(Date.now() / 1000), value: _lastVwap.value });
-          vwapSeriesMap[period].setData(vwapData);
+          _computeVwap(data.candles, function () {});
         })
         .catch(function () { _removeVwapSeries(period); });
     });
@@ -12078,6 +12108,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         if (data.error) { console.error('[chart]', data.error); return; }
         var candles = data.candles || [];
         if (!candles.length) return;
+        _lastCandles = candles;
 
         var last = candles[candles.length - 1];
         lastCandleTime = last.time * 1000;
@@ -12884,13 +12915,30 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   // ── EVENTS ──
 
-  var _renderRaf = null;
-  function _scheduleRender() {
-    if (_renderRaf) return;
-    _renderRaf = requestAnimationFrame(function () {
-      _renderRaf = null;
+  // rAF render loop (Option C — lead dev approved)
+  var _renderLoopId = null;
+  var _interactionTimeout = null;
+  var IDLE_DELAY_MS = 200;
+
+  function _startRenderLoop() {
+    if (_renderLoopId) return;
+    function loop() {
       _renderAll();
-    });
+      _renderLoopId = requestAnimationFrame(loop);
+    }
+    _renderLoopId = requestAnimationFrame(loop);
+  }
+
+  function _stopRenderLoop() {
+    if (_renderLoopId) {
+      cancelAnimationFrame(_renderLoopId);
+      _renderLoopId = null;
+    }
+  }
+
+  function _scheduleStop() {
+    clearTimeout(_interactionTimeout);
+    _interactionTimeout = setTimeout(_stopRenderLoop, IDLE_DELAY_MS);
   }
 
   function _bindEvents() {
@@ -12900,17 +12948,20 @@ TradeEditorController.renderHtml = function (day, trade) {
     state.canvas.addEventListener('mouseleave', _onMouseLeave);
     state.canvas.addEventListener('dblclick', _onDblClick);
 
-    // Redessiner quand la souris bouge sur le chart (couvre axe des prix, crosshair, etc.)
-    if (state.chart && typeof state.chart.subscribeCrosshairMove === 'function') {
-      state.chart.subscribeCrosshairMove(_scheduleRender);
-    }
-
-    // Redessiner immediatement sur tout mouvement souris dans le conteneur (couvre drag axe des prix)
+    // Render loop synchro parfaite pendant interaction souris
     if (state.container) {
       state.container.addEventListener('mousemove', function () {
-        requestAnimationFrame(function () { _renderAll(); });
+        _startRenderLoop();
+        _scheduleStop();
       }, { passive: true });
-      state.container.addEventListener('wheel', function () { requestAnimationFrame(function () { _renderAll(); }); }, { passive: true });
+      state.container.addEventListener('wheel', function () {
+        _startRenderLoop();
+        _scheduleStop();
+      }, { passive: true });
+      state.container.addEventListener('mouseleave', function () {
+        clearTimeout(_interactionTimeout);
+        _stopRenderLoop();
+      });
     }
 
     document.addEventListener('change', function (e) {
@@ -13585,18 +13636,19 @@ TradeEditorController.renderHtml = function (day, trade) {
       } catch (e) {}
     }
 
-    // Redessiner immediatement sur tout mouvement souris dans le conteneur
+    // rAF render loop pendant interaction (synchro parfaite axe Y)
     if (state.container) {
-      var _lastVpRender = 0;
+      var _vpLoopId = null, _vpTimer = null;
+      function _vpStart() { if (_vpLoopId) return; function l() { _renderVP(); _vpLoopId = requestAnimationFrame(l); } _vpLoopId = requestAnimationFrame(l); }
+      function _vpStop() { if (_vpLoopId) { cancelAnimationFrame(_vpLoopId); _vpLoopId = null; } }
       try {
         state.container.addEventListener('mousemove', function () {
-          var now = Date.now();
-          if (now - _lastVpRender > 16) {
-            _lastVpRender = now;
-            requestAnimationFrame(function () { _renderVP(); });
-          }
+          _vpStart(); clearTimeout(_vpTimer); _vpTimer = setTimeout(_vpStop, 200);
         }, { passive: true });
-        state.container.addEventListener('wheel', function () { requestAnimationFrame(function () { _renderVP(); }); }, { passive: true });
+        state.container.addEventListener('wheel', function () {
+          _vpStart(); clearTimeout(_vpTimer); _vpTimer = setTimeout(_vpStop, 200);
+        }, { passive: true });
+        state.container.addEventListener('mouseleave', function () { clearTimeout(_vpTimer); _vpStop(); });
       } catch(e) {}
     }
 

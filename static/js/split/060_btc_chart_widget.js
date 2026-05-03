@@ -225,43 +225,52 @@
       var days = VWAP_DAYS[period] || 1;
       var fetchInterval = VWAP_INTERVALS[period] || '1h';
       var color = VWAP_COLORS[period] || '#f59e0b';
-      var needed = Math.max(Math.ceil(days * 1440 / (INTERVAL_MINUTES[fetchInterval] || 60)) + 10, 100);
       var label = 'VWAP ' + period + ' (' + fetchInterval + ')';
 
+      function _computeVwap(candleArray, callback) {
+        var now = Math.floor(Date.now() / 1000);
+        var todayStart = Math.floor(now / 86400) * 86400;
+        var cutoff = todayStart - (days - 1) * 86400;
+        var cumTpv = 0, cumVol = 0;
+        var vwapData = [];
+        for (var i = 0; i < candleArray.length; i++) {
+          var c = candleArray[i];
+          if (c.time < cutoff) continue;
+          var tp = (c.high + c.low + c.close) / 3;
+          cumTpv += tp * c.volume;
+          cumVol += c.volume;
+          if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
+        }
+        if (!vwapData.length) { _removeVwapSeries(period); callback(); return; }
+        var _renderR = null;
+        try { _renderR = chart.timeScale().getVisibleRange(); } catch(e) {}
+        if (_renderR && _renderR.from) vwapData = vwapData.filter(function (d) { return d.time >= _renderR.from; });
+        if (!vwapData.length) { _removeVwapSeries(period); callback(); return; }
+        if (!vwapSeriesMap[period]) {
+          vwapSeriesMap[period] = chart.addLineSeries({
+            color: color, lineWidth: 1.5, priceLineVisible: false,
+            lastValueVisible: true, crosshairMarkerVisible: false,
+            title: label,
+          });
+        }
+        var _lv = vwapData[vwapData.length - 1];
+        if (_lv) vwapData.push({ time: Math.floor(Date.now() / 1000), value: _lv.value });
+        vwapSeriesMap[period].setData(vwapData);
+        callback();
+      }
+
+      if ((period === '1D' || period === '7D') && _lastCandles && _lastCandles.length) {
+        _computeVwap(_lastCandles, function () {});
+        return;
+      }
+
+      var needed = Math.max(Math.ceil(days * 1440 / (INTERVAL_MINUTES[fetchInterval] || 60)) + 10, 100);
       var url = '/api/market/klines?symbol=BTCUSDT&interval=' + fetchInterval + '&limit=' + needed;
       fetch(url)
         .then(function (r) { return r.json(); })
         .then(function (data) {
           if (data.error || !data.candles || !data.candles.length) { _removeVwapSeries(period); return; }
-          var vwapCandles = data.candles;
-          var now = Math.floor(Date.now() / 1000);
-          var todayStart = Math.floor(now / 86400) * 86400;
-          var cutoff = todayStart - (days - 1) * 86400;
-          var cumTpv = 0, cumVol = 0;
-          var vwapData = [];
-          for (var i = 0; i < vwapCandles.length; i++) {
-            var c = vwapCandles[i];
-            if (c.time < cutoff) continue;
-            var tp = (c.high + c.low + c.close) / 3;
-            cumTpv += tp * c.volume;
-            cumVol += c.volume;
-            if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
-          }
-          if (!vwapData.length) { _removeVwapSeries(period); return; }
-          var _renderR = null;
-          try { _renderR = chart.timeScale().getVisibleRange(); } catch(e) {}
-          if (_renderR && _renderR.from) vwapData = vwapData.filter(function (d) { return d.time >= _renderR.from; });
-          if (!vwapData.length) { _removeVwapSeries(period); return; }
-          if (!vwapSeriesMap[period]) {
-            vwapSeriesMap[period] = chart.addLineSeries({
-              color: color, lineWidth: 1.5, priceLineVisible: false,
-              lastValueVisible: true, crosshairMarkerVisible: false,
-              title: label,
-            });
-          }
-          var _lv = vwapData[vwapData.length - 1];
-          if (_lv) vwapData.push({ time: Math.floor(Date.now() / 1000), value: _lv.value });
-          vwapSeriesMap[period].setData(vwapData);
+          _computeVwap(data.candles, function () {});
         })
         .catch(function () { _removeVwapSeries(period); });
     });
@@ -540,6 +549,7 @@
         if (data.error) { console.error('[btc-chart]', data.error); return; }
         var candles = data.candles || [];
         if (!candles.length) return;
+        _lastCandles = candles;
         var last = candles[candles.length - 1];
         lastCandleTime = last.time * 1000;
         _startCountdown();

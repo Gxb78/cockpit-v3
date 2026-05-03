@@ -56,18 +56,19 @@
       } catch (e) {}
     }
 
-    // Redessiner immediatement sur tout mouvement souris dans le conteneur
+    // rAF render loop pendant interaction (synchro parfaite axe Y)
     if (state.container) {
-      var _lastVpRender = 0;
+      var _vpLoopId = null, _vpTimer = null;
+      function _vpStart() { if (_vpLoopId) return; function l() { _renderVP(); _vpLoopId = requestAnimationFrame(l); } _vpLoopId = requestAnimationFrame(l); }
+      function _vpStop() { if (_vpLoopId) { cancelAnimationFrame(_vpLoopId); _vpLoopId = null; } }
       try {
         state.container.addEventListener('mousemove', function () {
-          var now = Date.now();
-          if (now - _lastVpRender > 16) {
-            _lastVpRender = now;
-            requestAnimationFrame(function () { _renderVP(); });
-          }
+          _vpStart(); clearTimeout(_vpTimer); _vpTimer = setTimeout(_vpStop, 200);
         }, { passive: true });
-        state.container.addEventListener('wheel', function () { requestAnimationFrame(function () { _renderVP(); }); }, { passive: true });
+        state.container.addEventListener('wheel', function () {
+          _vpStart(); clearTimeout(_vpTimer); _vpTimer = setTimeout(_vpStop, 200);
+        }, { passive: true });
+        state.container.addEventListener('mouseleave', function () { clearTimeout(_vpTimer); _vpStop(); });
       } catch(e) {}
     }
 

@@ -421,13 +421,30 @@
 
   // ── EVENTS ──
 
-  var _renderRaf = null;
-  function _scheduleRender() {
-    if (_renderRaf) return;
-    _renderRaf = requestAnimationFrame(function () {
-      _renderRaf = null;
+  // rAF render loop (Option C — lead dev approved)
+  var _renderLoopId = null;
+  var _interactionTimeout = null;
+  var IDLE_DELAY_MS = 200;
+
+  function _startRenderLoop() {
+    if (_renderLoopId) return;
+    function loop() {
       _renderAll();
-    });
+      _renderLoopId = requestAnimationFrame(loop);
+    }
+    _renderLoopId = requestAnimationFrame(loop);
+  }
+
+  function _stopRenderLoop() {
+    if (_renderLoopId) {
+      cancelAnimationFrame(_renderLoopId);
+      _renderLoopId = null;
+    }
+  }
+
+  function _scheduleStop() {
+    clearTimeout(_interactionTimeout);
+    _interactionTimeout = setTimeout(_stopRenderLoop, IDLE_DELAY_MS);
   }
 
   function _bindEvents() {
@@ -437,17 +454,20 @@
     state.canvas.addEventListener('mouseleave', _onMouseLeave);
     state.canvas.addEventListener('dblclick', _onDblClick);
 
-    // Redessiner quand la souris bouge sur le chart (couvre axe des prix, crosshair, etc.)
-    if (state.chart && typeof state.chart.subscribeCrosshairMove === 'function') {
-      state.chart.subscribeCrosshairMove(_scheduleRender);
-    }
-
-    // Redessiner immediatement sur tout mouvement souris dans le conteneur (couvre drag axe des prix)
+    // Render loop synchro parfaite pendant interaction souris
     if (state.container) {
       state.container.addEventListener('mousemove', function () {
-        requestAnimationFrame(function () { _renderAll(); });
+        _startRenderLoop();
+        _scheduleStop();
       }, { passive: true });
-      state.container.addEventListener('wheel', function () { requestAnimationFrame(function () { _renderAll(); }); }, { passive: true });
+      state.container.addEventListener('wheel', function () {
+        _startRenderLoop();
+        _scheduleStop();
+      }, { passive: true });
+      state.container.addEventListener('mouseleave', function () {
+        clearTimeout(_interactionTimeout);
+        _stopRenderLoop();
+      });
     }
 
     document.addEventListener('change', function (e) {

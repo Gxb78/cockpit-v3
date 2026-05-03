@@ -35,6 +35,7 @@
   var ws = null;
   var wsReconnectTimer = null;
   var _wsIntentionalClose = false;
+  var _lastCandles = null; // dernieres bougies fetchees (pour VWAP 1D/7D temps reel)
 
   // Settings state
   var indSettings = {
@@ -510,6 +511,7 @@
         var s = window.VolumeProfile ? window.VolumeProfile.getSettings() : null;
         if (s) {
           document.getElementById('vpActive').checked = !!s.active;
+          toggle.classList.toggle('active', !!s.active);
           document.getElementById('vpBucketSize').value = s.bucketSize;
           document.getElementById('vpPeriod').value = s.period;
           document.getElementById('vpVaPercent').value = s.vaPercent;
@@ -523,11 +525,21 @@
         }
       }
     });
-    document.addEventListener('click', function () { dropdown.classList.add('hidden'); }, false);
+    document.addEventListener('click', function (e) {
+      if (!dropdown.contains(e.target) && e.target !== toggle) dropdown.classList.add('hidden');
+    }, false);
     // Apply on change
     dropdown.addEventListener('change', function () {
       _readVpSettingsFromUI();
+      // Sync toggle active state
+      var active = document.getElementById('vpActive');
+      toggle.classList.toggle('active', active && active.checked);
     });
+    // Init toggle state from saved settings
+    setTimeout(function () {
+      var s = window.VolumeProfile ? window.VolumeProfile.getSettings() : null;
+      if (s) toggle.classList.toggle('active', !!s.active);
+    }, 100);
   }
 
   function _bindVwap() {
@@ -589,10 +601,52 @@
       var days = VWAP_DAYS[period] || 1;
       var fetchInterval = VWAP_INTERVALS[period] || '1h';
       var color = VWAP_COLORS[period] || '#f59e0b';
-      var minPerCandle = INTERVAL_MINUTES[fetchInterval] || 60;
-      var needed = Math.max(Math.ceil(days * 1440 / minPerCandle) + 10, 100);
       var label = 'VWAP ' + period + ' (' + fetchInterval + ')';
 
+      // Helper: compute cumulative VWAP from candles
+      function _computeVwap(candleArray, callback) {
+        var now = Math.floor(Date.now() / 1000);
+        var todayStart = Math.floor(now / 86400) * 86400;
+        var cutoff = todayStart - (days - 1) * 86400;
+        var cumTpv = 0, cumVol = 0;
+        var vwapData = [];
+        for (var i = 0; i < candleArray.length; i++) {
+          var c = candleArray[i];
+          if (c.time < cutoff) continue;
+          var tp = (c.high + c.low + c.close) / 3;
+          cumTpv += tp * c.volume;
+          cumVol += c.volume;
+          if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
+        }
+        if (!vwapData.length) { _removeVwapSeries(period); callback(); return; }
+        var _renderRange = null;
+        try { _renderRange = chart.timeScale().getVisibleRange(); } catch(e) {}
+        if (_renderRange && _renderRange.from) {
+          vwapData = vwapData.filter(function (d) { return d.time >= _renderRange.from; });
+        }
+        if (!vwapData.length) { _removeVwapSeries(period); callback(); return; }
+        if (!vwapSeriesMap[period]) {
+          vwapSeriesMap[period] = chart.addLineSeries({
+            color: color, lineWidth: 1.5, priceLineVisible: false,
+            lastValueVisible: true, crosshairMarkerVisible: false,
+            title: label,
+          });
+        }
+        var _lv = vwapData[vwapData.length - 1];
+        if (_lv) vwapData.push({ time: Math.floor(Date.now() / 1000), value: _lv.value });
+        vwapSeriesMap[period].setData(vwapData);
+        callback();
+      }
+
+      // 1D et 7D : utiliser les bougies du chart (temps reel, fluide)
+      if ((period === '1D' || period === '7D') && _lastCandles && _lastCandles.length) {
+        _computeVwap(_lastCandles, function () {});
+        return;
+      }
+
+      // 30D et 90D : fetch au bon intervalle
+      var minPerCandle = INTERVAL_MINUTES[fetchInterval] || 60;
+      var needed = Math.max(Math.ceil(days * 1440 / minPerCandle) + 10, 100);
       var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + fetchInterval + '&limit=' + needed;
       fetch(url)
         .then(function (r) { return r.json(); })
@@ -601,41 +655,7 @@
             _removeVwapSeries(period);
             return;
           }
-          var vwapCandles = data.candles;
-          var now = Math.floor(Date.now() / 1000);
-          // Calendar-aligned: start of today (00:00 UTC) moins (days-1) jours
-          var todayStart = Math.floor(now / 86400) * 86400;
-          var cutoff = todayStart - (days - 1) * 86400;
-          var cumTpv = 0, cumVol = 0;
-          var vwapData = [];
-          for (var i = 0; i < vwapCandles.length; i++) {
-            var c = vwapCandles[i];
-            if (c.time < cutoff) continue;
-            var tp = (c.high + c.low + c.close) / 3;
-            cumTpv += tp * c.volume;
-            cumVol += c.volume;
-            if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
-          }
-          if (!vwapData.length) { _removeVwapSeries(period); return; }
-          // Capturer le range visible au moment du render (pas au moment du fetch)
-          var _renderRange = null;
-          try { _renderRange = chart.timeScale().getVisibleRange(); } catch(e) {}
-          // Clipper les donnees anciennes qui compriment le price scale
-          if (_renderRange && _renderRange.from) {
-            vwapData = vwapData.filter(function (d) { return d.time >= _renderRange.from; });
-          }
-          if (!vwapData.length) { _removeVwapSeries(period); return; }
-          if (!vwapSeriesMap[period]) {
-            vwapSeriesMap[period] = chart.addLineSeries({
-              color: color, lineWidth: 1.5, priceLineVisible: false,
-              lastValueVisible: true, crosshairMarkerVisible: false,
-              title: label,
-            });
-          }
-          // Prolonger le dernier point jusqu'a maintenant (la bougie en cours est incomplete)
-          var _lastVwap = vwapData[vwapData.length - 1];
-          if (_lastVwap) vwapData.push({ time: Math.floor(Date.now() / 1000), value: _lastVwap.value });
-          vwapSeriesMap[period].setData(vwapData);
+          _computeVwap(data.candles, function () {});
         })
         .catch(function () { _removeVwapSeries(period); });
     });
@@ -944,6 +964,7 @@
         if (data.error) { console.error('[chart]', data.error); return; }
         var candles = data.candles || [];
         if (!candles.length) return;
+        _lastCandles = candles;
 
         var last = candles[candles.length - 1];
         lastCandleTime = last.time * 1000;
