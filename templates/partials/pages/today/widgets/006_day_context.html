@@ -9,7 +9,7 @@
               </svg>
               <div>Aucun contexte aujourd'hui.</div>
               <div class="empty-cta">
-                <button type="button" class="btn-ghost" id="todayContextCreateBtn">Creer un contexte</button>
+                <button type="button" class="btn-primary" id="todayContextCreateBtn">Creer un contexte</button>
               </div>
             </div>
           </div>
@@ -26,9 +26,10 @@
                 </select>
               </div>
               <input type="date" id="entryDate" class="tc-date-input" required />
-              <span class="tc-autosave" id="autosaveInd" data-state="idle">
+              <span class="tc-autosave" id="autosaveInd" data-state="idle" aria-live="polite" aria-atomic="true">
                 <span id="autosaveText">Auto-save</span>
               </span>
+              <span class="tc-status" id="contextStatus">Non créé</span>
             </div>
 
             <!-- Bias pills inline -->

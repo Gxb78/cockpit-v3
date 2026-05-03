@@ -12,6 +12,8 @@
   background: linear-gradient(165deg, rgba(13,14,22,0.95), rgba(10,12,20,0.92));
   border: 1px solid var(--border);
   border-radius: var(--r);
+  backface-visibility: hidden;
+  will-change: transform;
   transition: border-color 0.3s, transform 0.3s, box-shadow 0.3s;
 }
 
@@ -22,15 +24,87 @@
 }
 
 body.light-mode .page[data-page="today"] .kpi {
-  background: #fff;
-  border-color: #e7eaf0;
+  background: var(--surface);
+  border-color: var(--border-strong);
   box-shadow: 0 0 0 1px rgba(4, 23, 43, 0.04), 0 8px 20px -8px rgba(0,0,0,0.08), 0 2px 4px -2px rgba(0,0,0,0.04);
 }
 
 body.light-mode .page[data-page="today"] .kpi:hover {
-  border-color: rgba(15, 23, 42, 0.16);
+  border-color: var(--border-strong);
   box-shadow: 0 0 0 1px rgba(4, 23, 43, 0.06), 0 20px 28px -10px rgba(0,0,0,0.12), 0 4px 8px -4px rgba(0,0,0,0.06);
 }
+
+/* D-12: PnL color via class instead of inline style */
+.page[data-page="today"] .kpi-pnl.pnl-pos { color: var(--win); }
+.page[data-page="today"] .kpi-pnl.pnl-neg { color: var(--loss); }
+
+
+
+
+/* Chart error state (BTC widget + market API) */
+.chart-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+.chart-error-state svg {
+  opacity: 0.5;
+  margin-bottom: 4px;
+}
+.chart-error-state div {
+  font-weight: 500;
+  color: var(--text-soft);
+}
+.chart-error-state span {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+/* Context status badge */
+.tc-status {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9.5px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .page[data-page="today"] .kpi { transition: none !important; }
+  .widget-board.loading .kpi-value::after { animation: none !important; }
+  .widget-board.loading .kpi-sub::after { animation: none !important; }
+  .kpi-spark { transition: none !important; }
+  .spark-line { transition: none !important; }
+}
+/* D-20: Sparkline tooltip */
+.spark-tooltip {
+  position: absolute;
+  bottom: 100%;
+  margin-bottom: 4px;
+  padding: 3px 8px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 10;
+}
+.spark-tooltip.hidden { display: none; }
 
 /* ---------- Label ligne supérieure ---------- */
 .page[data-page="today"] .kpi-label {
@@ -62,6 +136,7 @@ body.light-mode .page[data-page="today"] .kpi:hover {
   line-height: 1.1;
   margin-bottom: 4px;
   color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Valeurs colorées (PnL) */
@@ -80,6 +155,10 @@ body.light-mode .page[data-page="today"] .kpi:hover {
   letter-spacing: 0.02em;
   margin-bottom: 0;
   line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 /* ---------- Winrate pills ---------- */
@@ -136,6 +215,7 @@ body.light-mode .page[data-page="today"] .kpi:hover {
   height: 42px;
   min-height: 42px;
   overflow: visible;
+  position: relative;
 }
 
 .page[data-page="today"] .kpi-spark {

@@ -1,28 +1,28 @@
 // ---------- KPIs ----------
 
-function getTradesForCurrentFilter() {
-  // Filtrer par la periode courante (Journal range)
-  var days = state.allDays || [];
-  var from = null, to = null;
-
-  if (state.journalRangeMode === "custom" && state.journalCustomFrom && state.journalCustomTo) {
-    from = state.journalCustomFrom;
-    to = state.journalCustomTo;
-  } else if (state.journalRangeMode === "quarter") {
-    var q = quarterRange(state.currentMonth || new Date());
-    from = q.from;
-    to = q.to;
-  } else {
-    // month mode (defaut)
-    var m = monthRange(state.currentMonth || new Date());
-    from = m.from;
-    to = m.to;
+function _kpiPeriodRange() {
+  // Week mode (journalViewMode) a priorite sur journalRangeMode
+  if (state.journalViewMode === "week") {
+    var start = startOfWeek(state.currentMonth || new Date());
+    var end = endOfWeek(state.currentMonth || new Date());
+    return { from: fmtDateKey(start), to: fmtDateKey(end) };
   }
+  if (state.journalRangeMode === "custom" && state.journalCustomFrom && state.journalCustomTo) {
+    return { from: state.journalCustomFrom, to: state.journalCustomTo };
+  }
+  if (state.journalRangeMode === "quarter") {
+    return quarterRange(state.currentMonth || new Date());
+  }
+  // month mode (defaut)
+  return monthRange(state.currentMonth || new Date());
+}
 
-  if (!from || !to) return days.flatMap(function (d) { return d.trades || []; });
-
+function getTradesForCurrentFilter() {
+  var days = state.allDays || [];
+  var range = _kpiPeriodRange();
+  if (!range || !range.from || !range.to) return days.flatMap(function (d) { return d.trades || []; });
   return days
-    .filter(function (d) { return d.date >= from && d.date <= to; })
+    .filter(function (d) { return d.date >= range.from && d.date <= range.to; })
     .flatMap(function (d) { return d.trades || []; });
 }
 
@@ -63,24 +63,51 @@ function computeDerivedTodayKPIs(s) {
   };
 }
 
+function _getPeriodRange() {
+  return _kpiPeriodRange();
+}
+
 function buildLast30PnlSeries() {
   const byDate = {};
   (state.allDays || []).forEach(day => {
     const key = day.date;
     if (!key) return;
-    const pnl = (day.trades || []).reduce((sum, t) => sum + Number(t.pnl || 0), 0);
+    const pnl = (day.trades || []).reduce(function(sum, t) {
+      var metrics = deriveTradeMetrics(t);
+      return sum + Number(metrics.pnl || 0);
+    }, 0);
     byDate[key] = (byDate[key] || 0) + pnl;
   });
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // Use current journal period instead of hardcoded last-30-days
+  const range = _getPeriodRange();
   const out = [];
-  for (let i = 29; i >= 0; i -= 1) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-    const key = fmtDateKey(d);
-    out.push({ date: key, pnl: Number(byDate[key] || 0) });
+
+  if (range && range.from && range.to) {
+    var p = range.from.split("-").map(Number);
+    var cur = new Date(p[0], p[1] - 1, p[2]);
+    var ep = range.to.split("-").map(Number);
+    var end = new Date(ep[0], ep[1] - 1, ep[2]);
+    var maxBars = 90;
+    while (cur <= end && out.length < maxBars) {
+      var key = fmtDateKey(cur);
+      out.push({ date: key, pnl: Number(byDate[key] || 0) });
+      cur.setDate(cur.getDate() + 1);
+    }
   }
+
+  // Fallback: last 30 days from today
+  if (out.length === 0) {
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (var i = 29; i >= 0; i -= 1) {
+      var d = new Date(today);
+      d.setDate(today.getDate() - i);
+      var key = fmtDateKey(d);
+      out.push({ date: key, pnl: Number(byDate[key] || 0) });
+    }
+  }
+
   return out;
 }
 
@@ -100,7 +127,7 @@ function renderPnlSparkline() {
     line.setAttribute("class", "spark-line flat");
     empty.classList.remove("hidden");
     if (labels) labels.innerHTML = "";
-    if (zero) zero.setAttribute("y1", "21");
+    if (zero) zero.classList.add("hidden");
     return;
   }
 
@@ -116,6 +143,7 @@ function renderPnlSparkline() {
 
   // Zero line position (y where v=0)
   if (zero) {
+    zero.classList.remove("hidden");
     const zeroY = padY + dataH * (1 - (0 - min) / range);
     zero.setAttribute("y1", zeroY.toFixed(1));
     zero.setAttribute("y2", zeroY.toFixed(1));
@@ -134,30 +162,88 @@ function renderPnlSparkline() {
     var first = series[0];
     var mid = series[Math.floor(total / 2)];
     var last = series[total - 1];
+    function _fmtSparkDate(d) {
+      if (!d) return "";
+      var p = d.split("-").map(Number);
+      return new Date(p[0], p[1] - 1, p[2]).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+    }
     labels.innerHTML =
-      '<span class="spark-label">' + (first.date ? first.date.slice(5) : "") + '</span>' +
-      '<span class="spark-label">' + (mid.date ? mid.date.slice(5) : "") + '</span>' +
-      '<span class="spark-label">' + (last.date ? last.date.slice(5) : "") + '</span>';
+      '<span class="spark-label">' + _fmtSparkDate(first.date) + '</span>' +
+      '<span class="spark-label">' + _fmtSparkDate(mid.date) + '</span>' +
+      '<span class="spark-label">' + _fmtSparkDate(last.date) + '</span>';
   }
 
   const total30 = values.reduce((sum, v) => sum + v, 0);
   const tone = total30 > 0 ? "pos" : total30 < 0 ? "neg" : "flat";
   line.setAttribute("class", `spark-line ${tone}`);
   empty.classList.add("hidden");
+
+  // D-20: Tooltip au survol — nearest data point
+  var wrap = document.querySelector(".kpi-spark-wrap");
+  if (!wrap) return;
+  var tip = document.getElementById("kpiPnlSparkTip");
+  if (!tip) {
+    tip = document.createElement("div");
+    tip.id = "kpiPnlSparkTip";
+    tip.className = "spark-tooltip hidden";
+    wrap.appendChild(tip);
+  }
+  var svg = document.getElementById("kpiPnlSpark");
+  if (!svg._sparkBound) {
+    svg._sparkBound = true;
+    svg.addEventListener("mousemove", function(e) {
+      var rect = svg.getBoundingClientRect();
+      var relX = e.clientX - rect.left;
+      var pctX = relX / rect.width;
+      var idx = Math.round(pctX * (series.length - 1));
+      idx = Math.max(0, Math.min(series.length - 1, idx));
+      var pt = series[idx];
+      if (!pt) return;
+      tip.style.left = (relX - 30) + "px";
+      var p = pt.date.split("-").map(Number);
+      var d = new Date(p[0], p[1] - 1, p[2]);
+      var label = d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+      var val = pt.pnl;
+      var sign = val >= 0 ? "+" : "";
+      tip.innerHTML = label + " : " + sign + val.toFixed(2) + "€";
+      tip.classList.remove("hidden");
+    });
+    svg.addEventListener("mouseleave", function() {
+      tip.classList.add("hidden");
+    });
+  }
 }
 
 function renderKPIs(s) {
+  s = s || {};
   const d = computeDerivedTodayKPIs(s);
-  const pnlEl = $("#kpiPnl");
-  pnlEl.textContent = fmtMoney(d.totalPnl);
-  pnlEl.style.color = d.totalPnl >= 0 ? "var(--win)" : "var(--loss)";
+  var pnlEl = $("#kpiPnl");
+  if (pnlEl) {
+    pnlEl.textContent = fmtMoney(d.totalPnl);
+    pnlEl.className = "kpi-pnl " + (d.totalPnl >= 0 ? "pnl-pos" : "pnl-neg");
+  }
+  // Update period label
+  var pnlSub = $("#kpiPnlSub");
+  if (pnlSub) {
+    var range = _kpiPeriodRange();
+    if (range && range.from && range.to) {
+      var p = range.from.split("-").map(Number);
+      var f = new Date(p[0], p[1] - 1, p[2]);
+      var pe = range.to.split("-").map(Number);
+      var t = new Date(pe[0], pe[1] - 1, pe[2]);
+      pnlSub.textContent = f.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })
+        + " - " + t.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+    }
+  }
   var wrEl = $("#kpiWinrate");
   if (wrEl) {
     if (d.numTrades > 0) _animateCounter(wrEl, Math.round(s.winrate || 0), "%", { duration: 500 });
     else wrEl.textContent = "\u2014";
   }
-  $("#kpiWins").textContent = `${s.wins}W`;
-  $("#kpiLosses").textContent = `${s.losses}L`;
+  var winsEl = $("#kpiWins");
+  if (winsEl) winsEl.textContent = d.numTrades > 0 ? `${s.wins}W` : "\u2014";
+  var lossesEl = $("#kpiLosses");
+  if (lossesEl) lossesEl.textContent = d.numTrades > 0 ? `${s.losses}L` : "\u2014";
   var wrBar = $("#kpiWinrateBar");
   if (wrBar) {
     wrBar.style.transform = "scaleX(" + Math.min(s.winrate || 0, 100) / 100 + ")";
@@ -181,7 +267,7 @@ function renderKPIs(s) {
     }
   } else {
     $("#kpiRR").textContent = "\u2014";
-    var rrBar = $("#kpiRRBar");
+    rrBar = $("#kpiRRBar");
     if (rrBar) {
       rrBar.style.transform = "scaleX(0)";
       rrBar.removeAttribute("aria-valuenow");
@@ -194,8 +280,9 @@ function renderKPIs(s) {
     if (d.numTrades > 0) _animateCounter(tradesEl, d.numTrades, "", { duration: 400 });
     else tradesEl.textContent = "\u2014";
   }
-  $("#kpiTradesSub").textContent = d.numTrades > 0
-    ? `${tradesLabel} \u00B7 ${fmtMoney(d.expectancy)} moyen / trade`
+  var tsEl = $("#kpiTradesSub");
+  if (tsEl) tsEl.textContent = d.numTrades > 0
+    ? `${tradesLabel} \u00B7 ${d.expectancy != null && isFinite(d.expectancy) ? fmtMoney(d.expectancy) : "—"} moyen / trade`
     : "Aucun trade enregistre";
 
   let pfText = "\u2014";
@@ -203,7 +290,10 @@ function renderKPIs(s) {
   if (d.profitFactor === Infinity) { pfText = "\u221E"; pfTooltipText = "Aucune perte enregistree"; }
   else if (Number.isFinite(d.profitFactor)) pfText = d.profitFactor.toFixed(2);
   var pfEl = $("#kpiProfitFactor");
-  if (pfEl) { pfEl.textContent = pfText; }
+  if (pfEl) {
+    pfEl.textContent = pfText;
+    pfEl.style.color = pfText === "\u221E" ? "var(--win)" : "";
+  }
   var pfTip = $("#pfTooltip");
   if (pfTip) { pfTip.textContent = pfTooltipText; pfTip.setAttribute("aria-hidden", pfTooltipText ? "false" : "true"); }
 
@@ -212,13 +302,16 @@ function renderKPIs(s) {
   var expSubEl = $("#kpiExpectancySub");
   if (expSubEl) expSubEl.textContent = d.numTrades > 0
     ? `${tradesLabel} pris en compte`
-    : "$ moyen par trade";
+    : "Moyenne par trade";
   // Streak
+  var streakVal = Number(s.streak);
   var streakEl = $("#kpiStreak");
-  if (streakEl) _animateCounter(streakEl, Number(s.streak) || 0);
+  if (streakEl) {
+    if (streakVal > 0) _animateCounter(streakEl, streakVal, "", { duration: 400 });
+    else streakEl.textContent = "\u2014";
+  }
   var streakSub = $("#kpiStreakSub");
   if (streakSub) {
-    var streakVal = Number(s.streak) || 0;
     streakSub.textContent = streakVal > 1 ? streakVal + " consecutifs" : streakVal === 1 ? "jour" : "\u2014";
   }
 
@@ -230,20 +323,25 @@ function renderKPIs(s) {
 
 // Animator: compte de 0 a target sur element
 var _animRunning = null;
-function _animateCounter(el, target) {
+var _reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function _animateCounter(el, target, suffix, opts) {
   if (!el) return;
-  var current = parseInt(el.textContent, 10) || 0;
+  if (_reduceMotion) { el.textContent = target + (suffix || ""); return; }
+  suffix = suffix || "";
+  opts = opts || {};
+  var current = parseFloat(el.textContent) || 0;
   if (current === target || target === 0) {
-    el.textContent = target;
+    el.textContent = target + suffix;
     return;
   }
   var start = performance.now();
   var from = current;
-  var duration = Math.min(600, Math.max(200, target * 30));
+  var decimals = opts.decimals || 0;
+  var duration = opts.duration || Math.min(600, Math.max(200, Math.abs(target) * 3));
   function _tick(now) {
     var t = Math.min(1, (now - start) / duration);
-    var val = Math.round(from + (target - from) * t);
-    el.textContent = val;
+    var val = (from + (target - from) * t).toFixed(decimals);
+    el.textContent = Number(val) + suffix;
     if (t < 1) requestAnimationFrame(_tick);
   }
   requestAnimationFrame(_tick);

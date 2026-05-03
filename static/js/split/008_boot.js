@@ -88,7 +88,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // sans que le caller ait a penser au re-rendu.
   onStateChange("days", function () {
     if (state.currentPage === "journal") renderCalendar();
-    if (state.currentPage === "today") renderTodayCalendar();
+    if (state.currentPage === "today") { renderTodayCalendar(); renderTodayContextWidget(true); }
   });
   onStateChange("_stats", function (stats) {
     renderKPIs(stats);

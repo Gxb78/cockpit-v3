@@ -984,6 +984,8 @@
     if (keepZoom && chart && chart.timeScale()) {
       try { savedRange = chart.timeScale().getVisibleRange(); } catch(e) {}
       try { savedLogical = chart.timeScale().getVisibleLogicalRange(); } catch(e) {}
+      // Freeze price scale BEFORE setData to prevent auto-jump on new candles
+      try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
     }
 
     var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=500';
@@ -1027,7 +1029,17 @@
           return { time: c.time, value: c.volume, color: c.close >= c.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' };
         }));
 
-        if (!keepZoom) chart.timeScale().fitContent();
+        if (!keepZoom) {
+          // Show last ~80 candles instead of ALL data (fitContent zooms too far out)
+          var total = candles.length;
+          var to = total;
+          var from = Math.max(0, total - 80);
+          try { chart.timeScale().setVisibleLogicalRange({ from: from, to: to }); } catch(e) { chart.timeScale().fitContent(); }
+          // Unlock vertical scroll by disabling autoScale AFTER data is visible
+          setTimeout(function() {
+            try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
+          }, 50);
+        }
 
         // Restaurer le zoom utilisateur apres setData (logique d'abord, temps en fallback)
         if (keepZoom) {
@@ -1037,6 +1049,8 @@
           } else if (savedRange) {
             try { chart.timeScale().setVisibleRange(savedRange); } catch(e) {}
           }
+          // Keep price scale unlocked for vertical scroll
+          try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
         }
       })
       .catch(function (err) { console.error('[chart] fetch error:', err); });

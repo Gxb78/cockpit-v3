@@ -1,9 +1,20 @@
 """Trading Journal COCKPIT v3 — modular app loader.
 
 Loads all app_parts modules into a single shared namespace in dependency order.
-Each module is validated for syntax before execution for clear error messages.
+Uses compile() + exec() into a dedicated namespace dict (not globals()),
+with name collision detection. Each module's function __globals__ points to
+the shared namespace, preserving the flat cross-module reference pattern.
+
+The app_parts module itself acts as a proxy: reads go through the shared
+namespace, and writes (monkey-patching) propagate back to it so all
+functions see the updated value at call time. Test isolation is preserved.
 """
+import sys
+import types
+import logging
 from pathlib import Path
+
+log = logging.getLogger("journal")
 
 _PARTS_DIR = Path(__file__).resolve().parent
 _PART_FILES = [
@@ -35,21 +46,85 @@ _PART_FILES = [
     "23_routes_market.py",          # 23 — Routes API market data (Binance)
 ]
 
+# Canonical shared namespace — ALL functions from ALL parts reference this dict
+_NS = {}
+
 for _part in _PART_FILES:
     _path = _PARTS_DIR / _part
     if not _path.exists():
         raise FileNotFoundError(f"Partie manquante: app_parts/{_part}")
-    _src = _path.read_text(encoding="utf-8").lstrip("﻿")
-    # Syntax check before execution for a clear, localised error message
+
+    # Set dunder names so source files with __file__ resolve correctly
+    _NS["__file__"] = str(_path)
+    _NS["__name__"] = "app_parts." + _part.replace(".py", "")
+
+    _before = set(_NS.keys())
+
+    _src = _path.read_text(encoding="utf-8").lstrip("\ufeff")
     try:
         _code = compile(_src, str(_path), "exec")
     except SyntaxError as _e:
         raise SyntaxError(
             f"Erreur de syntaxe dans app_parts/{_part}:\n  {_e.msg} (ligne {_e.lineno})"
         ) from _e
+
     try:
-        exec(_code, globals(), globals())
+        exec(_code, _NS, _NS)
     except Exception as _e:
         raise RuntimeError(
             f"Erreur au chargement de app_parts/{_part}: {_e}"
         ) from _e
+
+    # Detect public name collisions between parts
+    _after = set(_NS.keys())
+    _new = _after - _before
+    _collisions = {n for n in _new if n in _before and not n.startswith("_")}
+    if _collisions:
+        log.warning("Chevauchement de noms dans %s : %s", _part, _collisions)
+
+# ---------------------------------------------------------------------------
+# Expose all public names at the app_parts level so that:
+#   1) from app_parts import *  works (for app.py and tests)
+#   2) app_parts.init_db direct access works
+# These are COPIES in __dict__, but all functions read from _NS at call time.
+# ---------------------------------------------------------------------------
+_THIS = sys.modules[__name__]
+for _k, _v in list(_NS.items()):
+    if not _k.startswith("_") or _k in (
+        "__doc__", "__name__", "__file__", "__package__",
+        "__loader__", "__spec__", "__path__",
+    ):
+        _THIS.__dict__[_k] = _v
+_THIS.__dict__.update({
+    "_NS": _NS,
+    "_PART_FILES": _PART_FILES,
+    "_PARTS_DIR": _PARTS_DIR,
+})
+
+# Proxy: app_parts module delegates reads/writes to _NS
+# This preserves monkey-patching for tests (app_parts.DB_PATH = X updates
+# the namespace that all functions reference at call time).
+# When __setattr__ fires, it updates BOTH _NS (for function call-time lookup)
+# and the module's __dict__ (for direct attribute access).
+# __getattr__ is a safety net for any name not yet in __dict__.
+# ---------------------------------------------------------------------------
+
+
+class _AppPartsModule(types.ModuleType):
+    """Proxy module that reads through _NS and propagates writes to it."""
+
+    def __getattr__(self, name):
+        try:
+            return _NS[name]
+        except KeyError:
+            msg = f"module {__name__!r} has no attribute {name!r}"
+            raise AttributeError(msg) from None
+
+    def __setattr__(self, name, value):
+        # Always write into the shared namespace first so all functions see it
+        _NS[name] = value
+        # Also set on the module's own dict for normal attribute access
+        super().__setattr__(name, value)
+
+
+_THIS.__class__ = _AppPartsModule

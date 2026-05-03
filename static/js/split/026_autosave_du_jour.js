@@ -15,6 +15,16 @@ function setAutosaveState(s, msg) {
   const t  = $("#autosaveText");
   if (!el || !t) return;
   el.dataset.state = s;
+  // Sync context status
+  var ctxStatus = document.getElementById("contextStatus");
+  if (ctxStatus) {
+    var hasDay = !!document.getElementById("dayId")?.value;
+    if (s === "saved") ctxStatus.textContent = "Sauvegardé à " + _nowHHMM();
+    else if (s === "saving") ctxStatus.textContent = "Sauvegarde…";
+    else if (s === "dirty") ctxStatus.textContent = hasDay ? "Brouillon local" : "Brouillon";
+    else if (s === "error") ctxStatus.textContent = "Erreur";
+    else ctxStatus.textContent = hasDay ? "Sauvegardé" : "Non créé";
+  }
   var labels = {
     idle: "Auto-save",
     dirty: "Modif…",

@@ -6,9 +6,10 @@ function renderToday() {
   renderTodayContextWidget(true);
   const today   = todayKey();
   const todayList = state.allDays.filter(d => d.date === today);
-  const recent    = state.allDays.filter(d => d.date !== today).slice(0, 2);
+  const recent    = state.allDays.filter(d => d.date !== today).sort(function(a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 2);
 
-  const todayEl = $("#todayEntries");
+  var todayEl = $("#todayEntries");
+  if (!todayEl) return;
   todayEl.innerHTML = "";
   if (todayList.length === 0) {
     todayEl.innerHTML = `<div class="empty-state">
@@ -17,11 +18,30 @@ function renderToday() {
       <div class="empty-cta" id="emptyTodayCta"></div></div>`;
     var cta = document.getElementById("emptyTodayCta");
     if (cta) {
-      var btn = document.createElement("button");
-      btn.className = "btn-ghost";
-      btn.textContent = "Nouvelle entree";
-      btn.addEventListener("click", function () { wizOpen({ date: todayKey() }); });
-      cta.appendChild(btn);
+      var tradeBtn = document.createElement("button");
+      tradeBtn.className = "btn-primary";
+      tradeBtn.textContent = "Ajouter un trade";
+      tradeBtn.addEventListener("click", function () { wizOpen({ date: todayKey() }); });
+      cta.appendChild(tradeBtn);
+      var ctxBtn = document.createElement("button");
+      ctxBtn.className = "btn-ghost";
+      ctxBtn.textContent = "Creer un contexte";
+      ctxBtn.style.marginLeft = "8px";
+      ctxBtn.addEventListener("click", function () {
+        var emptyEl = document.getElementById("todayContextEmpty");
+        var form = document.getElementById("dayForm");
+        if (emptyEl) emptyEl.classList.add("hidden");
+        if (form) {
+          form.classList.remove("hidden");
+          var dateEl = document.getElementById("entryDate");
+          if (dateEl && !dateEl.value) dateEl.value = todayKey();
+          var instrEl = document.getElementById("entryInstrument");
+          if (instrEl && !instrEl.value && typeof _lastInstrument === "function") instrEl.value = _lastInstrument();
+        }
+        var instr = document.getElementById("entryInstrument");
+        if (instr) setTimeout(function () { instr.focus(); }, 100);
+      });
+      cta.appendChild(ctxBtn);
     }
   } else {
     todayList.forEach(d => todayEl.appendChild(dayCardEl(d)));
@@ -59,6 +79,9 @@ function renderTodayContextWidget(force) {
   const emptyEl = $("#todayContextEmpty");
   if (emptyEl) emptyEl.classList.toggle("hidden", hasDay);
   form.classList.toggle("hidden", !hasDay);
+  // Reset context status
+  var ctxStatus = $("#contextStatus");
+  if (ctxStatus) ctxStatus.textContent = hasDay ? "Sauvegardé" : "Non créé";
 
   if (!hasDay) return;
 
@@ -139,7 +162,14 @@ document.addEventListener("click", function (e) {
   var emptyEl = document.getElementById("todayContextEmpty");
   var form = document.getElementById("dayForm");
   if (emptyEl) emptyEl.classList.add("hidden");
-  if (form) form.classList.remove("hidden");
+  if (form) {
+    form.classList.remove("hidden");
+    // Pre-fill date + instrument for a new context
+    var dateEl = document.getElementById("entryDate");
+    if (dateEl && !dateEl.value) dateEl.value = todayKey();
+    var instrEl = document.getElementById("entryInstrument");
+    if (instrEl && !instrEl.value && typeof _lastInstrument === "function") instrEl.value = _lastInstrument();
+  }
   var instr = document.getElementById("entryInstrument");
   if (instr) setTimeout(function () { instr.focus(); }, 100);
 });

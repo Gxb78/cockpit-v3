@@ -51,7 +51,18 @@ function loadInstruments() {
           instrs.map(function (i) { return '<option value="' + i + '">' + i + "</option>"; }).join("");
       }
     })
-    .catch(function() {});
+    .catch(function() {
+      // Fallback: use hardcoded INSTRUMENTS if API fails
+      var ctx = document.getElementById("entryInstrument");
+      if (ctx && ctx.options.length <= 1) {
+        INSTRUMENTS.forEach(function(i) {
+          var opt = document.createElement("option");
+          opt.value = i;
+          opt.textContent = i;
+          ctx.appendChild(opt);
+        });
+      }
+    });
 }
 
 function populateInstruments(selectId) {
@@ -71,7 +82,18 @@ function populateInstruments(selectId) {
       });
       if (currentVal) sel.value = currentVal;
     })
-    .catch(function() {});
+    .catch(function() {
+      // Fallback: use hardcoded INSTRUMENTS if API fails
+      var ctx = document.getElementById("entryInstrument");
+      if (ctx && ctx.options.length <= 1) {
+        INSTRUMENTS.forEach(function(i) {
+          var opt = document.createElement("option");
+          opt.value = i;
+          opt.textContent = i;
+          ctx.appendChild(opt);
+        });
+      }
+    });
 }
 
 const SETTINGS_STORAGE_KEY = "cockpit:settings:v1";
@@ -314,7 +336,18 @@ function populateInstruments(selectId) {
       });
       if (currentVal) sel.value = currentVal;
     })
-    .catch(function() {});
+    .catch(function() {
+      // Fallback: use hardcoded INSTRUMENTS if API fails
+      var ctx = document.getElementById("entryInstrument");
+      if (ctx && ctx.options.length <= 1) {
+        INSTRUMENTS.forEach(function(i) {
+          var opt = document.createElement("option");
+          opt.value = i;
+          opt.textContent = i;
+          ctx.appendChild(opt);
+        });
+      }
+    });
 }
 // ---------- Loading indicator ----------
 

@@ -186,6 +186,30 @@
 .widget-board.loading .kpi-bar { opacity: 0.15; }
 .widget-board.loading .kpi-spark { opacity: 0.12; }
 .widget-board.loading .kpi-sub { color: transparent; }
+
+/* D-10: error state — subtle warning border + message */
+.widget-board[data-load-error] {
+  position: relative;
+}
+.widget-board[data-load-error] .kpi-value,
+.widget-board[data-load-error] .kpi-sub,
+.widget-board[data-load-error] .kpi-spark {
+  opacity: 0.3;
+  filter: grayscale(1);
+}
+.widget-board[data-load-error]::after {
+  content: "Erreur de chargement — " attr(data-load-error);
+  display: block;
+  text-align: center;
+  padding: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--loss, #ff4466);
+  background: color-mix(in srgb, var(--loss, #ff4466) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--loss, #ff4466) 30%, transparent);
+  border-radius: 8px;
+  margin-top: 10px;
+}
 .widget-board.loading .kpi-sub::after {
   content: "";
   display: inline-block;

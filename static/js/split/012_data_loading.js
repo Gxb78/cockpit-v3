@@ -67,8 +67,13 @@ async function loadStats(opts = {}) {
     if (state.statsInstrument !== "ALL") qs.set("instrument", state.statsInstrument);
     const s = await api(`/api/stats?${qs}`);
     state._stats = s;
-    if (!skipRender) renderKPIs(s);
-  } catch (e) { toast(e.message || "Erreur chargement stats", "error"); }
+    if (!skipRender) { renderKPIs(s); var board = document.querySelector('[data-widget-board="today"]'); if (board) board.removeAttribute("data-load-error"); }
+  } catch (e) {
+    toast(e.message || "Erreur chargement stats", "error");
+    // D-09: remove skeleton so it doesn't stay frozen on API error
+    var board = document.querySelector('[data-widget-board="today"]');
+    if (board) { board.classList.remove("loading"); board.setAttribute("data-load-error", "stats"); }
+  }
   finally { loading(false); }
 }
 

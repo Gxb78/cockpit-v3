@@ -245,7 +245,7 @@
       });
       if (items.length) {
         container.innerHTML =
-          '<div class="pretrade-widget" id="pretradeWidget">' +
+          '<div class="pretrade-widget">' +
           '<div class="pretrade-header">Pré-trade du jour</div>' +
           '<div class="pretrade-items">' + items.join("") + "</div></div>";
       }

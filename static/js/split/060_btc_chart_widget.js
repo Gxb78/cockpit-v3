@@ -545,6 +545,10 @@
 
     } catch (e) {
       console.error('[btc-chart] createChart error:', e);
+      container.innerHTML = '<div class="chart-error-state">'
+        + '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
+        + '<div>Erreur graphique</div>'
+        + '<span>Impossible de creer le graphique</span></div>';
     }
   }
 
@@ -557,6 +561,7 @@
     if (keepZoom && chart && chart.timeScale()) {
       try { savedRange = chart.timeScale().getVisibleRange(); } catch(e) {}
       try { savedLogical = chart.timeScale().getVisibleLogicalRange(); } catch(e) {}
+      try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
     }
 
     var url = '/api/market/klines?symbol=BTCUSDT&interval=' + currentInterval + '&limit=300';
@@ -587,7 +592,15 @@
           try { countdownPriceLine.applyOptions({ price: last.close }); } catch(e) {}
         }
         _updateCountdownLabel();
-        if (!keepZoom) chart.timeScale().fitContent();
+        if (!keepZoom) {
+          var total = candles.length;
+          var to = total;
+          var from = Math.max(0, total - 80);
+          try { chart.timeScale().setVisibleLogicalRange({ from: from, to: to }); } catch(e) { chart.timeScale().fitContent(); }
+          setTimeout(function() {
+            try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
+          }, 50);
+        }
 
         // Restaurer le zoom utilisateur apres setData (logique d'abord, temps en fallback)
         if (keepZoom) {
@@ -596,9 +609,19 @@
           } else if (savedRange) {
             try { chart.timeScale().setVisibleRange(savedRange); } catch(e) {}
           }
+          try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
         }
       })
-      .catch(function (err) { console.error('[btc-chart] fetch:', err); });
+      .catch(function (err) {
+        console.error('[btc-chart] fetch:', err);
+        var container = document.getElementById('btcChartContainer');
+        if (container && !chartReady) {
+          container.innerHTML = '<div class="chart-error-state">'
+            + '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
+            + '<div>Marche indisponible</div>'
+            + '<span>API Binance injoignable</span></div>';
+        }
+      });
   }
 
   // ── INIT ──

@@ -776,4 +776,18 @@ Cette section documente les features ajoutées, les conventions établies, et le
 - Fichiers a surveiller: `app_parts/05_payload_normalizers.py` (normalisation conditionnelle), `static/js/split/021_rr_preview.js` (syncExitMapping), `static/js/split/059_trade_editor_controller.js` (label TP), `templates/partials/pages/journal/table.html`, `static/js/split/056_journal_day_trade_cards.js`, `app_parts/03_core_helpers.py` (skip validation si is_win explicite).
 
 
+### CONVENTION-20260503 - Refacto loader `app_parts/__init__.py` (exec → namespace dédié)
 
+- **Motivation**: Le loader utilisait `exec(_code, globals(), globals())` qui chargeait tous les modules dans le même espace de noms que le package `app_parts` lui-même. Causes de fragilité: 1) collisions silencieuses entre modules (ex: `_time` écrasé entre deux fichiers), 2) pas de détection de chevauchement, 3) `globals()` implicite rendait le code difficile à instrumenter.
+- **Nouveau loader**: Chaque fichier est compilé et exécuté dans un dictionnaire namespace dédié `_NS`. Après chargement, un proxy `_AppPartsModule` est installé sur `app_parts` qui délègue les lectures/écritures à `_NS`. Les collisions de noms publics sont détectées et loguées en warning.
+- **Monkey-patching**: `app_parts.DB_PATH = X` (utilisé dans les tests) propage dans `_NS` via `__setattr__` — toutes les fonctions voient la nouvelle valeur à l'appel car leur `__globals__` pointe sur `_NS`.
+- **Rétrocompat**: `from app_parts import *` dans `app.py` continue de fonctionner (les noms sont copiés dans `__dict__` après chargement).
+- **Test de non-régression**: `python -m unittest discover -s tests -v` → 41 tests passent (dont le guardrail playbook mis à jour). Le serveur démarre avec `python app.py`.
+- **Fichiers modifiés**: `app_parts/__init__.py` (seulement ce fichier — les 25 modules `app_parts/*.py` sont inchangés).
+
+### BUG-20260503-D09 - [RÉSOLU] Skeleton KPI reste figé après erreur API
+- Symptome: Si le fetch `/api/stats` échoue (réseau, 500), `renderKPIs()` n'est jamais appelée. Le `.loading` class sur `[data-widget-board="today"]` n'est pas retiré → le shimmer skeleton reste indéfiniment.
+- Cause racine: `loadStats()` avait `catch { toast() }` mais ne nettoyait pas le skeleton. Le `finally { loading(false) }` ne gérait que la loadingBar globale (#loadingBar), pas le skeleton widget.
+- Regle de prevention: TOUT `catch` d'un fetch qui alimente un render doit netoyer l'état de chargement du widget correspondant. Pattern: `var board = document.querySelector('[data-widget-board="today"]'); if (board) board.classList.remove("loading");`. Le `finally` ne suffit pas si le render est dans le `try`.
+- Test de non-regression: Simuler une erreur API → le skeleton disparaît, le toast d'erreur s'affiche, un état d'erreur visuel apparaît (bordure rouge subtile avec "Erreur de chargement").
+- Fichiers a surveiller: `static/js/split/012_data_loading.js` (catch de loadStats), `static/js/split/013_kpis.js` (renderKPIs loading removal), `static/css/split/003_settings_chip_remove_hover.css` (.widget-board[data-load-error] styles).
