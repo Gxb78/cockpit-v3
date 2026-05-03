@@ -452,6 +452,17 @@
         scaleMargins: { top: 0.85, bottom: 0 },
       });
 
+      // Pré-créer les 4 séries VWAP (évite auto-fit addLineSeries pendant fetches)
+      Object.keys(VWAP_COLORS).forEach(function (p) {
+        vwapSeriesMap[p] = chart.addLineSeries({
+          color: VWAP_COLORS[p], lineWidth: 1.5,
+          priceLineVisible: false, lastValueVisible: false,
+          crosshairMarkerVisible: false,
+          title: 'VWAP ' + p,
+          visible: false,
+        });
+      });
+
       // Resize
       if (resizeObserver) resizeObserver.disconnect();
       resizeObserver = new ResizeObserver(function () {
@@ -654,7 +665,9 @@
 
   function _removeVwapSeries(key) {
     var s = vwapSeriesMap[key];
-    if (s) { try { chart.removeSeries(s); } catch(e) {} delete vwapSeriesMap[key]; }
+    if (s) {
+      try { s.applyOptions({ visible: false, lastValueVisible: false }); s.setData([]); } catch(e) {}
+    }
   }
 
   function _calcAndDrawVwap() {
@@ -693,14 +706,11 @@
         if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
       }
       if (!vwapData.length) { _removeVwapSeries(period); return; }
-      if (!vwapSeriesMap[period]) {
-        vwapSeriesMap[period] = chart.addLineSeries({
-          color: color, lineWidth: 1.5, priceLineVisible: false,
-          lastValueVisible: true, crosshairMarkerVisible: false,
-          title: label,
-        });
+      var s = vwapSeriesMap[period];
+      if (s) {
+        s.applyOptions({ visible: true, color: color, title: label, lastValueVisible: true });
+        s.setData(vwapData);
       }
-      vwapSeriesMap[period].setData(vwapData);
     }
 
     // Regrouper par fetchInterval pour dedoublonner les requetes identiques

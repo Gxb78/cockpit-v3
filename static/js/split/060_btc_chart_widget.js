@@ -218,7 +218,9 @@
 
   function _removeVwapSeries(key) {
     var s = vwapSeriesMap[key];
-    if (s) { try { chart.removeSeries(s); } catch(e) {} delete vwapSeriesMap[key]; }
+    if (s) {
+      try { s.applyOptions({ visible: false, lastValueVisible: false }); s.setData([]); } catch(e) {}
+    }
   }
   function _calcAndDrawVwap() {
     console.log('[VWAP] triggered by:', new Error().stack.split('\n')[2]);
@@ -237,6 +239,8 @@
     // Bloque l'auto-expand LWC pendant les setData VWAP
     try { chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
     try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
+    console.log('[VWAP] séries pré-créées:', Object.keys(vwapSeriesMap));
+    console.log('[VWAP] range AVANT fetches:', JSON.stringify(chart.timeScale().getVisibleLogicalRange()));
 
     // Helper: compute VWAP from candleArray pour une periode donnee
     function _computeVwap(period, candleArray) {
@@ -258,14 +262,11 @@
         if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
       }
       if (!vwapData.length) { _removeVwapSeries(period); return; }
-      if (!vwapSeriesMap[period]) {
-        vwapSeriesMap[period] = chart.addLineSeries({
-          color: color, lineWidth: 1.5, priceLineVisible: false,
-          lastValueVisible: true, crosshairMarkerVisible: false,
-          title: label,
-        });
+      var s = vwapSeriesMap[period];
+      if (s) {
+        s.applyOptions({ visible: true, color: color, title: label, lastValueVisible: true });
+        s.setData(vwapData);
       }
-      vwapSeriesMap[period].setData(vwapData);
       console.log('[VWAP] after setData period=', period, 'range=', JSON.stringify(chart.timeScale().getVisibleLogicalRange()));
     }
 
@@ -307,6 +308,7 @@
       _vwapDrawing = false;
       try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true }); } catch(e) {}
       try { chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
+      console.log('[VWAP] range APRÈS finally:', JSON.stringify(chart.timeScale().getVisibleLogicalRange()));
     });
   }
 
@@ -560,6 +562,17 @@
         lineStyle: 2,
         axisLabelVisible: true,
         title: '—',
+      });
+
+      // Pré-créer les 4 séries VWAP (évite auto-fit addLineSeries pendant fetches)
+      Object.keys(VWAP_COLORS).forEach(function (p) {
+        vwapSeriesMap[p] = chart.addLineSeries({
+          color: VWAP_COLORS[p], lineWidth: 1.5,
+          priceLineVisible: false, lastValueVisible: false,
+          crosshairMarkerVisible: false,
+          title: 'VWAP ' + p,
+          visible: false,
+        });
       });
 
       if (resizeObserver) resizeObserver.disconnect();
