@@ -355,6 +355,8 @@
 
   // Flag interaction utilisateur (evite override WS pendant scroll)
   var _userIsInteracting = false;
+  // Timestamp du premier fetch (evite de sauvegarder un zoom pas encore stabilise)
+  var _firstFetchMs = 0;
 
   // ── rAF-retry pour setVisibleLogicalRange ──
   function _applyZoomWithRetry(targetRange, maxAttempts) {
@@ -611,14 +613,17 @@
       _lastFetchTs = now;
     }
     _isFetching = true;
+    if (!_firstFetchMs) _firstFetchMs = Date.now();
 
     // Sauvegarder le zoom si on doit le restaurer apres setData
     var savedTarget = null;
     if (keepZoom && !_userIsInteracting && chart && chart.timeScale()) {
-      try {
-        var vis = chart.timeScale().getVisibleLogicalRange();
-        if (vis) savedTarget = { from: vis.from, to: vis.to };
-      } catch(e) {}
+      if (_source === 'user' || Date.now() - _firstFetchMs > 2000) {
+        try {
+          var vis = chart.timeScale().getVisibleLogicalRange();
+          if (vis) savedTarget = { from: vis.from, to: vis.to };
+        } catch(e) {}
+      }
       try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
     }
 
