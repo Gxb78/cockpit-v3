@@ -355,7 +355,7 @@
           vertLines: { color: 'transparent' },
           horzLines: { color: 'transparent' },
         },
-        crosshair: { mode: 1 },
+        crosshair: { mode: 0 },
         rightPriceScale: {
           borderColor: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)',
           borderVisible: false,
@@ -483,6 +483,10 @@
           btn.textContent = !snapOn ? '🧲' : '⊹';
           btn.dataset.label = !snapOn ? 'Snap ON' : 'Curseur';
           btn.classList.toggle('draw-snap-on', !snapOn);
+          // Sync LWC crosshair mode avec snap
+          if (window.chart) {
+            window.chart.applyOptions({ crosshair: { mode: snapOn ? 0 : 1 } });
+          }
           // Toujours passer en mode curseur
           toolbar.querySelectorAll('.draw-toolbar-btn').forEach(function (b) { b.classList.remove('is-active'); });
           btn.classList.add('is-active');

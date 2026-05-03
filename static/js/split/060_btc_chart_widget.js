@@ -455,7 +455,7 @@
           vertLines: { color: 'transparent' },
           horzLines: { color: 'transparent' },
         },
-        crosshair: { mode: 1 },
+        crosshair: { mode: 0 },
         rightPriceScale: {
           borderColor: isLight ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.08)',
           borderVisible: false,
