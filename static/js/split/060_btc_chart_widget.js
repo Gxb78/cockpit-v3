@@ -399,7 +399,6 @@
           var priceEl = document.getElementById('btcChartPrice');
           if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
           lastCandleTime = k.t;
-          if (k.x) { _fetchAndRender(true, 'ws'); return; }
           if (series) {
             try { series.update(candle); } catch(e) {}
           }

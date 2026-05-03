@@ -278,7 +278,6 @@
           var priceEl = document.getElementById('chartPrice');
           if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
           lastCandleTime = k.t;
-          if (k.x) { _fetchAndRender(true, 'ws'); return; }
           if (candlestickSeries) {
             try {
               if (chartStyle === 'candlestick') {
@@ -1095,7 +1094,18 @@
         } else if (!keepZoom) {
           // Premier chargement : centrer sur les dernieres bougies
           var total = candles.length;
+          var firstTotal = total;
           _applyZoomWithRetry({ from: Math.max(0, total - 80), to: total });
+          // One-shot: LWC notifie quand le layout est pret → on re-applique pour confirmation
+          var _zoomHandler = function() {
+            if (chart && chart.timeScale()) {
+              try {
+                chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, firstTotal - 80), to: firstTotal });
+              } catch(e) {}
+              chart.timeScale().unsubscribeVisibleLogicalRangeChange(_zoomHandler);
+            }
+          };
+          chart.timeScale().subscribeVisibleLogicalRangeChange(_zoomHandler);
         }
         // Unlock vertical scroll by disabling autoScale AFTER data is visible
         setTimeout(function() {
