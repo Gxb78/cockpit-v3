@@ -69,6 +69,7 @@
     isDrawing: false, dragStart: null, previewPoint: null,
     selectedIndex: -1, // -1 = none, >=0 = editing an existing drawing
     snapEnabled: true, // snap to candle OHLC
+    _crosshairPos: null, // position souris pour crosshair canvas
     toolOptions: {
       color: '#06b6d4', fillColor: '#06b6d4', opacity: 0.3,
       lineWidth: 1.5, lineStyle: 'solid',
@@ -326,7 +327,7 @@
   function setActiveTool(toolId) {
     state.selectedIndex = -1; // clear selection on tool change
     state.activeTool = toolId || 'cursor';
-    state.isDrawing = false; state.dragStart = null; state.previewPoint = null;
+    state.isDrawing = false; state.dragStart = null; state.previewPoint = null; state._crosshairPos = null;
     if (toolId === 'horizontal' || toolId === 'horizontalray' || toolId === 'vertical') {
       state.toolOptions.extendLeft = false; state.toolOptions.extendRight = true;
     } else if (toolId === 'text') {
@@ -734,9 +735,19 @@
       var tp = _snapPoint(_toTimePrice(e.clientX, e.clientY), e.clientX);
       if (tp && state.canvas) state.canvas.style.cursor = _hitTest(tp.time, tp.price) ? 'pointer' : '';
     }
+    // Stocker la position pour le crosshair canvas en mode dessin
+    if (state.activeTool !== 'cursor') {
+      var rect = state.container ? state.container.getBoundingClientRect() : null;
+      if (rect) {
+        state._crosshairPos = {
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top,
+        };
+      }
+    }
   }
 
-  function _onMouseLeave() { state.previewPoint = null; _renderAll(); }
+  function _onMouseLeave() { state.previewPoint = null; state._crosshairPos = null; _renderAll(); }
 
   function _onDblClick(e) {
     if (state.activeTool !== 'cursor') return;
@@ -779,6 +790,10 @@
     for (var i = 0; i < state.drawings.length; i++) { _renderDrawing(state.drawings[i], i); _drawSelectionIndicators(state.drawings[i], i); }
     if (state.dragStart && state.previewPoint && state.activeTool !== 'cursor') {
       _renderPreview(state.activeTool, state.dragStart, state.previewPoint);
+    }
+    // Crosshair en mode dessin : lignes horizontale + verticale
+    if (state.activeTool !== 'cursor' && state._crosshairPos) {
+      _renderCrosshair(state._crosshairPos);
     }
   }
 
@@ -825,6 +840,37 @@
       case 'fibonacci':    _drawFibonacci({ points: [p1, p2], color: o.color, fibLevels: o.fibLevels }); break;
       case 'text':         _drawText(p1, pd); break;
     }
+  }
+
+  // ── CROSSHAIR CANVAS (mode dessin) ──
+
+  function _renderCrosshair(pos) {
+    var ctx = state.ctx;
+    if (!ctx || !state.canvas) return;
+    var w = state.canvas.width;
+    var h = state.canvas.height;
+    var dpr = window.devicePixelRatio || 1;
+    var px = pos.x * dpr;
+    var py = pos.y * dpr;
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(6, 182, 212, 0.35)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+
+    // Ligne verticale
+    ctx.beginPath();
+    ctx.moveTo(px, 0);
+    ctx.lineTo(px, h);
+    ctx.stroke();
+
+    // Ligne horizontale
+    ctx.beginPath();
+    ctx.moveTo(0, py);
+    ctx.lineTo(w, py);
+    ctx.stroke();
+
+    ctx.restore();
   }
 
   // ── SESSION ZONES ──
