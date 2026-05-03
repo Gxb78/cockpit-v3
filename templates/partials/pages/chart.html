@@ -21,49 +21,49 @@
           <!-- Volume Profile toggle + dropdown -->
           <button type="button" class="chart-ind-toggle" id="vpToggle">VP <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="2 3 4 5 6 3"/></svg></button>
           <div class="chart-ind-dropdown hidden" id="vpDropdown">
-            <label class="chart-ind-opt" style="display:flex;align-items:center;gap:6px;padding:4px 10px">
+            <label class="chart-ind-opt" class="vp-check-label">
               <input type="checkbox" id="vpActive">
               <span>Activer VP</span>
             </label>
-            <div class="chart-ind-opt" style="flex-direction:column;align-items:stretch">
-              <div style="display:flex;justify-content:space-between;padding:2px 10px;font-size:10px;color:var(--text-faint)">Bucket</div>
-              <div style="display:flex;gap:4px;padding:2px 10px">
-                <select class="chart-ind-opt" id="vpBucketSize" style="flex:1;font-size:10px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text)">
+            <div class="chart-ind-opt" class="vp-col">
+              <div class="vp-label">Bucket</div>
+              <div class="vp-row">
+                <select class="chart-ind-opt" id="vpBucketSize" class="vp-select">
                   <option value="5">$5</option>
                   <option value="10">$10</option>
                   <option value="20">$20</option>
                   <option value="50">$50</option>
                 </select>
               </div>
-              <div style="display:flex;justify-content:space-between;padding:2px 10px;font-size:10px;color:var(--text-faint)">Période</div>
-              <div style="display:flex;gap:4px;padding:2px 10px">
-                <select class="chart-ind-opt" id="vpPeriod" style="flex:1;font-size:10px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text)">
+              <div class="vp-label">Période</div>
+              <div class="vp-row">
+                <select class="chart-ind-opt" id="vpPeriod" class="vp-select">
                   <option value="visible">Visible</option>
                   <option value="day">1 jour</option>
                   <option value="week">7 jours</option>
                   <option value="month">30 jours</option>
                 </select>
               </div>
-              <div style="display:flex;justify-content:space-between;padding:2px 10px;font-size:10px;color:var(--text-faint)">Value Area</div>
-              <div style="display:flex;gap:4px;padding:2px 10px">
-                <select class="chart-ind-opt" id="vpVaPercent" style="flex:1;font-size:10px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text)">
+              <div class="vp-label">Value Area</div>
+              <div class="vp-row">
+                <select class="chart-ind-opt" id="vpVaPercent" class="vp-select">
                   <option value="68">68%</option>
                   <option value="70">70%</option>
                   <option value="80">80%</option>
                 </select>
               </div>
-              <div style="display:flex;justify-content:space-between;padding:2px 10px;font-size:10px;color:var(--text-faint)">Affichage</div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;padding:2px 10px">
-                <label style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="vpShowPOC" checked>POC</label>
-                <label style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="vpShowVAH" checked>VAH</label>
-                <label style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="vpShowVAL" checked>VAL</label>
+              <div class="vp-label">Affichage</div>
+              <div class="vp-row--wide">
+                <label class="vp-check-label"><input type="checkbox" id="vpShowPOC" checked>POC</label>
+                <label class="vp-check-label"><input type="checkbox" id="vpShowVAH" checked>VAH</label>
+                <label class="vp-check-label"><input type="checkbox" id="vpShowVAL" checked>VAL</label>
               </div>
-              <div style="display:flex;justify-content:space-between;padding:2px 10px;font-size:10px;color:var(--text-faint)">Couleurs</div>
-              <div style="display:flex;gap:4px;flex-wrap:wrap;padding:2px 10px">
-                <label style="display:flex;align-items:center;gap:2px;font-size:10px;color:var(--text-muted)">POC <input type="color" class="chart-settings-color" id="vpColorPOC" value="#f59e0b" style="width:22px;height:18px;padding:0"></label>
-                <label style="display:flex;align-items:center;gap:2px;font-size:10px;color:var(--text-muted)">VAH <input type="color" class="chart-settings-color" id="vpColorVAH" value="#22c55e" style="width:22px;height:18px;padding:0"></label>
-                <label style="display:flex;align-items:center;gap:2px;font-size:10px;color:var(--text-muted)">VAL <input type="color" class="chart-settings-color" id="vpColorVAL" value="#ef4444" style="width:22px;height:18px;padding:0"></label>
-                <label style="display:flex;align-items:center;gap:2px;font-size:10px;color:var(--text-muted)">HVN <input type="color" class="chart-settings-color" id="vpColorHvn" value="#06b6d4" style="width:22px;height:18px;padding:0"></label>
+              <div class="vp-label">Couleurs</div>
+              <div class="vp-row--wide">
+                <label class="vp-check-label--tight">POC <input type="color" class="chart-settings-color" id="vpColorPOC" value="#f59e0b" class="vp-color-input"></label>
+                <label class="vp-check-label--tight">VAH <input type="color" class="chart-settings-color" id="vpColorVAH" value="#22c55e" class="vp-color-input"></label>
+                <label class="vp-check-label--tight">VAL <input type="color" class="chart-settings-color" id="vpColorVAL" value="#ef4444" class="vp-color-input"></label>
+                <label class="vp-check-label--tight">HVN <input type="color" class="chart-settings-color" id="vpColorHvn" value="#06b6d4" class="vp-color-input"></label>
               </div>
             </div>
           </div>
@@ -79,9 +79,9 @@
           </button>
         </div>
 
-        <div class="chart-price-display" style="display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;margin:0 12px">
-          <span id="chartPrice" style="color:var(--text)">—</span>
-          <span id="chartChange" style="font-size:11px;color:var(--text-muted)">—</span>
+        <div class="chart-price-display">
+          <span id="chartPrice" class="price">—</span>
+          <span id="chartChange" class="change">—</span>
         </div>
 
         <div class="chart-timeframes">
@@ -258,13 +258,13 @@
                 <input type="color" class="draw-color-pick" id="drawColorPick" value="#06b6d4">
               </div>
             </div>
-            <div class="draw-opt-row" id="drawFillRow" style="display:none">
+            <div class="draw-opt-row draw-opt-row--hidden" id="drawFillRow">
               <label class="draw-opt-label">Remplir</label>
               <div class="draw-opt-control">
                 <input type="color" class="draw-color-pick" id="drawFillColor" value="#06b6d4">
               </div>
             </div>
-            <div class="draw-opt-row" id="drawOpacityRow" style="display:none">
+            <div class="draw-opt-row draw-opt-row--hidden" id="drawOpacityRow">
               <label class="draw-opt-label">Opacité</label>
               <input type="range" class="draw-opt-range" id="drawOpacity" min="0" max="1" step="0.05" value="0.3">
               <span class="draw-opt-range-val" id="drawOpacityVal">0.30</span>
@@ -287,18 +287,18 @@
                 <option value="dotted">┈ Petit point</option>
               </select>
             </div>
-            <div class="draw-opt-row" id="drawExtRow" style="display:none">
+            <div class="draw-opt-row draw-opt-row--hidden" id="drawExtRow">
               <label class="draw-opt-label">Prolonger</label>
               <div class="draw-opt-check-group">
                 <label class="draw-opt-check"><input type="checkbox" id="drawExtLeft"> Gauche</label>
                 <label class="draw-opt-check"><input type="checkbox" id="drawExtRight" checked> Droite</label>
               </div>
             </div>
-            <div class="draw-opt-row" id="drawTextRow" style="display:none">
+            <div class="draw-opt-row draw-opt-row--hidden" id="drawTextRow">
               <label class="draw-opt-label">Texte</label>
               <input type="text" class="draw-opt-text" id="drawText" placeholder="Étiquette..." maxlength="60">
             </div>
-            <div class="draw-opt-section" id="drawFibSection" style="display:none">
+            <div class="draw-opt-section draw-opt-section--hidden" id="drawFibSection">
               <div class="draw-opt-section-title">Niveaux Fibonacci</div>
               <div class="draw-fib-list" id="drawFibLevels"></div>
             </div>
