@@ -10546,7 +10546,13 @@ TradeEditorController.renderHtml = function (day, trade) {
   // Indicator series
   var indicatorSeries = {};
   var rsiSeries = null;
-  var vwapSeries = null;
+  var vwapSeriesMap = {};
+  var activeVwapPeriods = [];
+  try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) activeVwapPeriods = s; } catch(e) {}
+  var VWAP_COLORS = { '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
+  var VWAP_INTERVALS = { '1D': '1h', '7D': '1h', '30D': '4h', '90D': '1d' };
+  var VWAP_DAYS = { '1D': 1, '7D': 7, '30D': 30, '90D': 90 };
+  var INTERVAL_MINUTES = { '1m':1,'3m':3,'5m':5,'15m':15,'30m':30,'1h':60,'2h':120,'4h':240,'6h':360,'8h':480,'12h':720,'1d':1440,'3d':4320,'1w':10080,'1M':43200 };
 
   var INTERVAL_MS = {
     '1m': 60000, '3m': 180000, '5m': 300000, '15m': 900000,
@@ -10572,11 +10578,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
   } catch(e) {}
 
-  // VWAP period synced from chart page
-  var activeVwapPeriod = null;
-  try {
-    activeVwapPeriod = localStorage.getItem('chartVwapPeriod') || null;
-  } catch(e) {}
+  // VWAP period read from chartVwapPeriods (array, multi-select)
 
   function _getIntervalMs(interval) {
     var m = INTERVAL_MS[interval];
@@ -10736,59 +10738,67 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
   }
 
-  // ── VWAP ──
-  function _calcAndDrawVwap(candles) {
-    if (!activeVwapPeriod || !candles || !candles.length) {
-      if (vwapSeries) { try { chart.removeSeries(vwapSeries); } catch(e) {} vwapSeries = null; }
-      return;
-    }
-    var days = { '1D': 1, '7D': 7, '30D': 30, '90D': 90 }[activeVwapPeriod] || 1;
-    var fetchInterval = '1h';
-    if (days >= 7 && days <= 14) fetchInterval = '1h';
-    else if (days <= 90) fetchInterval = '4h';
-    else fetchInterval = '1d';
-    var intervalMinutes = { '1m':1,'3m':3,'5m':5,'15m':15,'30m':30,'1h':60,'2h':120,'4h':240,'6h':360,'8h':480,'12h':720,'1d':1440,'3d':4320,'1w':10080,'1M':43200 };
-    var minPerCandle = intervalMinutes[fetchInterval] || 60;
-    var needed = Math.ceil(days * 1440 / minPerCandle) + 10;
-    needed = Math.max(needed, 100);
+  // ── VWAP (multi-periode) ──
+  function _removeVwapSeries(key) {
+    var s = vwapSeriesMap[key];
+    if (s) { try { chart.removeSeries(s); } catch(e) {} delete vwapSeriesMap[key]; }
+  }
+  function _calcAndDrawVwap() {
+    Object.keys(vwapSeriesMap).forEach(function (k) {
+      if (activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
+    });
+    if (!activeVwapPeriods.length) return;
 
-    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + fetchInterval + '&limit=' + needed;
-    fetch(url)
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (data.error || !data.candles || !data.candles.length) {
-          if (vwapSeries) { try { chart.removeSeries(vwapSeries); } catch(e) {} vwapSeries = null; }
-          return;
-        }
-        var vwapCandles = data.candles;
-        var now = Math.floor(Date.now() / 1000);
-        var cutoff = now - days * 86400;
-        var cumTpv = 0, cumVol = 0;
-        var vwapData = [];
-        for (var i = 0; i < vwapCandles.length; i++) {
-          var c = vwapCandles[i];
-          if (c.time < cutoff) continue;
-          var tp = (c.high + c.low + c.close) / 3;
-          cumTpv += tp * c.volume;
-          cumVol += c.volume;
-          if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
-        }
-        if (!vwapData.length) {
-          if (vwapSeries) { try { chart.removeSeries(vwapSeries); } catch(e) {} vwapSeries = null; }
-          return;
-        }
-        if (!vwapSeries) {
-          vwapSeries = chart.addLineSeries({
-            color: '#f59e0b', lineWidth: 1.5, priceLineVisible: false,
-            lastValueVisible: true, crosshairMarkerVisible: false,
-            title: 'VWAP ' + activeVwapPeriod,
-          });
-        }
-        vwapSeries.setData(vwapData);
-      })
-      .catch(function () {
-        if (vwapSeries) { try { chart.removeSeries(vwapSeries); } catch(e) {} vwapSeries = null; }
-      });
+    var _savedR = null, _savedL = null;
+    try { _savedR = chart.timeScale().getVisibleRange(); } catch(e) {}
+    try { _savedL = chart.timeScale().getVisibleLogicalRange(); } catch(e) {}
+
+    activeVwapPeriods.forEach(function (period) {
+      var days = VWAP_DAYS[period] || 1;
+      var fetchInterval = VWAP_INTERVALS[period] || '1h';
+      var color = VWAP_COLORS[period] || '#f59e0b';
+      var needed = Math.max(Math.ceil(days * 1440 / (INTERVAL_MINUTES[fetchInterval] || 60)) + 10, 100);
+      var label = 'VWAP ' + period + ' (' + fetchInterval + ')';
+
+      var url = '/api/market/klines?symbol=BTCUSDT&interval=' + fetchInterval + '&limit=' + needed;
+      fetch(url)
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error || !data.candles || !data.candles.length) { _removeVwapSeries(period); return; }
+          var vwapCandles = data.candles;
+          var now = Math.floor(Date.now() / 1000);
+          var todayStart = Math.floor(now / 86400) * 86400;
+          var cutoff = todayStart - (days - 1) * 86400;
+          var cumTpv = 0, cumVol = 0;
+          var vwapData = [];
+          for (var i = 0; i < vwapCandles.length; i++) {
+            var c = vwapCandles[i];
+            if (c.time < cutoff) continue;
+            var tp = (c.high + c.low + c.close) / 3;
+            cumTpv += tp * c.volume;
+            cumVol += c.volume;
+            if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
+          }
+          if (!vwapData.length) { _removeVwapSeries(period); return; }
+          var _renderR = null;
+          try { _renderR = chart.timeScale().getVisibleRange(); } catch(e) {}
+          if (_renderR && _renderR.from) vwapData = vwapData.filter(function (d) { return d.time >= _renderR.from; });
+          if (!vwapData.length) { _removeVwapSeries(period); return; }
+          if (!vwapSeriesMap[period]) {
+            vwapSeriesMap[period] = chart.addLineSeries({
+              color: color, lineWidth: 1.5, priceLineVisible: false,
+              lastValueVisible: true, crosshairMarkerVisible: false,
+              title: label,
+            });
+          }
+          var _lv = vwapData[vwapData.length - 1];
+          if (_lv) vwapData.push({ time: Math.floor(Date.now() / 1000), value: _lv.value });
+          vwapSeriesMap[period].setData(vwapData);
+        })
+        .catch(function () { _removeVwapSeries(period); });
+    });
+    if (_savedL) { try { chart.timeScale().setVisibleLogicalRange(_savedL); } catch(e) {} }
+    else if (_savedR) { try { chart.timeScale().setVisibleRange(_savedR); } catch(e) {} }
   }
 
   // ── TIMER ──
@@ -10874,7 +10884,10 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   function _disconnectWs() {
     if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
-    if (ws) { _wsIntentionalClose = true; try { ws.close(); } catch(e) {} ws = null; _wsIntentionalClose = false; }
+    if (ws) {
+      if (ws.readyState === WebSocket.CONNECTING) { ws = null; return; }
+      _wsIntentionalClose = true; try { ws.close(); } catch(e) {} ws = null; _wsIntentionalClose = false;
+    }
   }
 
   function _startAutoRefresh() {
@@ -11073,7 +11086,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         _renderIndicators(candles);
 
         // VWAP
-        _calcAndDrawVwap(candles);
+        _calcAndDrawVwap();
 
         if (countdownPriceLine) {
           try { countdownPriceLine.applyOptions({ price: last.close }); } catch(e) {}
@@ -11132,9 +11145,16 @@ TradeEditorController.renderHtml = function (day, trade) {
   var rsiSeries = null;
   var rsiPaneId = 'rsi_pane';
 
-  // VWAP
-  var vwapSeries = null;
-  var activeVwapPeriod = localStorage.getItem('chartVwapPeriod') || null;
+  // VWAP (multi-periode)
+  var vwapSeriesMap = {};
+  var activeVwapPeriods = [];
+  try {
+    var saved = JSON.parse(localStorage.getItem('chartVwapPeriods'));
+    if (Array.isArray(saved)) activeVwapPeriods = saved;
+  } catch(e) {}
+  var VWAP_COLORS = { '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
+  var VWAP_INTERVALS = { '1D': '1h', '7D': '1h', '30D': '4h', '90D': '1d' };
+  var VWAP_DAYS = { '1D': 1, '7D': 7, '30D': 30, '90D': 90 };
 
   // State
   var countdownPriceLine = null;
@@ -11390,7 +11410,10 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   function _disconnectWs() {
     if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
-    if (ws) { _wsIntentionalClose = true; try { ws.close(); } catch(e) {} ws = null; _wsIntentionalClose = false; }
+    if (ws) {
+      if (ws.readyState === WebSocket.CONNECTING) { ws = null; return; }
+      _wsIntentionalClose = true; try { ws.close(); } catch(e) {} ws = null; _wsIntentionalClose = false;
+    }
   }
 
   function _getIntervalMs(interval) {
@@ -11533,6 +11556,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 
       // ── BIND UI EVENTS ──
 
+      _bindVpDropdown();
       _bindVwap();
       _bindTimeframes();
       _bindPairs();
@@ -11604,6 +11628,42 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   // ── VWAP ──
 
+  function _bindVpDropdown() {
+    var toggle = document.getElementById('vpToggle');
+    var dropdown = document.getElementById('vpDropdown');
+    if (!toggle || !dropdown) return;
+    toggle.addEventListener('click', function (e) {
+      e.stopPropagation();
+      dropdown.classList.toggle('hidden');
+      var panel = document.getElementById('chartSettingsPanel');
+      if (panel) panel.classList.add('hidden');
+      var vwap = document.getElementById('vwapDropdown');
+      if (vwap) vwap.classList.add('hidden');
+      // Sync UI from VP state
+      if (!dropdown.classList.contains('hidden')) {
+        var s = window.VolumeProfile ? window.VolumeProfile.getSettings() : null;
+        if (s) {
+          document.getElementById('vpActive').checked = !!s.active;
+          document.getElementById('vpBucketSize').value = s.bucketSize;
+          document.getElementById('vpPeriod').value = s.period;
+          document.getElementById('vpVaPercent').value = s.vaPercent;
+          document.getElementById('vpShowPOC').checked = !!s.showPOC;
+          document.getElementById('vpShowVAH').checked = !!s.showVAH;
+          document.getElementById('vpShowVAL').checked = !!s.showVAL;
+          if (document.getElementById('vpColorPOC')) document.getElementById('vpColorPOC').value = s.colorPOC;
+          if (document.getElementById('vpColorVAH')) document.getElementById('vpColorVAH').value = s.colorVAH;
+          if (document.getElementById('vpColorVAL')) document.getElementById('vpColorVAL').value = s.colorVAL;
+          if (document.getElementById('vpColorHvn')) document.getElementById('vpColorHvn').value = s.colorHvn;
+        }
+      }
+    });
+    document.addEventListener('click', function () { dropdown.classList.add('hidden'); }, false);
+    // Apply on change
+    dropdown.addEventListener('change', function () {
+      _readVpSettingsFromUI();
+    });
+  }
+
   function _bindVwap() {
     var vwapToggle = document.getElementById('vwapToggle');
     var vwapDropdown = document.getElementById('vwapDropdown');
@@ -11621,78 +11681,102 @@ TradeEditorController.renderHtml = function (day, trade) {
       btn.addEventListener('click', function (e) {
         e.stopPropagation();
         var period = btn.dataset.vwap;
-        if (btn.classList.contains('active')) {
-          btn.classList.remove('active');
-          activeVwapPeriod = null;
-          vwapToggle.classList.remove('active');
-        } else {
-          vwapDropdown.querySelectorAll('.chart-ind-opt').forEach(function (b) { b.classList.remove('active'); });
-          btn.classList.add('active');
-          activeVwapPeriod = period;
-          vwapToggle.classList.add('active');
-        }
-        try { localStorage.setItem('chartVwapPeriod', activeVwapPeriod || ''); } catch(e) {}
+        btn.classList.toggle('active');
+        var idx = activeVwapPeriods.indexOf(period);
+        if (idx >= 0) { activeVwapPeriods.splice(idx, 1); }
+        else { activeVwapPeriods.push(period); }
+        vwapToggle.classList.toggle('active', activeVwapPeriods.length > 0);
+        try { localStorage.setItem('chartVwapPeriods', JSON.stringify(activeVwapPeriods)); } catch(e) {}
         vwapDropdown.classList.add('hidden');
         _fetchAndRender(true);
       });
     });
+    // Restaurer l'etat des boutons depuis activeVwapPeriods
+    vwapDropdown.querySelectorAll('.chart-ind-opt').forEach(function (btn) {
+      if (activeVwapPeriods.indexOf(btn.dataset.vwap) >= 0) btn.classList.add('active');
+    });
+    if (activeVwapPeriods.length > 0) vwapToggle.classList.add('active');
   }
 
-  function _calcAndDrawVwap(candles) {
-    if (!activeVwapPeriod || !candles || !candles.length) {
-      if (vwapSeries) { try { chart.removeSeries(vwapSeries); } catch(e) {} vwapSeries = null; }
-      return;
-    }
-    var days = { '1D': 1, '7D': 7, '30D': 30, '90D': 90 }[activeVwapPeriod] || 1;
-    // Choisir l'intervalle de fetch adapté à la période
-    var fetchInterval = '1h';
-    if (days >= 7 && days <= 14) fetchInterval = '1h';
-    else if (days <= 90) fetchInterval = '4h';
-    else fetchInterval = '1d';
-    // Calculer le nombre de bougies nécessaires (marge +10)
-    var intervalMinutes = { '1m':1,'3m':3,'5m':5,'15m':15,'30m':30,'1h':60,'2h':120,'4h':240,'6h':360,'8h':480,'12h':720,'1d':1440,'3d':4320,'1w':10080,'1M':43200 };
-    var minPerCandle = intervalMinutes[fetchInterval] || 60;
-    var needed = Math.ceil(days * 1440 / minPerCandle) + 10;
-    needed = Math.max(needed, 100); // minimum 100 bougies
+  var VWAP_COLORS = { '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
+  var VWAP_INTERVALS = { '1D': '1h', '7D': '1h', '30D': '4h', '90D': '1d' };
+  var VWAP_DAYS = { '1D': 1, '7D': 7, '30D': 30, '90D': 90 };
+  var INTERVAL_MINUTES = { '1m':1,'3m':3,'5m':5,'15m':15,'30m':30,'1h':60,'2h':120,'4h':240,'6h':360,'8h':480,'12h':720,'1d':1440,'3d':4320,'1w':10080,'1M':43200 };
 
-    // Fetch data au bon intervalle
-    var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + fetchInterval + '&limit=' + needed;
-    fetch(url)
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (data.error || !data.candles || !data.candles.length) {
-          if (vwapSeries) { try { chart.removeSeries(vwapSeries); } catch(e) {} vwapSeries = null; }
-          return;
-        }
-        var vwapCandles = data.candles;
-        var now = Math.floor(Date.now() / 1000);
-        var cutoff = now - days * 86400;
-        var cumTpv = 0, cumVol = 0;
-        var vwapData = [];
-        for (var i = 0; i < vwapCandles.length; i++) {
-          var c = vwapCandles[i];
-          if (c.time < cutoff) continue;
-          var tp = (c.high + c.low + c.close) / 3;
-          cumTpv += tp * c.volume;
-          cumVol += c.volume;
-          if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
-        }
-        if (!vwapData.length) {
-          if (vwapSeries) { try { chart.removeSeries(vwapSeries); } catch(e) {} vwapSeries = null; }
-          return;
-        }
-        if (!vwapSeries) {
-          vwapSeries = chart.addLineSeries({
-            color: '#f59e0b', lineWidth: 1.5, priceLineVisible: false,
-            lastValueVisible: true, crosshairMarkerVisible: false,
-            title: 'VWAP ' + activeVwapPeriod,
-          });
-        }
-        vwapSeries.setData(vwapData);
-      })
-      .catch(function () {
-        if (vwapSeries) { try { chart.removeSeries(vwapSeries); } catch(e) {} vwapSeries = null; }
-      });
+  function _removeVwapSeries(key) {
+    var s = vwapSeriesMap[key];
+    if (s) { try { chart.removeSeries(s); } catch(e) {} delete vwapSeriesMap[key]; }
+  }
+
+  function _calcAndDrawVwap() {
+    // Supprimer les series VWAP pour les periodes desactivees
+    Object.keys(vwapSeriesMap).forEach(function (k) {
+      if (activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
+    });
+    if (!activeVwapPeriods.length) return;
+
+    var _savedRange = null, _savedLogical = null;
+    try { _savedRange = chart.timeScale().getVisibleRange(); } catch(e) {}
+    try { _savedLogical = chart.timeScale().getVisibleLogicalRange(); } catch(e) {}
+
+    activeVwapPeriods.forEach(function (period) {
+      var days = VWAP_DAYS[period] || 1;
+      var fetchInterval = VWAP_INTERVALS[period] || '1h';
+      var color = VWAP_COLORS[period] || '#f59e0b';
+      var minPerCandle = INTERVAL_MINUTES[fetchInterval] || 60;
+      var needed = Math.max(Math.ceil(days * 1440 / minPerCandle) + 10, 100);
+      var label = 'VWAP ' + period + ' (' + fetchInterval + ')';
+
+      var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + fetchInterval + '&limit=' + needed;
+      fetch(url)
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error || !data.candles || !data.candles.length) {
+            _removeVwapSeries(period);
+            return;
+          }
+          var vwapCandles = data.candles;
+          var now = Math.floor(Date.now() / 1000);
+          // Calendar-aligned: start of today (00:00 UTC) moins (days-1) jours
+          var todayStart = Math.floor(now / 86400) * 86400;
+          var cutoff = todayStart - (days - 1) * 86400;
+          var cumTpv = 0, cumVol = 0;
+          var vwapData = [];
+          for (var i = 0; i < vwapCandles.length; i++) {
+            var c = vwapCandles[i];
+            if (c.time < cutoff) continue;
+            var tp = (c.high + c.low + c.close) / 3;
+            cumTpv += tp * c.volume;
+            cumVol += c.volume;
+            if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
+          }
+          if (!vwapData.length) { _removeVwapSeries(period); return; }
+          // Capturer le range visible au moment du render (pas au moment du fetch)
+          var _renderRange = null;
+          try { _renderRange = chart.timeScale().getVisibleRange(); } catch(e) {}
+          // Clipper les donnees anciennes qui compriment le price scale
+          if (_renderRange && _renderRange.from) {
+            vwapData = vwapData.filter(function (d) { return d.time >= _renderRange.from; });
+          }
+          if (!vwapData.length) { _removeVwapSeries(period); return; }
+          if (!vwapSeriesMap[period]) {
+            vwapSeriesMap[period] = chart.addLineSeries({
+              color: color, lineWidth: 1.5, priceLineVisible: false,
+              lastValueVisible: true, crosshairMarkerVisible: false,
+              title: label,
+            });
+          }
+          // Prolonger le dernier point jusqu'a maintenant (la bougie en cours est incomplete)
+          var _lastVwap = vwapData[vwapData.length - 1];
+          if (_lastVwap) vwapData.push({ time: Math.floor(Date.now() / 1000), value: _lastVwap.value });
+          vwapSeriesMap[period].setData(vwapData);
+        })
+        .catch(function () { _removeVwapSeries(period); });
+    });
+
+    // Restaurer le range visible
+    if (_savedLogical) { try { chart.timeScale().setVisibleLogicalRange(_savedLogical); } catch(e) {} }
+    else if (_savedRange) { try { chart.timeScale().setVisibleRange(_savedRange); } catch(e) {} }
   }
 
   // ── TIMEFRAMES ──
@@ -11779,7 +11863,6 @@ TradeEditorController.renderHtml = function (day, trade) {
       _setVal('chartDefSymbol', currentSymbol);
       _setVal('chartDefStyle', chartStyle);
       _renderSessionControls();
-      _syncVpSettingsUI();
     }
 
     // Render session zone controls dynamically
@@ -11844,7 +11927,6 @@ TradeEditorController.renderHtml = function (day, trade) {
       save.addEventListener('click', function () {
         _readSettingsFromUI();
         _readSessionSettingsFromUI();
-        _readVpSettingsFromUI();
         _saveSettings();
         _applySettings();
         panel.classList.add('hidden');
@@ -11885,7 +11967,6 @@ TradeEditorController.renderHtml = function (day, trade) {
         if (window.VolumeProfile) {
           window.VolumeProfile.init(chart, candlestickSeries, document.getElementById('chartCanvasWrap'));
         }
-        _syncVpSettingsUI();
         panel.classList.add('hidden');
         toast('Paramètres réinitialisés', 'info');
       });
@@ -12010,7 +12091,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         candlestickSeries.setData(chartStyle === 'candlestick' ? candles : candles.map(function (c) { return { time: c.time, value: c.close }; }));
 
         // VWAP
-        _calcAndDrawVwap(candles);
+        _calcAndDrawVwap();
 
         // Volume Profile (passe les bougies pour recalcul)
         if (window.VolumeProfile) {
@@ -13593,6 +13674,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   function updateSettings(s) {
     Object.assign(state.settings, s);
     saveSettings();
+    _calcVP();
     _renderVP();
   }
 
@@ -13722,11 +13804,12 @@ TradeEditorController.renderHtml = function (day, trade) {
       return candles;
     }
     var now = Math.floor(Date.now() / 1000);
+    var todayStart = Math.floor(now / 86400) * 86400;
     var cutoff;
     switch (period) {
-      case 'day':   cutoff = now - 86400; break;
-      case 'week':  cutoff = now - 7 * 86400; break;
-      case 'month': cutoff = now - 30 * 86400; break;
+      case 'day':   cutoff = todayStart; break;
+      case 'week':  cutoff = todayStart - 6 * 86400; break;
+      case 'month': cutoff = todayStart - 29 * 86400; break;
       default:      return candles;
     }
     var result = [];

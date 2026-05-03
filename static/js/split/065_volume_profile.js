@@ -145,6 +145,7 @@
   function updateSettings(s) {
     Object.assign(state.settings, s);
     saveSettings();
+    _calcVP();
     _renderVP();
   }
 
@@ -274,11 +275,12 @@
       return candles;
     }
     var now = Math.floor(Date.now() / 1000);
+    var todayStart = Math.floor(now / 86400) * 86400;
     var cutoff;
     switch (period) {
-      case 'day':   cutoff = now - 86400; break;
-      case 'week':  cutoff = now - 7 * 86400; break;
-      case 'month': cutoff = now - 30 * 86400; break;
+      case 'day':   cutoff = todayStart; break;
+      case 'week':  cutoff = todayStart - 6 * 86400; break;
+      case 'month': cutoff = todayStart - 29 * 86400; break;
       default:      return candles;
     }
     var result = [];

@@ -8,10 +8,6 @@
           <button class="chart-pair-btn active" data-symbol="BTCUSDT">BTC/USDT</button>
           <button class="chart-pair-btn" data-symbol="ETHUSDT">ETH/USDT</button>
         </div>
-        <div class="chart-price-info" id="chartPriceInfo">
-          <span class="chart-price" id="chartPrice">—</span>
-          <span class="chart-change" id="chartChange"></span>
-        </div>
       </div>
       <div class="chart-topbar-right">
         <div class="chart-indicators">
@@ -21,6 +17,55 @@
             <button type="button" class="chart-ind-opt" data-vwap="7D">7 jours</button>
             <button type="button" class="chart-ind-opt" data-vwap="30D">30 jours</button>
             <button type="button" class="chart-ind-opt" data-vwap="90D">90 jours</button>
+          </div>
+          <!-- Volume Profile toggle + dropdown -->
+          <button type="button" class="chart-ind-toggle" id="vpToggle">VP <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="2 3 4 5 6 3"/></svg></button>
+          <div class="chart-ind-dropdown hidden" id="vpDropdown">
+            <label class="chart-ind-opt" style="display:flex;align-items:center;gap:6px;padding:4px 10px">
+              <input type="checkbox" id="vpActive">
+              <span>Activer VP</span>
+            </label>
+            <div class="chart-ind-opt" style="flex-direction:column;align-items:stretch">
+              <div style="display:flex;justify-content:space-between;padding:2px 10px;font-size:10px;color:var(--text-faint)">Bucket</div>
+              <div style="display:flex;gap:4px;padding:2px 10px">
+                <select class="chart-ind-opt" id="vpBucketSize" style="flex:1;font-size:10px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text)">
+                  <option value="5">$5</option>
+                  <option value="10">$10</option>
+                  <option value="20">$20</option>
+                  <option value="50">$50</option>
+                </select>
+              </div>
+              <div style="display:flex;justify-content:space-between;padding:2px 10px;font-size:10px;color:var(--text-faint)">Période</div>
+              <div style="display:flex;gap:4px;padding:2px 10px">
+                <select class="chart-ind-opt" id="vpPeriod" style="flex:1;font-size:10px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text)">
+                  <option value="visible">Visible</option>
+                  <option value="day">1 jour</option>
+                  <option value="week">7 jours</option>
+                  <option value="month">30 jours</option>
+                </select>
+              </div>
+              <div style="display:flex;justify-content:space-between;padding:2px 10px;font-size:10px;color:var(--text-faint)">Value Area</div>
+              <div style="display:flex;gap:4px;padding:2px 10px">
+                <select class="chart-ind-opt" id="vpVaPercent" style="flex:1;font-size:10px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text)">
+                  <option value="68">68%</option>
+                  <option value="70">70%</option>
+                  <option value="80">80%</option>
+                </select>
+              </div>
+              <div style="display:flex;justify-content:space-between;padding:2px 10px;font-size:10px;color:var(--text-faint)">Affichage</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;padding:2px 10px">
+                <label style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="vpShowPOC" checked>POC</label>
+                <label style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="vpShowVAH" checked>VAH</label>
+                <label style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="vpShowVAL" checked>VAL</label>
+              </div>
+              <div style="display:flex;justify-content:space-between;padding:2px 10px;font-size:10px;color:var(--text-faint)">Couleurs</div>
+              <div style="display:flex;gap:4px;flex-wrap:wrap;padding:2px 10px">
+                <label style="display:flex;align-items:center;gap:2px;font-size:10px;color:var(--text-muted)">POC <input type="color" class="chart-settings-color" id="vpColorPOC" value="#f59e0b" style="width:22px;height:18px;padding:0"></label>
+                <label style="display:flex;align-items:center;gap:2px;font-size:10px;color:var(--text-muted)">VAH <input type="color" class="chart-settings-color" id="vpColorVAH" value="#22c55e" style="width:22px;height:18px;padding:0"></label>
+                <label style="display:flex;align-items:center;gap:2px;font-size:10px;color:var(--text-muted)">VAL <input type="color" class="chart-settings-color" id="vpColorVAL" value="#ef4444" style="width:22px;height:18px;padding:0"></label>
+                <label style="display:flex;align-items:center;gap:2px;font-size:10px;color:var(--text-muted)">HVN <input type="color" class="chart-settings-color" id="vpColorHvn" value="#06b6d4" style="width:22px;height:18px;padding:0"></label>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -123,86 +168,6 @@
 
             <div class="chart-settings-section-note">
               Les Fibonacci extensions (2/2.5/3/4/4.5/5) seront disponibles dans les outils de dessin — Phase 2
-            </div>
-          </div>
-
-          <!-- Volume Profile section -->
-          <div class="chart-settings-section">
-            <div class="chart-settings-section-title">
-              Volume Profile
-              <label class="chart-toggle chart-toggle-sm" style="margin-left:auto">
-                <input type="checkbox" id="vpActive">
-                <span class="chart-toggle-track"><span class="chart-toggle-thumb"></span></span>
-              </label>
-            </div>
-            <div class="chart-settings-section-note">
-              Histogramme des volumes par palier de prix — POC, VAH, VAL
-            </div>
-
-            <div class="chart-settings-row">
-              <div class="chart-settings-label">
-                <span>Taille du bucket</span>
-              </div>
-              <select class="chart-settings-select" id="vpBucketSize">
-                <option value="5">$5</option>
-                <option value="10" selected>$10</option>
-                <option value="20">$20</option>
-                <option value="50">$50</option>
-              </select>
-            </div>
-
-            <div class="chart-settings-row">
-              <div class="chart-settings-label">
-                <span>Période VP</span>
-              </div>
-              <select class="chart-settings-select" id="vpPeriod">
-                <option value="visible">Visible (tout)</option>
-                <option value="day">1 jour</option>
-                <option value="week">7 jours</option>
-                <option value="month">30 jours</option>
-              </select>
-            </div>
-
-            <div class="chart-settings-row">
-              <div class="chart-settings-label">
-                <span>Value Area</span>
-              </div>
-              <select class="chart-settings-select" id="vpVaPercent">
-                <option value="68">68 %</option>
-                <option value="70" selected>70 %</option>
-                <option value="80">80 %</option>
-              </select>
-            </div>
-
-            <div class="chart-settings-row">
-              <div class="chart-settings-label">
-                <span>Affichage</span>
-              </div>
-              <div class="chart-settings-controls" style="gap:8px;flex-wrap:wrap">
-                <label class="chart-toggle-label"><input type="checkbox" id="vpShowPOC" checked> <span>POC</span></label>
-                <label class="chart-toggle-label"><input type="checkbox" id="vpShowVAH" checked> <span>VAH</span></label>
-                <label class="chart-toggle-label"><input type="checkbox" id="vpShowVAL" checked> <span>VAL</span></label>
-              </div>
-            </div>
-
-            <div class="chart-settings-row">
-              <div class="chart-settings-label">
-                <span>Couleurs</span>
-              </div>
-              <div class="chart-settings-controls" style="gap:4px;flex-wrap:wrap">
-                <label style="display:flex;align-items:center;gap:2px;font-size:10px;color:var(--text-muted)">
-                  POC <input type="color" class="chart-settings-color" id="vpColorPOC" value="#f59e0b" style="width:24px;height:20px">
-                </label>
-                <label style="display:flex;align-items:center;gap:2px;font-size:10px;color:var(--text-muted)">
-                  VAH <input type="color" class="chart-settings-color" id="vpColorVAH" value="#22c55e" style="width:24px;height:20px">
-                </label>
-                <label style="display:flex;align-items:center;gap:2px;font-size:10px;color:var(--text-muted)">
-                  VAL <input type="color" class="chart-settings-color" id="vpColorVAL" value="#ef4444" style="width:24px;height:20px">
-                </label>
-                <label style="display:flex;align-items:center;gap:2px;font-size:10px;color:var(--text-muted)">
-                  HVN <input type="color" class="chart-settings-color" id="vpColorHvn" value="#06b6d4" style="width:24px;height:20px">
-                </label>
-              </div>
             </div>
           </div>
 
