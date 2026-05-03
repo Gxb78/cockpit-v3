@@ -558,7 +558,7 @@
       try { savedLogical = chart.timeScale().getVisibleLogicalRange(); } catch(e) {}
     }
 
-    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + currentInterval + '&limit=5000';
+    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + currentInterval + '&limit=300';
     fetch(url)
       .then(function (r) { return r.json(); })
       .then(function (data) {

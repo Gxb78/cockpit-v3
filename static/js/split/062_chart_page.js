@@ -990,7 +990,7 @@
       try { savedLogical = chart.timeScale().getVisibleLogicalRange(); } catch(e) {}
     }
 
-    var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=10000';
+    var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=500';
     fetch(url)
       .then(function (r) { return r.json(); })
       .then(function (data) {
