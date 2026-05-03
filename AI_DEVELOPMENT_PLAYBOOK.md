@@ -791,3 +791,10 @@ Cette section documente les features ajoutées, les conventions établies, et le
 - Regle de prevention: TOUT `catch` d'un fetch qui alimente un render doit netoyer l'état de chargement du widget correspondant. Pattern: `var board = document.querySelector('[data-widget-board="today"]'); if (board) board.classList.remove("loading");`. Le `finally` ne suffit pas si le render est dans le `try`.
 - Test de non-regression: Simuler une erreur API → le skeleton disparaît, le toast d'erreur s'affiche, un état d'erreur visuel apparaît (bordure rouge subtile avec "Erreur de chargement").
 - Fichiers a surveiller: `static/js/split/012_data_loading.js` (catch de loadStats), `static/js/split/013_kpis.js` (renderKPIs loading removal), `static/css/split/003_settings_chip_remove_hover.css` (.widget-board[data-load-error] styles).
+
+### BUG-20260503-D23 - [RÉSOLU] États vides sans action claire
+- Symptome: Plusieurs états vides (recent entries, favoris, journal filters, calendar search) n'avaient aucun bouton d'action pour sortir de l'état vide.
+- Cause racine: Approche "message seulement" sans CTA — l'utilisateur devait deviner quoi faire.
+- Regle de prevention: TOUT état vide doit proposer une action claire : "Ajouter", "Voir", "Réinitialiser", "Créer". Pas de message seul.
+- Test de non-regression: Naviguer vers chaque écran sans données → un bouton d'action est visible.
+- Fichiers a surveiller: `014_today_page.js` (recent empty), `012_favorites_carousel.html` (fav empty), `table.html` (journal filter empty), `015_calendar.js` (calendar/search empty).

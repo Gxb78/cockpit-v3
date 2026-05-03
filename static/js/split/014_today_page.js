@@ -51,7 +51,7 @@ function renderToday() {
   if (recentEl) {
     recentEl.innerHTML = "";
     if (recent.length === 0) {
-      recentEl.innerHTML = '<div class="empty-state"><div>Pas encore d\'historique</div></div>';
+      recentEl.innerHTML = '<div class="empty-state"><div>Pas encore d\'historique</div><div class="empty-cta"><button type="button" class="btn-ghost" onclick="wizOpen({ date: todayKey() })">Ajouter un trade</button></div></div>';
     } else {
       recent.forEach(d => recentEl.appendChild(dayCardEl(d)));
     }
@@ -173,4 +173,5 @@ document.addEventListener("click", function (e) {
   var instr = document.getElementById("entryInstrument");
   if (instr) setTimeout(function () { instr.focus(); }, 100);
 });
+
 

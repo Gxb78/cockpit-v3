@@ -2999,7 +2999,7 @@ function renderToday() {
   if (recentEl) {
     recentEl.innerHTML = "";
     if (recent.length === 0) {
-      recentEl.innerHTML = '<div class="empty-state"><div>Pas encore d\'historique</div></div>';
+      recentEl.innerHTML = '<div class="empty-state"><div>Pas encore d\'historique</div><div class="empty-cta"><button type="button" class="btn-ghost" onclick="wizOpen({ date: todayKey() })">Ajouter un trade</button></div></div>';
     } else {
       recent.forEach(d => recentEl.appendChild(dayCardEl(d)));
     }
@@ -3124,12 +3124,10 @@ document.addEventListener("click", function (e) {
 
 // ---- 015_calendar.js ----
 // ---------- Calendar ----------
-
 let _calendarByDayCache = {};
 let _calendarGridBound = false;
 let _calWasAutoTable = false;
 let _calPnLThresholds = null;
-
 function bindCalendarGridActions(grid) {
   if (!grid || _calendarGridBound) return;
   grid.addEventListener("click", (e) => {
@@ -3155,7 +3153,6 @@ function bindCalendarGridActions(grid) {
       wizOpen({ date: key });
       return;
     }
-
     const tradeCount = info.days.reduce((sum, day) => sum + ((day.trades || []).length), 0);
     if (tradeCount > 0 && typeof renderJournalDayTrades === "function") {
       renderJournalDayTrades(key, info.days);
@@ -3179,12 +3176,10 @@ function bindCalendarGridActions(grid) {
   });
   _calendarGridBound = true;
 }
-
 function renderCalendar(windowDef = null) {
   const win = windowDef || getJournalWindow();
   updateJournalTradeFilterOptions(state.days);
   if (typeof updateJournalStatsDisplay === "function") updateJournalStatsDisplay();
-
   // Auto-switch: table si range > 35 jours (sauf si utilisateur a explicitement choisi)
   var from = parseDateKey(win.from);
   var to = parseDateKey(win.to);
@@ -3199,23 +3194,19 @@ function renderCalendar(windowDef = null) {
     setJournalLayoutMode("calendar", { persist: false, rerender: false });
     _calWasAutoTable = false;
   }
-
   updateJournalTradeFiltersUI();
   const byDay = buildCalendarByDay(state.days);
   _calPnLThresholds = _computePnLBands(byDay);
-
   const monthLabelEl = $("#monthLabel");
   if (monthLabelEl) monthLabelEl.textContent = state.journalViewMode === "month" ? win.label : `${win.title} · ${win.label}`;
   const monthInputEl = $("#journalMonthInput");
   if (monthInputEl) {
     monthInputEl.value = `${state.currentMonth.getFullYear()}-${String(state.currentMonth.getMonth() + 1).padStart(2, "0")}`;
   }
-
   const prevBtn = $("#prevMonth");
   const nextBtn = $("#nextMonth");
   if (prevBtn) prevBtn.title = state.journalViewMode === "week" ? "Semaine précédente" : "Période précédente";
   if (nextBtn) nextBtn.title = state.journalViewMode === "week" ? "Semaine suivante" : "Période suivante";
-
   const grid = $("#calendarGrid");
   if (!grid) return;
   bindCalendarGridActions(grid);
@@ -3224,7 +3215,6 @@ function renderCalendar(windowDef = null) {
   grid.dataset.viewMode = state.journalViewMode || "month";
   const tk = todayKey();
   const fragment = document.createDocumentFragment();
-
   if (state.journalViewMode === "week") {
     const weekStart = parseDateKey(win.from) || startOfWeek(state.currentMonth);
     for (let i = 0; i < 7; i += 1) {
@@ -3258,7 +3248,6 @@ function renderCalendar(windowDef = null) {
     const firstDayIndex = (first.getDay() + 6) % 7;
     const daysInMonth   = new Date(year, month + 1, 0).getDate();
     const daysInPrev    = new Date(year, month, 0).getDate();
-
     for (let i = firstDayIndex; i > 0; i -= 1) {
       fragment.appendChild(dayCell(new Date(year, month - 1, daysInPrev - i + 1), byDay, true, tk));
     }
@@ -3271,7 +3260,6 @@ function renderCalendar(windowDef = null) {
     }
   }
   grid.replaceChildren(fragment);
-
   // Empty state — seulement si filtres ont tout vide, sinon calendrier reste visible
   var totalTrades = 0;
   Object.keys(byDay).forEach(function (k) { totalTrades += Number(byDay[k].trades || 0); });
@@ -3293,24 +3281,25 @@ function renderCalendar(windowDef = null) {
     var msg = searchQ
       ? 'Aucun resultat pour "' + escapeHtml(searchQ) + '".'
       : "Aucun trade ne correspond aux filtres actifs.";
+    var resetBtn = searchQ
+      ? '<div class="empty-cta"><button type="button" class="btn-ghost" onclick="clearJournalSearch()">Effacer la recherche</button></div>'
+      : '<div class="empty-cta"><button type="button" class="btn-ghost" onclick="resetJournalFilters()">Réinitialiser les filtres</button></div>';
     emptyEl.innerHTML =
       '<div class="empty-state">' +
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
         "<span>" + msg + "</span>" +
+        resetBtn +
       "</div>";
     emptyEl.classList.remove("hidden");
   } else if (emptyEl) {
     emptyEl.classList.add("hidden");
   }
-
   const totalCells = grid.children.length;
   const rows = Math.max(1, Math.ceil(totalCells / 7));
   grid.style.setProperty("--journal-rows", String(rows));
-
   renderCalendarMonthFocus(byDay, win);
   renderJournalTable();
 }
-
 function computeMonthFocusData(byDay = null) {
   const dataset = byDay || {};
   const days = Object.values(dataset);
@@ -3318,20 +3307,17 @@ function computeMonthFocusData(byDay = null) {
   let wins = 0;
   let losses = 0;
   let pnl = 0;
-
   days.forEach(dayInfo => {
     trades += Number(dayInfo?.trades || 0);
     wins += Number(dayInfo?.wins || 0);
     losses += Number(dayInfo?.losses || 0);
     pnl += Number(dayInfo?.pnl || 0);
   });
-
   const decided = wins + losses;
   const winrate = decided > 0 ? (wins / decided) * 100 : null;
   const avgPnlPerTrade = trades > 0 ? pnl / trades : null;
   return { trades, wins, losses, pnl, decided, winrate, avgPnlPerTrade };
 }
-
 function renderJournalHeaderStats(data) {
   var wrEl       = $("#jhsWr");
   var pnlEl      = $("#jhsPnl");
@@ -3340,7 +3326,6 @@ function renderJournalHeaderStats(data) {
   var wrInline   = $("#jhsWrInline");
   var pnlInline  = $("#jhsPnlInline");
   if (!wrEl) return;
-
   if (!data || data.trades === 0) {
     wrEl.textContent  = "WR --";
     wrEl.className    = "stat";
@@ -3352,12 +3337,10 @@ function renderJournalHeaderStats(data) {
     if (pnlInline) { pnlInline.textContent = "--"; pnlInline.className = "journal-filter-stat-value"; }
     return;
   }
-
   var wrText  = data.winrate == null ? "--" : data.winrate.toFixed(1) + "%";
   var pnlText = fmtMoney(data.pnl);
   var trText  = String(data.trades);
   var avgText = data.avgPnlPerTrade == null ? "--" : fmtMoney(data.avgPnlPerTrade);
-
   wrEl.textContent  = "WR " + wrText;
   wrEl.className    = "stat" + (data.winrate >= 50 ? " pos" : data.winrate != null ? " neg" : "");
   pnlEl.textContent = "PnL " + pnlText;
@@ -3366,7 +3349,6 @@ function renderJournalHeaderStats(data) {
   trEl.className    = "stat";
   avgEl.textContent = "Moy " + avgText;
   avgEl.className   = "stat";
-
   if (wrInline) {
     wrInline.textContent = wrText;
     wrInline.className   = "journal-filter-stat-value" + (data.winrate != null && data.winrate >= 50 ? " pos" : data.winrate != null ? " neg" : "");
@@ -3376,14 +3358,11 @@ function renderJournalHeaderStats(data) {
     pnlInline.className   = "journal-filter-stat-value" + (data.pnl > 0 ? " pos" : data.pnl < 0 ? " neg" : "");
   }
 }
-
 function renderCalendarMonthFocus(byDay, windowDef) {
   var data = computeMonthFocusData(byDay);
   renderJournalHeaderStats(data);
 }
-
 /* ---- PnL intensity bands (4 levels based on quartiles) ---- */
-
 function _computePnLBands(byDay) {
   const wins = [];
   const losses = [];
@@ -3405,7 +3384,6 @@ function _computePnLBands(byDay) {
     lossBands: losses.length > 3 ? [quartile(losses, 0.25), quartile(losses, 0.5), quartile(losses, 0.75)] : null,
   };
 }
-
 function _pnlBand(pnl, thresholds) {
   if (!thresholds || pnl == null || pnl === 0) return "";
   if (pnl > 0) {
@@ -3422,7 +3400,6 @@ function _pnlBand(pnl, thresholds) {
   if (absPnl <= thresholds.lossBands[2]) return "loss-3";
   return "loss-4";
 }
-
 function dayCell(dt, byDay, otherMonth, today) {
   const key  = fmtDateKey(dt);
   const info = byDay[key];
@@ -3436,9 +3413,7 @@ function dayCell(dt, byDay, otherMonth, today) {
   el.classList.add(`day-mode-${mode}`);
   const band = _pnlBand(info?.pnl, _calPnLThresholds);
   if (band) el.classList.add(band);
-
   let metricHtml = `<div class="day-center day-center-empty"></div>`;
-
   if (info && info.trades > 0) {
     const pnlClass = info.pnl > 0 ? "pos" : info.pnl < 0 ? "neg" : "flat";
     if (mode === "pnl") {
@@ -3465,7 +3440,6 @@ function dayCell(dt, byDay, otherMonth, today) {
   } else if (info && Number(info.trades || 0) > 1) {
     stackHtml = `<div class="day-stack-indicator trades" title="Plusieurs trades ce jour">${info.trades}T</div>`;
   }
-
   let dotsHtml = "";
   if (info && (info.wins || info.losses)) {
     const winDots = Math.min(info.wins || 0, 5);
@@ -3478,19 +3452,15 @@ function dayCell(dt, byDay, otherMonth, today) {
   el.innerHTML = `<div class="day-num">${dt.getDate()}</div>${metricHtml}${stackHtml}${dotsHtml}`;
   return el;
 }
-
 // ---- Afficher le contexte d'un jour sans trade (carte HTF + bouton trade) ----
 function renderJournalDayContext(dateKey, days) {
   var wrap = $("#journalDayTrades");
   if (!wrap) return;
   bindJournalDayTrades();
-
   var day = days && days[0];
   if (!day) { closeJournalDayTrades(); return; }
-
   wrap.classList.remove("hidden");
   wrap.dataset.count = "0";
-
   // Creer un trade virtuel avec les donnees HTF pour reutiliser journalTradeFlipCardHtml
   var notes = day.daily_notes || day.htf_context || "";
   var biasLabel = day.htf_bias || "neutral";
@@ -3513,7 +3483,6 @@ function renderJournalDayContext(dateKey, days) {
     session: "",
     execution_quality: 0,
   };
-
   var virtualDay = {
     id: day.id,
     instrument: day.instrument || "-",
@@ -3522,12 +3491,10 @@ function renderJournalDayContext(dateKey, days) {
     htf_context: day.htf_context,
     daily_notes: day.daily_notes,
   };
-
   if (typeof journalTradeFlipCardHtml === "function") {
     wrap.innerHTML = '<div class="journal-day-context-empty">' +
       journalTradeFlipCardHtml(virtualDay, virtualTrade, 1, [virtualTrade]) +
       '</div>';
-
     // Remplacer le bouton "Editer" par "Creer un trade"
     var editBtn = wrap.querySelector('[data-journal-trade-edit]');
     if (editBtn) {
@@ -3536,7 +3503,6 @@ function renderJournalDayContext(dateKey, days) {
       editBtn.style.flex = '1';
       editBtn.removeAttribute('data-journal-trade-edit');
       editBtn.id = 'journalDayContextAddTrade';
-
       editBtn.addEventListener('click', function (e) {
         e.stopPropagation();
         wizOpen({
@@ -3549,11 +3515,9 @@ function renderJournalDayContext(dateKey, days) {
         });
       });
     }
-
     // Masquer le bouton "Voir dans le journal"
     var journalBtn = wrap.querySelector('[data-fav-journal]');
     if (journalBtn) journalBtn.style.display = 'none';
-
     // Injecter le contexte HTF dans la zone summary de la card
     var summaryEl = wrap.querySelector('.journal-trade-main p');
     if (summaryEl && notes) {
@@ -3563,6 +3527,20 @@ function renderJournalDayContext(dateKey, days) {
     // Fallback : wizard direct
     wizOpen({ date: dateKey });
   }
+}
+
+// Global helpers for empty-state CTAs (inline onclick handlers)
+function clearJournalSearch() {
+  var f = JSON.parse(JSON.stringify(state.journalTradeFilters || {}));
+  delete f.search;
+  state.journalTradeFilters = f;
+  if (typeof saveJournalTradeFilters === "function") saveJournalTradeFilters(f);
+  if (typeof renderCalendar === "function") renderCalendar();
+}
+function resetJournalFilters() {
+  state.journalTradeFilters = {};
+  if (typeof saveJournalTradeFilters === "function") saveJournalTradeFilters({});
+  if (typeof renderCalendar === "function") renderCalendar();
 }
 
 // ---- 016_openpickerfordate.js ----
