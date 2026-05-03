@@ -11717,9 +11717,7 @@ TradeEditorController.renderHtml = function (day, trade) {
           btn.dataset.label = !snapOn ? 'Snap ON' : 'Curseur';
           btn.classList.toggle('draw-snap-on', !snapOn);
           // Sync LWC crosshair mode avec snap
-          if (window.chart) {
-            window.chart.applyOptions({ crosshair: { mode: snapOn ? 0 : 1 } });
-          }
+          try { chart.applyOptions({ crosshair: { mode: snapOn ? 0 : 1 } }); } catch(e) {}
           // Toujours passer en mode curseur
           toolbar.querySelectorAll('.draw-toolbar-btn').forEach(function (b) { b.classList.remove('is-active'); });
           btn.classList.add('is-active');
