@@ -118,6 +118,16 @@
     this._lastHistoricalTradeId = 0;
     this._liveTradesCount = 0;
 
+    // Request counter pour annuler les vieux fetchs
+    this._loadRequestId = 0;
+
+    // Anti-doublon live: ensemble borné des IDs déjà vus
+    this._seenLiveIds = {};
+    this._seenLiveIdsQueue = [];
+
+    // rAF handle pour pouvoir stop/start
+    this._rafId = null;
+
     // Statut
     this._setStatus('ready');
     console.log('[OrderflowEngine] initialized');
@@ -169,8 +179,8 @@
     lay.priceAxisWidth = 60;
     lay.vpWidth = 40;
     lay.chartLeft = 10;
-    lay.chartRight = w - lay.priceAxisWidth - lay.vpWidth - 15;
-    lay.chartWidth = lay.chartRight - lay.chartLeft;
+    lay.chartRight = Math.max(lay.chartLeft + 100, w - lay.priceAxisWidth - lay.vpWidth - 15);
+    lay.chartWidth = Math.max(100, lay.chartRight - lay.chartLeft);
   };
 
   // ============================================================
@@ -538,8 +548,8 @@
 
       // Recalculer le layout
       var lay = this.layout;
-      lay.chartRight = rw - lay.priceAxisWidth - lay.vpWidth - 15;
-      lay.chartWidth = lay.chartRight - lay.chartLeft;
+      lay.chartRight = Math.max(lay.chartLeft + 100, rw - lay.priceAxisWidth - lay.vpWidth - 15);
+      lay.chartWidth = Math.max(100, lay.chartRight - lay.chartLeft);
 
       this._dirty = true;
     }
@@ -689,6 +699,9 @@
     var my = this.mousePos.y;
     var ps = this.priceScale;
 
+    // Ne pas dessiner le crosshair dans la zone prix/VP
+    if (mx > this.layout.chartRight) return;
+
     ctx.save();
     ctx.setLineDash([3, 4]);
     ctx.strokeStyle = 'rgba(255,255,255,0.18)';
@@ -716,6 +729,9 @@
     var mx = this.mousePos.x;
     var my = this.mousePos.y;
     var w = this.canvas.width / this.dpr;
+    var lay = this.layout;
+
+    if (mx > lay.chartRight) return;
 
     var price = this.yToPrice(my);
     var time = this.xToTime(mx);
@@ -804,9 +820,16 @@
     var self = this;
     function loop() {
       self.render();
-      requestAnimationFrame(loop);
+      self._rafId = requestAnimationFrame(loop);
     }
     loop();
+  };
+
+  OrderflowEngine.prototype.stop = function () {
+    if (this._rafId) {
+      cancelAnimationFrame(this._rafId);
+      this._rafId = null;
+    }
   };
 
   // ============================================================
@@ -814,12 +837,37 @@
   // ============================================================
 
   function initOrderflow() {
-    if (document.querySelector('.page[data-page="orderflow"]')) {
-      var engine = new OrderflowEngine('ofCanvas');
-      window.__ofEngine = engine;
-      engine.start();
+    var container = document.querySelector('.page[data-page="orderflow"]');
+    if (!container) return;
+    var engine = new OrderflowEngine('ofCanvas');
+    window.__ofEngine = engine;
+
+    // Si la page est déjà active, lancer le chargement tout de suite
+    if (container.classList.contains('active')) {
+      engine.loadData(engine._symbol, engine._interval);
     }
+
+    engine.start();
   }
+
+  // Écouter les changements de page pour charger/stoper
+  document.addEventListener('pageChange', function (e) {
+    var engine = window.__ofEngine;
+    if (!engine) return;
+    var page = e.detail && e.detail.page;
+    if (page === 'orderflow') {
+      if (!engine._isLiveData && !engine._loading && engine._rawTrades.length === 0) {
+        engine.loadData(engine._symbol, engine._interval);
+      }
+      if (engine._liveEnabled) {
+        engine._connectLive();
+      }
+      engine.start();
+    } else {
+      engine.stop();
+      engine._disconnectLive();
+    }
+  });
 
   // Attendre que le DOM soit prêt
   if (document.readyState === 'loading') {
@@ -835,6 +883,7 @@
 
   OrderflowEngine.prototype.loadData = function (symbol, interval) {
     var self = this;
+    var requestId = ++this._loadRequestId;
     this._symbol = symbol || this._symbol;
     this._interval = interval || this._interval;
     this._intervalMs = this._intervalToMs(this._interval);
@@ -847,6 +896,7 @@
 
     OF.DataService.fetchTrades(this._symbol, startTime, now, 5000)
       .then(function (res) {
+        if (requestId !== self._loadRequestId) return; // stale request
         // res peut etre {trades, limits} ou directement un array (fallback)
         var trades = Array.isArray(res) ? res : (res && res.trades ? res.trades : res);
         if (!trades || trades.length === 0) {
@@ -894,6 +944,7 @@
         self._setStatus(self._buildStatus());
       })
       .catch(function (err) {
+        if (requestId !== self._loadRequestId) return; // stale request
         console.warn('[OF] API error, fallback mock:', err.message);
         self._disconnectLive();
         self._error = err.message;
@@ -925,7 +976,55 @@
   OrderflowEngine.prototype.reload = function () {
     this._disconnectLive();
     OF.DataService.clearCache();
-    this.loadData(this._symbol, this._interval);
+    this._loadRequestId++; // annuler tout fetch en cours
+    var now = Date.now();
+    var startTime = now - this._requestedRangeMs;
+    var self = this;
+    var requestId = this._loadRequestId;
+
+    OF.DataService.fetchTrades(this._symbol, startTime, now, 5000, true)
+      .then(function (res) {
+        if (requestId !== self._loadRequestId) return;
+        // meme traitement que loadData…
+        var trades = Array.isArray(res) ? res : (res && res.trades ? res.trades : res);
+        if (!trades || trades.length === 0) {
+          throw new Error('Aucune trade recue pour ' + self._symbol);
+        }
+        var limits = !Array.isArray(res) && res ? res.limits || {} : {};
+        var candles = OF.Aggregator.aggregate(trades, self._intervalMs, self._tickSize);
+        if (candles.length === 0) throw new Error('Aggregation vide');
+
+        self._rawTrades = trades;
+        self._candles = candles;
+        self._isLiveData = true;
+        self._loading = false;
+        self._currentRange = { start: startTime, end: now };
+        self._fetchTimestamp = Date.now();
+        self._fetchMeta = limits;
+        self._liveTradesCount = 0;
+
+        self._lastHistoricalTradeId = 0;
+        for (var ti = 0; ti < trades.length; ti++) {
+          if (trades[ti].id && trades[ti].id > self._lastHistoricalTradeId) {
+            self._lastHistoricalTradeId = trades[ti].id;
+          }
+        }
+
+        self._fitToData();
+        self._dirty = true;
+        self._updateStatsPanel();
+        if (self._liveEnabled) {
+          self._connectLive();
+        }
+        self._setStatus(self._buildStatus());
+      })
+      .catch(function (err) {
+        if (requestId !== self._loadRequestId) return;
+        self._error = err.message;
+        self._isLiveData = false;
+        self._loadMockData();
+        self._setStatus(self._buildStatus());
+      });
   };
 
   // ============================================================
@@ -962,6 +1061,18 @@
   OrderflowEngine.prototype._onLiveTrade = function (trade) {
     // Anti-doublon: ignorer si id <= dernier historique
     if (trade.id && this._lastHistoricalTradeId > 0 && trade.id <= this._lastHistoricalTradeId) return;
+
+    // Anti-doublon reconnect: _seenLiveIds ensemble borné
+    if (trade.id) {
+      if (this._seenLiveIds[trade.id]) return;
+      this._seenLiveIds[trade.id] = true;
+      this._seenLiveIdsQueue.push(trade.id);
+      // Garder max 5000 IDs en mémoire
+      if (this._seenLiveIdsQueue.length > 5000) {
+        var oldId = this._seenLiveIdsQueue.shift();
+        delete this._seenLiveIds[oldId];
+      }
+    }
 
     // Mettre à jour le dernier ID
     if (trade.id && trade.id > this._lastHistoricalTradeId) {
@@ -1498,10 +1609,12 @@
     _reconnectTimer: null,
     _reconnectAttempts: 0,
     _maxReconnect: 10,
-    _reconnectDelay: 1000, // 1s, doublé à chaque tentative
+    _reconnectDelay: 1000,
     _onTrade: null,
     _onStatus: null,
     _status: 'disconnected',
+    _reconnectScheduled: false, // garde anti-double reconnect
+    _streamToken: 0, // incremente à chaque connect → ignore callback obsolètes
 
     /** Connect to Binance aggTrade stream */
     connect: function (symbol, onTrade, onStatus) {
@@ -1510,6 +1623,8 @@
       this._onTrade = onTrade;
       this._onStatus = onStatus;
       this._reconnectAttempts = 0;
+      this._reconnectScheduled = false;
+      this._streamToken++;
       this._connect();
     },
 
@@ -1517,50 +1632,57 @@
     _connect: function () {
       if (!this._symbol) return;
       var self = this;
+      var token = this._streamToken;
+
       var url = WS_BINANCE + this._symbol + '@aggTrade';
 
       try {
         this._ws = new WebSocket(url);
       } catch (e) {
         console.warn('[LiveStream] WS creation failed:', e.message);
-        self._setStatus('error');
+        if (token === self._streamToken) self._setStatus('error');
         return;
       }
 
+      // Timeout de connexion
       var connTimeout = setTimeout(function () {
+        if (token !== self._streamToken) return;
         if (self._ws && self._ws.readyState === WebSocket.CONNECTING) {
           console.warn('[LiveStream] connection timeout');
-          self._ws.close();
+          self._neutralizeAndClose();
           self._scheduleReconnect();
         }
       }, 5000);
 
       this._ws.onopen = function () {
+        if (token !== self._streamToken) { self._neutralizeAndClose(); return; }
         clearTimeout(connTimeout);
         self._reconnectAttempts = 0;
         self._reconnectDelay = 1000;
+        self._reconnectScheduled = false;
         self._setStatus('connected');
         console.log('[LiveStream] connected to', url);
       };
 
       this._ws.onmessage = function (e) {
+        if (token !== self._streamToken) return;
         try {
           var data = JSON.parse(e.data);
           if (data.e !== 'aggTrade') return;
           var trade = self._normalize(data);
           if (self._onTrade) self._onTrade(trade);
-        } catch (err) {
-          // ignore parse errors on non-trade messages
-        }
+        } catch (err) { /* ignore */ }
       };
 
       this._ws.onerror = function () {
+        if (token !== self._streamToken) return;
         clearTimeout(connTimeout);
         console.warn('[LiveStream] WS error');
       };
 
       this._ws.onclose = function () {
         clearTimeout(connTimeout);
+        if (token !== self._streamToken) return;
         if (self._status === 'disconnected') return; // intentional
         self._setStatus('reconnecting');
         self._scheduleReconnect();
@@ -1578,8 +1700,22 @@
       };
     },
 
-    /** Schedule reconnection with exponential backoff */
+    /** Neutralise TOUS les callbacks et ferme le socket, meme CONNECTING */
+    _neutralizeAndClose: function () {
+      if (!this._ws) return;
+      // Neutraliser les callbacks pour eviter toute execution future
+      this._ws.onopen = null;
+      this._ws.onmessage = null;
+      this._ws.onerror = null;
+      this._ws.onclose = null;
+      // Fermer — meme si CONNECTING, close() est safe (la spec WebSocket le gère)
+      try { this._ws.close(); } catch (e) { /* ignore */ }
+      this._ws = null;
+    },
+
+    /** Schedule reconnection avec exponential backoff, avec guard anti-double */
     _scheduleReconnect: function () {
+      if (this._reconnectScheduled) return;
       if (this._reconnectAttempts >= this._maxReconnect) {
         this._setStatus('error');
         console.warn('[LiveStream] max reconnects reached');
@@ -1589,28 +1725,26 @@
       var delay = this._reconnectDelay;
       this._reconnectDelay = Math.min(this._reconnectDelay * 2, 30000);
       this._reconnectAttempts++;
+      this._reconnectScheduled = true;
       console.log('[LiveStream] reconnect in', delay, 'ms (attempt', this._reconnectAttempts + ')');
+
+      if (this._reconnectTimer) clearTimeout(this._reconnectTimer);
       this._reconnectTimer = setTimeout(function () {
+        self._reconnectScheduled = false;
         self._connect();
       }, delay);
     },
 
     /** Disconnect intentionally */
     disconnect: function () {
+      this._reconnectScheduled = false;
+      this._reconnectAttempts = 0;
+      this._reconnectDelay = 1000;
       if (this._reconnectTimer) {
         clearTimeout(this._reconnectTimer);
         this._reconnectTimer = null;
       }
-      this._reconnectAttempts = 0;
-      this._reconnectDelay = 1000;
-      if (this._ws) {
-        // Ne pas close si CONNECTING — juste oublier
-        if (this._ws.readyState !== WebSocket.CONNECTING) {
-          this._ws.onclose = null; // eviter reconnect auto
-          this._ws.close();
-        }
-        this._ws = null;
-      }
+      this._neutralizeAndClose();
       this._setStatus('disconnected');
     },
 
@@ -1630,13 +1764,16 @@
 
   OF.DataService = {
     _cache: {},
+    _cacheMeta: {}, // metadata complement pour chaque cacheKey
 
-    /** Fetch aggTrades (auto-paginate: max 5 pages x 1000 = 5000 trades) */
-    fetchTrades: function (symbol, startTime, endTime, limit) {
+    /** Fetch aggTrades (auto-paginate backend, up to 8000) */
+    fetchTrades: function (symbol, startTime, endTime, limit, force) {
       var cacheKey = symbol + ':' + (startTime || '') + ':' + (endTime || '');
-      var cached = this._cache[cacheKey];
-      if (cached && Date.now() - cached.ts < CACHE_TTL) {
-        return Promise.resolve(cached.trades);
+      if (!force) {
+        var cached = this._cache[cacheKey];
+        if (cached && Date.now() - cached.ts < CACHE_TTL) {
+          return Promise.resolve(cached);
+        }
       }
 
       var self = this;
@@ -1649,6 +1786,7 @@
           + '&limit=1000';
         if (startTime) url += '&startTime=' + startTime;
         if (currentEnd) url += '&endTime=' + currentEnd;
+        if (force) url += '&force=1';
 
         return fetch(url)
           .then(function (r) {
@@ -1672,8 +1810,9 @@
                 count: allTrades.length,
                 hitBinanceLimit: batch.length >= 1000,
               };
-              self._cache[cacheKey] = { ts: Date.now(), trades: allTrades };
-              return { trades: allTrades, limits: meta };
+              var result = { trades: allTrades, limits: meta };
+              self._cache[cacheKey] = { ts: Date.now(), trades: result };
+              return result;
             }
 
             pagesLeft--;

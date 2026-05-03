@@ -813,3 +813,11 @@ Cette section documente les features ajoutées, les conventions établies, et le
 - Regle de prevention: NE JAMAIS utiliser `_time` comme alias d'import dans les fichiers app_parts. Utiliser `_time_mod` pour le module (`import time as _time_mod`) et `_time` ou `_time_fn` pour la fonction (`from time import time as _time_fn`). Vérifier avec `grep -n 'import.*as _time' app_parts/*.py` apres ajout d'un fichier.
 - Test de non-regression: Charger le module app_parts → `_time` doit etre callable. Toutes les routes `@ratelimit` doivent repondre 200.
 - Fichiers a surveiller: app_parts/__init__.py, app_parts/03_core_helpers.py, app_parts/23_routes_market.py, app_parts/15_parse_trade.py, app_parts/19_ai_chat.py
+
+### CONVENTION-20260506-01 — Pagination backend aggTrades + force cache bust
+- Symptome: La route `/api/market/aggtrades` ne paginait pas et envoyait limit=5000 a Binance (max 1000). Le cache etait un dict sans limite de taille. Le cache hit renvoyait des metadata incompletes. Le param force n'existait pas. Les int() levaient 500 sur input invalide.
+- Cause racine: Implementation initiale minimaliste sans pagination, cache size limit, ou validation de parametres.
+- Regle de prevention: TOUJOURS clamber les parametres limite. Paginer en backend avec _MAX_PAGES = 8. Stoker le payload complet dans le cache (pas seulement trades). Expurger les entrees expirees quand le cache depasse _CACHE_MAX_KEYS = 100. Ajouter force=1 pour bypass cache. Utiliser _parse_int_param() avec try/except plutot que int() direct.
+- Test de non-regression: /api/market/aggtrades?symbol=BTCUSDT&limit=5000 doit retourner jusqu'a 5000 trades pagines. /api/market/aggtrades?limit=abc doit retourner 400. /api/market/aggtrades?force=1 doit contourner le cache.
+- Changement: Rewrite complet de market_aggtrades(), ajout de _purge_cache(), _parse_int_param(), _fetch_binance_agg(), _MAX_PAGES, MAX_TOTAL_TRADES.
+- Fichiers a surveiller: app_parts/23_routes_market.py

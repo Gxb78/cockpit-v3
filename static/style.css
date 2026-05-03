@@ -17600,7 +17600,11 @@ body.light-mode .of-status {
 
 /* ── Focus states ── */
 .of-pair-btn:focus-visible,
-.of-tf-btn:focus-visible {
+.of-tf-btn:focus-visible,
+.of-step-btn:focus-visible,
+.of-range-btn:focus-visible,
+.of-live-btn:focus-visible,
+.of-reload-btn:focus-visible {
   outline: 2px solid var(--cyan, #38d3ee);
   outline-offset: 1px;
   border-radius: 4px;

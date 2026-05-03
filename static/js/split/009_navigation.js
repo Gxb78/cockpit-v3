@@ -43,6 +43,8 @@ function goPage(pageName) {
     p.classList.toggle("active", p.dataset.page === pageName);
   });
   _updateTitle(pageName);
+  // Dispatcher un event pour que les composants réagissent au changement de page
+  document.dispatchEvent(new CustomEvent('pageChange', { detail: { page: pageName } }));
   if (pageName === "journal") {
     updateCalendarMetricToggleUI();
     updateJournalViewToggleUI();
