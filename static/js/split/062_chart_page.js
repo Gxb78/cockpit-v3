@@ -649,6 +649,8 @@
   var INTERVAL_MINUTES = { '1m':1,'3m':3,'5m':5,'15m':15,'30m':30,'1h':60,'2h':120,'4h':240,'6h':360,'8h':480,'12h':720,'1d':1440,'3d':4320,'1w':10080,'1M':43200 };
   // ── VWAP (multi-periode) ──
   var _vwapInFlight = false;
+  var _vwapDrawing = false;
+  var _lastVwapFetch = 0;
 
   function _removeVwapSeries(key) {
     var s = vwapSeriesMap[key];
@@ -656,6 +658,7 @@
   }
 
   function _calcAndDrawVwap() {
+    console.log('[VWAP] 062 triggered by:', new Error().stack.split('\n')[2]);
     // Supprimer les series VWAP pour les periodes desactivees
     Object.keys(vwapSeriesMap).forEach(function (k) {
       if (activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
@@ -664,6 +667,10 @@
     // Skip si un appel est deja en vol (cascade auto-refresh)
     if (_vwapInFlight) return Promise.resolve();
     _vwapInFlight = true;
+    _vwapDrawing = true;
+
+    // Bloque l'auto-expand LWC pendant les setData VWAP
+    try { chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
 
     // Helper: compute cumulative VWAP from candles for one period
     function _computeVwap(period, candleArray) {
@@ -728,9 +735,12 @@
         });
     });
 
-    // Fin du VWAP — retourner la promesse pour chainer le zoom apres
+    // Fin du VWAP — restaurer l'auto-shift
     return Promise.all(fetches).finally(function () {
       _vwapInFlight = false;
+      _vwapDrawing = false;
+      try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true }); } catch(e) {}
+      try { chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
     });
   }
 
@@ -1062,7 +1072,7 @@
 
         candlestickSeries.setData(chartStyle === 'candlestick' ? candles : candles.map(function (c) { return { time: c.time, value: c.close }; }));
 
-        // VWAP
+        // VWAP — avec TTL 5min pour éviter les re-fetchs inutiles
         var zoomTarget = null;
         if (savedTarget) {
           zoomTarget = savedTarget;
@@ -1070,29 +1080,35 @@
           var total = candles.length;
           zoomTarget = { from: Math.max(0, total - 100), to: total + 15 };
         }
-        _calcAndDrawVwap().finally(function () {
-          // Appliquer le zoom APRES les VWAP pour eviter l'auto-expand LWC
-          if (zoomTarget) {
-            _applyZoomWithRetry(zoomTarget);
-            // One-shot: LWC notifie quand le layout est pret → on re-applique pour confirmation
-            var _firstTotal = zoomTarget.to - 15; // recalculer total depuis zoomTarget
-            var _zoomHandler = function() {
-              if (chart && chart.timeScale()) {
-                if (!_userIsInteracting) {
-                  try {
-                    chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, _firstTotal - 80), to: _firstTotal + 8 });
-                  } catch(e) {}
+        var _firstTotal = zoomTarget ? zoomTarget.to - 15 : 0;
+        if (!_lastVwapFetch || Date.now() - _lastVwapFetch > 300000) {
+          _lastVwapFetch = Date.now();
+          _calcAndDrawVwap().finally(function () {
+            _isFetching = false;
+            if (zoomTarget) {
+              _applyZoomWithRetry(zoomTarget);
+              // One-shot: LWC notifie quand le layout est pret → on re-applique pour confirmation
+              var _zoomHandler = function() {
+                if (_vwapDrawing) return;
+                if (chart && chart.timeScale()) {
+                  if (!_userIsInteracting) {
+                    try {
+                      chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, _firstTotal - 80), to: _firstTotal + 8 });
+                    } catch(e) {}
+                  }
+                  try { chart.timeScale().unsubscribeVisibleLogicalRangeChange(_zoomHandler); } catch(e) {}
                 }
+              };
+              try { chart.timeScale().subscribeVisibleLogicalRangeChange(_zoomHandler); } catch(e) {}
+              setTimeout(function() {
                 try { chart.timeScale().unsubscribeVisibleLogicalRangeChange(_zoomHandler); } catch(e) {}
-              }
-            };
-            try { chart.timeScale().subscribeVisibleLogicalRangeChange(_zoomHandler); } catch(e) {}
-            // Timeout de securite
-            setTimeout(function() {
-              try { chart.timeScale().unsubscribeVisibleLogicalRangeChange(_zoomHandler); } catch(e) {}
-            }, 2000);
-          }
-        });
+              }, 2000);
+            }
+          });
+        } else {
+          _isFetching = false;
+          if (zoomTarget) _applyZoomWithRetry(zoomTarget);
+        }
 
         // Volume Profile (passe les bougies pour recalcul)
         if (window.VolumeProfile) {
@@ -1116,7 +1132,6 @@
         setTimeout(function() {
           try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
         }, 50);
-        _isFetching = false;
       })
       .catch(function (err) {
         console.error('[chart] fetch error:', err);

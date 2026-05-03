@@ -17,6 +17,9 @@
   var vwapSeriesMap = {};
   var activeVwapPeriods = [];
   try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) activeVwapPeriods = s; } catch(e) {}
+  // Flag anti-boucle VWAP → RANGE CHANGE → VWAP
+  var _vwapDrawing = false;
+  var _lastVwapFetch = 0;
   var VWAP_COLORS = { '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
   var VWAP_INTERVALS = { '1D': '1h', '7D': '1h', '30D': '4h', '90D': '1d' };
   var VWAP_DAYS = { '1D': 1, '7D': 7, '30D': 30, '90D': 90 };
@@ -218,7 +221,9 @@
     if (s) { try { chart.removeSeries(s); } catch(e) {} delete vwapSeriesMap[key]; }
   }
   function _calcAndDrawVwap() {
+    console.log('[VWAP] triggered by:', new Error().stack.split('\n')[2]);
     console.log('[VWAP] _calcAndDrawVwap periods=', activeVwapPeriods, 'range before=', chart && chart.timeScale() ? JSON.stringify(chart.timeScale().getVisibleLogicalRange()) : 'no chart');
+    console.log('[VWAP] full stack:', new Error().stack);
     // Nettoyer les periodes desactivees
     Object.keys(vwapSeriesMap).forEach(function (k) {
       if (activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
@@ -227,6 +232,10 @@
     // Skip si un appel est deja en vol (evite la cascade auto-refresh)
     if (_vwapInFlight) return Promise.resolve();
     _vwapInFlight = true;
+    _vwapDrawing = true;
+
+    // Bloque l'auto-expand LWC pendant les setData VWAP
+    try { chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
 
     // Helper: compute VWAP from candleArray pour une periode donnee
     function _computeVwap(period, candleArray) {
@@ -291,9 +300,12 @@
         });
     });
 
-    // Fin du VWAP — retourner la promesse pour chainer le zoom apres
+    // Fin du VWAP — restaurer l'auto-shift + zoom
     return Promise.all(fetches).finally(function () {
       _vwapInFlight = false;
+      _vwapDrawing = false;
+      try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true }); } catch(e) {}
+      try { chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
     });
   }
 
@@ -655,7 +667,7 @@
         // Indicators
         _renderIndicators(candles);
 
-        // VWAP
+        // VWAP — avec TTL 5min pour éviter les re-fetchs inutiles
         var zoomTarget = null;
         if (savedTarget) {
           zoomTarget = savedTarget;
@@ -663,10 +675,16 @@
           var total = candles.length;
           zoomTarget = { from: Math.max(0, total - 100), to: total + 15 };
         }
-        _calcAndDrawVwap().finally(function () {
-          // Appliquer le zoom APRES les VWAP pour eviter l'auto-expand LWC
+        if (!_lastVwapFetch || Date.now() - _lastVwapFetch > 300000) {
+          _lastVwapFetch = Date.now();
+          _calcAndDrawVwap().finally(function () {
+            _isFetching = false;
+            if (zoomTarget) _applyZoomWithRetry(zoomTarget);
+          });
+        } else {
+          _isFetching = false;
           if (zoomTarget) _applyZoomWithRetry(zoomTarget);
-        });
+        }
 
         if (countdownPriceLine) {
           try { countdownPriceLine.applyOptions({ price: last.close }); } catch(e) {}
@@ -678,10 +696,10 @@
         // Subscribe aux changements de range pour debug
         try {
           chart.timeScale().subscribeVisibleLogicalRangeChange(function(range) {
+            if (_vwapDrawing) return;
             if (range) console.log('[RANGE CHANGE]', JSON.stringify(range), (new Error()).stack.split('\n')[2] || '');
           });
         } catch(e) {}
-        _isFetching = false;
       })
       .catch(function (err) {
         console.error('[btc-chart] fetch:', err);
