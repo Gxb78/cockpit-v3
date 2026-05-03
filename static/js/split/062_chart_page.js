@@ -663,10 +663,6 @@
     if (_vwapInFlight) return;
     _vwapInFlight = true;
 
-    var _savedRange = null, _savedLogical = null;
-    try { _savedRange = chart.timeScale().getVisibleRange(); } catch(e) {}
-    try { _savedLogical = chart.timeScale().getVisibleLogicalRange(); } catch(e) {}
-
     // Helper: compute cumulative VWAP from candles for one period
     function _computeVwap(period, candleArray) {
       var days = VWAP_DAYS[period] || 1;
@@ -730,10 +726,8 @@
         });
     });
 
-    // Restaurer le zoom une fois toutes les periodes calculees
+    // Fin du VWAP — pas de restore zoom (le zoom principal le gere)
     Promise.all(fetches).finally(function () {
-      if (_savedLogical) { try { chart.timeScale().setVisibleLogicalRange(_savedLogical); } catch(e) {} }
-      else if (_savedRange) { try { chart.timeScale().setVisibleRange(_savedRange); } catch(e) {} }
       _vwapInFlight = false;
     });
   }
