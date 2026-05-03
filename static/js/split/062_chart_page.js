@@ -15,8 +15,8 @@
   var vwapSeriesMap = {};
   var activeVwapPeriods = [];
   try {
-    var saved = JSON.parse(localStorage.getItem('chartVwapPeriods'));
-    if (Array.isArray(saved)) activeVwapPeriods = saved;
+    var savedVwap = JSON.parse(localStorage.getItem('chartVwapPeriods'));
+    if (Array.isArray(savedVwap)) activeVwapPeriods = savedVwap;
   } catch(e) {}
   var VWAP_COLORS = { '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
   var VWAP_INTERVALS = { '1D': '1h', '7D': '1h', '30D': '4h', '90D': '1d' };
@@ -47,10 +47,10 @@
 
   // Load saved settings
   try {
-    var saved = JSON.parse(localStorage.getItem('chartIndSettings'));
-    if (saved) {
-      Object.keys(saved).forEach(function (k) {
-        if (indSettings[k]) Object.assign(indSettings[k], saved[k]);
+    var savedInd = JSON.parse(localStorage.getItem('chartIndSettings'));
+    if (savedInd) {
+      Object.keys(savedInd).forEach(function (k) {
+        if (indSettings[k]) Object.assign(indSettings[k], savedInd[k]);
       });
     }
   } catch(e) {}
@@ -63,15 +63,16 @@
   };
 
   var PAIR_NAMES = { 'BTCUSDT': 'BTC/USDT', 'ETHUSDT': 'ETH/USDT' };
+  function getPairName(s) { return PAIR_NAMES[s] || s; }
 
   // ── INDICATOR CALCULATIONS ──
 
   function calcSMA(candles, period) {
-    var result = [];
-    for (var i = period - 1; i < candles.length; i++) {
-      var sum = 0;
-      for (var j = 0; j < period; j++) sum += candles[i - j].close;
-      result.push({ time: candles[i].time, value: sum / period });
+    var result = [], sum = 0;
+    for (var i = 0; i < candles.length; i++) {
+      sum += candles[i].close;
+      if (i >= period) sum -= candles[i - period].close;
+      if (i >= period - 1) result.push({ time: candles[i].time, value: sum / period });
     }
     return result;
   }
@@ -79,7 +80,10 @@
   function calcEMA(candles, period) {
     var result = [];
     var k = 2 / (period + 1);
-    var ema = candles[0].close;
+    // Warmup : SMA des period premieres bougies
+    var ema = 0;
+    for (var w = 0; w < period; w++) ema += candles[w].close;
+    ema /= period;
     for (var i = 0; i < candles.length; i++) {
       ema = (candles[i].close - ema) * k + ema;
       if (i >= period - 1) result.push({ time: candles[i].time, value: ema });
@@ -314,7 +318,14 @@
   function initChartPage() {
     var container = document.getElementById('chartCanvas');
     if (!container) return;
-    if (chart) { _fetchAndRender(true); return; }
+    if (chart) {
+      // Nettoyer avant refresh : WebSocket, timers, drawings
+      _disconnectWs();
+      if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+      if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+      _fetchAndRender(true);
+      return;
+    }
 
     _loadLibrary(function () {
       _createChart(container);
@@ -417,6 +428,9 @@
           var cw = wrap.clientWidth;
           var ch = wrap.clientHeight;
           if (cw > 0 && ch > 0) chart.applyOptions({ width: cw, height: ch });
+          if (window.ChartDrawings && window.ChartDrawings.onResize) {
+            window.ChartDrawings.onResize();
+          }
         }
       });
       resizeObserver.observe(wrap);
@@ -934,7 +948,7 @@
       localStorage.setItem('chartDefInterval', currentInterval);
       localStorage.setItem('chartDefSymbol', currentSymbol);
       localStorage.setItem('chartDefStyle', chartStyle);
-      localStorage.setItem('chartVwapPeriod', activeVwapPeriod || '');
+      localStorage.setItem('chartVwapPeriods', JSON.stringify(activeVwapPeriods));
     } catch(e) {}
   }
 
@@ -1010,7 +1024,7 @@
           }
         }
       })
-      .catch(function (err) { console.error('[chart] fetch:', err); });
+      .catch(function (err) { console.error('[chart] fetch error:', err); });
   }
 
   function _updateStats(candles) {
@@ -1094,13 +1108,34 @@
 
   // ── INIT ──
 
+  // Polling robuste : attend que #chartCanvas soit dans le DOM avant de lancer le callback
+  // maxRetries × interval ms (par défaut 20 × 50ms = 1s max)
+  function _waitForContainer(callback, maxRetries, interval) {
+    maxRetries = maxRetries || 20;
+    interval = interval || 50;
+    var retries = 0;
+    function poll() {
+      if (document.getElementById('chartCanvas')) {
+        callback();
+        return;
+      }
+      retries++;
+      if (retries >= maxRetries) {
+        console.warn('[chart] #chartCanvas introuvable apres ' + (maxRetries * interval) + 'ms');
+        return;
+      }
+      setTimeout(poll, interval);
+    }
+    poll();
+  }
+
   function _tryInit() {
     if (document.querySelector('.page[data-page="chart"].active')) {
-      initChartPage();
+      _waitForContainer(initChartPage);
     }
   }
 
-  document.addEventListener('DOMContentLoaded', function () { setTimeout(_tryInit, 500); });
+  document.addEventListener('DOMContentLoaded', function () { setTimeout(_tryInit, 50); });
 
   // Hook dans goPage existante
   var _origGoPage = window.goPage;
@@ -1108,15 +1143,15 @@
     window.goPage = function (pageName) {
       _origGoPage(pageName);
       if (pageName === 'chart') {
-        setTimeout(function () {
+        _waitForContainer(function () {
           initChartPage();
-          setTimeout(function () {
+          _waitForContainer(function () {
             if (chart) {
               var wrap = document.getElementById('chartCanvasWrap');
               if (wrap) chart.applyOptions({ width: wrap.clientWidth, height: wrap.clientHeight });
             }
-          }, 100);
-        }, 300);
+          }, 10, 100);
+        });
       }
     };
   }

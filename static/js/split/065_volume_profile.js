@@ -44,15 +44,13 @@
     _createCanvas();
     _bindTimeScale();
 
-    // Re-render on time scale change (zoom/pan)
+    // Re-render on time scale change (zoom/pan) — debounce double fire
     if (state.chart && state.chart.timeScale()) {
+      var _vpDeb = null;
+      function _vpSched() { if (_vpDeb) return; _vpDeb = setTimeout(function () { _vpDeb = null; _renderVP(); }, 16); }
       try {
-        state.chart.timeScale().subscribeVisibleTimeRangeChange(function () {
-          _renderVP();
-        });
-        state.chart.timeScale().subscribeVisibleLogicalRangeChange(function () {
-          _renderVP();
-        });
+        state.chart.timeScale().subscribeVisibleTimeRangeChange(_vpSched);
+        state.chart.timeScale().subscribeVisibleLogicalRangeChange(_vpSched);
       } catch (e) {}
     }
 

@@ -62,11 +62,11 @@
   // ── INDICATOR CALCULATIONS (same as 062) ──
 
   function _calcSMA(candles, period) {
-    var result = [];
-    for (var i = period - 1; i < candles.length; i++) {
-      var sum = 0;
-      for (var j = 0; j < period; j++) sum += candles[i - j].close;
-      result.push({ time: candles[i].time, value: sum / period });
+    var result = [], sum = 0;
+    for (var i = 0; i < candles.length; i++) {
+      sum += candles[i].close;
+      if (i >= period) sum -= candles[i - period].close;
+      if (i >= period - 1) result.push({ time: candles[i].time, value: sum / period });
     }
     return result;
   }
@@ -74,7 +74,10 @@
   function _calcEMA(candles, period) {
     var result = [];
     var k = 2 / (period + 1);
-    var ema = candles[0].close;
+    // Warmup : SMA des period premieres bougies
+    var ema = 0;
+    for (var w = 0; w < period; w++) ema += candles[w].close;
+    ema /= period;
     for (var i = 0; i < candles.length; i++) {
       ema = (candles[i].close - ema) * k + ema;
       if (i >= period - 1) result.push({ time: candles[i].time, value: ema });

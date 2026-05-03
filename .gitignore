@@ -15,6 +15,9 @@ data/backups/
 .DS_Store
 Thumbs.db
 
+# Build artifacts
+*.bak
+
 # IDE
 .vscode/
 .idea/

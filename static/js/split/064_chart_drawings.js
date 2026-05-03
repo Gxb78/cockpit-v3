@@ -89,9 +89,18 @@
   }
 
   function destroyDrawings() {
-    if (state.canvas && state.canvas.parentNode) state.canvas.parentNode.removeChild(state.canvas);
+    _stopRenderLoop();
+    clearTimeout(_interactionTimeout);
+    if (state.canvas) {
+      state.canvas.removeEventListener('click', _onCanvasClick);
+      state.canvas.removeEventListener('mousemove', _onMouseMove);
+      state.canvas.removeEventListener('mouseleave', _onMouseLeave);
+      state.canvas.removeEventListener('dblclick', _onDblClick);
+      if (state.canvas.parentNode) state.canvas.parentNode.removeChild(state.canvas);
+    }
+    window.removeEventListener('resize', _onWindowResize);
     state.chart = null; state.series = null; state.container = null;
-    state.ctx = null; state.canvas = null; state.drawings = [];
+    state.ctx = null; state.canvas = null; state.drawings = []; state.undoStack = [];
   }
 
   // ── CANVAS ──
@@ -501,16 +510,17 @@
     });
 
     if (state.chart && state.chart.timeScale()) {
-      state.chart.timeScale().subscribeVisibleTimeRangeChange(function () {
-        try { _resizeCanvas(); _renderAll(); } catch(e) { console.error('[draw] timeRange:', e); }
-      });
-      state.chart.timeScale().subscribeVisibleLogicalRangeChange(function () {
-        try { _resizeCanvas(); _renderAll(); } catch(e) { console.error('[draw] logicalRange:', e); }
-      });
+      var _debounceTimer = null;
+      function _scheduleRender() {
+        if (_debounceTimer) return;
+        _debounceTimer = setTimeout(function () { _debounceTimer = null; _renderAll(); }, 16);
+      }
+      state.chart.timeScale().subscribeVisibleTimeRangeChange(_scheduleRender);
+      state.chart.timeScale().subscribeVisibleLogicalRangeChange(_scheduleRender);
     }
 
-    // Redraw on window resize
-    window.addEventListener('resize', _onWindowResize);
+    // Redraw on window resize — DEPRECATED, utilise le ResizeObserver du chart page
+    // window.addEventListener('resize', _onWindowResize);
   }
 
   function _onWindowResize() {
@@ -1076,6 +1086,7 @@
     saveTemplate: saveTemplate, loadTemplate: loadTemplate,
     listTemplates: listTemplates, deleteTemplate: deleteTemplate,
     getDrawings: function () { return state.drawings.slice(); },
+    onResize: function () { _resizeCanvas(); _renderAll(); },
     // Session zones
     getSessionSettings: getSessionSettings,
     updateSessions: updateSessions,
