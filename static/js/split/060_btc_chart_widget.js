@@ -307,10 +307,6 @@
       // Appliquer le zoom synchrone (timestamps invariants)
       if (zoomTarget && chart && chart.timeScale()) {
         try { chart.timeScale().setVisibleRange({ from: zoomTarget.from, to: zoomTarget.to }); } catch(e) {}
-        // scrollToRealTime seulement au premier chargement (pas sur les refreshes VWAP)
-        if (!zoomTarget.hasSavedTarget) {
-          try { chart.timeScale().scrollToRealTime(); } catch(e) {}
-        }
       }
 
       console.log('[VWAP] range APRÈS finally:', JSON.stringify(chart.timeScale().getVisibleRange()));
@@ -706,6 +702,11 @@
         if (priceEl) priceEl.textContent = '$' + Number(last.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
         series.setData(candles);
 
+        // Point fantôme pour étendre le range autorisé par LWC (marge droite)
+        var intervalSec = Math.floor(_getIntervalMs(currentInterval) / 1000);
+        var phantomTime = last.time + intervalSec * 25;
+        try { series.update({ time: phantomTime, open: last.close, high: last.close, low: last.close, close: last.close }); } catch(e) {}
+
         // Indicators
         _renderIndicators(candles);
 
@@ -715,13 +716,11 @@
           zoomTarget = { from: savedTarget.from, to: savedTarget.to, hasSavedTarget: true };
         } else if (!keepZoom) {
           // Premier chargement : calculer en timestamps (invariant VWAP)
-          // rightOffset dans les options chart ne s'applique pas avec
-          // setVisibleRange, donc on ajoute la marge au timestamp
           var intervalSec = Math.floor(_getIntervalMs(currentInterval) / 1000);
           var firstIdx = Math.max(0, candles.length - 100);
           var fromTime = candles[firstIdx].time;
-          var toTime = candles[candles.length - 1].time;
-          zoomTarget = { from: fromTime, to: toTime };
+          var phantomTime = candles[candles.length - 1].time + intervalSec * 25;
+          zoomTarget = { from: fromTime, to: phantomTime, hasSavedTarget: false };
         }
         if (!_lastVwapFetch || Date.now() - _lastVwapFetch > 300000) {
           _lastVwapFetch = Date.now();
