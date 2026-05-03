@@ -5484,7 +5484,7 @@ body.light-mode .day-dots { gap: 3px; }
 /* ============================================================
    WIZARD — Taille reduite 420×520
    ============================================================ */
-.wiz { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); }
+.wiz { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); overflow: hidden; }
 .wiz-panel {
   width: min(420px, 94vw);
   height: 520px;
