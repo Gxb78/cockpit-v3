@@ -11758,9 +11758,9 @@ TradeEditorController.renderHtml = function (day, trade) {
   // ── VOLUME PROFILE ──
 
   function _initVolumeProfile() {
-    var wrap = document.getElementById('chartCanvasWrap');
-    if (!wrap || !window.VolumeProfile) return;
-    window.VolumeProfile.init(chart, candlestickSeries, wrap);
+    var chartEl = document.getElementById('chartCanvas');
+    if (!chartEl || !window.VolumeProfile) return;
+    window.VolumeProfile.init(chart, candlestickSeries, chartEl);
   }
 
   // ── VWAP ──
@@ -12785,12 +12785,46 @@ TradeEditorController.renderHtml = function (day, trade) {
   }
 
   function _resizeCanvas() {
-    var c = state.canvas; if (!c) return;
-    var rect = state.container.getBoundingClientRect();
+    var c = state.canvas; if (!c || !state.container) return;
+    var pane = _getLwcPaneRect();
+    var rect = pane || { left: 0, top: 0, width: state.container.clientWidth, height: state.container.clientHeight };
     var dpr = window.devicePixelRatio || 1;
-    c.width = rect.width * dpr; c.height = rect.height * dpr;
-    c.style.width = rect.width + 'px'; c.style.height = rect.height + 'px';
+    c.style.left = rect.left + 'px';
+    c.style.top = rect.top + 'px';
+    c.style.width = rect.width + 'px';
+    c.style.height = rect.height + 'px';
+    c.width = Math.round(rect.width * dpr);
+    c.height = Math.round(rect.height * dpr);
     if (state.ctx) state.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  // Trouve le rectangle du pane LWC interne (pas tout le container)
+  function _getLwcPaneRect() {
+    if (!state.container) return null;
+    var containerRect = state.container.getBoundingClientRect();
+    var canvases = Array.prototype.slice.call(
+      state.container.querySelectorAll('canvas')
+    ).filter(function (c) {
+      return c !== state.canvas && !c.classList.contains('draw-overlay');
+    });
+    if (!canvases.length) return null;
+    var best = null, bestArea = 0;
+    for (var i = 0; i < canvases.length; i++) {
+      var r = canvases[i].getBoundingClientRect();
+      var area = r.width * r.height;
+      if (r.width > 100 && r.height > 100 && area > bestArea) {
+        best = r; bestArea = area;
+      }
+    }
+    if (!best) return null;
+    return {
+      left: best.left - containerRect.left,
+      top: best.top - containerRect.top,
+      width: best.width,
+      height: best.height,
+      absLeft: best.left,
+      absTop: best.top,
+    };
   }
 
   // ── COORDINATES ──
@@ -12818,7 +12852,10 @@ TradeEditorController.renderHtml = function (day, trade) {
   }
 
   function _toTimePrice(clientX, clientY) {
-    var rect = state.container.getBoundingClientRect();
+    var pane = _getLwcPaneRect();
+    var rect = pane
+      ? { left: pane.absLeft, top: pane.absTop }
+      : state.container.getBoundingClientRect();
     var x = clientX - rect.left;
     var y = clientY - rect.top;
     var tp = state.chart.timeScale().coordinateToTime(x);
@@ -13178,6 +13215,37 @@ TradeEditorController.renderHtml = function (day, trade) {
     state.canvas.addEventListener('mouseleave', _onMouseLeave);
     state.canvas.addEventListener('dblclick', _onDblClick);
 
+    // Click handler sur le conteneur pour hit-test en mode curseur
+    if (state.container) {
+      state.container.addEventListener('click', function (e) {
+        if (state.activeTool === 'cursor') {
+          var tp = _toTimePrice(e.clientX, e.clientY);
+          if (tp) {
+            var hitIdx = _hitTestIndex(tp.time, tp.price);
+            if (hitIdx >= 0) {
+              e.stopPropagation();
+              _selectDrawing(hitIdx);
+            }
+          }
+        }
+      });
+      // Fallback: document-level click si le container ne capte pas
+      document.addEventListener('click', function (e) {
+        if (state.activeTool !== 'cursor') return;
+        if (!state.container || !state.container.contains(e.target)) return;
+        var tp = _toTimePrice(e.clientX, e.clientY);
+        console.log('[drawings] cursor click', e.clientX, e.clientY, tp);
+        if (tp) {
+          var hitIdx = _hitTestIndex(tp.time, tp.price);
+          console.log('[drawings] hitIdx', hitIdx);
+          if (hitIdx >= 0) {
+            e.stopPropagation();
+            _selectDrawing(hitIdx);
+          }
+        }
+      });
+    }
+
     // Render loop synchro parfaite pendant interaction souris
     if (state.container) {
       state.container.addEventListener('mousemove', function () {
@@ -13474,7 +13542,15 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   function _renderAll() {
     var ctx = state.ctx; if (!ctx || !state.canvas) return;
+
+    // Clear en repere bitmap (pas CSS) pour eviter les artefacts Retina
+    var dpr = window.devicePixelRatio || 1;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, state.canvas.width, state.canvas.height);
+    ctx.restore();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
     _renderSessions();
     for (var i = 0; i < state.drawings.length; i++) { _renderDrawing(state.drawings[i], i); _drawSelectionIndicators(state.drawings[i], i); }
     if (state.dragStart && state.previewPoint && state.activeTool !== 'cursor') {

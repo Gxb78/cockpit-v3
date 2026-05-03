@@ -525,9 +525,9 @@
   // ── VOLUME PROFILE ──
 
   function _initVolumeProfile() {
-    var wrap = document.getElementById('chartCanvasWrap');
-    if (!wrap || !window.VolumeProfile) return;
-    window.VolumeProfile.init(chart, candlestickSeries, wrap);
+    var chartEl = document.getElementById('chartCanvas');
+    if (!chartEl || !window.VolumeProfile) return;
+    window.VolumeProfile.init(chart, candlestickSeries, chartEl);
   }
 
   // ── VWAP ──
