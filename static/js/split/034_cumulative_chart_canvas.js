@@ -53,7 +53,7 @@ function renderCumChart(data, opts = {}) {
       const v = minV + (range * i / 4);
       const y = pad.t + ch - (i/4) * ch;
       ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l+cw, y); ctx.stroke();
-      ctx.fillText(v.toFixed(0)+"$", pad.l - 8, y + 3);
+      ctx.fillText(fmtMoney(v), pad.l - 8, y + 3);
     }
     ctx.strokeStyle = "rgba(255,255,255,0.10)"; ctx.setLineDash([4,4]);
     ctx.beginPath(); ctx.moveTo(pad.l, zeroY); ctx.lineTo(pad.l+cw, zeroY); ctx.stroke();
