@@ -576,7 +576,6 @@
             + ' | container=' + (document.getElementById('btcChartContainer') ? 'ok' : 'null'));
           toast('Aucune donnee disponible pour ' + currentInterval, 'error'); return;
         }
-        _lastCandles = candles;
         var last = candles[candles.length - 1];
         lastCandleTime = last.time * 1000;
         _startCountdown();

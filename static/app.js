@@ -11603,7 +11603,6 @@ TradeEditorController.renderHtml = function (day, trade) {
             + ' | container=' + (document.getElementById('btcChartContainer') ? 'ok' : 'null'));
           toast('Aucune donnee disponible pour ' + currentInterval, 'error'); return;
         }
-        _lastCandles = candles;
         var last = candles[candles.length - 1];
         lastCandleTime = last.time * 1000;
         _startCountdown();
@@ -12689,7 +12688,6 @@ TradeEditorController.renderHtml = function (day, trade) {
         if (data.error) { console.error('[chart]', data.error); toast(data.error, 'error'); return; }
         var candles = data.candles || [];
         if (!candles.length) return;
-        _lastCandles = candles;
 
         var last = candles[candles.length - 1];
         lastCandleTime = last.time * 1000;

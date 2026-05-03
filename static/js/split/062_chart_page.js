@@ -989,7 +989,6 @@
         if (data.error) { console.error('[chart]', data.error); toast(data.error, 'error'); return; }
         var candles = data.candles || [];
         if (!candles.length) return;
-        _lastCandles = candles;
 
         var last = candles[candles.length - 1];
         lastCandleTime = last.time * 1000;
