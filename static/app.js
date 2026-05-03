@@ -11380,8 +11380,25 @@ TradeEditorController.renderHtml = function (day, trade) {
   var _lastFetchTs = 0;
   var _FETCH_COOLDOWN_MS = 5000;
 
-  // Protection first-view (evite que WS override le zoom initial)
-  var _initialViewSet = false;
+  // Flag interaction utilisateur (evite override WS pendant scroll)
+  var _userIsInteracting = false;
+
+  // ── rAF-retry pour setVisibleLogicalRange ──
+  function _applyZoomWithRetry(targetRange, maxAttempts) {
+    if (!chart || !chart.timeScale()) return;
+    maxAttempts = maxAttempts || 5;
+    var attempts = 0;
+    function tryApply() {
+      if (++attempts > maxAttempts) return;
+      try {
+        chart.timeScale().setVisibleLogicalRange(targetRange);
+        var actual = chart.timeScale().getVisibleLogicalRange();
+        if (actual && Math.abs(actual.from - targetRange.from) <= 1 && Math.abs(actual.to - targetRange.to) <= 1) return;
+      } catch(e) {}
+      requestAnimationFrame(tryApply);
+    }
+    requestAnimationFrame(tryApply);
+  }
 
   function _connectWs() {
     if (ws && ws.readyState === WebSocket.CONNECTING) return;
@@ -11622,8 +11639,15 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
     _isFetching = true;
 
-    // Sauvegarder le zoom utilisateur avant refresh (en temps ET en logique)
-    var savedRange = null;
+    // Sauvegarder le zoom si on doit le restaurer apres setData
+    var savedTarget = null;
+    if (keepZoom && !_userIsInteracting && chart && chart.timeScale()) {
+      try {
+        var vis = chart.timeScale().getVisibleLogicalRange();
+        if (vis) savedTarget = { from: vis.from, to: vis.to };
+      } catch(e) {}
+      try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
+    }
 
     var url = '/api/market/klines?symbol=BTCUSDT&interval=' + currentInterval + '&limit=300';
     fetch(url)
@@ -11659,15 +11683,12 @@ TradeEditorController.renderHtml = function (day, trade) {
           try { countdownPriceLine.applyOptions({ price: last.close }); } catch(e) {}
         }
         _updateCountdownLabel();
-        // Toujours centrer sur les dernieres bougies
-        var total = candles.length;
-        var from = Math.max(0, total - 80);
-        try {
-          chart.timeScale().setVisibleLogicalRange({ from: from, to: total });
-        } catch(e) {
-          setTimeout(function() {
-            try { chart.timeScale().setVisibleLogicalRange({ from: from, to: total }); } catch(e2) { chart.timeScale().fitContent(); }
-          }, 100);
+        // Appliquer le zoom avec rAF-retry (verification convergente)
+        if (savedTarget) {
+          _applyZoomWithRetry(savedTarget);
+        } else if (!keepZoom) {
+          var total = candles.length;
+          _applyZoomWithRetry({ from: Math.max(0, total - 80), to: total });
         }
         setTimeout(function() {
           try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
@@ -11688,6 +11709,12 @@ TradeEditorController.renderHtml = function (day, trade) {
   }
 
   // ── INIT ──
+
+  // Interaction listeners pour _userIsInteracting
+  document.addEventListener('mousedown', function() { _userIsInteracting = true; }, { passive: true });
+  document.addEventListener('mouseup', function() { _userIsInteracting = false; }, { passive: true });
+  document.addEventListener('touchstart', function() { _userIsInteracting = true; }, { passive: true });
+  document.addEventListener('touchend', function() { _userIsInteracting = false; }, { passive: true });
 
   function _waitForContainer(callback, maxRetries, interval) {
     maxRetries = maxRetries || 20;
@@ -11772,8 +11799,25 @@ TradeEditorController.renderHtml = function (day, trade) {
   var _lastFetchTs = 0;
   var _FETCH_COOLDOWN_MS = 5000;
 
-  // Protection first-view (evite que WS override le zoom initial)
-  var _initialViewSet = false;
+  // Flag interaction utilisateur (evite override WS pendant scroll)
+  var _userIsInteracting = false;
+
+  // ── rAF-retry pour setVisibleLogicalRange ──
+  function _applyZoomWithRetry(targetRange, maxAttempts) {
+    if (!chart || !chart.timeScale()) return;
+    maxAttempts = maxAttempts || 5;
+    var attempts = 0;
+    function tryApply() {
+      if (++attempts > maxAttempts) return;
+      try {
+        chart.timeScale().setVisibleLogicalRange(targetRange);
+        var actual = chart.timeScale().getVisibleLogicalRange();
+        if (actual && Math.abs(actual.from - targetRange.from) <= 1 && Math.abs(actual.to - targetRange.to) <= 1) return;
+      } catch(e) {}
+      requestAnimationFrame(tryApply);
+    }
+    requestAnimationFrame(tryApply);
+  }
 
   // Settings state
   var indSettings = {
@@ -12060,6 +12104,14 @@ TradeEditorController.renderHtml = function (day, trade) {
       _fetchAndRender(true, 'user');
       return;
     }
+
+    // Interaction listeners pour _userIsInteracting
+    function _onInteractStart() { _userIsInteracting = true; }
+    function _onInteractEnd() { _userIsInteracting = false; }
+    document.addEventListener('mousedown', _onInteractStart, { passive: true });
+    document.addEventListener('mouseup', _onInteractEnd, { passive: true });
+    document.addEventListener('touchstart', _onInteractStart, { passive: true });
+    document.addEventListener('touchend', _onInteractEnd, { passive: true });
 
     _loadLibrary(function () {
       _createChart(container);
@@ -12736,9 +12788,15 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
     _isFetching = true;
 
-    // Sauvegarder le zoom utilisateur avant refresh (en temps ET en logique)
-    var savedRange = null;
-    var savedLogical = null;
+    // Sauvegarder le zoom si on doit le restaurer apres setData
+    var savedTarget = null;
+    if (keepZoom && !_userIsInteracting && chart && chart.timeScale()) {
+      try {
+        var vis = chart.timeScale().getVisibleLogicalRange();
+        if (vis) savedTarget = { from: vis.from, to: vis.to };
+      } catch(e) {}
+      try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
+    }
 
     var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=500';
     fetch(url)
@@ -12782,15 +12840,14 @@ TradeEditorController.renderHtml = function (day, trade) {
           return { time: c.time, value: c.volume, color: c.close >= c.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' };
         }));
 
-        // Toujours centrer sur les dernieres bougies (desactive le restore keepZoom)
-        var total = candles.length;
-        var from = Math.max(0, total - 80);
-        try {
-          chart.timeScale().setVisibleLogicalRange({ from: from, to: total });
-        } catch(e) {
-          setTimeout(function() {
-            try { chart.timeScale().setVisibleLogicalRange({ from: from, to: total }); } catch(e2) { chart.timeScale().fitContent(); }
-          }, 100);
+        // Appliquer le zoom avec rAF-retry (verification convergente)
+        if (savedTarget) {
+          // Restaurer le zoom d'avant le fetch (WS/refresh)
+          _applyZoomWithRetry(savedTarget);
+        } else if (!keepZoom) {
+          // Premier chargement : centrer sur les dernieres bougies
+          var total = candles.length;
+          _applyZoomWithRetry({ from: Math.max(0, total - 80), to: total });
         }
         // Unlock vertical scroll by disabling autoScale AFTER data is visible
         setTimeout(function() {
