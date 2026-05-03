@@ -272,7 +272,7 @@
     if (closeBtn) {
       closeBtn.addEventListener("click", function () {
         var t = document.getElementById("toastInsight");
-        if (t) t.classList.remove("toast-insight--visible");
+        if (t) t.classList.remove("show");
         if (_insightsToastTimeout) clearTimeout(_insightsToastTimeout);
       });
     }
@@ -300,7 +300,6 @@
     var from = document.getElementById("filterFrom");
     var to = document.getElementById("filterTo");
     var instr = document.getElementById("filterInstrument");
-    var strat = document.getElementById("filterStrategy");
     var refresh = document.getElementById("insightsRefreshBtn");
     if (!from || !to) return;
 
@@ -310,7 +309,6 @@
       from.value = saved.from || _getFirstDayOfMonth();
       to.value = saved.to || _getTodayStr();
       if (saved.instrument && instr) instr.value = saved.instrument;
-      if (saved.strategy && strat) strat.value = saved.strategy;
     } else {
       // Try to inherit from journal: use current month range
       if (typeof getJournalCustomWindow === "function" && typeof fmtDateKey === "function") {
