@@ -844,3 +844,10 @@ Cette section documente les features ajoutées, les conventions établies, et le
 - Regle de prevention: Timeout = 3s max pour les proxies API externes. Ajouter `log.warning` sur les timeouts Binance pour diagnositic. Les VWAP multi-TF doivent echouer silencieusement (log only, pas de toast).
 - Test de non-regression: Charger la page Today → le widget BTC chart doit s'afficher immediatement meme si Binance est down. Les VWAP doivent etre absents (pas d'etat d'erreur visible).
 - Fichiers a surveiller: app_parts/23_routes_market.py, static/js/split/060_btc_chart_widget.js
+
+### BUG-20260506-06 — JS bundle bloque en Pending (serveur Flask mono-thread)
+- Symptome: `app.js` reste en Pending (0 B) dans le navigateur, CSS se charge normalement. La page reste noire sans data.
+- Cause racine: `app.run(host, port, debug)` sans `threaded=True`. Flask par defaut est mono-thread. Quand le proxy Binance bloque le thread (3s), la reponse du JS (657 KB) est suspendue → le navigateur attend.
+- Regle de prevention: Toujours `threaded=True` sur `app.run()` en dev. En prod, utiliser waitress/gunicorn.
+- Test de non-regression: Lancer le serveur, charger la page → `app.js` doit charger en <500ms meme si Binance est down.
+- Fichiers a surveiller: app_parts/18_launcher.py

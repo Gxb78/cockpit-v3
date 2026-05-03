@@ -78,4 +78,4 @@ def launch():
         open_browser_enabled,
         browser_url,
     )
-    app.run(host=host, port=port, debug=debug_mode)
+    app.run(host=host, port=port, debug=debug_mode, threaded=True)
