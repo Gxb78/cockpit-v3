@@ -177,6 +177,7 @@ def db_info():
         size_str = f"{size_bytes / 1024:.1f} Ko"
     else:
         size_str = f"{size_bytes / 1024 / 1024:.1f} Mo"
+    db = get_db()
     return jsonify({
         "db_path": db_path,
         "size_bytes": size_bytes,

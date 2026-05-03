@@ -46,7 +46,7 @@ function updateAppShell(pageName) {
 
 function bindAppShellActions() {
   document.getElementById("shellNewEntryBtn")?.addEventListener("click", function () {
-    wizOpen({ date: todayKey() });
+    wizOpen({});
   });
 
   document.getElementById("shellCmdkBtn")?.addEventListener("click", function () {

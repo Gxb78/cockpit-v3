@@ -32,10 +32,12 @@ function _wizStepInstrument() {
 }
 
 function wizSelectInstrument(id) {
-  if (!wizState) return;
+  console.log('[WIZ] wizSelectInstrument(' + id + ')');
+  if (!wizState) { console.log('[WIZ] wizSelectInstrument: no wizState'); return; }
   wizState.data.instrument = wizCanonicalInstrument(id);
   _wizRender();
-  setTimeout(wizNext, 200);
+  if (_wizTimer) clearTimeout(_wizTimer);
+  _wizTimer = setTimeout(wizNext, 200);
 }
 
 // ── Session ──
@@ -60,10 +62,12 @@ function _wizStepSession() {
 }
 
 function wizSelectSession(id) {
-  if (!wizState) return;
+  console.log('[WIZ] wizSelectSession(' + id + ')');
+  if (!wizState) { console.log('[WIZ] wizSelectSession: no wizState'); return; }
   wizState.data.session = id;
   _wizRender();
-  setTimeout(wizNext, 200);
+  if (_wizTimer) clearTimeout(_wizTimer);
+  _wizTimer = setTimeout(wizNext, 200);
 }
 
 // ── Strategy ──
@@ -118,7 +122,8 @@ function wizSelectStrategy(id) {
   if (!wizState) return;
   wizState.data.strategy = id;
   _wizRender();
-  setTimeout(wizNext, 200);
+  if (_wizTimer) clearTimeout(_wizTimer);
+  _wizTimer = setTimeout(wizNext, 200);
 }
 
 // ── Day Context ──

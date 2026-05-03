@@ -3890,7 +3890,7 @@ body.light-mode .day-dots { gap: 3px; }
 }
 .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0,229,255,0.40); }
 .btn-primary:hover::after { transform: translateX(100%); }
-.btn-primary svg { width: 14px; height: 14px; }
+.btn-primary svg { width: 14px; height: 14px; pointer-events: none; }
 
 .btn-ghost {
   background: rgba(255,255,255,0.04);
@@ -5244,7 +5244,7 @@ body.light-mode .day-dots { gap: 3px; }
   flex-shrink: 0;
 }
 .wiz-btn-icon:hover { border-color: var(--border-strong); color: var(--text); }
-.wiz-btn-icon svg { width: 16px; height: 16px; }
+.wiz-btn-icon svg { width: 16px; height: 16px; pointer-events: none; }
 .wiz-btn-icon.invisible { visibility: hidden; pointer-events: none; }
 
 .wiz-step-indicator {
@@ -5487,8 +5487,7 @@ body.light-mode .day-dots { gap: 3px; }
 .wiz { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); overflow: hidden; }
 .wiz-panel {
   width: min(420px, 94vw);
-  height: 520px;
-  max-height: 92dvh;
+  height: min(85dvh, 780px);
   display: flex;
   flex-direction: column;
   background: var(--surface);
@@ -5511,7 +5510,7 @@ body.light-mode .day-dots { gap: 3px; }
 }
 .wiz-rail-mode .wiz-panel {
   width: min(660px, calc(100vw - 280px));
-  height: min(360px, 70dvh);
+  height: min(520px, 80dvh);
   box-shadow: 0 18px 48px rgba(0,0,0,0.35);
   margin: 0;
 }
@@ -5697,7 +5696,7 @@ body.light-mode .day-dots { gap: 3px; }
 .wiz-skip-btn:hover { color: var(--text); border-color: var(--border-strong); }
 .wiz-skip-btn.invisible { visibility: hidden; pointer-events: none; }
 .wiz-next-btn { display: flex; align-items: center; gap: 7px; padding: 11px 22px; font-size: 0.9rem; }
-.wiz-next-btn svg { width: 15px; height: 15px; }
+.wiz-next-btn svg { width: 15px; height: 15px; pointer-events: none; }
 
 /* Draft banner */
 .wiz-draft-banner {
@@ -17260,5 +17259,189 @@ body.light-mode .draw-toolbar--inline {
 .draw-lock-btn[data-locked="true"] {
   background: rgba(245, 158, 11, 0.12);
   border-color: #f59e0b;
+}
+}
+
+/* ---- 066_orderflow.css ---- */
+@layer components {
+/* ---- 066_orderflow.css ----
+ * Orderflow page — Canvas 2D full viewport custom engine.
+ * Independant de Lightweight Charts et de la page Chart classique.
+ */
+
+/* ── Page layout ── */
+.page[data-page="orderflow"].active {
+  display: flex;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+.of-layout {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  background: var(--bg, #0a0a0f);
+}
+
+/* ── Canvas plein écran (occupe tout l'espace dispo) ── */
+.of-canvas {
+  flex: 1;
+  min-height: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  /* Désactiver le comportement natif du navigateur pour le wheel/pan */
+  touch-action: none;
+}
+
+/* ── Top bar flottant (overlay par-dessus le canvas, pas de layout shift) ── */
+.of-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  gap: 12px;
+  flex-shrink: 0;
+  z-index: 10;
+  pointer-events: none; /* laisse passer les clics vers le canvas */
+}
+
+.of-topbar > * {
+  pointer-events: auto; /* les enfants sont cliquables */
+}
+
+.of-pair-selector {
+  display: flex;
+  gap: 2px;
+}
+
+.of-pair-btn {
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  background: rgba(10, 10, 15, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--text-muted, #94a3b8);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.of-pair-btn:hover {
+  color: var(--text, #f1f5f9);
+  border-color: var(--border, #334155);
+  background: rgba(10, 10, 15, 0.85);
+}
+
+.of-pair-btn.active {
+  color: var(--cyan, #38d3ee);
+  border-color: rgba(56, 211, 238, 0.30);
+  background: rgba(56, 211, 238, 0.08);
+}
+
+.of-timeframes {
+  display: flex;
+  gap: 2px;
+}
+
+.of-tf-btn {
+  padding: 4px 9px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: rgba(10, 10, 15, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--text-faint, #64748b);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.of-tf-btn:hover {
+  color: var(--text-muted, #94a3b8);
+  border-color: var(--border, #334155);
+  background: rgba(10, 10, 15, 0.85);
+}
+
+.of-tf-btn.active {
+  color: var(--cyan, #38d3ee);
+  border-color: rgba(56, 211, 238, 0.25);
+  background: rgba(56, 211, 238, 0.06);
+}
+
+/* ── Status ── */
+.of-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.of-status {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: var(--text-faint, #64748b);
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(10, 10, 15, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ── Light mode ── */
+body.light-mode .of-pair-btn {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+}
+
+body.light-mode .of-pair-btn.active {
+  color: #0ea5e9;
+  border-color: rgba(14, 165, 233, 0.30);
+  background: rgba(14, 165, 233, 0.06);
+}
+
+body.light-mode .of-tf-btn {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+}
+
+body.light-mode .of-tf-btn.active {
+  color: #0ea5e9;
+  border-color: rgba(14, 165, 233, 0.25);
+  background: rgba(14, 165, 233, 0.05);
+}
+
+body.light-mode .of-status {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+}
+
+/* ── Focus states ── */
+.of-pair-btn:focus-visible,
+.of-tf-btn:focus-visible {
+  outline: 2px solid var(--cyan, #38d3ee);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
+/* ── Responsive ── */
+@media (max-width: 760px) {
+  .of-topbar {
+    flex-wrap: wrap;
+    padding: 4px 10px;
+    gap: 6px;
+  }
+  .of-pair-btn { font-size: 10px; padding: 3px 8px; }
+  .of-tf-btn { font-size: 9px; padding: 3px 7px; }
 }
 }

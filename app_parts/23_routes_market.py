@@ -84,3 +84,118 @@ def market_klines():
         "interval": interval,
         "candles": candles,
     })
+
+
+# =====================================================================
+# Aggregated Trades (aggTrades) — pour footprint charts
+# =====================================================================
+# Proxies Binance /api/v3/aggTrades. Public — no API key needed.
+# Champs Binance bruts : a=aggTradeId, p=price, q=qty, f=firstId,
+#   l=lastId, T=tradeTime(ms), m=isBuyerMaker(true=sell, false=buy)
+#
+# Notre format normalisé : {id, time, price, qty, side}
+#   side = "sell" si isBuyerMaker (m=True), "buy" sinon
+
+import time as _time
+
+_SYMBOL_WHITELIST = frozenset({"BTCUSDT", "ETHUSDT", "SOLUSDT"})
+_MAX_TIME_RANGE_MS = 24 * 60 * 60 * 1000  # 24h max par requête
+_CACHE_TTL_S = 30  # cache court — les aggTrades sont immutables
+
+# Cache simple en mémoire : clé = "symbol:startTime:endTime"
+_aggtrade_cache = {}
+
+
+def _format_aggTrade(t):
+    """Normalise un aggTrade Binance en notre format."""
+    return {
+        "id": t["a"],
+        "time": t["T"],
+        "price": float(t["p"]),
+        "qty": float(t["q"]),
+        "side": "sell" if t["m"] else "buy",
+    }
+
+
+@app.get("/api/market/aggtrades")
+def market_aggtrades():
+    """Proxy les aggTrades Binance pour footprint charts.
+
+    Query params:
+      symbol    (str) : paire (BTCUSDT, ETHUSDT, SOLUSDT)
+      startTime (int) : timestamp ms debut (optionnel)
+      endTime   (int) : timestamp ms fin (optionnel, max 24h apres start)
+      limit     (int) : nb trades max (defaut 1000, max 1000)
+
+    Retourne un tableau de trades normalises tries par time croissant.
+    """
+    symbol = request.args.get("symbol", "BTCUSDT").upper().strip()
+    if symbol not in _SYMBOL_WHITELIST:
+        return jsonify({"error": f"Symbole non supporte: {symbol}. Supportes: {', '.join(sorted(_SYMBOL_WHITELIST))}"}), 400
+
+    start_time = request.args.get("startTime", None)
+    end_time = request.args.get("endTime", None)
+    limit = int(request.args.get("limit", 1000))
+
+    # Valider plage temporelle
+    if start_time:
+        start_time = int(start_time)
+        if end_time:
+            end_time = int(end_time)
+            if end_time - start_time > _MAX_TIME_RANGE_MS:
+                return jsonify({
+                    "error": f"Plage trop large: max {_MAX_TIME_RANGE_MS // 3600000}h"
+                }), 400
+
+    # Clé de cache
+    cache_key = f"{symbol}:{start_time}:{end_time}:{limit}"
+    cached = _aggtrade_cache.get(cache_key)
+    now = _time.time()
+    if cached and (now - cached["ts"]) < _CACHE_TTL_S:
+        return jsonify({
+            "symbol": symbol,
+            "trades": cached["trades"],
+            "cached": True,
+            "count": len(cached["trades"]),
+        })
+
+    # Construire l'URL Binance
+    url = f"{BINANCE_API}/api/v3/aggTrades?symbol={symbol}&limit={limit}"
+    if start_time:
+        url += f"&startTime={start_time}"
+    if end_time:
+        url += f"&endTime={end_time}"
+
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Journal/1.0"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            raw = resp.read().decode("utf-8")
+            batch = _json.loads(raw)
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")[:200]
+        return jsonify({"error": f"Binance HTTP {e.code}: {detail}"}), e.code
+    except urllib.error.URLError as e:
+        return jsonify({"error": f"Erreur reseau: {e.reason}"}), 502
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    if not isinstance(batch, list):
+        return jsonify({"error": "Format inattendu Binance", "raw": str(batch)[:300]}), 502
+
+    trades = [_format_aggTrade(t) for t in batch]
+
+    # Trier par time croissant (Binance les renvoie déjà tries mais on assure)
+    trades.sort(key=lambda t: t["time"])
+
+    # Mettre en cache
+    _aggtrade_cache[cache_key] = {
+        "ts": now,
+        "trades": trades,
+    }
+
+    return jsonify({
+        "symbol": symbol,
+        "trades": trades,
+        "cached": False,
+        "count": len(trades),
+    })

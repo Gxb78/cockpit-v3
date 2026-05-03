@@ -798,3 +798,11 @@ Cette section documente les features ajoutées, les conventions établies, et le
 - Regle de prevention: TOUT état vide doit proposer une action claire : "Ajouter", "Voir", "Réinitialiser", "Créer". Pas de message seul.
 - Test de non-regression: Naviguer vers chaque écran sans données → un bouton d'action est visible.
 - Fichiers a surveiller: `014_today_page.js` (recent empty), `012_favorites_carousel.html` (fav empty), `table.html` (journal filter empty), `015_calendar.js` (calendar/search empty).
+
+
+### BUG-20260505-03 - [RÉSOLU] Wizard clics morts + draft auto-resume
+- Symptome: Dès l'ouverture du wizard, plus aucun clic ne marche. Après un refresh, la wizard reprend à l'étape du crash PC (3/12 au lieu de 1/12).
+- Cause racine: 3 causes combinées — (1) setTimeout(wizNext,200) jamais annulé → timer stale après fermeture (2) wizClose() ne nettoyait pas paddingTop/paddingLeft/onclick/wiz-rail-mode (3) Draft auto-repris à chaque wizOpen()
+- Regle de prevention: (1) Toujours stocker le timer ID et clearTimeout dans wizClose() (2) wizClose() doit nettoyer TOUS les résidus d'état (inline styles, classes dynamiques, onclick) (3) _wizClearDraft() en tête de wizOpen() — le draft est crash recovery, jamais repris auto.
+- Test de non-regression: Ouvrir wizard depuis le rail, cliquer sur Suivant/cartes, fermer, rouvrir — doit repartir à l'étape 1. Répéter 3x.
+- Fichiers a surveiller: 040_wizard_core.js, 042_wizsetdate.js, 025_wizard_steps_ui.css

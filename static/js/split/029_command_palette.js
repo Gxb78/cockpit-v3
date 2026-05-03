@@ -79,12 +79,13 @@ function buildCmdkItems(query) {
   const q = (query || "").trim().toLowerCase();
   const items = [];
   const actions = [
-    { kind:"action", label:"Nouveau trade (aujourd'hui)", icon:"plus", run:()=>{ closeCmdk(); wizOpen({ date: todayKey() }); }},
+    { kind:"action", label:"Nouveau trade (aujourd'hui)", icon:"plus", run:()=>{ closeCmdk(); wizOpen({}); }},
     { kind:"action", label:"Aller a Today",                 icon:"home", run:()=>{ closeCmdk(); goPage("today"); }},
     { kind:"action", label:"Journal (calendrier)",          icon:"cal",  run:()=>{ closeCmdk(); goPage("journal"); }},
     { kind:"action", label:"Journal en vue semaine",        icon:"cal",  run:()=>{ closeCmdk(); goPage("journal"); setJournalViewMode("week", { persist:true, reload:true }); }},
     { kind:"action", label:"Journal en vue mois",           icon:"cal",  run:()=>{ closeCmdk(); goPage("journal"); setJournalViewMode("month", { persist:true, reload:true }); }},
     
+    { kind:"action", label:"Orderflow Terminal",            icon:"flow", run:()=>{ closeCmdk(); goPage("orderflow"); }},
     { kind:"action", label:"Ouvrir Settings",               icon:"gear", run:()=>{ closeCmdk(); goPage("settings"); }},
     { kind:"action", label:"Exporter en JSON",              icon:"down", run:()=>{ closeCmdk(); $("#exportBtn").click(); }},
   ];

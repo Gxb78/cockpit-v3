@@ -1,0 +1,24 @@
+<!-- ============ ORDERFLOW PAGE — Canvas 2D custom ============ -->
+<section class="page" data-page="orderflow">
+  <div class="of-layout">
+    <canvas id="ofCanvas" class="of-canvas"></canvas>
+
+    <!-- Top bar minimal -->
+    <div class="of-topbar">
+      <div class="of-pair-selector">
+        <button class="of-pair-btn active" data-symbol="BTCUSDT">BTC/USDT</button>
+        <button class="of-pair-btn" data-symbol="ETHUSDT">ETH/USDT</button>
+      </div>
+      <div class="of-timeframes">
+        <button class="of-tf-btn active" data-interval="3m">3m</button>
+        <button class="of-tf-btn" data-interval="5m">5m</button>
+        <button class="of-tf-btn" data-interval="15m">15m</button>
+        <button class="of-tf-btn" data-interval="1h">1H</button>
+        <button class="of-tf-btn" data-interval="4h">4H</button>
+      </div>
+      <div class="of-info">
+        <span id="ofStatus" class="of-status">initializing…</span>
+      </div>
+    </div>
+  </div>
+</section>

@@ -5,6 +5,7 @@ var PAGE_TITLES = {
   journal:  "Journal — COCKPIT Trading Journal",
   stats:    "Stats — COCKPIT Trading Journal",
   settings: "Settings — COCKPIT Trading Journal",
+  orderflow: "Orderflow — COCKPIT Trading Journal",
 };
 
 function _updateTitle(pageName) {
@@ -23,9 +24,9 @@ function bindNav() {
       goPage(item.dataset.page);
     });
   }
-  $("#newEntryBtn")?.addEventListener("click", function () { wizOpen({ date: todayKey() }); });
-  $("#railNewTradeBtn")?.addEventListener("click", function () { wizOpen({ date: todayKey(), railMode: true }); });
-  $("#quickAddBtn")?.addEventListener("click", function () { wizOpen({ date: todayKey() }); });
+  $("#newEntryBtn")?.addEventListener("click", function () { wizOpen({}); });
+  $("#railNewTradeBtn")?.addEventListener("click", function () { wizOpen({ railMode: true }); });
+  $("#quickAddBtn")?.addEventListener("click", function () { wizOpen({}); });
   $("#openCmdk")?.addEventListener("click", function () { openCmdk(); });
 }
 

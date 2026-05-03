@@ -5,8 +5,7 @@
 .wiz { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); overflow: hidden; }
 .wiz-panel {
   width: min(420px, 94vw);
-  height: 520px;
-  max-height: 92dvh;
+  height: min(85dvh, 780px);
   display: flex;
   flex-direction: column;
   background: var(--surface);
@@ -29,7 +28,7 @@
 }
 .wiz-rail-mode .wiz-panel {
   width: min(660px, calc(100vw - 280px));
-  height: min(360px, 70dvh);
+  height: min(520px, 80dvh);
   box-shadow: 0 18px 48px rgba(0,0,0,0.35);
   margin: 0;
 }
@@ -215,7 +214,7 @@
 .wiz-skip-btn:hover { color: var(--text); border-color: var(--border-strong); }
 .wiz-skip-btn.invisible { visibility: hidden; pointer-events: none; }
 .wiz-next-btn { display: flex; align-items: center; gap: 7px; padding: 11px 22px; font-size: 0.9rem; }
-.wiz-next-btn svg { width: 15px; height: 15px; }
+.wiz-next-btn svg { width: 15px; height: 15px; pointer-events: none; }
 
 /* Draft banner */
 .wiz-draft-banner {

@@ -74,10 +74,11 @@ function _wizActiveDir() {
 // ─── Render ────────────────────────────────────────────────
 
 function _wizRender() {
-  if (!wizState) return;
+  if (!wizState) { console.log('[WIZ] _wizRender: no wizState'); return; }
   const step  = wizState.steps[wizState.stepIdx];
   const total = wizState.steps.length;
   const idx   = wizState.stepIdx;
+  console.log('[WIZ] _wizRender step=' + step + ' (' + (idx+1) + '/' + total + ')');
 
   // Progress bar
   const fill = document.getElementById('wizProgressFill');
@@ -105,7 +106,13 @@ function _wizRender() {
 
   // Body
   const body = document.getElementById('wizBody');
-  if (body) body.innerHTML = _wizStepHtml(step);
+  if (body) {
+    var stepHtml = _wizStepHtml(step);
+    console.log('[WIZ] body.innerHTML, length=' + stepHtml.length + ', first 80chars=' + stepHtml.slice(0,80));
+    body.innerHTML = stepHtml;
+  } else {
+    console.log('[WIZ] ERROR: #wizBody not found');
+  }
 
   // Footer
   _wizRenderFooter(step, idx, total);

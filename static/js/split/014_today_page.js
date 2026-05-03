@@ -21,7 +21,7 @@ function renderToday() {
       var tradeBtn = document.createElement("button");
       tradeBtn.className = "btn-primary";
       tradeBtn.textContent = "Ajouter un trade";
-      tradeBtn.addEventListener("click", function () { wizOpen({ date: todayKey() }); });
+      tradeBtn.addEventListener("click", function () { wizOpen({}); });
       cta.appendChild(tradeBtn);
       var ctxBtn = document.createElement("button");
       ctxBtn.className = "btn-ghost";
@@ -51,7 +51,7 @@ function renderToday() {
   if (recentEl) {
     recentEl.innerHTML = "";
     if (recent.length === 0) {
-      recentEl.innerHTML = '<div class="empty-state"><div>Pas encore d\'historique</div><div class="empty-cta"><button type="button" class="btn-ghost" onclick="wizOpen({ date: todayKey() })">Ajouter un trade</button></div></div>';
+      recentEl.innerHTML = '<div class="empty-state"><div>Pas encore d\'historique</div><div class="empty-cta"><button type="button" class="btn-ghost" onclick="wizOpen({})">Ajouter un trade</button></div></div>';
     } else {
       recent.forEach(d => recentEl.appendChild(dayCardEl(d)));
     }

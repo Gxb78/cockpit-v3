@@ -7,7 +7,7 @@ function bindGlobalKeys() {
     const meta   = e.metaKey || e.ctrlKey;
 
     if (meta && e.key.toLowerCase() === "k") { e.preventDefault(); openCmdk(); return; }
-    if (meta && e.key.toLowerCase() === "n") { e.preventDefault(); wizOpen({ date: todayKey() }); return; }
+    if (meta && e.key.toLowerCase() === "n") { e.preventDefault(); wizOpen({}); return; }
 
     if (e.key === "Escape") {
       if (state.cmdkOpen) { closeCmdk(); return; }
@@ -22,6 +22,7 @@ function bindGlobalKeys() {
       
       if (e.key === "g" || e.key === "G") { e.preventDefault(); goPage("settings"); }
       if (e.key === "c" || e.key === "C") { e.preventDefault(); goPage("chart"); }
+      if (e.key === "o" || e.key === "O") { e.preventDefault(); goPage("orderflow"); }
       if (e.key === "/") {
         e.preventDefault();
         var search = document.getElementById("journalFilterSearch");

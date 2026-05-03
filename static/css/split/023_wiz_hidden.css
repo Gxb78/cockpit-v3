@@ -58,7 +58,7 @@
   flex-shrink: 0;
 }
 .wiz-btn-icon:hover { border-color: var(--border-strong); color: var(--text); }
-.wiz-btn-icon svg { width: 16px; height: 16px; }
+.wiz-btn-icon svg { width: 16px; height: 16px; pointer-events: none; }
 .wiz-btn-icon.invisible { visibility: hidden; pointer-events: none; }
 
 .wiz-step-indicator {

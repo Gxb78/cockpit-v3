@@ -64,6 +64,9 @@ function wizDefaultInstrument() {
 var _wizLastFocused = null;
 
 function wizOpen(opts) {
+  console.log('[WIZARD] wizOpen() called');
+  // Ne pas reprendre de brouillon — on part de zéro à chaque ouverture
+  _wizClearDraft();
   _wizLastFocused = document.activeElement;
   opts = opts || {};
   const mode = opts.mode === 'postmortem' ? 'postmortem' : 'trade';
@@ -121,6 +124,19 @@ function wizOpen(opts) {
     el.classList.toggle('wiz-rail-mode', !!opts.railMode);
     document.body.style.overflow = 'hidden';
 
+    // Diagnostic DOM — vérifier que les éléments cliquables existent
+    console.log('[WIZ] wizOpen DOM check:');
+    console.log('  #wizCloseBtn:', !!document.getElementById('wizCloseBtn'));
+    console.log('  #wizBackBtn:', !!document.getElementById('wizBackBtn'));
+    console.log('  #wizNextBtn:', !!document.getElementById('wizNextBtn'));
+    console.log('  #wizSkipBtn:', !!document.getElementById('wizSkipBtn'));
+    console.log('  #wizBody:', !!document.getElementById('wizBody'));
+    console.log('  .wiz-cards:', !!document.querySelector('.wiz-cards'));
+    console.log('  .wiz-dir-btn:', !!document.querySelector('.wiz-dir-btn'));
+    console.log('  .wiz-panel:', !!document.querySelector('.wiz-panel'));
+    console.log('  el === wiz:', el === document.getElementById('wiz'));
+    console.log('  railMode:', !!opts.railMode, 'hidden class:', el.classList.contains('hidden'));
+
     if (opts.railMode) {
       var btn = document.getElementById('railNewTradeBtn');
       if (btn) {
@@ -155,7 +171,12 @@ function wizOpen(opts) {
   }
 }
 
+var _wizTimer = null;
+
 function wizClose() {
+  console.log('[WIZ] wizClose()');
+  // Annuler tout setTimeout en attente (wizSelectInstrument/wizSelectSession)
+  if (_wizTimer) { clearTimeout(_wizTimer); _wizTimer = null; }
   // Sauvegarder le draft avant de fermer
   if (wizState && wizState.mode !== 'postmortem') {
     _wizSaveDraft();
@@ -164,7 +185,11 @@ function wizClose() {
   if (el) {
     el.classList.add('hidden');
     el.classList.remove('wiz-context-card');
+    el.classList.remove('wiz-rail-mode');
+    el.style.paddingTop = '';
+    el.style.paddingLeft = '';
     el.style.paddingRight = '';
+    el.onclick = null;
   }
   document.body.style.overflow = '';
   wizState = null;
@@ -211,6 +236,7 @@ function wizDiscardDraft() {
 // ─── Navigation ────────────────────────────────────────────
 
 function wizNext() {
+  console.log('[WIZ] wizNext() step=' + (wizState ? wizState.steps[wizState.stepIdx] : '?') + ' idx=' + (wizState ? wizState.stepIdx : '?'));
   if (!wizState) return;
   _wizSaveCurrentStep();
   if (wizState.stepIdx < wizState.steps.length - 1) {
@@ -223,6 +249,7 @@ function wizNext() {
 }
 
 function wizBack() {
+  console.log('[WIZ] wizBack()');
   if (!wizState) return;
   if (wizState.stepIdx > 0) {
     wizState.stepIdx--;
