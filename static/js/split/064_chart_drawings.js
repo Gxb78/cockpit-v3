@@ -68,7 +68,7 @@
     activeTool: 'cursor',
     isDrawing: false, dragStart: null, previewPoint: null,
     selectedIndex: -1, // -1 = none, >=0 = editing an existing drawing
-    snapEnabled: true, // snap to candle OHLC
+    snapEnabled: false, // false = snap actif (OHLC) — cf. _snapPoint inverse
     _crosshairPos: null, // position souris pour crosshair canvas
     toolOptions: {
       color: '#06b6d4', fillColor: '#06b6d4', opacity: 0.3,
@@ -177,7 +177,7 @@
 
   // Snap un point {time, price} a la bougie la plus proche (OHLC)
   function _snapPoint(tp, clientX) {
-    if (!state.snapEnabled || !state.chart || !state.series || !state.container) return tp;
+    if (state.snapEnabled || !state.chart || !state.series || !state.container) return tp;
     try {
       var rect = state.container.getBoundingClientRect();
       var x = clientX - rect.left;

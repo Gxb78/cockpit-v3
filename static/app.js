@@ -11703,17 +11703,17 @@ TradeEditorController.renderHtml = function (day, trade) {
       var btn = document.createElement('button');
       btn.type = 'button';
       if (t.id === 'cursor') {
-        // Cursor = toggle snap: ⊹ quand snap OFF, 🧲 quand snap ON
-        btn.className = 'draw-toolbar-btn is-active' + (window.ChartDrawings.getSnapEnabled() ? ' draw-snap-on' : '');
+        // Cursor = toggle snap: 🧲 = snap actif (OHLC), ⊹ = curseur libre
+        btn.className = 'draw-toolbar-btn is-active' + (!window.ChartDrawings.getSnapEnabled() ? ' draw-snap-on' : '');
         btn.dataset.tool = 'cursor';
-        btn.dataset.label = window.ChartDrawings.getSnapEnabled() ? 'Snap ON' : 'Curseur';
-        btn.textContent = window.ChartDrawings.getSnapEnabled() ? '🧲' : '⊹';
+        btn.dataset.label = !window.ChartDrawings.getSnapEnabled() ? 'Snap ON' : 'Curseur';
+        btn.textContent = !window.ChartDrawings.getSnapEnabled() ? '🧲' : '⊹';
         btn.addEventListener('click', function () {
           var snapOn = !window.ChartDrawings.getSnapEnabled();
           window.ChartDrawings.setSnapEnabled(snapOn);
-          btn.textContent = snapOn ? '🧲' : '⊹';
-          btn.dataset.label = snapOn ? 'Snap ON' : 'Curseur';
-          btn.classList.toggle('draw-snap-on', snapOn);
+          btn.textContent = !snapOn ? '🧲' : '⊹';
+          btn.dataset.label = !snapOn ? 'Snap ON' : 'Curseur';
+          btn.classList.toggle('draw-snap-on', !snapOn);
           // Toujours passer en mode curseur
           toolbar.querySelectorAll('.draw-toolbar-btn').forEach(function (b) { b.classList.remove('is-active'); });
           btn.classList.add('is-active');
@@ -12731,7 +12731,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     activeTool: 'cursor',
     isDrawing: false, dragStart: null, previewPoint: null,
     selectedIndex: -1, // -1 = none, >=0 = editing an existing drawing
-    snapEnabled: true, // snap to candle OHLC
+    snapEnabled: false, // false = snap actif (OHLC) — cf. _snapPoint inverse
     _crosshairPos: null, // position souris pour crosshair canvas
     toolOptions: {
       color: '#06b6d4', fillColor: '#06b6d4', opacity: 0.3,
@@ -12840,7 +12840,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   // Snap un point {time, price} a la bougie la plus proche (OHLC)
   function _snapPoint(tp, clientX) {
-    if (!state.snapEnabled || !state.chart || !state.series || !state.container) return tp;
+    if (state.snapEnabled || !state.chart || !state.series || !state.container) return tp;
     try {
       var rect = state.container.getBoundingClientRect();
       var x = clientX - rect.left;
