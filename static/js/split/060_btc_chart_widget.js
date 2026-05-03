@@ -307,8 +307,10 @@
       // Appliquer le zoom synchrone (timestamps invariants)
       if (zoomTarget && chart && chart.timeScale()) {
         try { chart.timeScale().setVisibleRange({ from: zoomTarget.from, to: zoomTarget.to }); } catch(e) {}
-        // scrollToRealTime place le dernier bar avec rightOffset natif
-        try { chart.timeScale().scrollToRealTime(); } catch(e) {}
+        // scrollToRealTime seulement au premier chargement (pas sur les refreshes VWAP)
+        if (!zoomTarget.hasSavedTarget) {
+          try { chart.timeScale().scrollToRealTime(); } catch(e) {}
+        }
       }
 
       console.log('[VWAP] range APRÈS finally:', JSON.stringify(chart.timeScale().getVisibleRange()));
@@ -710,7 +712,7 @@
         // VWAP — avec TTL 5min pour éviter les re-fetchs inutiles
         var zoomTarget = null;
         if (savedTarget) {
-          zoomTarget = savedTarget;
+          zoomTarget = { from: savedTarget.from, to: savedTarget.to, hasSavedTarget: true };
         } else if (!keepZoom) {
           // Premier chargement : calculer en timestamps (invariant VWAP)
           // rightOffset dans les options chart ne s'applique pas avec
