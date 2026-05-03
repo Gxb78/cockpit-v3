@@ -30,7 +30,6 @@
         if (countEl) countEl.textContent = trades.length + ' trade' + (trades.length > 1 ? 's' : '');
 
         trades.forEach(function (trade, idx) {
-          // Construire un objet day synthetique
           var day = {
             id: trade.day_id,
             instrument: trade.day_instrument || '-',
@@ -49,23 +48,27 @@
           track.appendChild(wrap);
         });
 
-        // Si on n'a pas pu render la card au moment de la creation (fonction pas encore dispo),
-        // essayer de render la slide courante
-        if (trades.length > 0) {
-          var firstSlide = track.children[0];
-          if (firstSlide && !firstSlide.querySelector('.journal-flip-card')) {
-            _renderSlide(0);
-          }
-        }
-
         currentIndex = 0;
         _scrollTo(currentIndex, false);
         _updateDots(trades.length);
         _updateArrows(trades.length);
         _updateCount();
+
+        // Rendre les slides adjacentes (maintenant que trades est peuple)
+        _renderSlide(0);
+        _renderSlide(1);
+
+        // Setup scroll observer apres que les slides soient bien en place
+        _setupScrollObserver();
       })
       .catch(function (err) {
         console.error('[fav-carousel] fetch:', err);
+        // Sur erreur reseau : afficher l'empty state et cacher les fleches
+        if (empty) empty.style.display = '';
+        if (countEl) countEl.textContent = '';
+        track.innerHTML = '';
+        _updateDots(0);
+        _updateArrows(0);
       });
   }
 
@@ -116,8 +119,9 @@
     var left = document.getElementById('favCarouselLeft');
     var right = document.getElementById('favCarouselRight');
     if (!left || !right) return;
-    left.style.display = count > 1 ? '' : 'none';
-    right.style.display = count > 1 ? '' : 'none';
+    // Cacher les fleches uniquement si zero trades
+    left.style.display = count > 0 ? '' : 'none';
+    right.style.display = count > 0 ? '' : 'none';
     left.disabled = currentIndex <= 0;
     right.disabled = currentIndex >= count - 1;
   }
@@ -197,18 +201,15 @@
         // Laisser le temps aux widgets de se mettre en place
         setTimeout(function () {
           initFavCarousel();
-          // Puis setup l'observer apres que les slides soient rendues
-          setTimeout(function () {
-            if (trades.length > 0) {
-              _setupScrollObserver();
-              _renderSlide(0);
-              _renderSlide(1);
-            }
-          }, 200);
         }, 500);
       }
     };
   }
+
+  // Exposer une fonction de refresh pour les mise a jour externes
+  window.refreshFavCarousel = function () {
+    initFavCarousel();
+  };
 
   // ── Aussi au DOMContentLoaded si Today est deja ouvert ──
   document.addEventListener('DOMContentLoaded', function () {

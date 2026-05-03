@@ -1,0 +1,488 @@
+/* ---------- Chart Drawing Toolbar ---------- */
+
+.draw-toolbar {
+  position: absolute;
+  top: 50%;
+  left: 8px;
+  transform: translateY(-50%);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--surface-solid);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  transition: opacity 0.2s;
+  touch-action: none;
+}
+
+.draw-toolbar-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, transform 0.12s;
+  position: relative;
+}
+
+.draw-toolbar-btn:hover {
+  background: rgba(255,255,255,0.05);
+  color: var(--text-muted);
+}
+
+.draw-toolbar-btn.is-active {
+  background: rgba(6, 182, 212, 0.12);
+  color: #06b6d4;
+}
+
+.draw-toolbar-btn[data-tool="cursor"].is-active {
+  background: rgba(255,255,255,0.05);
+  color: var(--text);
+}
+
+.draw-toolbar-btn + .draw-toolbar-btn {
+  border-top: 1px solid var(--border);
+  padding-top: 2px;
+  margin-top: 2px;
+}
+
+.draw-toolbar-btn:first-child {
+  border-top: none;
+}
+
+/* ── Tooltip ── */
+.draw-toolbar-btn::after {
+  content: attr(data-label);
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-solid);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 3px 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+
+.draw-toolbar-btn:hover::after {
+  opacity: 1;
+}
+
+/* ── Clear button ── */
+.draw-toolbar-btn.draw-clear {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.draw-toolbar-btn.draw-clear:hover {
+  color: #ef4444;
+}
+
+/* ── Drawing Options Panel ── */
+.draw-options-panel {
+  position: absolute;
+  top: 50%;
+  left: 56px;
+  transform: translateY(-50%);
+  z-index: 15;
+  width: 220px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--surface-solid);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+  animation: drawPanelIn 0.15s ease-out;
+  will-change: transform, opacity;
+}
+
+@keyframes drawPanelIn {
+  from { opacity: 0; transform: translateY(-50%) translateX(-6px); }
+  to   { opacity: 1; transform: translateY(-50%) translateX(0); }
+}
+
+.draw-options-panel.hidden {
+  display: none !important;
+}
+
+.draw-options-header {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.draw-options-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.draw-options-body {
+  padding: 8px 14px 10px;
+}
+
+.draw-opt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+  gap: 8px;
+}
+
+.draw-opt-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  min-width: 52px;
+}
+
+.draw-opt-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Color swatches ── */
+.draw-swatches {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.draw-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.12s, border-color 0.12s;
+  padding: 0;
+}
+
+.draw-swatch:hover {
+  transform: scale(1.15);
+}
+
+.draw-swatch.is-active {
+  border-color: #fff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.2);
+}
+
+/* ── Color picker input ── */
+.draw-color-pick {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  background: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.draw-color-pick::-webkit-color-swatch-wrapper { padding: 1px; }
+.draw-color-pick::-webkit-color-swatch { border: none; border-radius: 2px; }
+.draw-color-pick::-moz-color-swatch { border: none; border-radius: 2px; }
+
+/* ── Select ── */
+.draw-opt-select {
+  padding: 3px 22px 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='8' height='6' viewBox='0 0 8 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L4 4.5L7 1.5' stroke='%239ca3af' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  min-width: 80px;
+}
+
+.draw-opt-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* ── Checkboxes ── */
+.draw-opt-check-group {
+  display: flex;
+  gap: 10px;
+}
+
+.draw-opt-check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.draw-opt-check input {
+  accent-color: #06b6d4;
+}
+
+/* ── Text input ── */
+.draw-opt-text {
+  flex: 1;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 500;
+  min-width: 100px;
+}
+
+.draw-opt-text:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.draw-opt-text::placeholder {
+  color: var(--text-faint);
+}
+
+/* ── Range slider (opacity) ── */
+.draw-opt-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 80px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  outline: none;
+  cursor: pointer;
+}
+
+.draw-opt-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #06b6d4;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.draw-opt-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #06b6d4;
+  cursor: pointer;
+  border: none;
+}
+
+.draw-opt-range-val {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  min-width: 28px;
+  text-align: right;
+}
+
+/* ── Section (fib, templates) ── */
+.draw-opt-section {
+  padding: 8px 0 2px;
+  border-top: 1px solid var(--border);
+  margin-top: 6px;
+}
+
+.draw-opt-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+/* ── Fib level toggles ── */
+.draw-fib-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.draw-fib-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: background 0.1s;
+}
+
+.draw-fib-row:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+.draw-fib-row input {
+  accent-color: #06b6d4;
+}
+
+.draw-fib-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.draw-fib-label {
+  flex: 1;
+}
+
+/* ── Templates ── */
+.draw-template-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.draw-template-select {
+  flex: 1;
+  min-width: 0;
+  font-size: 10px;
+}
+
+.draw-template-btn {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.12s, border-color 0.12s;
+  padding: 0;
+  line-height: 1;
+}
+
+.draw-template-btn:hover {
+  background: rgba(255,255,255,0.05);
+  border-color: var(--border-strong);
+}
+
+.draw-template-btn--del:hover {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+}
+
+/* ── Light mode ── */
+body.light-mode .draw-options-panel {
+  box-shadow: 0 8px 32px rgba(0,0,0,0.10);
+}
+
+body.light-mode .draw-opt-select,
+body.light-mode .draw-opt-text {
+  background: rgba(0,0,0,0.02);
+  border-color: #d1d5db;
+}
+
+body.light-mode .draw-swatch.is-active {
+  border-color: #1e293b;
+}
+
+body.light-mode .draw-color-pick {
+  border-color: #d1d5db;
+}
+
+/* ── Drawing toolbar for widget (inline) ── */
+.draw-toolbar--inline {
+  position: static;
+  transform: none;
+  flex-direction: row;
+  border-radius: 8px;
+  padding: 3px;
+  margin: 0 auto 6px;
+  box-shadow: none;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  display: inline-flex;
+}
+
+.draw-toolbar--inline .draw-toolbar-btn {
+  width: 28px;
+  height: 28px;
+  font-size: 13px;
+}
+
+.draw-toolbar--inline .draw-toolbar-btn + .draw-toolbar-btn {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+  border-left: 1px solid var(--border);
+  padding-left: 2px;
+  margin-left: 2px;
+}
+
+.draw-toolbar--inline .draw-toolbar-btn:first-child {
+  border-left: none;
+}
+
+.draw-toolbar--inline .draw-toolbar-btn.draw-clear {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+/* ── Light mode ── */
+body.light-mode .draw-toolbar {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.10);
+}
+
+body.light-mode .draw-toolbar-btn:hover {
+  background: rgba(0,0,0,0.04);
+}
+
+body.light-mode .draw-toolbar-btn.is-active {
+  background: rgba(6, 182, 212, 0.10);
+}
+
+body.light-mode .draw-toolbar-btn::after {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+body.light-mode .draw-toolbar--inline {
+  background: var(--surface);
+}

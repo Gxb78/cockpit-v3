@@ -1,4 +1,5 @@
 // ---------- BTC Chart widget — TradingView Lightweight Charts ----------
+// v2.0 — Indicators: SMA, EMA, Bollinger, RSI (synced from chart settings)
 
 (function () {
   var chart = null;
@@ -10,7 +11,10 @@
   var countdownTimer = null;
   var lastCandleTime = 0;
 
-  // Intervalle en ms pour le countdown
+  // Indicator series
+  var indicatorSeries = {};
+  var rsiSeries = null;
+
   var INTERVAL_MS = {
     '1m': 60000, '3m': 180000, '5m': 300000, '15m': 900000,
     '30m': 1800000, '1h': 3600000, '2h': 7200000, '4h': 14400000,
@@ -18,10 +22,26 @@
     '1d': 86400000, '3d': 259200000, '1w': 604800000, '1M': 2592000000,
   };
 
+  // Read settings from same localStorage as chart page
+  var indSettings = {
+    sma: { active: false, period: 20, color: '#f59e0b' },
+    ema: { active: false, period: 20, color: '#06b6d4' },
+    boll: { active: false, period: 20, color: '#a78bfa' },
+    rsi: { active: false, period: 14, color: '#f472b6' },
+  };
+
+  try {
+    var saved = JSON.parse(localStorage.getItem('chartIndSettings'));
+    if (saved) {
+      Object.keys(saved).forEach(function (k) {
+        if (indSettings[k]) Object.assign(indSettings[k], saved[k]);
+      });
+    }
+  } catch(e) {}
+
   function _getIntervalMs(interval) {
     var m = INTERVAL_MS[interval];
     if (m) return m;
-    // Custom: parser 5m, 2h, 3d etc.
     var match = interval.match(/^(\d+)(m|h|d|w|M)$/);
     if (!match) return 3600000;
     var num = parseInt(match[1], 10);
@@ -29,6 +49,155 @@
     var mult = { m: 60000, h: 3600000, d: 86400000, w: 604800000, M: 2592000000 };
     return num * (mult[unit] || 3600000);
   }
+
+  // ── INDICATOR CALCULATIONS (same as 062) ──
+
+  function _calcSMA(candles, period) {
+    var result = [];
+    for (var i = period - 1; i < candles.length; i++) {
+      var sum = 0;
+      for (var j = 0; j < period; j++) sum += candles[i - j].close;
+      result.push({ time: candles[i].time, value: sum / period });
+    }
+    return result;
+  }
+
+  function _calcEMA(candles, period) {
+    var result = [];
+    var k = 2 / (period + 1);
+    var ema = candles[0].close;
+    for (var i = 0; i < candles.length; i++) {
+      ema = (candles[i].close - ema) * k + ema;
+      if (i >= period - 1) result.push({ time: candles[i].time, value: ema });
+    }
+    return result;
+  }
+
+  function _calcBollinger(candles, period) {
+    var smaData = _calcSMA(candles, period);
+    var result = [];
+    for (var i = 0; i < smaData.length; i++) {
+      var idx = i + period - 1;
+      var sumSq = 0;
+      for (var j = 0; j < period; j++) {
+        var diff = candles[idx - j].close - smaData[i].value;
+        sumSq += diff * diff;
+      }
+      var std = Math.sqrt(sumSq / period);
+      result.push({
+        time: smaData[i].time,
+        middle: smaData[i].value,
+        upper: smaData[i].value + 2 * std,
+        lower: smaData[i].value - 2 * std,
+      });
+    }
+    return result;
+  }
+
+  function _calcRSI(candles, period) {
+    if (candles.length < period + 1) return [];
+    var gains = [], losses = [];
+    for (var i = 1; i < candles.length; i++) {
+      var diff = candles[i].close - candles[i - 1].close;
+      gains.push(diff > 0 ? diff : 0);
+      losses.push(diff < 0 ? -diff : 0);
+    }
+    var avgGain = 0, avgLoss = 0;
+    for (var j = 0; j < period; j++) {
+      avgGain += gains[j];
+      avgLoss += losses[j];
+    }
+    avgGain /= period;
+    avgLoss /= period;
+    var result = [];
+    var rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+    result.push({ time: candles[period].time, value: 100 - (100 / (1 + rs)) });
+    for (var k = period; k < gains.length; k++) {
+      avgGain = (avgGain * (period - 1) + gains[k]) / period;
+      avgLoss = (avgLoss * (period - 1) + losses[k]) / period;
+      rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+      result.push({ time: candles[k + 1].time, value: 100 - (100 / (1 + rs)) });
+    }
+    return result;
+  }
+
+  function _clearIndicators() {
+    if (!chart) return;
+    Object.keys(indicatorSeries).forEach(function (key) {
+      try { chart.removeSeries(indicatorSeries[key]); } catch(e) {}
+    });
+    indicatorSeries = {};
+    if (rsiSeries) {
+      try { chart.removeSeries(rsiSeries); } catch(e) {}
+      rsiSeries = null;
+    }
+  }
+
+  function _renderIndicators(candles) {
+    _clearIndicators();
+    if (!chart || !candles || !candles.length) return;
+
+    var s = indSettings;
+
+    if (s.sma.active && candles.length >= s.sma.period) {
+      var smaData = _calcSMA(candles, s.sma.period);
+      indicatorSeries.sma = chart.addLineSeries({
+        color: s.sma.color, lineWidth: 1.5, priceLineVisible: false,
+        lastValueVisible: true, crosshairMarkerVisible: false,
+        title: 'SMA ' + s.sma.period,
+      });
+      indicatorSeries.sma.setData(smaData);
+    }
+
+    if (s.ema.active && candles.length >= s.ema.period) {
+      var emaData = _calcEMA(candles, s.ema.period);
+      indicatorSeries.ema = chart.addLineSeries({
+        color: s.ema.color, lineWidth: 1.5, priceLineVisible: false,
+        lastValueVisible: true, crosshairMarkerVisible: false,
+        title: 'EMA ' + s.ema.period,
+      });
+      indicatorSeries.ema.setData(emaData);
+    }
+
+    if (s.boll.active && candles.length >= s.boll.period) {
+      var bollData = _calcBollinger(candles, s.boll.period);
+      indicatorSeries.bollMid = chart.addLineSeries({
+        color: s.boll.color, lineWidth: 1, priceLineVisible: false,
+        lastValueVisible: true, crosshairMarkerVisible: false,
+        title: 'BB ' + s.boll.period,
+      });
+      indicatorSeries.bollUpper = chart.addLineSeries({
+        color: s.boll.color, lineWidth: 1, priceLineVisible: false,
+        lastValueVisible: false, crosshairMarkerVisible: false, lineStyle: 2,
+      });
+      indicatorSeries.bollLower = chart.addLineSeries({
+        color: s.boll.color, lineWidth: 1, priceLineVisible: false,
+        lastValueVisible: false, crosshairMarkerVisible: false, lineStyle: 2,
+      });
+      indicatorSeries.bollMid.setData(bollData.map(function (d) { return { time: d.time, value: d.middle }; }));
+      indicatorSeries.bollUpper.setData(bollData.map(function (d) { return { time: d.time, value: d.upper }; }));
+      indicatorSeries.bollLower.setData(bollData.map(function (d) { return { time: d.time, value: d.lower }; }));
+    }
+
+    if (s.rsi.active && candles.length >= s.rsi.period + 1) {
+      try {
+        rsiSeries = chart.addLineSeries({
+          color: s.rsi.color, lineWidth: 1.5, priceLineVisible: false,
+          lastValueVisible: true, crosshairMarkerVisible: false,
+          priceScaleId: 'rsi_pane',
+          title: 'RSI ' + s.rsi.period,
+        });
+        chart.priceScale('rsi_pane').applyOptions({
+          scaleMargins: { top: 0.7, bottom: 0 },
+          visible: true,
+        });
+        var rsiData = _calcRSI(candles, s.rsi.period);
+        rsiSeries.setData(rsiData);
+      } catch(e) { console.error('[btc-chart] RSI:', e); }
+    }
+  }
+
+  // ── TIMER ──
 
   function _startCountdown() {
     if (countdownTimer) clearInterval(countdownTimer);
@@ -40,7 +209,8 @@
       var remaining = ms - elapsed;
       if (remaining <= 0) {
         _updateCountdownLabel('0:00');
-        // Nouvelle bougie → refresh auto, conserve le zoom
+        if (countdownTimer) clearInterval(countdownTimer);
+        countdownTimer = null;
         _fetchAndRender(true);
         return;
       }
@@ -59,7 +229,8 @@
     try { countdownPriceLine.applyOptions({ title: timerTxt }); } catch(e) {}
   }
 
-  // Auto-refresh periodique : toutes les 15s (petits TF) a 60s (grands TF)
+  // ── NETWORK ──
+
   var refreshTimer = null;
   var currentSymbol = 'btcusdt';
   var ws = null;
@@ -67,7 +238,6 @@
   var _wsIntentionalClose = false;
 
   function _connectWs() {
-    // Ne pas fermer une connexion en cours d'etablissement
     if (ws && ws.readyState === WebSocket.CONNECTING) return;
     if (ws) { _wsIntentionalClose = true; try { ws.close(); } catch(e) {} _wsIntentionalClose = false; }
     var stream = currentSymbol + '@kline_' + currentInterval;
@@ -94,7 +264,6 @@
           if (series) {
             try { series.update(candle); } catch(e) {}
           }
-          // Mettre a jour la priceLine du dernier cours en temps reel
           if (countdownPriceLine) {
             try { countdownPriceLine.applyOptions({ price: candle.close }); } catch(e) {}
           }
@@ -117,10 +286,8 @@
   function _startAutoRefresh() {
     if (refreshTimer) clearInterval(refreshTimer);
     var ms = _getIntervalMs(currentInterval);
-    // Rafraichir toutes les 15s pour les TF < 1h, 30s pour 1-4h, 60s pour > 4h
     var interval = ms < 3600000 ? 15000 : ms < 14400000 ? 30000 : 60000;
     refreshTimer = setInterval(function () {
-      // Ne pas refresh si le countdown est en train de le faire
       if (!lastCandleTime) return;
       var now = Date.now();
       var elapsed = now - lastCandleTime;
@@ -130,22 +297,20 @@
     }, interval);
   }
 
+  // ── CHART ──
+
   function initBtcChart() {
     var container = document.getElementById('btcChartContainer');
     if (!container) {
-      // Le widget n'est pas encore dans le DOM — reessayer plus tard
       if (document.querySelector('.page[data-page="today"].active')) {
         setTimeout(initBtcChart, 300);
       }
       return;
     }
     if (chartReady) return;
-
-    // S'assurer que le container a une hauteur
     if (container.clientHeight < 50) {
       container.style.minHeight = '320px';
     }
-
     loadLibrary(container);
   }
 
@@ -155,14 +320,11 @@
       _fetchAndRender();
       return;
     }
-
-    // Essayer plusieurs CDN
     var urls = [
       'https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js',
       'https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js',
       'https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.1.3/lightweight-charts.standalone.production.js',
     ];
-
     function tryCdn(idx) {
       if (idx >= urls.length) {
         console.error('[btc-chart] aucun CDN disponible');
@@ -184,7 +346,6 @@
   function _createChart(container) {
     if (chartReady) return;
     chartReady = true;
-
     if (!container || !container.parentElement) return;
 
     var isLight = document.body.classList.contains('light-mode');
@@ -226,7 +387,6 @@
         priceLineVisible: false,
       });
 
-      // Label vert avec timer sur le dernier cours
       countdownPriceLine = series.createPriceLine({
         price: 0,
         color: '#22c55e',
@@ -236,7 +396,6 @@
         title: '—',
       });
 
-      // Resize observer
       if (resizeObserver) resizeObserver.disconnect();
       resizeObserver = new ResizeObserver(function () {
         if (chart && container) {
@@ -254,7 +413,6 @@
           btn.classList.add('active');
           currentInterval = btn.dataset.interval;
           _disconnectWs();
-          // Vider le champ custom
           var ci = document.getElementById('btcChartCustom');
           if (ci) ci.value = '';
           _fetchAndRender();
@@ -266,7 +424,6 @@
       if (customInput) {
         customInput.addEventListener('change', function () {
           var val = this.value.trim().toLowerCase();
-          // Valider le format (chiffres + une lettre: m/h/d/w/M)
           if (!/^\d+(m|h|d|w|M)$/.test(val)) {
             this.classList.add("jedit-field-error");
             this.title = "Format attendu: chiffre + m/h/d/w/M (ex: 45m, 4h, 7d)";
@@ -284,13 +441,64 @@
         });
       }
 
+      // ── DRAWING TOOLS ──
+      _initWidgetDrawings();
+
     } catch (e) {
       console.error('[btc-chart] createChart error:', e);
     }
   }
 
+  function _initWidgetDrawings() {
+    if (!window.ChartDrawings || !chart || !series) return;
+    var container = document.getElementById('btcChartContainer');
+    if (!container) return;
+
+    var toolbar = document.getElementById('drawToolbarWidget');
+    if (!toolbar) return;
+
+    var tools = window.ChartDrawings.tools;
+    toolbar.innerHTML = '';
+    tools.forEach(function (t) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'draw-toolbar-btn' + (t.id === 'cursor' ? ' is-active' : '');
+      btn.dataset.tool = t.id;
+      btn.dataset.label = t.label;
+      btn.textContent = t.icon;
+      btn.addEventListener('click', function () {
+        toolbar.querySelectorAll('.draw-toolbar-btn').forEach(function (b) { b.classList.remove('is-active'); });
+        btn.classList.add('is-active');
+        window.ChartDrawings.setTool(t.id);
+      });
+      toolbar.appendChild(btn);
+    });
+
+    var clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.className = 'draw-toolbar-btn draw-clear';
+    clearBtn.dataset.label = 'Tout effacer';
+    clearBtn.textContent = '✕';
+    clearBtn.addEventListener('click', function () {
+      if (confirm('Effacer tous les dessins ?')) {
+        window.ChartDrawings.clearAll();
+      }
+    });
+    toolbar.appendChild(clearBtn);
+
+    var isLight = document.body.classList.contains('light-mode');
+    window.ChartDrawings.init(chart, series, container, isLight);
+  }
+
   function _fetchAndRender(keepZoom) {
     if (!series) return;
+
+    // Sauvegarder le zoom utilisateur avant refresh
+    var savedRange = null;
+    if (keepZoom && chart && chart.timeScale()) {
+      try { savedRange = chart.timeScale().getVisibleRange(); } catch(e) {}
+    }
+
     var url = '/api/market/klines?symbol=BTCUSDT&interval=' + currentInterval + '&limit=200';
     fetch(url)
       .then(function (r) { return r.json(); })
@@ -307,17 +515,26 @@
         var priceEl = document.getElementById('btcChartPrice');
         if (priceEl) priceEl.textContent = '$' + Number(last.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
         series.setData(candles);
-        // Mettre a jour le label timer sur le dernier cours
+
+        // Indicators
+        _renderIndicators(candles);
+
         if (countdownPriceLine) {
           try { countdownPriceLine.applyOptions({ price: last.close }); } catch(e) {}
         }
         _updateCountdownLabel();
         if (!keepZoom) chart.timeScale().fitContent();
+
+        // Restaurer le zoom utilisateur apres setData
+        if (keepZoom && savedRange) {
+          try { chart.timeScale().setVisibleRange(savedRange); } catch(e) {}
+        }
       })
       .catch(function (err) { console.error('[btc-chart] fetch:', err); });
   }
 
-  // Init: essayer toutes les 500ms pendant 5s max
+  // ── INIT ──
+
   function _tryInit() {
     if (chartReady) return;
     initBtcChart();
@@ -330,7 +547,6 @@
     setTimeout(_tryInit, 300);
   });
 
-  // Navigation vers Today
   var _origGoPage = window.goPage;
   if (_origGoPage) {
     window.goPage = function (pageName) {

@@ -886,6 +886,10 @@ function _toggleTradeFavorite(tid, btnEl) {
     _journalDayTradeCache[String(tid)] = updated;
     _journalSyncStateAfterSave(tid, updated);
     toast(isFav ? 'Retire des favoris' : 'Ajoute aux favoris', 'success');
+    // Rafraichir le widget Favoris Carousel si la page Today est visible
+    if (typeof window.refreshFavCarousel === 'function') {
+      window.refreshFavCarousel();
+    }
   }).catch(function() {
     // Rollback visuel
     btnEl.classList.toggle('is-active', isFav);

@@ -15519,6 +15519,7 @@ body.light-mode .btc-chart-custom {
   width: 100%;
   height: 100%;
   overflow: hidden;
+  position: relative;
 }
 
 /* ── Top bar ── */
@@ -15570,15 +15571,6 @@ body.light-mode .btc-chart-custom {
   display: flex;
   align-items: baseline;
   gap: 10px;
-}
-
-.chart-countdown-inline {
-  font-family: "JetBrains Mono", monospace;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-faint);
-  margin-right: 8px;
-  white-space: nowrap;
 }
 
 .chart-price {
@@ -15675,7 +15667,396 @@ body.light-mode .btc-chart-custom {
   background: rgba(245, 158, 11, 0.08);
 }
 
-.hidden { display: none !important; }
+/* ── Settings Button ── */
+.chart-settings-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.chart-settings-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.chart-settings-btn:hover {
+  color: var(--text-muted);
+  border-color: var(--border);
+  background: rgba(255,255,255,0.03);
+}
+
+/* ── Settings Panel ── */
+.chart-settings-panel {
+  position: absolute;
+  top: 48px;
+  right: 20px;
+  z-index: 100;
+  width: 380px;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--surface-solid);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.45), 0 4px 12px rgba(0,0,0,0.2);
+  animation: settingsSlideIn 0.2s ease-out;
+}
+
+@keyframes settingsSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.chart-settings-panel.hidden {
+  display: none !important;
+}
+
+.chart-settings-inner {
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-settings-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.chart-settings-header svg {
+  color: var(--accent, #06b6d4);
+  flex-shrink: 0;
+}
+
+.chart-settings-header span {
+  flex: 1;
+}
+
+.chart-settings-close {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.chart-settings-close:hover {
+  color: var(--text);
+  background: rgba(255,255,255,0.06);
+}
+
+.chart-settings-body {
+  padding: 8px 0;
+}
+
+.chart-settings-section {
+  padding: 4px 18px;
+}
+
+.chart-settings-section + .chart-settings-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.chart-settings-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+  margin-bottom: 8px;
+}
+
+/* ── Settings Row ── */
+.chart-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 0;
+  gap: 12px;
+}
+
+.chart-settings-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.chart-settings-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ── Indicator Badge ── */
+.chart-ind-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  min-width: 30px;
+}
+
+.chart-ind-badge.sma {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.chart-ind-badge.ema {
+  background: rgba(6, 182, 212, 0.15);
+  color: #06b6d4;
+}
+
+.chart-ind-badge.boll {
+  background: rgba(167, 139, 250, 0.15);
+  color: #a78bfa;
+}
+
+.chart-ind-badge.rsi {
+  background: rgba(244, 114, 182, 0.15);
+  color: #f472b6;
+}
+
+/* ── Session Zone Controls ── */
+.chart-session-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.chart-session-hours {
+  font-size: 10px;
+  color: var(--text-faint);
+  opacity: 0.7;
+}
+
+/* ── Color picker ── */
+.chart-settings-color {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+  background: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.chart-settings-color::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.chart-settings-color::-webkit-color-swatch {
+  border: none;
+  border-radius: 3px;
+}
+
+.chart-settings-color::-moz-color-swatch {
+  border: none;
+  border-radius: 3px;
+}
+
+/* ── Section note ── */
+.chart-settings-section-note {
+  font-size: 10px;
+  color: var(--text-faint);
+  padding: 8px 0 2px;
+  font-style: italic;
+  line-height: 1.4;
+  opacity: 0.7;
+}
+
+/* ── Number Input ── */
+.chart-settings-input {
+  width: 52px;
+  padding: 4px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: "JetBrains Mono", monospace;
+  text-align: center;
+  transition: border-color 0.15s;
+  -moz-appearance: textfield;
+}
+
+.chart-settings-input::-webkit-inner-spin-button,
+.chart-settings-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.chart-settings-input:focus {
+  outline: none;
+  border-color: var(--accent, #06b6d4);
+  box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.12);
+}
+
+/* ── Toggle Switch ── */
+.chart-toggle {
+  display: inline-flex;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.chart-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.chart-toggle-track {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.08);
+  transition: background 0.25s ease;
+}
+
+.chart-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  transition: transform 0.25s ease, background 0.25s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.chart-toggle input:checked + .chart-toggle-track {
+  background: rgba(6, 182, 212, 0.25);
+}
+
+.chart-toggle input:checked + .chart-toggle-track .chart-toggle-thumb {
+  transform: translateX(16px);
+  background: #06b6d4;
+}
+
+.chart-toggle input:focus-visible + .chart-toggle-track {
+  box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2);
+}
+
+/* ── Select ── */
+.chart-settings-select {
+  padding: 4px 28px 4px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='8' height='6' viewBox='0 0 8 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L4 4.5L7 1.5' stroke='%239ca3af' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition: border-color 0.15s;
+  min-width: 90px;
+}
+
+.chart-settings-select:focus {
+  outline: none;
+  border-color: var(--accent, #06b6d4);
+  box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.12);
+}
+
+/* ── Footer buttons ── */
+.chart-settings-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 18px;
+  border-top: 1px solid var(--border);
+}
+
+.chart-settings-btn-reset {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.chart-settings-btn-reset:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: rgba(255,255,255,0.04);
+}
+
+.chart-settings-btn-save {
+  padding: 6px 18px;
+  border-radius: 6px;
+  border: none;
+  background: var(--accent, #06b6d4);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.chart-settings-btn-save:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.chart-settings-btn-save:active {
+  transform: translateY(0);
+}
+
+/* ── Settings Panel Position Override ── */
+/* Position the panel at the topbar-right level */
+.chart-topbar-right {
+  position: relative;
+}
 
 /* ── Timeframes ── */
 .chart-timeframes {
@@ -15719,7 +16100,7 @@ body.light-mode .btc-chart-custom {
   overflow: hidden;
 }
 
-.chart-canvas-wrap > div {
+#chartCanvas {
   width: 100%;
   height: 100%;
 }
@@ -15764,6 +16145,66 @@ body.light-mode .chart-ind-opt:hover {
   background: rgba(0,0,0,0.04);
 }
 
+body.light-mode .chart-settings-panel {
+  box-shadow: 0 16px 48px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06);
+}
+
+body.light-mode .chart-settings-btn {
+  color: #64748b;
+}
+
+body.light-mode .chart-settings-btn:hover {
+  color: #1e293b;
+  border-color: #e2e8f0;
+  background: rgba(0,0,0,0.02);
+}
+
+body.light-mode .chart-settings-input,
+body.light-mode .chart-settings-select {
+  background: rgba(0,0,0,0.02);
+  border-color: #d1d5db;
+}
+
+body.light-mode .chart-settings-color {
+  border-color: #d1d5db;
+}
+
+body.light-mode .chart-toggle-track {
+  background: rgba(0,0,0,0.1);
+}
+
+body.light-mode .chart-toggle input:checked + .chart-toggle-track {
+  background: rgba(6, 182, 212, 0.25);
+}
+
+body.light-mode .chart-settings-btn:hover {
+  background: rgba(0,0,0,0.03);
+}
+
+body.light-mode .chart-settings-section-note {
+  color: #9ca3af;
+}
+
+body.light-mode .chart-settings-btn-reset {
+  border-color: #d1d5db;
+}
+
+body.light-mode .chart-ind-badge.sma {
+  background: rgba(245, 158, 11, 0.12);
+}
+
+body.light-mode .chart-ind-badge.ema {
+  background: rgba(6, 182, 212, 0.12);
+}
+
+body.light-mode .chart-ind-badge.boll {
+  background: rgba(167, 139, 250, 0.12);
+}
+
+body.light-mode .chart-ind-badge.rsi {
+  background: rgba(244, 114, 182, 0.12);
+}
+
 /* ── Responsive ── */
 @media (max-width: 760px) {
   .chart-topbar {
@@ -15775,7 +16216,25 @@ body.light-mode .chart-ind-opt:hover {
   .chart-topbar-right { flex-wrap: wrap; gap: 8px; }
   .chart-price { font-size: 16px; }
   .chart-bottombar { flex-wrap: wrap; gap: 12px; padding: 4px 12px; }
+  .chart-settings-panel {
+    position: fixed;
+    top: auto;
+    right: 12px;
+    width: calc(100vw - 24px);
+    max-width: 380px;
+  }
 }
+
+/* ── Volume Profile ── */
+.chart-toggle-sm .chart-toggle-track { width: 28px; height: 16px; }
+.chart-toggle-sm .chart-toggle-thumb { width: 12px; height: 12px; }
+.chart-toggle-sm input:checked + .chart-toggle-track .chart-toggle-thumb { transform: translateX(12px); }
+
+.chart-toggle-label { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); cursor: pointer; }
+.chart-toggle-label input[type="checkbox"] { margin: 0; accent-color: var(--accent); }
+
+/* VP overlay — sits beneath drawings canvas */
+.vp-overlay { z-index: 9; }
 
 /* ---- 063_favorites_carousel.css ---- */
 /* ---------- Favorites Carousel Widget ---------- */
@@ -15870,7 +16329,7 @@ body.light-mode .chart-ind-opt:hover {
   display: grid;
   place-items: center;
   box-shadow: var(--shadow-sm, 0 2px 6px rgba(0,0,0,0.08));
-  opacity: 0;
+  opacity: 0.85;
   transition: opacity 0.2s, transform 0.2s;
 }
 
@@ -15879,7 +16338,7 @@ body.light-mode .chart-ind-opt:hover {
 }
 
 .fav-carousel-arrow[disabled] {
-  opacity: 0.2;
+  opacity: 0.4;
   cursor: default;
 }
 
@@ -16017,4 +16476,494 @@ body:not(.light-mode) .fav-carousel-dot {
 
 body:not(.light-mode) .fav-carousel-dot.is-active {
   background: #06b6d4;
+}
+
+/* ---- 064_chart_drawings.css ---- */
+/* ---------- Chart Drawing Toolbar ---------- */
+
+.draw-toolbar {
+  position: absolute;
+  top: 50%;
+  left: 8px;
+  transform: translateY(-50%);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--surface-solid);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  transition: opacity 0.2s;
+  touch-action: none;
+}
+
+.draw-toolbar-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, transform 0.12s;
+  position: relative;
+}
+
+.draw-toolbar-btn:hover {
+  background: rgba(255,255,255,0.05);
+  color: var(--text-muted);
+}
+
+.draw-toolbar-btn.is-active {
+  background: rgba(6, 182, 212, 0.12);
+  color: #06b6d4;
+}
+
+.draw-toolbar-btn[data-tool="cursor"].is-active {
+  background: rgba(255,255,255,0.05);
+  color: var(--text);
+}
+
+.draw-toolbar-btn + .draw-toolbar-btn {
+  border-top: 1px solid var(--border);
+  padding-top: 2px;
+  margin-top: 2px;
+}
+
+.draw-toolbar-btn:first-child {
+  border-top: none;
+}
+
+/* ── Tooltip ── */
+.draw-toolbar-btn::after {
+  content: attr(data-label);
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-solid);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 3px 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+
+.draw-toolbar-btn:hover::after {
+  opacity: 1;
+}
+
+/* ── Clear button ── */
+.draw-toolbar-btn.draw-clear {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.draw-toolbar-btn.draw-clear:hover {
+  color: #ef4444;
+}
+
+/* ── Drawing Options Panel ── */
+.draw-options-panel {
+  position: absolute;
+  top: 50%;
+  left: 56px;
+  transform: translateY(-50%);
+  z-index: 15;
+  width: 220px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--surface-solid);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+  animation: drawPanelIn 0.15s ease-out;
+  will-change: transform, opacity;
+}
+
+@keyframes drawPanelIn {
+  from { opacity: 0; transform: translateY(-50%) translateX(-6px); }
+  to   { opacity: 1; transform: translateY(-50%) translateX(0); }
+}
+
+.draw-options-panel.hidden {
+  display: none !important;
+}
+
+.draw-options-header {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.draw-options-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.draw-options-body {
+  padding: 8px 14px 10px;
+}
+
+.draw-opt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+  gap: 8px;
+}
+
+.draw-opt-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  min-width: 52px;
+}
+
+.draw-opt-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Color swatches ── */
+.draw-swatches {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.draw-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.12s, border-color 0.12s;
+  padding: 0;
+}
+
+.draw-swatch:hover {
+  transform: scale(1.15);
+}
+
+.draw-swatch.is-active {
+  border-color: #fff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.2);
+}
+
+/* ── Color picker input ── */
+.draw-color-pick {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  background: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.draw-color-pick::-webkit-color-swatch-wrapper { padding: 1px; }
+.draw-color-pick::-webkit-color-swatch { border: none; border-radius: 2px; }
+.draw-color-pick::-moz-color-swatch { border: none; border-radius: 2px; }
+
+/* ── Select ── */
+.draw-opt-select {
+  padding: 3px 22px 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='8' height='6' viewBox='0 0 8 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L4 4.5L7 1.5' stroke='%239ca3af' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  min-width: 80px;
+}
+
+.draw-opt-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* ── Checkboxes ── */
+.draw-opt-check-group {
+  display: flex;
+  gap: 10px;
+}
+
+.draw-opt-check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.draw-opt-check input {
+  accent-color: #06b6d4;
+}
+
+/* ── Text input ── */
+.draw-opt-text {
+  flex: 1;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 500;
+  min-width: 100px;
+}
+
+.draw-opt-text:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.draw-opt-text::placeholder {
+  color: var(--text-faint);
+}
+
+/* ── Range slider (opacity) ── */
+.draw-opt-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 80px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  outline: none;
+  cursor: pointer;
+}
+
+.draw-opt-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #06b6d4;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.draw-opt-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #06b6d4;
+  cursor: pointer;
+  border: none;
+}
+
+.draw-opt-range-val {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  min-width: 28px;
+  text-align: right;
+}
+
+/* ── Section (fib, templates) ── */
+.draw-opt-section {
+  padding: 8px 0 2px;
+  border-top: 1px solid var(--border);
+  margin-top: 6px;
+}
+
+.draw-opt-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+/* ── Fib level toggles ── */
+.draw-fib-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.draw-fib-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: background 0.1s;
+}
+
+.draw-fib-row:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+.draw-fib-row input {
+  accent-color: #06b6d4;
+}
+
+.draw-fib-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.draw-fib-label {
+  flex: 1;
+}
+
+/* ── Templates ── */
+.draw-template-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.draw-template-select {
+  flex: 1;
+  min-width: 0;
+  font-size: 10px;
+}
+
+.draw-template-btn {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.12s, border-color 0.12s;
+  padding: 0;
+  line-height: 1;
+}
+
+.draw-template-btn:hover {
+  background: rgba(255,255,255,0.05);
+  border-color: var(--border-strong);
+}
+
+.draw-template-btn--del:hover {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+}
+
+/* ── Light mode ── */
+body.light-mode .draw-options-panel {
+  box-shadow: 0 8px 32px rgba(0,0,0,0.10);
+}
+
+body.light-mode .draw-opt-select,
+body.light-mode .draw-opt-text {
+  background: rgba(0,0,0,0.02);
+  border-color: #d1d5db;
+}
+
+body.light-mode .draw-swatch.is-active {
+  border-color: #1e293b;
+}
+
+body.light-mode .draw-color-pick {
+  border-color: #d1d5db;
+}
+
+/* ── Drawing toolbar for widget (inline) ── */
+.draw-toolbar--inline {
+  position: static;
+  transform: none;
+  flex-direction: row;
+  border-radius: 8px;
+  padding: 3px;
+  margin: 0 auto 6px;
+  box-shadow: none;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  display: inline-flex;
+}
+
+.draw-toolbar--inline .draw-toolbar-btn {
+  width: 28px;
+  height: 28px;
+  font-size: 13px;
+}
+
+.draw-toolbar--inline .draw-toolbar-btn + .draw-toolbar-btn {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+  border-left: 1px solid var(--border);
+  padding-left: 2px;
+  margin-left: 2px;
+}
+
+.draw-toolbar--inline .draw-toolbar-btn:first-child {
+  border-left: none;
+}
+
+.draw-toolbar--inline .draw-toolbar-btn.draw-clear {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+/* ── Light mode ── */
+body.light-mode .draw-toolbar {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.10);
+}
+
+body.light-mode .draw-toolbar-btn:hover {
+  background: rgba(0,0,0,0.04);
+}
+
+body.light-mode .draw-toolbar-btn.is-active {
+  background: rgba(6, 182, 212, 0.10);
+}
+
+body.light-mode .draw-toolbar-btn::after {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+body.light-mode .draw-toolbar--inline {
+  background: var(--surface);
 }

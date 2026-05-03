@@ -23,6 +23,17 @@
             <button type="button" class="chart-ind-opt" data-vwap="90D">90 jours</button>
           </div>
         </div>
+
+        <!-- Settings button -->
+        <div class="chart-settings-group">
+          <button type="button" class="chart-settings-btn" id="chartSettingsBtn" title="Paramètres du chart">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </button>
+        </div>
+
         <div class="chart-timeframes">
           <button class="chart-tf-btn active" data-interval="3m">3m</button>
           <button class="chart-tf-btn" data-interval="5m">5m</button>
@@ -36,10 +47,299 @@
       </div>
     </div>
 
-    <!-- Chart area -->
+    <!-- Chart settings panel (slide down) -->
+    <div class="chart-settings-panel hidden" id="chartSettingsPanel">
+      <div class="chart-settings-inner">
+        <div class="chart-settings-header">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>Paramètres du chart</span>
+          <button type="button" class="chart-settings-close" id="chartSettingsClose">✕</button>
+        </div>
+
+        <div class="chart-settings-body">
+          <!-- Indicateurs section -->
+          <div class="chart-settings-section">
+            <div class="chart-settings-section-title">Indicateurs</div>
+
+            <div class="chart-settings-row">
+              <div class="chart-settings-label">
+                <span class="chart-ind-badge sma">SMA</span>
+                <span>Moy. mobile simple</span>
+              </div>
+              <div class="chart-settings-controls">
+                <input type="color" class="chart-settings-color" id="indSmaColor" value="#f59e0b">
+                <input type="number" class="chart-settings-input" id="indSmaPeriod" value="20" min="2" max="200" title="Période">
+                <label class="chart-toggle">
+                  <input type="checkbox" id="indSmaActive">
+                  <span class="chart-toggle-track"><span class="chart-toggle-thumb"></span></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="chart-settings-row">
+              <div class="chart-settings-label">
+                <span class="chart-ind-badge ema">EMA</span>
+                <span>Moy. exponentielle</span>
+              </div>
+              <div class="chart-settings-controls">
+                <input type="color" class="chart-settings-color" id="indEmaColor" value="#06b6d4">
+                <input type="number" class="chart-settings-input" id="indEmaPeriod" value="20" min="2" max="200" title="Période">
+                <label class="chart-toggle">
+                  <input type="checkbox" id="indEmaActive">
+                  <span class="chart-toggle-track"><span class="chart-toggle-thumb"></span></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="chart-settings-row">
+              <div class="chart-settings-label">
+                <span class="chart-ind-badge boll">Boll</span>
+                <span>Bollinger Bands</span>
+              </div>
+              <div class="chart-settings-controls">
+                <input type="color" class="chart-settings-color" id="indBollColor" value="#a78bfa">
+                <input type="number" class="chart-settings-input" id="indBollPeriod" value="20" min="2" max="200" title="Période">
+                <label class="chart-toggle">
+                  <input type="checkbox" id="indBollActive">
+                  <span class="chart-toggle-track"><span class="chart-toggle-thumb"></span></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="chart-settings-row">
+              <div class="chart-settings-label">
+                <span class="chart-ind-badge rsi">RSI</span>
+                <span>Relative Strength Index</span>
+              </div>
+              <div class="chart-settings-controls">
+                <input type="color" class="chart-settings-color" id="indRsiColor" value="#f472b6">
+                <input type="number" class="chart-settings-input" id="indRsiPeriod" value="14" min="2" max="50" title="Période">
+                <label class="chart-toggle">
+                  <input type="checkbox" id="indRsiActive">
+                  <span class="chart-toggle-track"><span class="chart-toggle-thumb"></span></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="chart-settings-section-note">
+              Les Fibonacci extensions (2/2.5/3/4/4.5/5) seront disponibles dans les outils de dessin — Phase 2
+            </div>
+          </div>
+
+          <!-- Volume Profile section -->
+          <div class="chart-settings-section">
+            <div class="chart-settings-section-title">
+              Volume Profile
+              <label class="chart-toggle chart-toggle-sm" style="margin-left:auto">
+                <input type="checkbox" id="vpActive">
+                <span class="chart-toggle-track"><span class="chart-toggle-thumb"></span></span>
+              </label>
+            </div>
+            <div class="chart-settings-section-note">
+              Histogramme des volumes par palier de prix — POC, VAH, VAL
+            </div>
+
+            <div class="chart-settings-row">
+              <div class="chart-settings-label">
+                <span>Taille du bucket</span>
+              </div>
+              <select class="chart-settings-select" id="vpBucketSize">
+                <option value="5">$5</option>
+                <option value="10" selected>$10</option>
+                <option value="20">$20</option>
+                <option value="50">$50</option>
+              </select>
+            </div>
+
+            <div class="chart-settings-row">
+              <div class="chart-settings-label">
+                <span>Période VP</span>
+              </div>
+              <select class="chart-settings-select" id="vpPeriod">
+                <option value="visible">Visible (tout)</option>
+                <option value="day">1 jour</option>
+                <option value="week">7 jours</option>
+                <option value="month">30 jours</option>
+              </select>
+            </div>
+
+            <div class="chart-settings-row">
+              <div class="chart-settings-label">
+                <span>Value Area</span>
+              </div>
+              <select class="chart-settings-select" id="vpVaPercent">
+                <option value="68">68 %</option>
+                <option value="70" selected>70 %</option>
+                <option value="80">80 %</option>
+              </select>
+            </div>
+
+            <div class="chart-settings-row">
+              <div class="chart-settings-label">
+                <span>Affichage</span>
+              </div>
+              <div class="chart-settings-controls" style="gap:8px;flex-wrap:wrap">
+                <label class="chart-toggle-label"><input type="checkbox" id="vpShowPOC" checked> <span>POC</span></label>
+                <label class="chart-toggle-label"><input type="checkbox" id="vpShowVAH" checked> <span>VAH</span></label>
+                <label class="chart-toggle-label"><input type="checkbox" id="vpShowVAL" checked> <span>VAL</span></label>
+              </div>
+            </div>
+
+            <div class="chart-settings-row">
+              <div class="chart-settings-label">
+                <span>Couleurs</span>
+              </div>
+              <div class="chart-settings-controls" style="gap:4px;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:2px;font-size:10px;color:var(--text-muted)">
+                  POC <input type="color" class="chart-settings-color" id="vpColorPOC" value="#f59e0b" style="width:24px;height:20px">
+                </label>
+                <label style="display:flex;align-items:center;gap:2px;font-size:10px;color:var(--text-muted)">
+                  VAH <input type="color" class="chart-settings-color" id="vpColorVAH" value="#22c55e" style="width:24px;height:20px">
+                </label>
+                <label style="display:flex;align-items:center;gap:2px;font-size:10px;color:var(--text-muted)">
+                  VAL <input type="color" class="chart-settings-color" id="vpColorVAL" value="#ef4444" style="width:24px;height:20px">
+                </label>
+                <label style="display:flex;align-items:center;gap:2px;font-size:10px;color:var(--text-muted)">
+                  HVN <input type="color" class="chart-settings-color" id="vpColorHvn" value="#06b6d4" style="width:24px;height:20px">
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sessions section -->
+          <div class="chart-settings-section">
+            <div class="chart-settings-section-title">Sessions</div>
+            <div class="chart-settings-section-note">
+              Zones de trading par fuseau horaire (UTC)
+            </div>
+            <div id="chartSessionControls"></div>
+          </div>
+
+          <!-- Defaults section -->
+          <div class="chart-settings-section">
+            <div class="chart-settings-section-title">Par défaut</div>
+
+            <div class="chart-settings-row">
+              <div class="chart-settings-label">
+                <span>Timeframe</span>
+              </div>
+              <select class="chart-settings-select" id="chartDefInterval">
+                <option value="3m">3 min</option>
+                <option value="5m">5 min</option>
+                <option value="15m">15 min</option>
+                <option value="30m">30 min</option>
+                <option value="1h">1 heure</option>
+                <option value="4h">4 heures</option>
+                <option value="1d">1 jour</option>
+                <option value="1w">1 semaine</option>
+              </select>
+            </div>
+
+            <div class="chart-settings-row">
+              <div class="chart-settings-label">
+                <span>Paire</span>
+              </div>
+              <select class="chart-settings-select" id="chartDefSymbol">
+                <option value="BTCUSDT">BTC/USDT</option>
+                <option value="ETHUSDT">ETH/USDT</option>
+              </select>
+            </div>
+
+            <div class="chart-settings-row">
+              <div class="chart-settings-label">
+                <span>Style graphique</span>
+              </div>
+              <select class="chart-settings-select" id="chartDefStyle">
+                <option value="candlestick">Bougies</option>
+                <option value="line">Ligne</option>
+                <option value="area">Area</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="chart-settings-footer">
+          <button type="button" class="chart-settings-btn-reset" id="chartSettingsReset">Réinitialiser</button>
+          <button type="button" class="chart-settings-btn-save" id="chartSettingsSave">Appliquer</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chart area + Draw Options Panel (inside chart-main for correct positioning) -->
     <div class="chart-main">
       <div class="chart-canvas-wrap" id="chartCanvasWrap">
         <div id="chartCanvas"></div>
+        <!-- Drawing toolbar -->
+        <div class="draw-toolbar" id="drawToolbar"></div>
+        <!-- Drawing options panel -->
+        <div class="draw-options-panel hidden" id="drawOptionsPanel">
+          <div class="draw-options-header">
+            <span class="draw-options-title">Options de dessin</span>
+          </div>
+          <div class="draw-options-body">
+            <div class="draw-opt-row">
+              <label class="draw-opt-label">Trait</label>
+              <div class="draw-opt-control">
+                <div class="draw-swatches" id="drawColorSwatches"></div>
+                <input type="color" class="draw-color-pick" id="drawColorPick" value="#06b6d4">
+              </div>
+            </div>
+            <div class="draw-opt-row" id="drawFillRow" style="display:none">
+              <label class="draw-opt-label">Remplir</label>
+              <div class="draw-opt-control">
+                <input type="color" class="draw-color-pick" id="drawFillColor" value="#06b6d4">
+              </div>
+            </div>
+            <div class="draw-opt-row" id="drawOpacityRow" style="display:none">
+              <label class="draw-opt-label">Opacité</label>
+              <input type="range" class="draw-opt-range" id="drawOpacity" min="0" max="1" step="0.05" value="0.3">
+              <span class="draw-opt-range-val" id="drawOpacityVal">0.30</span>
+            </div>
+            <div class="draw-opt-row">
+              <label class="draw-opt-label">Épaisseur</label>
+              <select class="draw-opt-select" id="drawLineWidth">
+                <option value="1">1 px</option>
+                <option value="1.5" selected>1.5 px</option>
+                <option value="2">2 px</option>
+                <option value="2.5">2.5 px</option>
+                <option value="3">3 px</option>
+              </select>
+            </div>
+            <div class="draw-opt-row">
+              <label class="draw-opt-label">Style</label>
+              <select class="draw-opt-select" id="drawLineStyle">
+                <option value="solid">─ Plein</option>
+                <option value="dashed">╌ Pointillé</option>
+                <option value="dotted">┈ Petit point</option>
+              </select>
+            </div>
+            <div class="draw-opt-row" id="drawExtRow" style="display:none">
+              <label class="draw-opt-label">Prolonger</label>
+              <div class="draw-opt-check-group">
+                <label class="draw-opt-check"><input type="checkbox" id="drawExtLeft"> Gauche</label>
+                <label class="draw-opt-check"><input type="checkbox" id="drawExtRight" checked> Droite</label>
+              </div>
+            </div>
+            <div class="draw-opt-row" id="drawTextRow" style="display:none">
+              <label class="draw-opt-label">Texte</label>
+              <input type="text" class="draw-opt-text" id="drawText" placeholder="Étiquette..." maxlength="60">
+            </div>
+            <div class="draw-opt-section" id="drawFibSection" style="display:none">
+              <div class="draw-opt-section-title">Niveaux Fibonacci</div>
+              <div class="draw-fib-list" id="drawFibLevels"></div>
+            </div>
+            <div class="draw-opt-section">
+              <div class="draw-opt-section-title">Templates</div>
+              <div class="draw-template-row">
+                <select class="draw-opt-select draw-template-select" id="drawTemplateLoad">
+                  <option value="">— Charger —</option>
+                </select>
+                <button type="button" class="draw-template-btn" id="drawTemplateSave" title="Sauvegarder">💾</button>
+                <button type="button" class="draw-template-btn draw-template-btn--del" id="drawTemplateDelete" title="Supprimer">🗑</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
