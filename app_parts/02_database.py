@@ -119,6 +119,9 @@ CREATE TABLE IF NOT EXISTS knowledge_cards (
     CREATE INDEX IF NOT EXISTS idx_days_date        ON days(date);
     CREATE INDEX IF NOT EXISTS idx_days_instrument  ON days(instrument);
     CREATE INDEX IF NOT EXISTS idx_trades_day_id    ON trades(day_id);
+    CREATE INDEX IF NOT EXISTS idx_trades_strategy  ON trades(strategy);
+    CREATE INDEX IF NOT EXISTS idx_trades_is_win    ON trades(is_win);
+    CREATE INDEX IF NOT EXISTS idx_trades_created_at ON trades(created_at);
     """)
     _ensure_column(con, "trades", "why_tp", "TEXT")
     _ensure_column(con, "trades", "plan_model", "TEXT")

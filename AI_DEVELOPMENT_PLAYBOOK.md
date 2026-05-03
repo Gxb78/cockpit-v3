@@ -865,3 +865,19 @@ Cette section documente les features ajoutées, les conventions établies, et le
 - Regle de prevention: TOUJOURS verifier l'existence avec `SELECT id` avant DELETE sur des ressources individuelles. Pour les batchs, utiliser `cur.rowcount` au lieu de `len(ids)`.
 - Test de non-regression: `DELETE /api/days/999999` → 404. `DELETE /api/trades/999999` → 404. `DELETE /api/trades/batch` avec 501 IDs → 400.
 - Fichiers a surveiller: app_parts/09_routes_days.py, app_parts/10_routes_trades.py
+
+### BUG-20260507-02 — /api/trades/instruments pas de fallback config si DB vide
+- Symptome: avec une DB vide, la route retourne `[]` au lieu des instruments par defaut definis dans INSTRUMENTS.
+- Cause racine: la route ne faisait que `SELECT DISTINCT instrument FROM days` sans fallback.
+- Regle de prevention: TOUJOURS prevoir un fallback sur les valeurs de config quand une requete DB retourne 0 resultats. Les instruments par defaut du config.json sont la source de verite, la DB est un sur-ensemble dynamique.
+- Fichiers a surveiller: app_parts/10_routes_trades.py
+
+### CONVENTION-20260507-01 — Index manquants sur trades
+- Cause racine: les colonnes `strategy`, `is_win`, `created_at` sont frequemment filtrees/triees sans index.
+- Regle: Ajouter les indexes sur les colonnes de filtrage et tri frequents dans `init_db()`. Migration si table existe deja.
+- Fichiers a surveiller: app_parts/02_database.py
+
+### CONVENTION-20260507-02 — ML _load_trades_with_context doit utiliser derive_trade_metrics()
+- Cause racine: le module ML lisait les colonnes brutes `pnl`, `is_win`, `rr` directement depuis la DB, contournant `derive_trade_metrics()` qui normalise ces valeurs.
+- Regle: Toujours passer par `derive_trade_metrics()` pour les metriques derivees (pnl, rr, is_win) meme dans les modules non-stats. Les valeurs brutes DB peuvent etre NULL ou incoherentes.
+- Fichiers a surveiller: app_parts/20_ml_engine.py

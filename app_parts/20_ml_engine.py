@@ -88,10 +88,11 @@ def _load_trades_with_context(db, instrument=None, date_from=None, date_to=None)
         t = dict(r)
         t["tags"] = _decode_json(t.get("tags"), [])
         t["_day_tags"] = _decode_json(t.get("_day_tags"), [])
-        # Deriver les metriques effectives (meme logique que stats)
-        t["_pnl_eff"] = t.get("pnl") or 0
-        t["_is_win_eff"] = t.get("is_win")
-        t["_rr_eff"] = t.get("rr")
+        # Utiliser derive_trade_metrics pour les metriques coherentes avec stats API
+        derived = derive_trade_metrics(t)
+        t["_pnl_eff"] = derived["pnl"] or 0
+        t["_is_win_eff"] = derived["is_win"]
+        t["_rr_eff"] = derived["rr"]
         trades.append(t)
     return trades
 
@@ -132,6 +133,8 @@ def analyze_patterns(db, instrument=None, date_from=None, date_to=None):
         cache_key += f"|inst={instrument}"
     if date_from:
         cache_key += f"|from={date_from}"
+    if date_to:
+        cache_key += f"|to={date_to}"
 
     cached = _ml_cache_get(cache_key)
     if cached:

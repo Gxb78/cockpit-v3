@@ -62,7 +62,7 @@ def list_favorite_trades():
         SELECT t.*, d.date as day_date, d.instrument as day_instrument
         FROM trades t
         JOIN days d ON d.id = t.day_id
-        WHERE t.tags LIKE '%favoris%'
+        WHERE t.tags LIKE '%"favoris"%'
         ORDER BY t.created_at DESC
     """).fetchall()
     result = []
@@ -186,6 +186,9 @@ def list_instruments():
         "SELECT DISTINCT instrument FROM days WHERE instrument IS NOT NULL AND instrument != '' ORDER BY instrument"
     ).fetchall()
     instruments = [row["instrument"] for row in rows]
+    # Fallback sur INSTRUMENTS si la DB est vide
+    if not instruments:
+        instruments = INSTRUMENTS
     return jsonify({"ok": True, "instruments": instruments})
 
 
@@ -196,5 +199,18 @@ def journal_search():
     q = request.args.get("q", "").strip()
     if not q or len(q) < 2:
         return jsonify({"ok": True, "days": []})
-    days = _query_days(search=q)
+    raw_from = request.args.get("from")
+    raw_to = request.args.get("to")
+    instrument = request.args.get("instrument")
+    try:
+        date_from = _validate_date_key(raw_from, "from") if raw_from else None
+        date_to = _validate_date_key(raw_to, "to") if raw_to else None
+    except ValueError as _exc:
+        return jsonify({"error": str(_exc)}), 400
+    days = _query_days(
+        search=q,
+        date_from=date_from,
+        date_to=date_to,
+        instrument=instrument,
+    )
     return jsonify({"ok": True, "days": days, "count": len(days)})
