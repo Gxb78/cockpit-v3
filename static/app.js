@@ -15444,6 +15444,8 @@ TradeEditorController.renderHtml = function (day, trade) {
     // Candles data
     this._candles = [];
     this._rawTrades = [];
+    this._klinesCandles = [];  // Bougies OHLC de base (depuis klines)
+    this._footprintMap = {};   // Footprint indexé par candleTime (depuis aggTrades)
     this._isLiveData = false;
     this._loading = false;
     this._error = null;
@@ -15453,7 +15455,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     this._intervalMs = 180000;
     this._coverageInfo = "";
     this._currentRange = null; // {start, end} du dernier fetch
-    this._requestedRangeMs = 21600000; // 6h par defaut
+    this._requestedRangeMs = 1800000; // 30min par defaut
     this._rangeUserOverridden = false;
     this._fetchTimestamp = null;
     // Steps config par symbole
@@ -15515,6 +15517,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       el.classList.toggle('status-loading', this._loading);
       el.classList.toggle('status-reconnecting', this._liveStatus === 'reconnecting');
       el.classList.toggle('status-live-off', !this._liveEnabled);
+      el.classList.toggle('status-partial', !!this._partialData);
     }
   };
 
@@ -15594,7 +15597,8 @@ TradeEditorController.renderHtml = function (day, trade) {
       self.dragStart.x = e.offsetX;
       self.dragStart.y = e.offsetY;
       self.scrollStart.time = self.timeScale.startTime;
-      self.scrollStart.price = self.priceScale.minPrice;
+      self.scrollStart.priceMin = self.priceScale.minPrice;
+      self.scrollStart.priceMax = self.priceScale.maxPrice;
     });
 
     // Mouse move — drag / crosshair
@@ -15778,6 +15782,25 @@ TradeEditorController.renderHtml = function (day, trade) {
         self._setStatus(self._buildStatus());
       });
     }
+
+    // Fit price button
+    var fitBtn = document.getElementById('ofFitBtn');
+    if (fitBtn) {
+      fitBtn.addEventListener('click', function () {
+        if (self._candles.length === 0) return;
+        self._fitPrice(0.05); // 5% margin
+        self._dirty = true;
+        self._setStatus(self._buildStatus());
+      });
+    }
+
+    // Reset view button
+    var resetBtn = document.getElementById('ofResetBtn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function () {
+        self._resetDefaultView();
+      });
+    }
   };
 
   // ============================================================
@@ -15855,11 +15878,16 @@ TradeEditorController.renderHtml = function (day, trade) {
   OrderflowEngine.prototype._pan = function (dx, dy) {
     var ts = this.timeScale;
 
-    // Horizontal ONLY: drag deplace le temps (gauche/droite)
-    // Pour le prix, utiliser la molette (wheel)
+    // Horizontal: drag deplace le temps (gauche/droite)
     var dt = -dx / ts.pixelsPerMs;
     ts.startTime = this.scrollStart.time + dt;
     ts.endTime = ts.startTime + (this.timeScale.width - ts.leftMargin - ts.rightMargin) / ts.pixelsPerMs;
+
+    // Vertical: drag deplace le prix (haut/bas)
+    var ps = this.priceScale;
+    var dp = -dy / ps.pixelsPerUnit;
+    ps.minPrice = this.scrollStart.priceMin + dp;
+    ps.maxPrice = this.scrollStart.priceMax + dp;
 
     this._dirty = true;
   };
@@ -16269,26 +16297,41 @@ TradeEditorController.renderHtml = function (day, trade) {
 
     var now = Date.now();
     var startTime = now - this._requestedRangeMs;
+    // Footprint: seulement les dernieres 15 min (900000ms)
+    var fpStartTime = now - 900000;
 
-    OF.DataService.fetchTrades(this._symbol, startTime, now, 5000)
-      .then(function (res) { self._applyHistoricalData(res, startTime, now, requestId); })
+    Promise.all([
+      OF.DataService.fetchKlines(this._symbol, this._interval, startTime, now),
+      OF.DataService.fetchTrades(this._symbol, fpStartTime, now, 5000)
+    ])
+      .then(function (results) {
+        self._applyHybridData(results[0], results[1], startTime, now, requestId);
+      })
       .catch(function (err) { self._handleHistoricalError(err, requestId); });
   };
 
-  /** Appliquer les donnees fetch à l'engine (commun à loadData et reload) */
-  OrderflowEngine.prototype._applyHistoricalData = function (res, startTime, endTime, requestId) {
+  /** Appliquer les donnees hybrides (klines + aggTrades) à l'engine */
+  OrderflowEngine.prototype._applyHybridData = function (klinesData, tradesData, startTime, endTime, requestId) {
     if (requestId !== this._loadRequestId) return;
     var self = this;
-    var trades = Array.isArray(res) ? res : (res && res.trades ? res.trades : res);
-    if (!trades || trades.length === 0) {
-      throw new Error('Aucune trade recue pour ' + self._symbol);
-    }
-    var limits = !Array.isArray(res) && res ? res.limits || {} : {};
-    var candles = OF.Aggregator.aggregate(trades, self._intervalMs, self._tickSize);
-    if (candles.length === 0) { throw new Error('Aggregation vide'); }
 
+    // 1. Bougies OHLC depuis klines
+    var klines = klinesData && klinesData.candles ? klinesData.candles : (Array.isArray(klinesData) ? klinesData : []);
+    if (!klines || klines.length === 0) {
+      throw new Error('Aucune kline recue pour ' + self._symbol);
+    }
+    var ohlcCandles = OF.Aggregator.aggregateOHLC(klines, self._intervalMs);
+    self._klinesCandles = ohlcCandles;
+
+    // 2. Footprint depuis aggTrades (limité aux 15 dernieres minutes)
+    var trades = Array.isArray(tradesData) ? tradesData : (tradesData && tradesData.trades ? tradesData.trades : []);
+    var limits = !Array.isArray(tradesData) && tradesData ? tradesData.limits || {} : {};
     self._rawTrades = trades;
-    self._candles = candles;
+    self._footprintMap = OF.Aggregator.buildFootprintMap(trades, self._intervalMs, self._tickSize);
+
+    // 3. Fusion
+    self._candles = OF.Aggregator.mergeOHLCWithFootprint(ohlcCandles, self._footprintMap);
+
     self._isLiveData = true;
     self._loading = false;
     self._currentRange = { start: startTime, end: endTime };
@@ -16303,10 +16346,10 @@ TradeEditorController.renderHtml = function (day, trade) {
       }
     }
 
-    var firstTime = candles[0] ? candles[0].time : 0;
-    var lastTime = candles[candles.length - 1] ? candles[candles.length - 1].time : 0;
-    var coverageH = Math.round((lastTime - firstTime) / 3600000 * 10) / 10;
-    self._coverageInfo = coverageH + 'h covered';
+    // Partial = footprint partiel (pas assez de trades pour couvrir toutes les bougies recentes)
+    var fpCandleCount = Object.keys(self._footprintMap).length;
+    var expectedRecent = Math.ceil(900000 / self._intervalMs); // bougies attendues dans les 15min
+    self._partialData = fpCandleCount < expectedRecent && trades.length > 0;
 
     self._fitToData();
     self._dirty = true;
@@ -16355,11 +16398,17 @@ TradeEditorController.renderHtml = function (day, trade) {
     this._loadRequestId++; // annuler tout fetch en cours
     var now = Date.now();
     var startTime = now - this._requestedRangeMs;
+    var fpStartTime = now - 900000;
     var self = this;
     var requestId = this._loadRequestId;
 
-    OF.DataService.fetchTrades(this._symbol, startTime, now, 5000, true)
-      .then(function (res) { self._applyHistoricalData(res, startTime, now, requestId); })
+    Promise.all([
+      OF.DataService.fetchKlines(this._symbol, this._interval, startTime, now),
+      OF.DataService.fetchTrades(this._symbol, fpStartTime, now, 5000, true)
+    ])
+      .then(function (results) {
+        self._applyHybridData(results[0], results[1], startTime, now, requestId);
+      })
       .catch(function (err) { self._handleHistoricalError(err, requestId); });
   };
 
@@ -16425,43 +16474,95 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
   };
 
-  /** Flusher le buffer live — append, trim, aggregate, render */
+  /** Flusher le buffer live — ensureLiveCandle + footprint incremental + merge */
   OrderflowEngine.prototype._flushLiveTrades = function () {
     this._liveFlushTimer = null;
     var buf = this._liveBuffer;
     this._liveBuffer = [];
     if (!buf.length) return;
 
-    for (var i = 0; i < buf.length; i++) {
-      this._rawTrades.push(buf[i]);
-      this._liveTradesCount++;
-    }
-
-    // Trim mémoire différé (max toutes les 5s)
+    // 1. Ensure live candles + push to rawTrades + trim
     var now = Date.now();
-    if (!this._lastTrimAt || now - this._lastTrimAt > 5000) {
-      var trimBefore = this._currentRange ? this._currentRange.start : (now - this._requestedRangeMs);
-      var idx = 0;
-      while (idx < this._rawTrades.length - 1 && this._rawTrades[idx].time < trimBefore) {
-        idx++;
+    var fpWindow = 900000; // 15 min
+    var trimBefore = now - this._requestedRangeMs; // garder au moins le range demande
+
+    for (var i = 0; i < buf.length; i++) {
+      var t = buf[i];
+      this._rawTrades.push(t);
+      this._liveTradesCount++;
+
+      // Ensure candle existe dans _klinesCandles
+      var candleTime = Math.floor(t.time / this._intervalMs) * this._intervalMs;
+      this._ensureLiveCandle(candleTime, t);
+
+      // Mettre à jour le dernier ID
+      if (t.id && t.id > this._lastHistoricalTradeId) {
+        this._lastHistoricalTradeId = t.id;
       }
-      if (idx > 0) this._rawTrades.splice(0, idx);
-      this._lastTrimAt = now;
     }
 
-    // Re-agréger une seule fois pour tout le batch
-    this._candles = OF.Aggregator.aggregate(this._rawTrades, this._intervalMs, this._tickSize);
+    // 2. Trim: garder max 15 min de trades en mémoire
+    var fpTrim = now - fpWindow;
+    var idx = 0;
+    while (idx < this._rawTrades.length - 1 && this._rawTrades[idx].time < fpTrim) {
+      idx++;
+    }
+    if (idx > 0) this._rawTrades.splice(0, idx);
+
+    // 3. Appliquer le batch à la footprintMap existante (incrémental)
+    OF.Aggregator.applyTradesToFootprintMap(this._footprintMap, buf, this._intervalMs, this._tickSize);
+
+    // 4. Re-merger klines + footprint
+    this._candles = OF.Aggregator.mergeOHLCWithFootprint(this._klinesCandles, this._footprintMap);
+
+    // 5. Mettre à jour le flag partial
+    var fpCount = Object.keys(this._footprintMap).length;
+    var expected = Math.ceil(900000 / this._intervalMs);
+    this._partialData = fpCount < expected && this._rawTrades.length > 0;
 
     this._dirty = true;
     this._updateStatsPanel();
     this._setStatus(this._buildStatus());
   };
 
+  /** Créer ou mettre à jour une bougie synthétique depuis un trade live */
+  OrderflowEngine.prototype._ensureLiveCandle = function (candleTime, trade) {
+    // Chercher dans _klinesCandles
+    for (var i = 0; i < this._klinesCandles.length; i++) {
+      if (this._klinesCandles[i].time === candleTime) {
+        var c = this._klinesCandles[i];
+        c.high = Math.max(c.high, trade.price);
+        c.low = Math.min(c.low, trade.price);
+        c.close = trade.price;
+        c.volume = (c.volume || 0) + trade.qty;
+        return;
+      }
+    }
+    // Pas trouvé → créer une bougie synthétique
+    this._klinesCandles.push({
+      time: candleTime,
+      open: trade.price,
+      high: trade.price,
+      low: trade.price,
+      close: trade.price,
+      volume: trade.qty,
+      delta: 0,
+      levels: [],
+      _synthetic: true
+    });
+    // Rester trié par time
+    this._klinesCandles.sort(function (a, b) { return a.time - b.time; });
+  };
+
   /** Construire le message de status */
   OrderflowEngine.prototype._buildStatus = function () {
     var parts = [this._symbol + ' ' + this._interval];
     if (this._candles.length > 0) {
-      parts.push(this._candles.length + ' candles');
+      var ohlcH = Math.round(this._requestedRangeMs / 60000);
+      var fpMins = this._rawTrades.length > 0 ? 15 : 0;
+      parts.push('OHLC ' + ohlcH + 'min');
+      if (fpMins > 0) parts.push('FP ' + fpMins + 'min');
+      if (this._partialData) parts.push('⚠ FP partiel');
     }
     if (this._liveEnabled && this._liveStatus === 'connected') {
       parts.push('LIVE');
@@ -16534,8 +16635,8 @@ TradeEditorController.renderHtml = function (day, trade) {
     var savedStart = this.timeScale.startTime;
     var savedEnd = this.timeScale.endTime;
 
-    var candles = OF.Aggregator.aggregate(this._rawTrades, this._intervalMs, this._tickSize);
-    this._candles = candles;
+    this._footprintMap = OF.Aggregator.buildFootprintMap(this._rawTrades, this._intervalMs, this._tickSize);
+    this._candles = OF.Aggregator.mergeOHLCWithFootprint(this._klinesCandles, this._footprintMap);
 
     // Restaurer la plage temps (ne pas reset le contexte utilisateur)
     this.timeScale.startTime = savedStart;
@@ -16585,7 +16686,10 @@ TradeEditorController.renderHtml = function (day, trade) {
         if (autoBtn) autoBtn.classList.add('active');
       }
     }
-    if (this._rawTrades && this._rawTrades.length > 0 && this._currentRange) {
+    if (this._klinesCandles && this._klinesCandles.length > 0) {
+      // Intervalle change → re-fetch complet (klines au nouvel intervalle)
+      this.loadData(this._symbol, interval);
+    } else if (this._rawTrades && this._rawTrades.length > 0 && this._currentRange) {
       this._reaggregate();
     } else {
       this.loadData(this._symbol, interval);
@@ -16637,6 +16741,57 @@ TradeEditorController.renderHtml = function (day, trade) {
     this.priceScale.maxPrice = maxP + pad;
     this.timeScale.startTime = candles[0].time;
     this.timeScale.endTime = candles[candles.length - 1].time + this._intervalMs * 6;
+  };
+
+  /** Fit price seulement — centrer le range prix sur les bougies visibles */
+  OrderflowEngine.prototype._fitPrice = function (margin) {
+    margin = margin || 0.05;
+    var candles = this._candles;
+    if (!candles || candles.length === 0) return;
+    var ts = this.timeScale;
+    var visibleStart = ts.startTime;
+    var visibleEnd = ts.endTime;
+
+    var minP = Infinity, maxP = -Infinity;
+    var found = false;
+    for (var i = 0; i < candles.length; i++) {
+      var c = candles[i];
+      if (c.time < visibleStart || c.time > visibleEnd) continue;
+      if (c.low < minP) minP = c.low;
+      if (c.high > maxP) maxP = c.high;
+      found = true;
+    }
+    if (!found) {
+      // Fallback: toutes les bougies
+      minP = candles[0].low;
+      maxP = candles[0].high;
+      for (var j = 0; j < candles.length; j++) {
+        if (candles[j].low < minP) minP = candles[j].low;
+        if (candles[j].high > maxP) maxP = candles[j].high;
+      }
+    }
+    var range = maxP - minP;
+    var pad = range * margin || range * 0.05 || 200;
+    this.priceScale.minPrice = minP - pad;
+    this.priceScale.maxPrice = maxP + pad;
+  };
+
+  /** Reset complet : range temporel au défaut + fit price */
+  OrderflowEngine.prototype._resetDefaultView = function () {
+    var now = Date.now();
+    this.timeScale.startTime = now - this._requestedRangeMs;
+    this.timeScale.endTime = now;
+    // Desactiver l'override utilisateur pour le range
+    this._rangeUserOverridden = false;
+    var autoBtn = document.getElementById('ofAutoRange');
+    if (autoBtn) {
+      var rangeBtns = document.querySelectorAll('.of-range-btn');
+      rangeBtns.forEach(function (b) { b.classList.remove('active'); });
+      autoBtn.classList.add('active');
+    }
+    this._fitPrice(0.05);
+    this._dirty = true;
+    this._setStatus(this._buildStatus());
   };
 
   // ============================================================
@@ -17123,6 +17278,21 @@ TradeEditorController.renderHtml = function (day, trade) {
     _cache: {},
     _cacheMeta: {}, // metadata complement pour chaque cacheKey
 
+    /** Fetch OHLC klines pour le range complet */
+    fetchKlines: function (symbol, interval, startTime, endTime) {
+      var rangeMs = endTime - startTime;
+      var intervalMs = OF.Aggregator._intervalMs(interval) || 180000;
+      var limit = Math.max(1, Math.ceil(rangeMs / intervalMs)) + 3; // buffer pour bougie en cours + offset serveur
+      var url = '/api/market/klines?symbol=' + encodeURIComponent(symbol)
+        + '&interval=' + encodeURIComponent(interval)
+        + '&limit=' + limit;
+      if (startTime) url += '&startTime=' + startTime;
+      return fetch(url).then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + r.statusText);
+        return r.json();
+      });
+    },
+
     /** Fetch aggTrades (auto-paginate backend, up to 8000) */
     fetchTrades: function (symbol, startTime, endTime, limit, force) {
       var cacheKey = symbol + ':' + (startTime || '') + ':' + (endTime || '');
@@ -17272,6 +17442,171 @@ TradeEditorController.renderHtml = function (day, trade) {
 
       candles.sort(function (a, b) { return a.time - b.time; });
       return candles;
+    },
+
+    /** Convertir interval string en ms */
+    _intervalMs: function (interval) {
+      var map = { '1m': 60000, '3m': 180000, '5m': 300000, '15m': 900000, '30m': 1800000, '1h': 3600000, '4h': 14400000 };
+      return map[interval] || 180000;
+    },
+
+    /**
+     * Construire des bougies OHLC depuis des klines.
+     * Les klines ont time en secondes → converti en ms.
+     * @param {Array} klines — [{time, open, high, low, close, volume}]
+     * @param {number} intervalMs — intervalle en ms
+     * @returns {Array} candles sans footprint (levels=[], delta=0)
+     */
+    aggregateOHLC: function (klines, intervalMs) {
+      if (!klines || klines.length === 0) return [];
+      intervalMs = intervalMs || 180000;
+      var tickSize = this._tickSize || 10;
+      return klines.map(function (k) {
+        return {
+          time: k.time * 1000,         // klines en secondes → ms
+          open: k.open,
+          high: k.high,
+          low: k.low,
+          close: k.close,
+          volume: k.volume || 0,
+          delta: 0,
+          levels: [],
+          _fromKline: true
+        };
+      });
+    },
+
+    /**
+     * Aggréger des aggTrades en footprintMap indexée par candleTime.
+     * @param {Array} trades — [{time(ms), price, qty, side}]
+     * @param {number} intervalMs
+     * @param {number} tickSize
+     * @returns {Object} { candleTime: {delta, levels: [{price, bid, ask, delta}]} }
+     */
+    buildFootprintMap: function (trades, intervalMs, tickSize) {
+      var map = {};
+      if (!trades || trades.length === 0) return map;
+      tickSize = tickSize || 10;
+      intervalMs = intervalMs || 180000;
+
+      for (var i = 0; i < trades.length; i++) {
+        var t = trades[i];
+        var candleTime = Math.floor(t.time / intervalMs) * intervalMs;
+        if (!map[candleTime]) {
+          map[candleTime] = { delta: 0, levels: {} };
+        }
+        var c = map[candleTime];
+        var priceKey = Math.floor(t.price / tickSize) * tickSize;
+        if (!c.levels[priceKey]) {
+          c.levels[priceKey] = { price: priceKey, bid: 0, ask: 0, delta: 0 };
+        }
+        var lv = c.levels[priceKey];
+        if (t.side === 'buy') {
+          lv.bid += t.qty;
+          lv.delta += t.qty;
+          c.delta += t.qty;
+        } else {
+          lv.ask += t.qty;
+          lv.delta -= t.qty;
+          c.delta -= t.qty;
+        }
+      }
+
+      // Convertir levels en arrays
+      var result = {};
+      var timeKeys = Object.keys(map);
+      for (var ti = 0; ti < timeKeys.length; ti++) {
+        var tk = Number(timeKeys[ti]);
+        var src = map[tk];
+        var levelsArr = [];
+        var priceKeys = Object.keys(src.levels).map(Number).sort(function (a, b) { return a - b; });
+        for (var pi = 0; pi < priceKeys.length; pi++) {
+          var pk = priceKeys[pi];
+          var lv = src.levels[pk];
+          levelsArr.push({
+            price: pk,
+            bid: Math.round(lv.bid * 100) / 100,
+            ask: Math.round(lv.ask * 100) / 100,
+            delta: Math.round(lv.delta * 100) / 100
+          });
+        }
+        result[tk] = { delta: Math.round(src.delta * 100) / 100, levels: levelsArr };
+      }
+      return result;
+    },
+
+    /**
+     * Fusionner des bougies OHLC avec une footprintMap.
+     * Chaque bougie OHLC reçoit levels+delta si la footprintMap a une entrée pour son time.
+     * @param {Array} ohlcCandles — de aggregateOHLC()
+     * @param {Object} footprintMap — de buildFootprintMap()
+     * @returns {Array} candles fusionnées
+     */
+    mergeOHLCWithFootprint: function (ohlcCandles, footprintMap) {
+      return ohlcCandles.map(function (c) {
+        var fp = footprintMap[c.time];
+        if (fp) {
+          c.delta = fp.delta;
+          c.levels = fp.levels;
+        }
+        // Si pas de footprint, levels reste [] — la bougie sera dessinée en OHLC simple
+        return c;
+      });
+    },
+
+    /**
+     * Appliquer un batch de trades à une footprintMap existante (incrémental).
+     * Optimisation: ne pas tout reconstruire à chaque flush live.
+     * @param {Object} footprintMap — existant, muté sur place
+     * @param {Array} trades — [{time(ms), price, qty, side}]
+     * @param {number} intervalMs
+     * @param {number} tickSize
+     */
+    applyTradesToFootprintMap: function (footprintMap, trades, intervalMs, tickSize) {
+      tickSize = tickSize || 10;
+      intervalMs = intervalMs || 180000;
+      for (var i = 0; i < trades.length; i++) {
+        var t = trades[i];
+        var candleTime = Math.floor(t.time / intervalMs) * intervalMs;
+        if (!footprintMap[candleTime]) {
+          footprintMap[candleTime] = { delta: 0, levels: {} };
+        }
+        var c = footprintMap[candleTime];
+        var priceKey = Math.floor(t.price / tickSize) * tickSize;
+        if (!c.levels[priceKey]) {
+          c.levels[priceKey] = { price: priceKey, bid: 0, ask: 0, delta: 0 };
+        }
+        var lv = c.levels[priceKey];
+        if (t.side === 'buy') {
+          lv.bid += t.qty;
+          lv.delta += t.qty;
+          c.delta += t.qty;
+        } else {
+          lv.ask += t.qty;
+          lv.delta -= t.qty;
+          c.delta -= t.qty;
+        }
+      }
+      // Convertir les nouvelles entrées de levels en arrays
+      var timeKeys = Object.keys(footprintMap);
+      for (var ti = 0; ti < timeKeys.length; ti++) {
+        var tk = Number(timeKeys[ti]);
+        var src = footprintMap[tk];
+        if (Array.isArray(src.levels)) continue; // déjà converti
+        var levelsArr = [];
+        var priceKeys = Object.keys(src.levels).map(Number).sort(function (a, b) { return a - b; });
+        for (var pi = 0; pi < priceKeys.length; pi++) {
+          var pk = priceKeys[pi];
+          var lv = src.levels[pk];
+          levelsArr.push({
+            price: pk,
+            bid: Math.round(lv.bid * 100) / 100,
+            ask: Math.round(lv.ask * 100) / 100,
+            delta: Math.round(lv.delta * 100) / 100
+          });
+        }
+        src.levels = levelsArr;
+      }
     }
   };
 

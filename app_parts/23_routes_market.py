@@ -9,6 +9,7 @@
 import urllib.request
 import json as _json
 import time as _time_mod
+import copy
 
 BINANCE_API = "https://api.binance.com"
 MAX_PER_REQUEST = 1000
@@ -111,7 +112,7 @@ def fetch_klines(symbol, interval, limit, start_time=None):
     cached = _klines_cache.get(cache_key)
     if cached and (now - cached["ts"]) < _KLINES_CACHE_TTL:
         # Cache hit fresh — retourner directement
-        resp = dict(cached["response"])
+        resp = copy.deepcopy(cached["response"])
         resp["cache"]["hit"] = True
         resp["cache"]["age"] = int(now - cached["ts"])
         return resp, 200
@@ -132,7 +133,7 @@ def fetch_klines(symbol, interval, limit, start_time=None):
             upstream_error = err[0].get("error", str(err[0]))
             # Stale fallback: si on a du cache, le retourner avec flag stale
             if cached:
-                resp = dict(cached["response"])
+                resp = copy.deepcopy(cached["response"])
                 resp["source"] = "cache"
                 resp["cache"]["hit"] = True
                 resp["cache"]["stale"] = True
@@ -159,7 +160,7 @@ def fetch_klines(symbol, interval, limit, start_time=None):
     candles = [_normalize_candle(k) for k in all_raw]
     candles = _dedupe_klines(candles)
 
-    source = "cache" if cached else "binance"
+    source = "binance"
     age = int(now - cached["ts"]) if cached else 0
 
     response_data = {
@@ -342,7 +343,7 @@ def market_aggtrades():
     if not force:
         cached = _aggtrade_cache.get(cache_key)
         if cached and (now - cached["ts"]) < _CACHE_TTL_S:
-            resp = dict(cached["response"])
+            resp = copy.deepcopy(cached["response"])
             resp["cache"] = {"hit": True, "ttl": _CACHE_TTL_S, "age": int(now - cached["ts"])}
             return jsonify(resp)
 

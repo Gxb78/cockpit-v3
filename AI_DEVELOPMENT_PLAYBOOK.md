@@ -892,3 +892,10 @@ Cette section documente les features ajoutées, les conventions établies, et le
 - Motivation: extraire la logique metier des routes pour la rendre reutilisable par l'IA chat et les tests.
 - Regle: Les fonctions `service_*` prennent `db` en parametre explicite, ne dependent pas du contexte Flask. Les routes restent minces (parse → service → jsonify). Charger les services AVANT les routes dans `__init__.py`.
 - Fichiers a surveiller: app_parts/06a_trade_service.py, app_parts/06b_day_service.py, app_parts/__init__.py
+
+### BUG-20260503-08 — [RÉSOLU] pnl REAL DEFAULT 0 en DB empeche la distinction pnl-absent vs pnl=0
+- Symptome: quand _auto_calc_pnl() ne set pas pnl (pas d'entry/exit/size), le DEFAULT 0 en DB prenait le relais, rendant impossible la distinction entre "pnl non fourni" (None) et "pnl=0 explicite". Cassait le recalcul en update (le pnl=0 existant bloquait le guard `payload.get("pnl") is not None`).
+- Cause racine: `pnl REAL DEFAULT 0` dans le CREATE TABLE de 02_database.py.
+- Regle de prevention: les colonnes avec une semantique "optionnelle/inconnue" ne doivent PAS avoir de DEFAULT. NULL est la valeur correcte pour "non renseigne". Uniquement les colonnes ou 0 a un sens metier (ex: position_size) peuvent avoir DEFAULT 0.
+- Test de non-regression: creer un trade sans entry/exit/size → pnl=None (pas 0.0). Update avec exit_price → pnl recalcule depuis les donnees existantes.
+- Fichiers a surveiller: app_parts/02_database.py (CREATE TABLE trades), app_parts/05_payload_normalizers.py, app_parts/03_core_helpers.py

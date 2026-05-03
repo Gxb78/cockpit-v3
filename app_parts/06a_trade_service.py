@@ -94,6 +94,9 @@ def service_update_trade(trade_id, data_json, db):
     
     # Recalculer PnL et plan
     _auto_calc_pnl(semantic_payload, existing_row["day_id"], db)
+    for field in ("pnl", "is_win"):
+        if field in semantic_payload and semantic_payload[field] is not None:
+            payload[field] = semantic_payload[field]
     payload.update(evaluate_trade_plan(semantic_payload))
     
     # Ajouter timestamp

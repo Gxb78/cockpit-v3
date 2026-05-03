@@ -30,10 +30,10 @@ def reset_all_data():
     shot_count = db.execute("SELECT COUNT(*) AS c FROM trade_screenshots").fetchone()["c"]
 
     # Supprimer les screenshots du disque
-    shots = db.execute("SELECT id, file_path FROM trade_screenshots").fetchall()
+    shots = db.execute("SELECT id, filename FROM trade_screenshots").fetchall()
     for s in shots:
         try:
-            fp = Path(s["file_path"])
+            fp = Path(s["filename"])
             if fp.exists():
                 fp.unlink()
         except Exception:

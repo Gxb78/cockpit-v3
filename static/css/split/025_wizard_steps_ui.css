@@ -5,7 +5,7 @@
 .wiz { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); overflow: hidden; }
 .wiz-panel {
   width: min(420px, 94vw);
-  height: min(85dvh, 780px);
+  height: min(520px, 80dvh);
   display: flex;
   flex-direction: column;
   background: var(--surface);

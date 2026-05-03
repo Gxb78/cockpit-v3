@@ -33,24 +33,41 @@
   touch-action: none;
 }
 
-/* ── Top bar flottant (overlay par-dessus le canvas, pas de layout shift) ── */
+/* ── Top bar flottant — deux lignes ── */
 .of-topbar {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 4px;
   padding: 6px 16px;
-  gap: 12px;
-  flex-shrink: 0;
   z-index: 10;
-  pointer-events: none; /* laisse passer les clics vers le canvas */
+  pointer-events: none;
 }
 
-.of-topbar > * {
-  pointer-events: auto; /* les enfants sont cliquables */
+.of-topbar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.of-topbar-row-1 {
+  justify-content: flex-start;
+}
+
+.of-topbar-row-2 {
+  justify-content: flex-start;
+}
+
+/* Séparateur vertical */
+.of-sep {
+  width: 1px;
+  height: 18px;
+  background: rgba(255,255,255,0.08);
+  flex-shrink: 0;
 }
 
 .of-pair-selector {
@@ -145,6 +162,33 @@
 .of-step-btn.active {
   color: var(--cyan, #38d3ee);
   background: rgba(56, 211, 238, 0.12);
+}
+
+/* ── Action buttons (Fit, Reset) ── */
+.of-action-btn {
+  padding: 3px 9px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(10, 10, 15, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--text-faint, #64748b);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.of-action-btn:hover {
+  color: var(--text-muted, #94a3b8);
+  border-color: var(--border, #334155);
+  background: rgba(10, 10, 15, 0.85);
+}
+
+.of-action-btn:active {
+  color: var(--cyan, #38d3ee);
+  border-color: rgba(56, 211, 238, 0.25);
 }
 
 /* ── Range selector ── */
@@ -291,6 +335,12 @@
   color: #ef4444;
   background: rgba(239, 68, 68, 0.12);
   border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.of-status.status-partial {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
 }
 
 .of-status.status-loading {

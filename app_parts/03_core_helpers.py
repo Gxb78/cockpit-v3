@@ -245,7 +245,7 @@ def _auto_calc_pnl(payload, day_id, db):
     exit_price = payload.get("exit_price")
     
     # Si PnL deja fourni explicitement (incluant 0 pour break-even), ne pas recalculer
-    if "pnl" in payload and exit_price is not None:
+    if payload.get("pnl") is not None and exit_price is not None:
         # PnL deja calcule explicitement - ne pas recalculer
         return
     if exit_price is None:

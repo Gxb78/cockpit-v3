@@ -55,7 +55,7 @@ def init_db():
         take_profit       REAL,
         exit_price        REAL,
         position_size     REAL,
-        pnl               REAL DEFAULT 0,
+        pnl               REAL,
         rr                REAL,
         is_win            INTEGER,
         execution_quality INTEGER,

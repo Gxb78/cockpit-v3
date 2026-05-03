@@ -172,9 +172,6 @@ def normalize_trade_payload(data, *, for_update=False):
             elif val is None or val == "":
                 out[f] = None
 
-    if not for_update and out.get("pnl") is None:
-        out["pnl"] = 0
-
     return out, errors
 
 
