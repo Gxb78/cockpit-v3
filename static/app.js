@@ -11245,6 +11245,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     if (s) { try { chart.removeSeries(s); } catch(e) {} delete vwapSeriesMap[key]; }
   }
   function _calcAndDrawVwap() {
+    console.log('[VWAP] _calcAndDrawVwap periods=', activeVwapPeriods, 'range before=', chart && chart.timeScale() ? JSON.stringify(chart.timeScale().getVisibleLogicalRange()) : 'no chart');
     // Nettoyer les periodes desactivees
     Object.keys(vwapSeriesMap).forEach(function (k) {
       if (activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
@@ -11282,6 +11283,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         });
       }
       vwapSeriesMap[period].setData(vwapData);
+      console.log('[VWAP] after setData period=', period, 'range=', JSON.stringify(chart.timeScale().getVisibleLogicalRange()));
     }
 
     // Regrouper les periodes par fetchInterval pour dedoublonner les fetchs
@@ -11382,12 +11384,14 @@ TradeEditorController.renderHtml = function (day, trade) {
   // ── rAF-retry pour setVisibleLogicalRange ──
   function _applyZoomWithRetry(targetRange, maxAttempts) {
     if (!chart || !chart.timeScale()) return;
+    console.log('[ZOOM] _applyZoomWithRetry target=', JSON.stringify(targetRange), 'current=', JSON.stringify(chart.timeScale().getVisibleLogicalRange()));
     maxAttempts = maxAttempts || 5;
     var attempts = 0;
     function tryApply() {
       if (++attempts > maxAttempts) return;
       try {
         chart.timeScale().setVisibleLogicalRange(targetRange);
+        console.log('[ZOOM] setVisibleLogicalRange called, from=', targetRange.from, 'to=', targetRange.to);
         var actual = chart.timeScale().getVisibleLogicalRange();
         if (actual && Math.abs(actual.from - targetRange.from) <= 1 && Math.abs(actual.to - targetRange.to) <= 1) return;
       } catch(e) {}
@@ -11693,6 +11697,12 @@ TradeEditorController.renderHtml = function (day, trade) {
         setTimeout(function() {
           try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
         }, 50);
+        // Subscribe aux changements de range pour debug
+        try {
+          chart.timeScale().subscribeVisibleLogicalRangeChange(function(range) {
+            if (range) console.log('[RANGE CHANGE]', JSON.stringify(range), (new Error()).stack.split('\n')[2] || '');
+          });
+        } catch(e) {}
         _isFetching = false;
       })
       .catch(function (err) {
