@@ -881,3 +881,9 @@ Cette section documente les features ajoutées, les conventions établies, et le
 - Cause racine: le module ML lisait les colonnes brutes `pnl`, `is_win`, `rr` directement depuis la DB, contournant `derive_trade_metrics()` qui normalise ces valeurs.
 - Regle: Toujours passer par `derive_trade_metrics()` pour les metriques derivees (pnl, rr, is_win) meme dans les modules non-stats. Les valeurs brutes DB peuvent etre NULL ou incoherentes.
 - Fichiers a surveiller: app_parts/20_ml_engine.py
+
+### BUG-20260507-03 — Cache ML : date_to absent de la cle de cache
+- Symptome: Deux requetes `analyze_patterns` avec le meme `date_from` mais des `date_to` differents retournaient le meme resultat en cache.
+- Cause racine: la construction de `cache_key` incluait `pattern|{mtime}|inst={inst}|from={from}` mais pas `|to={to}`.
+- Regle de prevention: TOUS les parametres de requete doivent etre inclus dans la cle de cache. Un parametre oublie = donnees incoherentes silencieuses.
+- Fichiers a surveiller: app_parts/20_ml_engine.py
