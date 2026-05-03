@@ -11238,74 +11238,94 @@ TradeEditorController.renderHtml = function (day, trade) {
   }
 
   // ── VWAP (multi-periode) ──
+  var _vwapInFlight = false;
+
   function _removeVwapSeries(key) {
     var s = vwapSeriesMap[key];
     if (s) { try { chart.removeSeries(s); } catch(e) {} delete vwapSeriesMap[key]; }
   }
   function _calcAndDrawVwap() {
+    // Nettoyer les periodes desactivees
     Object.keys(vwapSeriesMap).forEach(function (k) {
       if (activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
     });
     if (!activeVwapPeriods.length) return;
+    // Skip si un appel est deja en vol (evite la cascade auto-refresh)
+    if (_vwapInFlight) return;
+    _vwapInFlight = true;
 
     var _savedR = null, _savedL = null;
     try { _savedR = chart.timeScale().getVisibleRange(); } catch(e) {}
     try { _savedL = chart.timeScale().getVisibleLogicalRange(); } catch(e) {}
 
-    activeVwapPeriods.forEach(function (period) {
+    // Helper: compute VWAP from candleArray pour une periode donnee
+    function _computeVwap(period, candleArray) {
       var days = VWAP_DAYS[period] || 1;
-      var fetchInterval = VWAP_INTERVALS[period] || '1h';
       var color = VWAP_COLORS[period] || '#f59e0b';
+      var fetchInterval = VWAP_INTERVALS[period] || '1h';
       var label = 'VWAP ' + period + ' (' + fetchInterval + ')';
-
-      function _computeVwap(candleArray, callback) {
-        var now = Math.floor(Date.now() / 1000);
-        var todayStart = Math.floor(now / 86400) * 86400;
-        var cutoff = todayStart - (days - 1) * 86400;
-        var cumTpv = 0, cumVol = 0;
-        var vwapData = [];
-        for (var i = 0; i < candleArray.length; i++) {
-          var c = candleArray[i];
-          if (c.time < cutoff) continue;
-          var tp = (c.high + c.low + c.close) / 3;
-          cumTpv += tp * c.volume;
-          cumVol += c.volume;
-          if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
-        }
-        if (!vwapData.length) { _removeVwapSeries(period); callback(); return; }
-        var _renderR = null;
-        try { _renderR = chart.timeScale().getVisibleRange(); } catch(e) {}
-        if (_renderR && _renderR.from) vwapData = vwapData.filter(function (d) { return d.time >= _renderR.from; });
-        if (!vwapData.length) { _removeVwapSeries(period); callback(); return; }
-        if (!vwapSeriesMap[period]) {
-          vwapSeriesMap[period] = chart.addLineSeries({
-            color: color, lineWidth: 1.5, priceLineVisible: false,
-            lastValueVisible: true, crosshairMarkerVisible: false,
-            title: label,
-          });
-        }
-        vwapSeriesMap[period].setData(vwapData);
-        callback();
+      var now = Math.floor(Date.now() / 1000);
+      var todayStart = Math.floor(now / 86400) * 86400;
+      var cutoff = todayStart - (days - 1) * 86400;
+      var cumTpv = 0, cumVol = 0;
+      var vwapData = [];
+      for (var i = 0; i < candleArray.length; i++) {
+        var c = candleArray[i];
+        if (c.time < cutoff) continue;
+        var tp = (c.high + c.low + c.close) / 3;
+        cumTpv += tp * c.volume;
+        cumVol += c.volume;
+        if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
       }
+      if (!vwapData.length) { _removeVwapSeries(period); return; }
+      if (!vwapSeriesMap[period]) {
+        vwapSeriesMap[period] = chart.addLineSeries({
+          color: color, lineWidth: 1.5, priceLineVisible: false,
+          lastValueVisible: true, crosshairMarkerVisible: false,
+          title: label,
+        });
+      }
+      vwapSeriesMap[period].setData(vwapData);
+    }
 
-      var needed = VWAP_LIMITS[period] || Math.max(Math.ceil(days * 1440 / (INTERVAL_MINUTES[fetchInterval] || 60)) + 10, 100);
-      var url = '/api/market/klines?symbol=BTCUSDT&interval=' + fetchInterval + '&limit=' + needed;
-      fetch(url)
+    // Regrouper les periodes par fetchInterval pour dedoublonner les fetchs
+    // p.ex. 1D+7D utilisent 1h → 1 seul fetch avec limit=max(24,168)=168
+    var groups = {};
+    activeVwapPeriods.forEach(function (p) {
+      var fi = VWAP_INTERVALS[p] || '1h';
+      if (!groups[fi]) groups[fi] = { periods: [], maxLimit: 0 };
+      groups[fi].periods.push(p);
+      var needed = VWAP_LIMITS[p] || Math.max(Math.ceil((VWAP_DAYS[p]||1) * 1440 / (INTERVAL_MINUTES[fi] || 60)) + 10, 100);
+      if (needed > groups[fi].maxLimit) groups[fi].maxLimit = needed;
+    });
+
+    // Lancer tous les fetchs groupes en parallele (2-3 max, bien sous la limite Chrome)
+    var fetches = Object.keys(groups).map(function (fi) {
+      var grp = groups[fi];
+      var limit = grp.maxLimit;
+      var url = '/api/market/klines?symbol=BTCUSDT&interval=' + fi + '&limit=' + limit;
+      return fetch(url)
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function (data) {
           if (data.error || !data.candles || !data.candles.length) {
-            console.warn('[btc-chart] VWAP ' + period + ' (' + fetchInterval + ') pas de donnees');
-            _removeVwapSeries(period); return;
+            console.warn('[btc-chart] VWAP (' + fi + ') pas de donnees');
+            grp.periods.forEach(function (p) { _removeVwapSeries(p); });
+            return;
           }
-          _computeVwap(data.candles, function () {});
+          grp.periods.forEach(function (p) { _computeVwap(p, data.candles); });
         })
         .catch(function (err) {
-          console.warn('[btc-chart] VWAP ' + period + ' (' + fetchInterval + ') erreur:', err && err.message);
-          _removeVwapSeries(period);
+          console.warn('[btc-chart] VWAP (' + fi + ') erreur:', err && err.message);
+          grp.periods.forEach(function (p) { _removeVwapSeries(p); });
         });
     });
-    if (_savedL) { try { chart.timeScale().setVisibleLogicalRange(_savedL); } catch(e) {} }
-    else if (_savedR) { try { chart.timeScale().setVisibleRange(_savedR); } catch(e) {} }
+
+    // Restaurer le zoom une fois toutes les periodes calculees
+    Promise.all(fetches).finally(function () {
+      if (_savedL) { try { chart.timeScale().setVisibleLogicalRange(_savedL); } catch(e) {} }
+      else if (_savedR) { try { chart.timeScale().setVisibleRange(_savedR); } catch(e) {} }
+      _vwapInFlight = false;
+    });
   }
 
   // ── TIMER ──
@@ -11325,7 +11345,10 @@ TradeEditorController.renderHtml = function (day, trade) {
         _updateCountdownLabel('0:00');
         if (countdownTimer) clearInterval(countdownTimer);
         countdownTimer = null;
-        _fetchAndRender(true);
+        // Laisser le WS gérer la fermeture de bougie si actif
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          _fetchAndRender(true, 'auto');
+        }
         return;
       }
       var totalSec = Math.ceil(remaining / 1000);
@@ -11352,6 +11375,11 @@ TradeEditorController.renderHtml = function (day, trade) {
   var wsReconnectTimer = null;
   var _wsIntentionalClose = false;
 
+  // Guards anti-boucle
+  var _isFetching = false;
+  var _lastFetchTs = 0;
+  var _FETCH_COOLDOWN_MS = 5000;
+
   function _connectWs() {
     if (ws && ws.readyState === WebSocket.CONNECTING) return;
     if (ws) { _wsIntentionalClose = true; try { ws.close(); } catch(e) {} _wsIntentionalClose = false; }
@@ -11376,7 +11404,7 @@ TradeEditorController.renderHtml = function (day, trade) {
           var priceEl = document.getElementById('btcChartPrice');
           if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
           lastCandleTime = k.t;
-          if (k.x) { _fetchAndRender(true); return; }
+          if (k.x) { _fetchAndRender(true, 'ws'); return; }
           if (series) {
             try { series.update(candle); } catch(e) {}
           }
@@ -11420,7 +11448,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       var now = Date.now();
       var elapsed = now - lastCandleTime;
       if (elapsed < _getIntervalMs(currentInterval) * 0.95) {
-        _fetchAndRender(true);
+        _fetchAndRender(true, 'auto');
       }
     }, interval);
   }
@@ -11445,7 +11473,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   function loadLibrary(container) {
     if (typeof window.LightweightCharts !== 'undefined') {
       _createChart(container);
-      _fetchAndRender();
+      _fetchAndRender(false, 'user');
       return;
     }
     var urls = [
@@ -11463,7 +11491,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       script.src = urls[idx];
       script.onload = function () {
         _createChart(container);
-        _fetchAndRender();
+        _fetchAndRender(false, 'user');
       };
       script.onerror = function () { tryCdn(idx + 1); };
       document.head.appendChild(script);
@@ -11544,7 +11572,7 @@ TradeEditorController.renderHtml = function (day, trade) {
           _disconnectWs();
           var ci = document.getElementById('btcChartCustom');
           if (ci) ci.value = '';
-          _fetchAndRender();
+          _fetchAndRender(false, 'user');
         });
       });
 
@@ -11563,7 +11591,7 @@ TradeEditorController.renderHtml = function (day, trade) {
           document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
           currentInterval = val;
           _disconnectWs();
-          _fetchAndRender();
+          _fetchAndRender(false, 'user');
         });
         customInput.addEventListener('keydown', function (e) {
           if (e.key === 'Enter') { this.blur(); }
@@ -11579,8 +11607,17 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
   }
 
-  function _fetchAndRender(keepZoom) {
+  function _fetchAndRender(keepZoom, _source) {
     if (!series) return;
+    // Guard anti-appels simultanés
+    if (_isFetching) return;
+    // Debounce 5s sur les appels automatiques (WS, countdown, auto-refresh)
+    if (_source !== 'user') {
+      var now = Date.now();
+      if (_lastFetchTs && (now - _lastFetchTs) < _FETCH_COOLDOWN_MS) return;
+      _lastFetchTs = now;
+    }
+    _isFetching = true;
 
     // Sauvegarder le zoom utilisateur avant refresh (en temps ET en logique)
     var savedRange = null;
@@ -11607,8 +11644,10 @@ TradeEditorController.renderHtml = function (day, trade) {
         lastCandleTime = last.time * 1000;
         _startCountdown();
         _startAutoRefresh();
-        _disconnectWs();
-        _connectWs();
+        if (_source !== 'ws') {
+          _disconnectWs();
+          _connectWs();
+        }
         var priceEl = document.getElementById('btcChartPrice');
         if (priceEl) priceEl.textContent = '$' + Number(last.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
         series.setData(candles);
@@ -11642,9 +11681,11 @@ TradeEditorController.renderHtml = function (day, trade) {
           }
           try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
         }
+        _isFetching = false;
       })
       .catch(function (err) {
         console.error('[btc-chart] fetch:', err);
+        _isFetching = false;
         var container = document.getElementById('btcChartContainer');
         if (container && !chartReady) {
           container.innerHTML = '<div class="chart-error-state">'
@@ -11734,6 +11775,11 @@ TradeEditorController.renderHtml = function (day, trade) {
   var ws = null;
   var wsReconnectTimer = null;
   var _wsIntentionalClose = false;
+
+  // Guards anti-boucle
+  var _isFetching = false;
+  var _lastFetchTs = 0;
+  var _FETCH_COOLDOWN_MS = 5000;
 
   // Settings state
   var indSettings = {
@@ -11950,7 +11996,7 @@ TradeEditorController.renderHtml = function (day, trade) {
           var priceEl = document.getElementById('chartPrice');
           if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
           lastCandleTime = k.t;
-          if (k.x) { _fetchAndRender(true); return; }
+          if (k.x) { _fetchAndRender(true, 'ws'); return; }
           if (candlestickSeries) {
             try {
               if (chartStyle === 'candlestick') {
@@ -12017,17 +12063,13 @@ TradeEditorController.renderHtml = function (day, trade) {
     var container = document.getElementById('chartCanvas');
     if (!container) return;
     if (chart) {
-      // Nettoyer avant refresh : WebSocket, timers, drawings
-      _disconnectWs();
-      if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
-      if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
-      _fetchAndRender(true);
+      _fetchAndRender(true, 'user');
       return;
     }
 
     _loadLibrary(function () {
       _createChart(container);
-      _fetchAndRender();
+      _fetchAndRender(false, 'user');
     });
   }
 
@@ -12299,7 +12341,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         vwapToggle.classList.toggle('active', activeVwapPeriods.length > 0);
         try { localStorage.setItem('chartVwapPeriods', JSON.stringify(activeVwapPeriods)); } catch(e) {}
         vwapDropdown.classList.add('hidden');
-        _fetchAndRender(true);
+        _fetchAndRender(true, 'user');
       });
     });
     // Restaurer l'etat des boutons depuis activeVwapPeriods
@@ -12314,6 +12356,8 @@ TradeEditorController.renderHtml = function (day, trade) {
   var VWAP_DAYS = { '1D': 1, '7D': 7, '30D': 30, '90D': 90 };
   var VWAP_LIMITS = { '1D': 24, '7D': 168, '30D': 190, '90D': 100 };
   var INTERVAL_MINUTES = { '1m':1,'3m':3,'5m':5,'15m':15,'30m':30,'1h':60,'2h':120,'4h':240,'6h':360,'8h':480,'12h':720,'1d':1440,'3d':4320,'1w':10080,'1M':43200 };
+  // ── VWAP (multi-periode) ──
+  var _vwapInFlight = false;
 
   function _removeVwapSeries(key) {
     var s = vwapSeriesMap[key];
@@ -12326,65 +12370,83 @@ TradeEditorController.renderHtml = function (day, trade) {
       if (activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
     });
     if (!activeVwapPeriods.length) return;
+    // Skip si un appel est deja en vol (cascade auto-refresh)
+    if (_vwapInFlight) return;
+    _vwapInFlight = true;
 
     var _savedRange = null, _savedLogical = null;
     try { _savedRange = chart.timeScale().getVisibleRange(); } catch(e) {}
     try { _savedLogical = chart.timeScale().getVisibleLogicalRange(); } catch(e) {}
 
-    activeVwapPeriods.forEach(function (period) {
+    // Helper: compute cumulative VWAP from candles for one period
+    function _computeVwap(period, candleArray) {
       var days = VWAP_DAYS[period] || 1;
       var fetchInterval = VWAP_INTERVALS[period] || '1h';
       var color = VWAP_COLORS[period] || '#f59e0b';
       var label = 'VWAP ' + period + ' (' + fetchInterval + ')';
-
-      // Helper: compute cumulative VWAP from candles
-      function _computeVwap(candleArray, callback) {
-        var now = Math.floor(Date.now() / 1000);
-        var todayStart = Math.floor(now / 86400) * 86400;
-        var cutoff = todayStart - (days - 1) * 86400;
-        var cumTpv = 0, cumVol = 0;
-        var vwapData = [];
-        for (var i = 0; i < candleArray.length; i++) {
-          var c = candleArray[i];
-          if (c.time < cutoff) continue;
-          var tp = (c.high + c.low + c.close) / 3;
-          cumTpv += tp * c.volume;
-          cumVol += c.volume;
-          if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
-        }
-        if (!vwapData.length) { _removeVwapSeries(period); callback(); return; }
-        if (!vwapSeriesMap[period]) {
-          vwapSeriesMap[period] = chart.addLineSeries({
-            color: color, lineWidth: 1.5, priceLineVisible: false,
-            lastValueVisible: true, crosshairMarkerVisible: false,
-            title: label,
-          });
-        }
-        var _lv = vwapData[vwapData.length - 1];
-        if (_lv) vwapData.push({ time: Math.floor(Date.now() / 1000), value: _lv.value });
-        vwapSeriesMap[period].setData(vwapData);
-        callback();
+      var now = Math.floor(Date.now() / 1000);
+      var todayStart = Math.floor(now / 86400) * 86400;
+      var cutoff = todayStart - (days - 1) * 86400;
+      var cumTpv = 0, cumVol = 0;
+      var vwapData = [];
+      for (var i = 0; i < candleArray.length; i++) {
+        var c = candleArray[i];
+        if (c.time < cutoff) continue;
+        var tp = (c.high + c.low + c.close) / 3;
+        cumTpv += tp * c.volume;
+        cumVol += c.volume;
+        if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
       }
+      if (!vwapData.length) { _removeVwapSeries(period); return; }
+      if (!vwapSeriesMap[period]) {
+        vwapSeriesMap[period] = chart.addLineSeries({
+          color: color, lineWidth: 1.5, priceLineVisible: false,
+          lastValueVisible: true, crosshairMarkerVisible: false,
+          title: label,
+        });
+      }
+      var _lv = vwapData[vwapData.length - 1];
+      if (_lv) vwapData.push({ time: Math.floor(Date.now() / 1000), value: _lv.value });
+      vwapSeriesMap[period].setData(vwapData);
+    }
 
-      // Toutes les periodes fetchent leurs donnees — pas de raccourci _lastCandles
-      var minPerCandle = INTERVAL_MINUTES[fetchInterval] || 60;
-      var needed = VWAP_LIMITS[period] || Math.max(Math.ceil(days * 1440 / minPerCandle) + 10, 100);
-      var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + fetchInterval + '&limit=' + needed;
-      fetch(url)
+    // Regrouper par fetchInterval pour dedoublonner les requetes identiques
+    // p.ex. 1D+7D utilisent 1h → 1 seul fetch avec limit=max(24,168)=168
+    var groups = {};
+    activeVwapPeriods.forEach(function (p) {
+      var fi = VWAP_INTERVALS[p] || '1h';
+      if (!groups[fi]) groups[fi] = { periods: [], maxLimit: 0 };
+      groups[fi].periods.push(p);
+      var minPerCandle = INTERVAL_MINUTES[fi] || 60;
+      var needed = VWAP_LIMITS[p] || Math.max(Math.ceil((VWAP_DAYS[p]||1) * 1440 / minPerCandle) + 10, 100);
+      if (needed > groups[fi].maxLimit) groups[fi].maxLimit = needed;
+    });
+
+    // Lancer tous les fetchs en parallele (2-3 max, bien sous la limite Chrome)
+    var fetches = Object.keys(groups).map(function (fi) {
+      var grp = groups[fi];
+      var limit = grp.maxLimit;
+      var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + fi + '&limit=' + limit;
+      return fetch(url)
         .then(function (r) { return r.json(); })
         .then(function (data) {
           if (data.error || !data.candles || !data.candles.length) {
-            _removeVwapSeries(period);
+            grp.periods.forEach(function (p) { _removeVwapSeries(p); });
             return;
           }
-          _computeVwap(data.candles, function () {});
+          grp.periods.forEach(function (p) { _computeVwap(p, data.candles); });
         })
-        .catch(function () { _removeVwapSeries(period); });
+        .catch(function () {
+          grp.periods.forEach(function (p) { _removeVwapSeries(p); });
+        });
     });
 
-    // Restaurer le range visible
-    if (_savedLogical) { try { chart.timeScale().setVisibleLogicalRange(_savedLogical); } catch(e) {} }
-    else if (_savedRange) { try { chart.timeScale().setVisibleRange(_savedRange); } catch(e) {} }
+    // Restaurer le zoom une fois toutes les periodes calculees
+    Promise.all(fetches).finally(function () {
+      if (_savedLogical) { try { chart.timeScale().setVisibleLogicalRange(_savedLogical); } catch(e) {} }
+      else if (_savedRange) { try { chart.timeScale().setVisibleRange(_savedRange); } catch(e) {} }
+      _vwapInFlight = false;
+    });
   }
 
   // ── TIMEFRAMES ──
@@ -12397,7 +12459,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         btn.classList.add('active');
         currentInterval = btn.dataset.interval;
         _disconnectWs();
-        _fetchAndRender();
+        _fetchAndRender(false, 'user');
       });
     });
     // Activer le bon bouton
@@ -12415,7 +12477,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         btn.classList.add('active');
         currentSymbol = btn.dataset.symbol;
         _disconnectWs();
-        _fetchAndRender();
+        _fetchAndRender(false, 'user');
       });
     });
   }
@@ -12663,13 +12725,22 @@ TradeEditorController.renderHtml = function (day, trade) {
   function _applySettings() {
     // Rebuild chart with new style if needed
     // For indicators, just re-render with current data
-    if (chart) _fetchAndRender(true);
+    if (chart) _fetchAndRender(true, 'user');
   }
 
   // ── FETCH & RENDER ──
 
-  function _fetchAndRender(keepZoom) {
+  function _fetchAndRender(keepZoom, _source) {
     if (!candlestickSeries) return;
+    // Guard anti-appels simultanés
+    if (_isFetching) return;
+    // Debounce 5s sur les appels automatiques (WS, countdown, auto-refresh)
+    if (_source !== 'user') {
+      var now = Date.now();
+      if (_lastFetchTs && (now - _lastFetchTs) < _FETCH_COOLDOWN_MS) return;
+      _lastFetchTs = now;
+    }
+    _isFetching = true;
 
     // Sauvegarder le zoom utilisateur avant refresh (en temps ET en logique)
     var savedRange = null;
@@ -12694,8 +12765,10 @@ TradeEditorController.renderHtml = function (day, trade) {
         lastPrice = last.close;
         _startCountdown();
         _startAutoRefresh();
-        _disconnectWs();
-        _connectWs();
+        if (_source !== 'ws') {
+          _disconnectWs();
+          _connectWs();
+        }
         _updateStats(candles);
 
         candlestickSeries.setData(chartStyle === 'candlestick' ? candles : candles.map(function (c) { return { time: c.time, value: c.close }; }));
@@ -12744,8 +12817,12 @@ TradeEditorController.renderHtml = function (day, trade) {
           // Keep price scale unlocked for vertical scroll
           try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
         }
+        _isFetching = false;
       })
-      .catch(function (err) { console.error('[chart] fetch error:', err); });
+      .catch(function (err) {
+        console.error('[chart] fetch error:', err);
+        _isFetching = false;
+      });
   }
 
   function _updateStats(candles) {
@@ -12790,7 +12867,10 @@ TradeEditorController.renderHtml = function (day, trade) {
         _updateCountdownLabel('0:00');
         if (countdownTimer) clearInterval(countdownTimer);
         countdownTimer = null;
-        _fetchAndRender(true);
+        // Laisser le WS gérer la fermeture de bougie si actif
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          _fetchAndRender(true, 'auto');
+        }
         return;
       }
       var totalSec = Math.ceil(remaining / 1000);
@@ -12821,7 +12901,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       var now = Date.now();
       var elapsed = now - lastCandleTime;
       if (elapsed < _getIntervalMs(currentInterval) * 0.95) {
-        _fetchAndRender(true);
+        _fetchAndRender(true, 'auto');
       }
     }, interval);
   }
@@ -15335,6 +15415,11 @@ TradeEditorController.renderHtml = function (day, trade) {
     this._seenLiveIds = {};
     this._seenLiveIdsQueue = [];
 
+    // Buffer live trades (flush toutes les 150ms)
+    this._liveBuffer = [];
+    this._liveFlushTimer = null;
+    this._lastTrimAt = 0;
+
     // rAF handle pour pouvoir stop/start
     this._rafId = null;
     this._running = false;
@@ -16041,6 +16126,11 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   OrderflowEngine.prototype.stop = function () {
     this._running = false;
+    if (this._liveFlushTimer) {
+      clearTimeout(this._liveFlushTimer);
+      this._liveFlushTimer = null;
+    }
+    this._liveBuffer = [];
     if (this._rafId) {
       cancelAnimationFrame(this._rafId);
       this._rafId = null;
@@ -16109,63 +16199,63 @@ TradeEditorController.renderHtml = function (day, trade) {
     var startTime = now - this._requestedRangeMs;
 
     OF.DataService.fetchTrades(this._symbol, startTime, now, 5000)
-      .then(function (res) {
-        if (requestId !== self._loadRequestId) return; // stale request
-        // res peut etre {trades, limits} ou directement un array (fallback)
-        var trades = Array.isArray(res) ? res : (res && res.trades ? res.trades : res);
-        if (!trades || trades.length === 0) {
-          throw new Error('Aucune trade recue pour ' + self._symbol);
-        }
-        var limits = !Array.isArray(res) && res ? res.limits || {} : {};
-        var candles = OF.Aggregator.aggregate(trades, self._intervalMs, self._tickSize);
-        if (candles.length === 0) {
-          throw new Error('Aggregation vide');
-        }
+      .then(function (res) { self._applyHistoricalData(res, startTime, now, requestId); })
+      .catch(function (err) { self._handleHistoricalError(err, requestId); });
+  };
 
-        self._rawTrades = trades;
-        self._candles = candles;
-        self._isLiveData = true;
-        self._loading = false;
-        self._currentRange = { start: startTime, end: now };
-        self._fetchTimestamp = Date.now();
-        self._fetchMeta = limits;
-        self._liveTradesCount = 0;
+  /** Appliquer les donnees fetch à l'engine (commun à loadData et reload) */
+  OrderflowEngine.prototype._applyHistoricalData = function (res, startTime, endTime, requestId) {
+    if (requestId !== this._loadRequestId) return;
+    var self = this;
+    var trades = Array.isArray(res) ? res : (res && res.trades ? res.trades : res);
+    if (!trades || trades.length === 0) {
+      throw new Error('Aucune trade recue pour ' + self._symbol);
+    }
+    var limits = !Array.isArray(res) && res ? res.limits || {} : {};
+    var candles = OF.Aggregator.aggregate(trades, self._intervalMs, self._tickSize);
+    if (candles.length === 0) { throw new Error('Aggregation vide'); }
 
-        // Déterminer le dernier ID historique (anti-doublon WS)
-        self._lastHistoricalTradeId = 0;
-        for (var ti = 0; ti < trades.length; ti++) {
-          if (trades[ti].id && trades[ti].id > self._lastHistoricalTradeId) {
-            self._lastHistoricalTradeId = trades[ti].id;
-          }
-        }
+    self._rawTrades = trades;
+    self._candles = candles;
+    self._isLiveData = true;
+    self._loading = false;
+    self._currentRange = { start: startTime, end: endTime };
+    self._fetchTimestamp = Date.now();
+    self._fetchMeta = limits;
+    self._liveTradesCount = 0;
 
-        // Calculer couverture temporelle
-        var firstTime = candles[0] ? candles[0].time : 0;
-        var lastTime = candles[candles.length - 1] ? candles[candles.length - 1].time : 0;
-        var coverageH = Math.round((lastTime - firstTime) / 3600000 * 10) / 10;
-        self._coverageInfo = coverageH + 'h covered';
+    self._lastHistoricalTradeId = 0;
+    for (var ti = 0; ti < trades.length; ti++) {
+      if (trades[ti].id && trades[ti].id > self._lastHistoricalTradeId) {
+        self._lastHistoricalTradeId = trades[ti].id;
+      }
+    }
 
-        // Ajuster les scales
-        self._fitToData();
-        self._dirty = true;
-        self._updateStatsPanel();
+    var firstTime = candles[0] ? candles[0].time : 0;
+    var lastTime = candles[candles.length - 1] ? candles[candles.length - 1].time : 0;
+    var coverageH = Math.round((lastTime - firstTime) / 3600000 * 10) / 10;
+    self._coverageInfo = coverageH + 'h covered';
 
-        // Connecter le WebSocket si live enabled
-        if (self._liveEnabled) {
-          self._disconnectLive(); // nettoyer avant
-          self._connectLive();
-        }
-        self._setStatus(self._buildStatus());
-      })
-      .catch(function (err) {
-        if (requestId !== self._loadRequestId) return; // stale request
-        console.warn('[OF] API error, fallback mock:', err.message);
-        self._disconnectLive();
-        self._error = err.message;
-        self._isLiveData = false;
-        self._loadMockData();
-        self._setStatus(self._buildStatus());
-      });
+    self._fitToData();
+    self._dirty = true;
+    self._updateStatsPanel();
+
+    if (self._liveEnabled) {
+      self._disconnectLive();
+      self._connectLive();
+    }
+    self._setStatus(self._buildStatus());
+  };
+
+  /** Gestion d'erreur fetch (commun à loadData et reload) */
+  OrderflowEngine.prototype._handleHistoricalError = function (err, requestId) {
+    if (requestId !== this._loadRequestId) return;
+    console.warn('[OF] API error, fallback mock:', err.message);
+    this._disconnectLive();
+    this._error = err.message;
+    this._isLiveData = false;
+    this._loadMockData();
+    this._setStatus(this._buildStatus());
   };
 
   /** Changer le range — marque comme override utilisateur */
@@ -16186,7 +16276,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     this.setInterval(this._interval); // va appliquer auto-range
   };
 
-  /** Recharger les donnees (force fetch) */
+  /** Recharger les donnees (force fetch — ignore le cache) */
   OrderflowEngine.prototype.reload = function () {
     this._disconnectLive();
     OF.DataService.clearCache();
@@ -16197,48 +16287,8 @@ TradeEditorController.renderHtml = function (day, trade) {
     var requestId = this._loadRequestId;
 
     OF.DataService.fetchTrades(this._symbol, startTime, now, 5000, true)
-      .then(function (res) {
-        if (requestId !== self._loadRequestId) return;
-        // meme traitement que loadData…
-        var trades = Array.isArray(res) ? res : (res && res.trades ? res.trades : res);
-        if (!trades || trades.length === 0) {
-          throw new Error('Aucune trade recue pour ' + self._symbol);
-        }
-        var limits = !Array.isArray(res) && res ? res.limits || {} : {};
-        var candles = OF.Aggregator.aggregate(trades, self._intervalMs, self._tickSize);
-        if (candles.length === 0) throw new Error('Aggregation vide');
-
-        self._rawTrades = trades;
-        self._candles = candles;
-        self._isLiveData = true;
-        self._loading = false;
-        self._currentRange = { start: startTime, end: now };
-        self._fetchTimestamp = Date.now();
-        self._fetchMeta = limits;
-        self._liveTradesCount = 0;
-
-        self._lastHistoricalTradeId = 0;
-        for (var ti = 0; ti < trades.length; ti++) {
-          if (trades[ti].id && trades[ti].id > self._lastHistoricalTradeId) {
-            self._lastHistoricalTradeId = trades[ti].id;
-          }
-        }
-
-        self._fitToData();
-        self._dirty = true;
-        self._updateStatsPanel();
-        if (self._liveEnabled) {
-          self._connectLive();
-        }
-        self._setStatus(self._buildStatus());
-      })
-      .catch(function (err) {
-        if (requestId !== self._loadRequestId) return;
-        self._error = err.message;
-        self._isLiveData = false;
-        self._loadMockData();
-        self._setStatus(self._buildStatus());
-      });
+      .then(function (res) { self._applyHistoricalData(res, startTime, now, requestId); })
+      .catch(function (err) { self._handleHistoricalError(err, requestId); });
   };
 
   // ============================================================
@@ -16271,7 +16321,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     this._setStatus(this._buildStatus());
   };
 
-  /** Handler pour chaque trade live */
+  /** Handler pour chaque trade live — bufferise et flush periodique */
   OrderflowEngine.prototype._onLiveTrade = function (trade) {
     // Anti-doublon: ignorer si id <= dernier historique
     if (trade.id && this._lastHistoricalTradeId > 0 && trade.id <= this._lastHistoricalTradeId) return;
@@ -16293,25 +16343,46 @@ TradeEditorController.renderHtml = function (day, trade) {
       this._lastHistoricalTradeId = trade.id;
     }
 
-    // Ajouter aux rawTrades
-    this._rawTrades.push(trade);
-    this._liveTradesCount++;
-
-    // Trim: garder seulement les trades dans le range visible (+1 candle de marge)
-    var trimBefore = this._currentRange ? this._currentRange.start : (Date.now() - this._requestedRangeMs);
-    var idx = 0;
-    while (idx < this._rawTrades.length - 1 && this._rawTrades[idx].time < trimBefore) {
-      idx++;
+    // Bufferiser et scheduler le flush
+    this._liveBuffer.push(trade);
+    if (!this._liveFlushTimer) {
+      var self = this;
+      this._liveFlushTimer = setTimeout(function () {
+        self._flushLiveTrades();
+      }, 150);
     }
-    if (idx > 0) this._rawTrades.splice(0, idx);
+  };
 
-    // Re-agréger — on pourrait optimiser avec update incrémental de la dernière bougie
-    var candles = OF.Aggregator.aggregate(this._rawTrades, this._intervalMs, this._tickSize);
-    this._candles = candles;
+  /** Flusher le buffer live — append, trim, aggregate, render */
+  OrderflowEngine.prototype._flushLiveTrades = function () {
+    this._liveFlushTimer = null;
+    var buf = this._liveBuffer;
+    this._liveBuffer = [];
+    if (!buf.length) return;
 
-    // Marquer dirty + update stats
+    for (var i = 0; i < buf.length; i++) {
+      this._rawTrades.push(buf[i]);
+      this._liveTradesCount++;
+    }
+
+    // Trim mémoire différé (max toutes les 5s)
+    var now = Date.now();
+    if (!this._lastTrimAt || now - this._lastTrimAt > 5000) {
+      var trimBefore = this._currentRange ? this._currentRange.start : (now - this._requestedRangeMs);
+      var idx = 0;
+      while (idx < this._rawTrades.length - 1 && this._rawTrades[idx].time < trimBefore) {
+        idx++;
+      }
+      if (idx > 0) this._rawTrades.splice(0, idx);
+      this._lastTrimAt = now;
+    }
+
+    // Re-agréger une seule fois pour tout le batch
+    this._candles = OF.Aggregator.aggregate(this._rawTrades, this._intervalMs, this._tickSize);
+
     this._dirty = true;
     this._updateStatsPanel();
+    this._setStatus(this._buildStatus());
   };
 
   /** Construire le message de status */
@@ -16986,7 +17057,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       if (!force) {
         var cached = this._cache[cacheKey];
         if (cached && Date.now() - cached.ts < CACHE_TTL) {
-          return Promise.resolve(cached);
+          return Promise.resolve(cached.result);
         }
       }
 
@@ -17025,7 +17096,7 @@ TradeEditorController.renderHtml = function (day, trade) {
                 hitBinanceLimit: batch.length >= 1000,
               };
               var result = { trades: allTrades, limits: meta };
-              self._cache[cacheKey] = { ts: Date.now(), trades: result };
+              self._cache[cacheKey] = { ts: Date.now(), result: result };
               return result;
             }
 

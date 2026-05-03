@@ -211,74 +211,94 @@
   }
 
   // ── VWAP (multi-periode) ──
+  var _vwapInFlight = false;
+
   function _removeVwapSeries(key) {
     var s = vwapSeriesMap[key];
     if (s) { try { chart.removeSeries(s); } catch(e) {} delete vwapSeriesMap[key]; }
   }
   function _calcAndDrawVwap() {
+    // Nettoyer les periodes desactivees
     Object.keys(vwapSeriesMap).forEach(function (k) {
       if (activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
     });
     if (!activeVwapPeriods.length) return;
+    // Skip si un appel est deja en vol (evite la cascade auto-refresh)
+    if (_vwapInFlight) return;
+    _vwapInFlight = true;
 
     var _savedR = null, _savedL = null;
     try { _savedR = chart.timeScale().getVisibleRange(); } catch(e) {}
     try { _savedL = chart.timeScale().getVisibleLogicalRange(); } catch(e) {}
 
-    activeVwapPeriods.forEach(function (period) {
+    // Helper: compute VWAP from candleArray pour une periode donnee
+    function _computeVwap(period, candleArray) {
       var days = VWAP_DAYS[period] || 1;
-      var fetchInterval = VWAP_INTERVALS[period] || '1h';
       var color = VWAP_COLORS[period] || '#f59e0b';
+      var fetchInterval = VWAP_INTERVALS[period] || '1h';
       var label = 'VWAP ' + period + ' (' + fetchInterval + ')';
-
-      function _computeVwap(candleArray, callback) {
-        var now = Math.floor(Date.now() / 1000);
-        var todayStart = Math.floor(now / 86400) * 86400;
-        var cutoff = todayStart - (days - 1) * 86400;
-        var cumTpv = 0, cumVol = 0;
-        var vwapData = [];
-        for (var i = 0; i < candleArray.length; i++) {
-          var c = candleArray[i];
-          if (c.time < cutoff) continue;
-          var tp = (c.high + c.low + c.close) / 3;
-          cumTpv += tp * c.volume;
-          cumVol += c.volume;
-          if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
-        }
-        if (!vwapData.length) { _removeVwapSeries(period); callback(); return; }
-        var _renderR = null;
-        try { _renderR = chart.timeScale().getVisibleRange(); } catch(e) {}
-        if (_renderR && _renderR.from) vwapData = vwapData.filter(function (d) { return d.time >= _renderR.from; });
-        if (!vwapData.length) { _removeVwapSeries(period); callback(); return; }
-        if (!vwapSeriesMap[period]) {
-          vwapSeriesMap[period] = chart.addLineSeries({
-            color: color, lineWidth: 1.5, priceLineVisible: false,
-            lastValueVisible: true, crosshairMarkerVisible: false,
-            title: label,
-          });
-        }
-        vwapSeriesMap[period].setData(vwapData);
-        callback();
+      var now = Math.floor(Date.now() / 1000);
+      var todayStart = Math.floor(now / 86400) * 86400;
+      var cutoff = todayStart - (days - 1) * 86400;
+      var cumTpv = 0, cumVol = 0;
+      var vwapData = [];
+      for (var i = 0; i < candleArray.length; i++) {
+        var c = candleArray[i];
+        if (c.time < cutoff) continue;
+        var tp = (c.high + c.low + c.close) / 3;
+        cumTpv += tp * c.volume;
+        cumVol += c.volume;
+        if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
       }
+      if (!vwapData.length) { _removeVwapSeries(period); return; }
+      if (!vwapSeriesMap[period]) {
+        vwapSeriesMap[period] = chart.addLineSeries({
+          color: color, lineWidth: 1.5, priceLineVisible: false,
+          lastValueVisible: true, crosshairMarkerVisible: false,
+          title: label,
+        });
+      }
+      vwapSeriesMap[period].setData(vwapData);
+    }
 
-      var needed = VWAP_LIMITS[period] || Math.max(Math.ceil(days * 1440 / (INTERVAL_MINUTES[fetchInterval] || 60)) + 10, 100);
-      var url = '/api/market/klines?symbol=BTCUSDT&interval=' + fetchInterval + '&limit=' + needed;
-      fetch(url)
+    // Regrouper les periodes par fetchInterval pour dedoublonner les fetchs
+    // p.ex. 1D+7D utilisent 1h → 1 seul fetch avec limit=max(24,168)=168
+    var groups = {};
+    activeVwapPeriods.forEach(function (p) {
+      var fi = VWAP_INTERVALS[p] || '1h';
+      if (!groups[fi]) groups[fi] = { periods: [], maxLimit: 0 };
+      groups[fi].periods.push(p);
+      var needed = VWAP_LIMITS[p] || Math.max(Math.ceil((VWAP_DAYS[p]||1) * 1440 / (INTERVAL_MINUTES[fi] || 60)) + 10, 100);
+      if (needed > groups[fi].maxLimit) groups[fi].maxLimit = needed;
+    });
+
+    // Lancer tous les fetchs groupes en parallele (2-3 max, bien sous la limite Chrome)
+    var fetches = Object.keys(groups).map(function (fi) {
+      var grp = groups[fi];
+      var limit = grp.maxLimit;
+      var url = '/api/market/klines?symbol=BTCUSDT&interval=' + fi + '&limit=' + limit;
+      return fetch(url)
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function (data) {
           if (data.error || !data.candles || !data.candles.length) {
-            console.warn('[btc-chart] VWAP ' + period + ' (' + fetchInterval + ') pas de donnees');
-            _removeVwapSeries(period); return;
+            console.warn('[btc-chart] VWAP (' + fi + ') pas de donnees');
+            grp.periods.forEach(function (p) { _removeVwapSeries(p); });
+            return;
           }
-          _computeVwap(data.candles, function () {});
+          grp.periods.forEach(function (p) { _computeVwap(p, data.candles); });
         })
         .catch(function (err) {
-          console.warn('[btc-chart] VWAP ' + period + ' (' + fetchInterval + ') erreur:', err && err.message);
-          _removeVwapSeries(period);
+          console.warn('[btc-chart] VWAP (' + fi + ') erreur:', err && err.message);
+          grp.periods.forEach(function (p) { _removeVwapSeries(p); });
         });
     });
-    if (_savedL) { try { chart.timeScale().setVisibleLogicalRange(_savedL); } catch(e) {} }
-    else if (_savedR) { try { chart.timeScale().setVisibleRange(_savedR); } catch(e) {} }
+
+    // Restaurer le zoom une fois toutes les periodes calculees
+    Promise.all(fetches).finally(function () {
+      if (_savedL) { try { chart.timeScale().setVisibleLogicalRange(_savedL); } catch(e) {} }
+      else if (_savedR) { try { chart.timeScale().setVisibleRange(_savedR); } catch(e) {} }
+      _vwapInFlight = false;
+    });
   }
 
   // ── TIMER ──
@@ -298,7 +318,10 @@
         _updateCountdownLabel('0:00');
         if (countdownTimer) clearInterval(countdownTimer);
         countdownTimer = null;
-        _fetchAndRender(true);
+        // Laisser le WS gérer la fermeture de bougie si actif
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          _fetchAndRender(true, 'auto');
+        }
         return;
       }
       var totalSec = Math.ceil(remaining / 1000);
@@ -325,6 +348,11 @@
   var wsReconnectTimer = null;
   var _wsIntentionalClose = false;
 
+  // Guards anti-boucle
+  var _isFetching = false;
+  var _lastFetchTs = 0;
+  var _FETCH_COOLDOWN_MS = 5000;
+
   function _connectWs() {
     if (ws && ws.readyState === WebSocket.CONNECTING) return;
     if (ws) { _wsIntentionalClose = true; try { ws.close(); } catch(e) {} _wsIntentionalClose = false; }
@@ -349,7 +377,7 @@
           var priceEl = document.getElementById('btcChartPrice');
           if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
           lastCandleTime = k.t;
-          if (k.x) { _fetchAndRender(true); return; }
+          if (k.x) { _fetchAndRender(true, 'ws'); return; }
           if (series) {
             try { series.update(candle); } catch(e) {}
           }
@@ -393,7 +421,7 @@
       var now = Date.now();
       var elapsed = now - lastCandleTime;
       if (elapsed < _getIntervalMs(currentInterval) * 0.95) {
-        _fetchAndRender(true);
+        _fetchAndRender(true, 'auto');
       }
     }, interval);
   }
@@ -418,7 +446,7 @@
   function loadLibrary(container) {
     if (typeof window.LightweightCharts !== 'undefined') {
       _createChart(container);
-      _fetchAndRender();
+      _fetchAndRender(false, 'user');
       return;
     }
     var urls = [
@@ -436,7 +464,7 @@
       script.src = urls[idx];
       script.onload = function () {
         _createChart(container);
-        _fetchAndRender();
+        _fetchAndRender(false, 'user');
       };
       script.onerror = function () { tryCdn(idx + 1); };
       document.head.appendChild(script);
@@ -517,7 +545,7 @@
           _disconnectWs();
           var ci = document.getElementById('btcChartCustom');
           if (ci) ci.value = '';
-          _fetchAndRender();
+          _fetchAndRender(false, 'user');
         });
       });
 
@@ -536,7 +564,7 @@
           document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
           currentInterval = val;
           _disconnectWs();
-          _fetchAndRender();
+          _fetchAndRender(false, 'user');
         });
         customInput.addEventListener('keydown', function (e) {
           if (e.key === 'Enter') { this.blur(); }
@@ -552,8 +580,17 @@
     }
   }
 
-  function _fetchAndRender(keepZoom) {
+  function _fetchAndRender(keepZoom, _source) {
     if (!series) return;
+    // Guard anti-appels simultanés
+    if (_isFetching) return;
+    // Debounce 5s sur les appels automatiques (WS, countdown, auto-refresh)
+    if (_source !== 'user') {
+      var now = Date.now();
+      if (_lastFetchTs && (now - _lastFetchTs) < _FETCH_COOLDOWN_MS) return;
+      _lastFetchTs = now;
+    }
+    _isFetching = true;
 
     // Sauvegarder le zoom utilisateur avant refresh (en temps ET en logique)
     var savedRange = null;
@@ -580,8 +617,10 @@
         lastCandleTime = last.time * 1000;
         _startCountdown();
         _startAutoRefresh();
-        _disconnectWs();
-        _connectWs();
+        if (_source !== 'ws') {
+          _disconnectWs();
+          _connectWs();
+        }
         var priceEl = document.getElementById('btcChartPrice');
         if (priceEl) priceEl.textContent = '$' + Number(last.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
         series.setData(candles);
@@ -615,9 +654,11 @@
           }
           try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
         }
+        _isFetching = false;
       })
       .catch(function (err) {
         console.error('[btc-chart] fetch:', err);
+        _isFetching = false;
         var container = document.getElementById('btcChartContainer');
         if (container && !chartReady) {
           container.innerHTML = '<div class="chart-error-state">'

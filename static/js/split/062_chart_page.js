@@ -36,6 +36,11 @@
   var wsReconnectTimer = null;
   var _wsIntentionalClose = false;
 
+  // Guards anti-boucle
+  var _isFetching = false;
+  var _lastFetchTs = 0;
+  var _FETCH_COOLDOWN_MS = 5000;
+
   // Settings state
   var indSettings = {
     sma: { active: false, period: 20, color: '#f59e0b' },
@@ -251,7 +256,7 @@
           var priceEl = document.getElementById('chartPrice');
           if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
           lastCandleTime = k.t;
-          if (k.x) { _fetchAndRender(true); return; }
+          if (k.x) { _fetchAndRender(true, 'ws'); return; }
           if (candlestickSeries) {
             try {
               if (chartStyle === 'candlestick') {
@@ -318,17 +323,13 @@
     var container = document.getElementById('chartCanvas');
     if (!container) return;
     if (chart) {
-      // Nettoyer avant refresh : WebSocket, timers, drawings
-      _disconnectWs();
-      if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
-      if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
-      _fetchAndRender(true);
+      _fetchAndRender(true, 'user');
       return;
     }
 
     _loadLibrary(function () {
       _createChart(container);
-      _fetchAndRender();
+      _fetchAndRender(false, 'user');
     });
   }
 
@@ -600,7 +601,7 @@
         vwapToggle.classList.toggle('active', activeVwapPeriods.length > 0);
         try { localStorage.setItem('chartVwapPeriods', JSON.stringify(activeVwapPeriods)); } catch(e) {}
         vwapDropdown.classList.add('hidden');
-        _fetchAndRender(true);
+        _fetchAndRender(true, 'user');
       });
     });
     // Restaurer l'etat des boutons depuis activeVwapPeriods
@@ -615,6 +616,8 @@
   var VWAP_DAYS = { '1D': 1, '7D': 7, '30D': 30, '90D': 90 };
   var VWAP_LIMITS = { '1D': 24, '7D': 168, '30D': 190, '90D': 100 };
   var INTERVAL_MINUTES = { '1m':1,'3m':3,'5m':5,'15m':15,'30m':30,'1h':60,'2h':120,'4h':240,'6h':360,'8h':480,'12h':720,'1d':1440,'3d':4320,'1w':10080,'1M':43200 };
+  // ── VWAP (multi-periode) ──
+  var _vwapInFlight = false;
 
   function _removeVwapSeries(key) {
     var s = vwapSeriesMap[key];
@@ -627,65 +630,83 @@
       if (activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
     });
     if (!activeVwapPeriods.length) return;
+    // Skip si un appel est deja en vol (cascade auto-refresh)
+    if (_vwapInFlight) return;
+    _vwapInFlight = true;
 
     var _savedRange = null, _savedLogical = null;
     try { _savedRange = chart.timeScale().getVisibleRange(); } catch(e) {}
     try { _savedLogical = chart.timeScale().getVisibleLogicalRange(); } catch(e) {}
 
-    activeVwapPeriods.forEach(function (period) {
+    // Helper: compute cumulative VWAP from candles for one period
+    function _computeVwap(period, candleArray) {
       var days = VWAP_DAYS[period] || 1;
       var fetchInterval = VWAP_INTERVALS[period] || '1h';
       var color = VWAP_COLORS[period] || '#f59e0b';
       var label = 'VWAP ' + period + ' (' + fetchInterval + ')';
-
-      // Helper: compute cumulative VWAP from candles
-      function _computeVwap(candleArray, callback) {
-        var now = Math.floor(Date.now() / 1000);
-        var todayStart = Math.floor(now / 86400) * 86400;
-        var cutoff = todayStart - (days - 1) * 86400;
-        var cumTpv = 0, cumVol = 0;
-        var vwapData = [];
-        for (var i = 0; i < candleArray.length; i++) {
-          var c = candleArray[i];
-          if (c.time < cutoff) continue;
-          var tp = (c.high + c.low + c.close) / 3;
-          cumTpv += tp * c.volume;
-          cumVol += c.volume;
-          if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
-        }
-        if (!vwapData.length) { _removeVwapSeries(period); callback(); return; }
-        if (!vwapSeriesMap[period]) {
-          vwapSeriesMap[period] = chart.addLineSeries({
-            color: color, lineWidth: 1.5, priceLineVisible: false,
-            lastValueVisible: true, crosshairMarkerVisible: false,
-            title: label,
-          });
-        }
-        var _lv = vwapData[vwapData.length - 1];
-        if (_lv) vwapData.push({ time: Math.floor(Date.now() / 1000), value: _lv.value });
-        vwapSeriesMap[period].setData(vwapData);
-        callback();
+      var now = Math.floor(Date.now() / 1000);
+      var todayStart = Math.floor(now / 86400) * 86400;
+      var cutoff = todayStart - (days - 1) * 86400;
+      var cumTpv = 0, cumVol = 0;
+      var vwapData = [];
+      for (var i = 0; i < candleArray.length; i++) {
+        var c = candleArray[i];
+        if (c.time < cutoff) continue;
+        var tp = (c.high + c.low + c.close) / 3;
+        cumTpv += tp * c.volume;
+        cumVol += c.volume;
+        if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
       }
+      if (!vwapData.length) { _removeVwapSeries(period); return; }
+      if (!vwapSeriesMap[period]) {
+        vwapSeriesMap[period] = chart.addLineSeries({
+          color: color, lineWidth: 1.5, priceLineVisible: false,
+          lastValueVisible: true, crosshairMarkerVisible: false,
+          title: label,
+        });
+      }
+      var _lv = vwapData[vwapData.length - 1];
+      if (_lv) vwapData.push({ time: Math.floor(Date.now() / 1000), value: _lv.value });
+      vwapSeriesMap[period].setData(vwapData);
+    }
 
-      // Toutes les periodes fetchent leurs donnees — pas de raccourci _lastCandles
-      var minPerCandle = INTERVAL_MINUTES[fetchInterval] || 60;
-      var needed = VWAP_LIMITS[period] || Math.max(Math.ceil(days * 1440 / minPerCandle) + 10, 100);
-      var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + fetchInterval + '&limit=' + needed;
-      fetch(url)
+    // Regrouper par fetchInterval pour dedoublonner les requetes identiques
+    // p.ex. 1D+7D utilisent 1h → 1 seul fetch avec limit=max(24,168)=168
+    var groups = {};
+    activeVwapPeriods.forEach(function (p) {
+      var fi = VWAP_INTERVALS[p] || '1h';
+      if (!groups[fi]) groups[fi] = { periods: [], maxLimit: 0 };
+      groups[fi].periods.push(p);
+      var minPerCandle = INTERVAL_MINUTES[fi] || 60;
+      var needed = VWAP_LIMITS[p] || Math.max(Math.ceil((VWAP_DAYS[p]||1) * 1440 / minPerCandle) + 10, 100);
+      if (needed > groups[fi].maxLimit) groups[fi].maxLimit = needed;
+    });
+
+    // Lancer tous les fetchs en parallele (2-3 max, bien sous la limite Chrome)
+    var fetches = Object.keys(groups).map(function (fi) {
+      var grp = groups[fi];
+      var limit = grp.maxLimit;
+      var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + fi + '&limit=' + limit;
+      return fetch(url)
         .then(function (r) { return r.json(); })
         .then(function (data) {
           if (data.error || !data.candles || !data.candles.length) {
-            _removeVwapSeries(period);
+            grp.periods.forEach(function (p) { _removeVwapSeries(p); });
             return;
           }
-          _computeVwap(data.candles, function () {});
+          grp.periods.forEach(function (p) { _computeVwap(p, data.candles); });
         })
-        .catch(function () { _removeVwapSeries(period); });
+        .catch(function () {
+          grp.periods.forEach(function (p) { _removeVwapSeries(p); });
+        });
     });
 
-    // Restaurer le range visible
-    if (_savedLogical) { try { chart.timeScale().setVisibleLogicalRange(_savedLogical); } catch(e) {} }
-    else if (_savedRange) { try { chart.timeScale().setVisibleRange(_savedRange); } catch(e) {} }
+    // Restaurer le zoom une fois toutes les periodes calculees
+    Promise.all(fetches).finally(function () {
+      if (_savedLogical) { try { chart.timeScale().setVisibleLogicalRange(_savedLogical); } catch(e) {} }
+      else if (_savedRange) { try { chart.timeScale().setVisibleRange(_savedRange); } catch(e) {} }
+      _vwapInFlight = false;
+    });
   }
 
   // ── TIMEFRAMES ──
@@ -698,7 +719,7 @@
         btn.classList.add('active');
         currentInterval = btn.dataset.interval;
         _disconnectWs();
-        _fetchAndRender();
+        _fetchAndRender(false, 'user');
       });
     });
     // Activer le bon bouton
@@ -716,7 +737,7 @@
         btn.classList.add('active');
         currentSymbol = btn.dataset.symbol;
         _disconnectWs();
-        _fetchAndRender();
+        _fetchAndRender(false, 'user');
       });
     });
   }
@@ -964,13 +985,22 @@
   function _applySettings() {
     // Rebuild chart with new style if needed
     // For indicators, just re-render with current data
-    if (chart) _fetchAndRender(true);
+    if (chart) _fetchAndRender(true, 'user');
   }
 
   // ── FETCH & RENDER ──
 
-  function _fetchAndRender(keepZoom) {
+  function _fetchAndRender(keepZoom, _source) {
     if (!candlestickSeries) return;
+    // Guard anti-appels simultanés
+    if (_isFetching) return;
+    // Debounce 5s sur les appels automatiques (WS, countdown, auto-refresh)
+    if (_source !== 'user') {
+      var now = Date.now();
+      if (_lastFetchTs && (now - _lastFetchTs) < _FETCH_COOLDOWN_MS) return;
+      _lastFetchTs = now;
+    }
+    _isFetching = true;
 
     // Sauvegarder le zoom utilisateur avant refresh (en temps ET en logique)
     var savedRange = null;
@@ -995,8 +1025,10 @@
         lastPrice = last.close;
         _startCountdown();
         _startAutoRefresh();
-        _disconnectWs();
-        _connectWs();
+        if (_source !== 'ws') {
+          _disconnectWs();
+          _connectWs();
+        }
         _updateStats(candles);
 
         candlestickSeries.setData(chartStyle === 'candlestick' ? candles : candles.map(function (c) { return { time: c.time, value: c.close }; }));
@@ -1045,8 +1077,12 @@
           // Keep price scale unlocked for vertical scroll
           try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
         }
+        _isFetching = false;
       })
-      .catch(function (err) { console.error('[chart] fetch error:', err); });
+      .catch(function (err) {
+        console.error('[chart] fetch error:', err);
+        _isFetching = false;
+      });
   }
 
   function _updateStats(candles) {
@@ -1091,7 +1127,10 @@
         _updateCountdownLabel('0:00');
         if (countdownTimer) clearInterval(countdownTimer);
         countdownTimer = null;
-        _fetchAndRender(true);
+        // Laisser le WS gérer la fermeture de bougie si actif
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          _fetchAndRender(true, 'auto');
+        }
         return;
       }
       var totalSec = Math.ceil(remaining / 1000);
@@ -1122,7 +1161,7 @@
       var now = Date.now();
       var elapsed = now - lastCandleTime;
       if (elapsed < _getIntervalMs(currentInterval) * 0.95) {
-        _fetchAndRender(true);
+        _fetchAndRender(true, 'auto');
       }
     }, interval);
   }

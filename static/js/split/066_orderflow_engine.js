@@ -125,6 +125,11 @@
     this._seenLiveIds = {};
     this._seenLiveIdsQueue = [];
 
+    // Buffer live trades (flush toutes les 150ms)
+    this._liveBuffer = [];
+    this._liveFlushTimer = null;
+    this._lastTrimAt = 0;
+
     // rAF handle pour pouvoir stop/start
     this._rafId = null;
     this._running = false;
@@ -831,6 +836,11 @@
 
   OrderflowEngine.prototype.stop = function () {
     this._running = false;
+    if (this._liveFlushTimer) {
+      clearTimeout(this._liveFlushTimer);
+      this._liveFlushTimer = null;
+    }
+    this._liveBuffer = [];
     if (this._rafId) {
       cancelAnimationFrame(this._rafId);
       this._rafId = null;
@@ -899,63 +909,63 @@
     var startTime = now - this._requestedRangeMs;
 
     OF.DataService.fetchTrades(this._symbol, startTime, now, 5000)
-      .then(function (res) {
-        if (requestId !== self._loadRequestId) return; // stale request
-        // res peut etre {trades, limits} ou directement un array (fallback)
-        var trades = Array.isArray(res) ? res : (res && res.trades ? res.trades : res);
-        if (!trades || trades.length === 0) {
-          throw new Error('Aucune trade recue pour ' + self._symbol);
-        }
-        var limits = !Array.isArray(res) && res ? res.limits || {} : {};
-        var candles = OF.Aggregator.aggregate(trades, self._intervalMs, self._tickSize);
-        if (candles.length === 0) {
-          throw new Error('Aggregation vide');
-        }
+      .then(function (res) { self._applyHistoricalData(res, startTime, now, requestId); })
+      .catch(function (err) { self._handleHistoricalError(err, requestId); });
+  };
 
-        self._rawTrades = trades;
-        self._candles = candles;
-        self._isLiveData = true;
-        self._loading = false;
-        self._currentRange = { start: startTime, end: now };
-        self._fetchTimestamp = Date.now();
-        self._fetchMeta = limits;
-        self._liveTradesCount = 0;
+  /** Appliquer les donnees fetch à l'engine (commun à loadData et reload) */
+  OrderflowEngine.prototype._applyHistoricalData = function (res, startTime, endTime, requestId) {
+    if (requestId !== this._loadRequestId) return;
+    var self = this;
+    var trades = Array.isArray(res) ? res : (res && res.trades ? res.trades : res);
+    if (!trades || trades.length === 0) {
+      throw new Error('Aucune trade recue pour ' + self._symbol);
+    }
+    var limits = !Array.isArray(res) && res ? res.limits || {} : {};
+    var candles = OF.Aggregator.aggregate(trades, self._intervalMs, self._tickSize);
+    if (candles.length === 0) { throw new Error('Aggregation vide'); }
 
-        // Déterminer le dernier ID historique (anti-doublon WS)
-        self._lastHistoricalTradeId = 0;
-        for (var ti = 0; ti < trades.length; ti++) {
-          if (trades[ti].id && trades[ti].id > self._lastHistoricalTradeId) {
-            self._lastHistoricalTradeId = trades[ti].id;
-          }
-        }
+    self._rawTrades = trades;
+    self._candles = candles;
+    self._isLiveData = true;
+    self._loading = false;
+    self._currentRange = { start: startTime, end: endTime };
+    self._fetchTimestamp = Date.now();
+    self._fetchMeta = limits;
+    self._liveTradesCount = 0;
 
-        // Calculer couverture temporelle
-        var firstTime = candles[0] ? candles[0].time : 0;
-        var lastTime = candles[candles.length - 1] ? candles[candles.length - 1].time : 0;
-        var coverageH = Math.round((lastTime - firstTime) / 3600000 * 10) / 10;
-        self._coverageInfo = coverageH + 'h covered';
+    self._lastHistoricalTradeId = 0;
+    for (var ti = 0; ti < trades.length; ti++) {
+      if (trades[ti].id && trades[ti].id > self._lastHistoricalTradeId) {
+        self._lastHistoricalTradeId = trades[ti].id;
+      }
+    }
 
-        // Ajuster les scales
-        self._fitToData();
-        self._dirty = true;
-        self._updateStatsPanel();
+    var firstTime = candles[0] ? candles[0].time : 0;
+    var lastTime = candles[candles.length - 1] ? candles[candles.length - 1].time : 0;
+    var coverageH = Math.round((lastTime - firstTime) / 3600000 * 10) / 10;
+    self._coverageInfo = coverageH + 'h covered';
 
-        // Connecter le WebSocket si live enabled
-        if (self._liveEnabled) {
-          self._disconnectLive(); // nettoyer avant
-          self._connectLive();
-        }
-        self._setStatus(self._buildStatus());
-      })
-      .catch(function (err) {
-        if (requestId !== self._loadRequestId) return; // stale request
-        console.warn('[OF] API error, fallback mock:', err.message);
-        self._disconnectLive();
-        self._error = err.message;
-        self._isLiveData = false;
-        self._loadMockData();
-        self._setStatus(self._buildStatus());
-      });
+    self._fitToData();
+    self._dirty = true;
+    self._updateStatsPanel();
+
+    if (self._liveEnabled) {
+      self._disconnectLive();
+      self._connectLive();
+    }
+    self._setStatus(self._buildStatus());
+  };
+
+  /** Gestion d'erreur fetch (commun à loadData et reload) */
+  OrderflowEngine.prototype._handleHistoricalError = function (err, requestId) {
+    if (requestId !== this._loadRequestId) return;
+    console.warn('[OF] API error, fallback mock:', err.message);
+    this._disconnectLive();
+    this._error = err.message;
+    this._isLiveData = false;
+    this._loadMockData();
+    this._setStatus(this._buildStatus());
   };
 
   /** Changer le range — marque comme override utilisateur */
@@ -976,7 +986,7 @@
     this.setInterval(this._interval); // va appliquer auto-range
   };
 
-  /** Recharger les donnees (force fetch) */
+  /** Recharger les donnees (force fetch — ignore le cache) */
   OrderflowEngine.prototype.reload = function () {
     this._disconnectLive();
     OF.DataService.clearCache();
@@ -987,48 +997,8 @@
     var requestId = this._loadRequestId;
 
     OF.DataService.fetchTrades(this._symbol, startTime, now, 5000, true)
-      .then(function (res) {
-        if (requestId !== self._loadRequestId) return;
-        // meme traitement que loadData…
-        var trades = Array.isArray(res) ? res : (res && res.trades ? res.trades : res);
-        if (!trades || trades.length === 0) {
-          throw new Error('Aucune trade recue pour ' + self._symbol);
-        }
-        var limits = !Array.isArray(res) && res ? res.limits || {} : {};
-        var candles = OF.Aggregator.aggregate(trades, self._intervalMs, self._tickSize);
-        if (candles.length === 0) throw new Error('Aggregation vide');
-
-        self._rawTrades = trades;
-        self._candles = candles;
-        self._isLiveData = true;
-        self._loading = false;
-        self._currentRange = { start: startTime, end: now };
-        self._fetchTimestamp = Date.now();
-        self._fetchMeta = limits;
-        self._liveTradesCount = 0;
-
-        self._lastHistoricalTradeId = 0;
-        for (var ti = 0; ti < trades.length; ti++) {
-          if (trades[ti].id && trades[ti].id > self._lastHistoricalTradeId) {
-            self._lastHistoricalTradeId = trades[ti].id;
-          }
-        }
-
-        self._fitToData();
-        self._dirty = true;
-        self._updateStatsPanel();
-        if (self._liveEnabled) {
-          self._connectLive();
-        }
-        self._setStatus(self._buildStatus());
-      })
-      .catch(function (err) {
-        if (requestId !== self._loadRequestId) return;
-        self._error = err.message;
-        self._isLiveData = false;
-        self._loadMockData();
-        self._setStatus(self._buildStatus());
-      });
+      .then(function (res) { self._applyHistoricalData(res, startTime, now, requestId); })
+      .catch(function (err) { self._handleHistoricalError(err, requestId); });
   };
 
   // ============================================================
@@ -1061,7 +1031,7 @@
     this._setStatus(this._buildStatus());
   };
 
-  /** Handler pour chaque trade live */
+  /** Handler pour chaque trade live — bufferise et flush periodique */
   OrderflowEngine.prototype._onLiveTrade = function (trade) {
     // Anti-doublon: ignorer si id <= dernier historique
     if (trade.id && this._lastHistoricalTradeId > 0 && trade.id <= this._lastHistoricalTradeId) return;
@@ -1083,25 +1053,46 @@
       this._lastHistoricalTradeId = trade.id;
     }
 
-    // Ajouter aux rawTrades
-    this._rawTrades.push(trade);
-    this._liveTradesCount++;
-
-    // Trim: garder seulement les trades dans le range visible (+1 candle de marge)
-    var trimBefore = this._currentRange ? this._currentRange.start : (Date.now() - this._requestedRangeMs);
-    var idx = 0;
-    while (idx < this._rawTrades.length - 1 && this._rawTrades[idx].time < trimBefore) {
-      idx++;
+    // Bufferiser et scheduler le flush
+    this._liveBuffer.push(trade);
+    if (!this._liveFlushTimer) {
+      var self = this;
+      this._liveFlushTimer = setTimeout(function () {
+        self._flushLiveTrades();
+      }, 150);
     }
-    if (idx > 0) this._rawTrades.splice(0, idx);
+  };
 
-    // Re-agréger — on pourrait optimiser avec update incrémental de la dernière bougie
-    var candles = OF.Aggregator.aggregate(this._rawTrades, this._intervalMs, this._tickSize);
-    this._candles = candles;
+  /** Flusher le buffer live — append, trim, aggregate, render */
+  OrderflowEngine.prototype._flushLiveTrades = function () {
+    this._liveFlushTimer = null;
+    var buf = this._liveBuffer;
+    this._liveBuffer = [];
+    if (!buf.length) return;
 
-    // Marquer dirty + update stats
+    for (var i = 0; i < buf.length; i++) {
+      this._rawTrades.push(buf[i]);
+      this._liveTradesCount++;
+    }
+
+    // Trim mémoire différé (max toutes les 5s)
+    var now = Date.now();
+    if (!this._lastTrimAt || now - this._lastTrimAt > 5000) {
+      var trimBefore = this._currentRange ? this._currentRange.start : (now - this._requestedRangeMs);
+      var idx = 0;
+      while (idx < this._rawTrades.length - 1 && this._rawTrades[idx].time < trimBefore) {
+        idx++;
+      }
+      if (idx > 0) this._rawTrades.splice(0, idx);
+      this._lastTrimAt = now;
+    }
+
+    // Re-agréger une seule fois pour tout le batch
+    this._candles = OF.Aggregator.aggregate(this._rawTrades, this._intervalMs, this._tickSize);
+
     this._dirty = true;
     this._updateStatsPanel();
+    this._setStatus(this._buildStatus());
   };
 
   /** Construire le message de status */
@@ -1776,7 +1767,7 @@
       if (!force) {
         var cached = this._cache[cacheKey];
         if (cached && Date.now() - cached.ts < CACHE_TTL) {
-          return Promise.resolve(cached);
+          return Promise.resolve(cached.result);
         }
       }
 
@@ -1815,7 +1806,7 @@
                 hitBinanceLimit: batch.length >= 1000,
               };
               var result = { trades: allTrades, limits: meta };
-              self._cache[cacheKey] = { ts: Date.now(), trades: result };
+              self._cache[cacheKey] = { ts: Date.now(), result: result };
               return result;
             }
 
