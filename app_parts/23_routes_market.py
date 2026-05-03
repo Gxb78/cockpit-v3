@@ -45,7 +45,7 @@ def market_klines():
 
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "Journal/1.0"})
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=3) as resp:
                 raw = resp.read().decode("utf-8")
                 batch = _json.loads(raw)
         except urllib.error.HTTPError as e:
@@ -53,6 +53,7 @@ def market_klines():
                 break
             return jsonify({"error": f"Binance HTTP {e.code}: {e.reason}"}), e.code
         except urllib.error.URLError as e:
+            log.warning("Binance URLError (%s %s limit=%s): %s", symbol, interval, fetch, e.reason)
             if all_candles:
                 break
             return jsonify({"error": f"Erreur reseau: {e.reason}"}), 502
@@ -147,7 +148,7 @@ def _fetch_binance_agg(url):
     """Fetch une page Binance, retourne (batch_or_None, error_json_or_None)."""
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Journal/1.0"})
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=3) as resp:
             raw = resp.read().decode("utf-8")
             batch = _json.loads(raw)
     except urllib.error.HTTPError as e:

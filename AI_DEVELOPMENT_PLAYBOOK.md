@@ -837,3 +837,10 @@ Cette section documente les features ajoutées, les conventions établies, et le
 - Cause racine: abort(400) dans Flask peut retourner une page HTML si pas de handler errorhandler(400) dedie.
 - Regle de prevention: Ne jamais utiliser abort() dans les routes API. Utiliser raise ValueError dans les helpers, try/except dans la route, return jsonify({"error": str(e)}), 400.
 - Fichiers a surveiller: app_parts/23_routes_market.py
+
+### BUG-20260506-05 — Timeout Binance 10s cause UI bloquee 10 secondes
+- Symptome: Au refresh, page noire sans donnees pendant ~10s, puis data apparait. `klines?interval=1d&limit=100` → 502 apres 10.02s.
+- Cause racine: `urllib.request.urlopen(req, timeout=10)` dans `market_klines()` et `_fetch_binance_page()`. Quand Binance est lent/unreachable, le thread Flask est bloque 10s. Le frontend attend les donnees VWAP 90D avant de rendre completement.
+- Regle de prevention: Timeout = 3s max pour les proxies API externes. Ajouter `log.warning` sur les timeouts Binance pour diagnositic. Les VWAP multi-TF doivent echouer silencieusement (log only, pas de toast).
+- Test de non-regression: Charger la page Today → le widget BTC chart doit s'afficher immediatement meme si Binance est down. Les VWAP doivent etre absents (pas d'etat d'erreur visible).
+- Fichiers a surveiller: app_parts/23_routes_market.py, static/js/split/060_btc_chart_widget.js

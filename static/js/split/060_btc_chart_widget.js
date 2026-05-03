@@ -272,10 +272,16 @@
       fetch(url)
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function (data) {
-          if (data.error || !data.candles || !data.candles.length) { _removeVwapSeries(period); return; }
+          if (data.error || !data.candles || !data.candles.length) {
+            console.warn('[btc-chart] VWAP ' + period + ' (' + fetchInterval + ') pas de donnees');
+            _removeVwapSeries(period); return;
+          }
           _computeVwap(data.candles, function () {});
         })
-        .catch(function () { _removeVwapSeries(period); });
+        .catch(function (err) {
+          console.warn('[btc-chart] VWAP ' + period + ' (' + fetchInterval + ') erreur:', err && err.message);
+          _removeVwapSeries(period);
+        });
     });
     if (_savedL) { try { chart.timeScale().setVisibleLogicalRange(_savedL); } catch(e) {} }
     else if (_savedR) { try { chart.timeScale().setVisibleRange(_savedR); } catch(e) {} }
@@ -570,7 +576,12 @@
       .then(function (data) {
         if (data.error) { console.error('[btc-chart]', data.error); toast(data.error, 'error'); return; }
         var candles = data.candles || [];
-        if (!candles.length) { toast('Aucune donnee disponible pour ' + currentInterval, 'error'); return; }
+        if (!candles.length) {
+          console.warn('[btc-chart] fetch OK mais 0 candles pour ' + currentInterval
+            + ' | chartReady=' + chartReady + ' | series=' + (series ? 'ok' : 'null')
+            + ' | container=' + (document.getElementById('btcChartContainer') ? 'ok' : 'null'));
+          toast('Aucune donnee disponible pour ' + currentInterval, 'error'); return;
+        }
         _lastCandles = candles;
         var last = candles[candles.length - 1];
         lastCandleTime = last.time * 1000;
