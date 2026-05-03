@@ -11688,7 +11688,7 @@ TradeEditorController.renderHtml = function (day, trade) {
           _applyZoomWithRetry(savedTarget);
         } else if (!keepZoom) {
           var total = candles.length;
-          _applyZoomWithRetry({ from: Math.max(0, total - 80), to: total });
+          _applyZoomWithRetry({ from: Math.max(0, total - 80), to: total + 8 });
         }
         setTimeout(function() {
           try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
@@ -12849,13 +12849,13 @@ TradeEditorController.renderHtml = function (day, trade) {
           // Premier chargement : centrer sur les dernieres bougies
           var total = candles.length;
           var firstTotal = total;
-          _applyZoomWithRetry({ from: Math.max(0, total - 80), to: total });
+          _applyZoomWithRetry({ from: Math.max(0, total - 80), to: total + 8 });
           // One-shot: LWC notifie quand le layout est pret → on re-applique pour confirmation
           var _zoomHandler = function() {
             if (chart && chart.timeScale()) {
               if (!_userIsInteracting) {
                 try {
-                  chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, firstTotal - 80), to: firstTotal });
+                  chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, firstTotal - 80), to: firstTotal + 8 });
                 } catch(e) {}
               }
               chart.timeScale().unsubscribeVisibleLogicalRangeChange(_zoomHandler);

@@ -661,7 +661,7 @@
           _applyZoomWithRetry(savedTarget);
         } else if (!keepZoom) {
           var total = candles.length;
-          _applyZoomWithRetry({ from: Math.max(0, total - 80), to: total });
+          _applyZoomWithRetry({ from: Math.max(0, total - 80), to: total + 8 });
         }
         setTimeout(function() {
           try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
