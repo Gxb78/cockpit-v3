@@ -394,7 +394,7 @@
           timeVisible: true,
           secondsVisible: false,
           borderVisible: false,
-          rightOffset: 20,
+          rightOffset: 8,
           shiftVisibleRangeOnNewBar: true,
         },
         handleScroll: { vertTouchDrag: true, horzTouchDrag: true, pressedMouseMove: true },
