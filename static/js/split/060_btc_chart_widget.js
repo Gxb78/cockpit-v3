@@ -236,6 +236,7 @@
 
     // Bloque l'auto-expand LWC pendant les setData VWAP
     try { chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
+    try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
 
     // Helper: compute VWAP from candleArray pour une periode donnee
     function _computeVwap(period, candleArray) {
@@ -372,7 +373,7 @@
   function _applyZoomWithRetry(targetRange, maxAttempts) {
     if (!chart || !chart.timeScale()) return;
     console.log('[ZOOM] _applyZoomWithRetry target=', JSON.stringify(targetRange), 'current=', JSON.stringify(chart.timeScale().getVisibleLogicalRange()));
-    maxAttempts = maxAttempts || 5;
+    maxAttempts = maxAttempts || 10;
     var attempts = 0;
     function tryApply() {
       if (++attempts > maxAttempts) return;

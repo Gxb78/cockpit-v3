@@ -49,7 +49,7 @@
   // ── rAF-retry pour setVisibleLogicalRange ──
   function _applyZoomWithRetry(targetRange, maxAttempts) {
     if (!chart || !chart.timeScale()) return;
-    maxAttempts = maxAttempts || 5;
+    maxAttempts = maxAttempts || 10;
     var attempts = 0;
     function tryApply() {
       if (++attempts > maxAttempts) return;
@@ -671,6 +671,7 @@
 
     // Bloque l'auto-expand LWC pendant les setData VWAP
     try { chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
+    try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
 
     // Helper: compute cumulative VWAP from candles for one period
     function _computeVwap(period, candleArray) {
@@ -699,8 +700,6 @@
           title: label,
         });
       }
-      var _lv = vwapData[vwapData.length - 1];
-      if (_lv) vwapData.push({ time: Math.floor(Date.now() / 1000), value: _lv.value });
       vwapSeriesMap[period].setData(vwapData);
     }
 
