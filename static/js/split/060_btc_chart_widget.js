@@ -452,7 +452,7 @@
 
   function _showWsError() {
     var el = document.getElementById("btcChartWsStatus");
-    if (el) { el.textContent = "Reconnexion..."; el.className = "btc-chart-ws-error visible"; }
+    if (el) { el.className = "btc-chart-ws-error visible"; }
   }
   function _hideWsError() {
     var el = document.getElementById("btcChartWsStatus");
