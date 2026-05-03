@@ -517,6 +517,8 @@
           borderColor: isLight ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.08)',
           timeVisible: true,
           secondsVisible: false,
+          rightOffset: 8,
+          shiftVisibleRangeOnNewBar: true,
         },
         handleScroll: { vertTouchDrag: true, horzTouchDrag: true, pressedMouseMove: true },
       });
