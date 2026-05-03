@@ -2681,7 +2681,7 @@ function bindCalendarGridActions(grid) {
       renderJournalDayTrades(key, info.days);
       return;
     }
-    // Aucun trade → afficher le contexte du jour avec bouton Nouveau trade
+    // Aucun trade → carte contexte avec donnees HTF + bouton Nouveau trade
     if (typeof closeJournalDayTrades === "function") closeJournalDayTrades();
     if (typeof renderJournalDayContext === "function") {
       renderJournalDayContext(key, info.days);
@@ -2995,7 +2995,7 @@ function dayCell(dt, byDay, otherMonth, today) {
   return el;
 }
 
-// ---- Afficher le contexte d'un jour sans trade (contexte seul) ----
+// ---- Afficher le contexte d'un jour sans trade (carte HTF + bouton trade) ----
 function renderJournalDayContext(dateKey, days) {
   var wrap = $("#journalDayTrades");
   if (!wrap) return;
@@ -3006,24 +3006,78 @@ function renderJournalDayContext(dateKey, days) {
 
   wrap.classList.remove("hidden");
   wrap.dataset.count = "0";
-  wrap.innerHTML = '<div class="journal-day-context-empty">'
-    + '<div class="journal-day-context-head">'
-    +   '<span class="badge-instr">' + escapeHtml(day.instrument || "-") + '</span>'
-    +   '<span class="settings-badge ' + (day.htf_bias === "bullish" ? "ok" : day.htf_bias === "bearish" ? "warn" : "") + '">' + escapeHtml(day.htf_bias || "neutral") + '</span>'
-    +   '<span class="day-date-meta">' + escapeHtml(day.date || "") + '</span>'
-    + '</div>'
-    + '<div class="journal-day-context-notes">'
-    +   escapeHtml(day.daily_notes || day.htf_context || "Aucune note de contexte pour ce jour.")
-    + '</div>'
-    + '<button class="btn-primary" id="journalDayContextAddTrade">+ Nouveau trade</button>'
-    + '</div>';
 
-  var addBtn = document.getElementById("journalDayContextAddTrade");
-  if (addBtn) {
-    addBtn.addEventListener("click", function (e) {
-      e.stopPropagation();
-      wizOpen({ date: dateKey });
-    });
+  // Creer un trade virtuel avec les donnees HTF pour reutiliser journalTradeFlipCardHtml
+  var notes = day.daily_notes || day.htf_context || "";
+  var biasLabel = day.htf_bias || "neutral";
+  var virtualTrade = {
+    id: "context_" + dateKey,
+    day_id: day.id,
+    day_instrument: day.instrument || "-",
+    day_date: day.date || dateKey,
+    strategy: "Contexte du jour",
+    direction: biasLabel,
+    pnl: 0,
+    rr: null,
+    is_win: null,
+    why_trade: notes,
+    scenario: notes,
+    why_entry: "",
+    lessons_learned: "",
+    screenshots: [],
+    tags: ["ctx_card"],
+    session: "",
+    execution_quality: 0,
+  };
+
+  var virtualDay = {
+    id: day.id,
+    instrument: day.instrument || "-",
+    date: day.date || dateKey,
+    htf_bias: day.htf_bias,
+    htf_context: day.htf_context,
+    daily_notes: day.daily_notes,
+  };
+
+  if (typeof journalTradeFlipCardHtml === "function") {
+    wrap.innerHTML = '<div class="journal-day-context-empty">' +
+      journalTradeFlipCardHtml(virtualDay, virtualTrade, 1, [virtualTrade]) +
+      '</div>';
+
+    // Remplacer le bouton "Editer" par "Creer un trade"
+    var editBtn = wrap.querySelector('[data-journal-trade-edit]');
+    if (editBtn) {
+      editBtn.textContent = '+ Créer un trade';
+      editBtn.className = editBtn.className.replace('journal-back-edit', '') + ' btn-primary';
+      editBtn.style.flex = '1';
+      editBtn.removeAttribute('data-journal-trade-edit');
+      editBtn.id = 'journalDayContextAddTrade';
+
+      editBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        wizOpen({
+          date: dateKey,
+          contextCard: true,
+          instrument: day.instrument,
+          htf_context: notes,
+          htf_bias: biasLabel,
+          daily_notes: day.daily_notes || '',
+        });
+      });
+    }
+
+    // Masquer le bouton "Voir dans le journal"
+    var journalBtn = wrap.querySelector('[data-fav-journal]');
+    if (journalBtn) journalBtn.style.display = 'none';
+
+    // Injecter le contexte HTF dans la zone summary de la card
+    var summaryEl = wrap.querySelector('.journal-trade-main p');
+    if (summaryEl && notes) {
+      summaryEl.textContent = notes;
+    }
+  } else {
+    // Fallback : wizard direct
+    wizOpen({ date: dateKey });
   }
 }
 
@@ -5346,9 +5400,9 @@ function wizOpen(opts) {
       date:         opts.date        || todayKey(),
       instrument:   instrument       || '',
       strategy:     strategy,
-      htf_bias:     '',
-    htf_context:  '',
-      daily_notes:  '',
+      htf_bias:     opts.htf_bias    || '',
+      htf_context:  opts.htf_context || '',
+      daily_notes:  opts.daily_notes || '',
       tags:         [],
       scenario:     '',
       why_trade:    '',
@@ -5374,6 +5428,13 @@ function wizOpen(opts) {
     _draft:   draft || null,
   };
 
+  // Auto-resume du draft si la date correspond
+  if (wizState.hasDraft && draft && draft.data && draft.data.date === wizState.data.date) {
+    wizState.data     = Object.assign(wizState.data, draft.data);
+    wizState.stepIdx  = draft.stepIdx || 0;
+    wizState.hasDraft = false;
+  }
+
   _wizRender();
   const el = document.getElementById('wiz');
   if (el) {
@@ -5391,9 +5452,22 @@ function wizOpen(opts) {
       }
       // Click outside panel = close
       el.onclick = function (e) { if (e.target === el) wizClose(); };
+    } else if (opts.contextCard) {
+      // Ouvrir la wizard pres de la carte contexte (journalDayTrades)
+      var card = document.getElementById('journalDayTrades');
+      if (card) {
+        var rect = card.getBoundingClientRect();
+        el.style.paddingTop = Math.max(8, rect.top - 8) + 'px';
+        el.style.paddingLeft = (rect.left + 8) + 'px';
+        el.style.paddingRight = (window.innerWidth - rect.right + 8) + 'px';
+      }
+      el.classList.add('wiz-context-card');
+      el.onclick = function (e) { if (e.target === el) wizClose(); };
     } else {
       el.style.paddingTop = '';
       el.style.paddingLeft = '';
+      el.style.paddingRight = '';
+      el.classList.remove('wiz-context-card');
       el.onclick = null;
       // Clean up rail button highlight if any
       var oldBtn = document.getElementById('railNewTradeBtn');
@@ -5403,8 +5477,16 @@ function wizOpen(opts) {
 }
 
 function wizClose() {
+  // Sauvegarder le draft avant de fermer
+  if (wizState && wizState.mode !== 'postmortem') {
+    _wizSaveDraft();
+  }
   const el = document.getElementById('wiz');
-  if (el) el.classList.add('hidden');
+  if (el) {
+    el.classList.add('hidden');
+    el.classList.remove('wiz-context-card');
+    el.style.paddingRight = '';
+  }
   document.body.style.overflow = '';
   wizState = null;
   // Clean up rail button highlight
@@ -6774,7 +6856,7 @@ function refreshDragHandles() {
 
     el.addEventListener("pointerdown", function(e) {
       if (e.button && e.button !== 0) return;
-      if (e.target.closest("input,textarea,button,a,select,[contenteditable],[draggable],[role=\"button\"]")) return;
+      if (e.target.closest("input,textarea,button,a,select,[contenteditable],[draggable],[role=\"button\"],.journal-flip-card,.fav-carousel-arrow")) return;
       if (_dnd) return;
       var widget = el;
       var board = widget.closest(".widget-board[data-widget-board]");
@@ -11616,15 +11698,34 @@ TradeEditorController.renderHtml = function (day, trade) {
     tools.forEach(function (t) {
       var btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'draw-toolbar-btn' + (t.id === 'cursor' ? ' is-active' : '');
-      btn.dataset.tool = t.id;
-      btn.dataset.label = t.label;
-      btn.textContent = t.icon;
-      btn.addEventListener('click', function () {
-        toolbar.querySelectorAll('.draw-toolbar-btn').forEach(function (b) { b.classList.remove('is-active'); });
-        btn.classList.add('is-active');
-        window.ChartDrawings.setTool(t.id);
-      });
+      if (t.id === 'cursor') {
+        // Cursor = toggle snap: ⊹ quand snap OFF, 🧲 quand snap ON
+        btn.className = 'draw-toolbar-btn is-active' + (window.ChartDrawings.getSnapEnabled() ? ' draw-snap-on' : '');
+        btn.dataset.tool = 'cursor';
+        btn.dataset.label = window.ChartDrawings.getSnapEnabled() ? 'Snap ON' : 'Curseur';
+        btn.textContent = window.ChartDrawings.getSnapEnabled() ? '🧲' : '⊹';
+        btn.addEventListener('click', function () {
+          var snapOn = !window.ChartDrawings.getSnapEnabled();
+          window.ChartDrawings.setSnapEnabled(snapOn);
+          btn.textContent = snapOn ? '🧲' : '⊹';
+          btn.dataset.label = snapOn ? 'Snap ON' : 'Curseur';
+          btn.classList.toggle('draw-snap-on', snapOn);
+          // Toujours passer en mode curseur
+          toolbar.querySelectorAll('.draw-toolbar-btn').forEach(function (b) { b.classList.remove('is-active'); });
+          btn.classList.add('is-active');
+          window.ChartDrawings.setTool('cursor');
+        });
+      } else {
+        btn.className = 'draw-toolbar-btn';
+        btn.dataset.tool = t.id;
+        btn.dataset.label = t.label;
+        btn.textContent = t.icon;
+        btn.addEventListener('click', function () {
+          toolbar.querySelectorAll('.draw-toolbar-btn').forEach(function (b) { b.classList.remove('is-active'); });
+          btn.classList.add('is-active');
+          window.ChartDrawings.setTool(t.id);
+        });
+      }
       toolbar.appendChild(btn);
     });
 
@@ -12307,223 +12408,250 @@ TradeEditorController.renderHtml = function (day, trade) {
 })();
 
 // ---- 063_favorites_carousel.js ----
-// ---------- Favorites carousel widget — Today dashboard ----------
+// ---------- Favorites Carousel Widget (reuses journal flip card) ----------
+// Uses journalTradeFlipCardHtml() so recto/verso is identical to journal.
 
 (function () {
-  var currentIndex = 0;
-  var trades = [];
-  var _origGoPage = window.goPage;
+  'use strict';
 
+  var _trades       = [];
+  var _currentIndex = 0;
+  var _observer     = null;
+
+  // ── Render / init ──────────────────────────────────────────
   function initFavCarousel() {
-    var track = document.getElementById('favCarouselTrack');
-    var empty = document.getElementById('favCarouselEmpty');
+    var track   = document.getElementById('favCarouselTrack');
+    var empty   = document.getElementById('favCarouselEmpty');
     var countEl = document.getElementById('favCarouselCount');
     if (!track) return;
+
+    // Show skeleton
+    track.innerHTML = '<div class="fav-skeleton"></div>';
+    if (empty) empty.style.display = 'none';
 
     fetch('/api/trades/favorites')
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        trades = Array.isArray(data) ? data : [];
+        _trades = Array.isArray(data) ? data : [];
+        _currentIndex = 0;
         track.innerHTML = '';
-        document.querySelector('.fav-carousel-panel')?.classList.remove('loading');
 
-        if (trades.length === 0) {
-          if (empty) empty.style.display = '';
-          if (countEl) countEl.textContent = '';
+        if (_observer) { _observer.disconnect(); _observer = null; }
+
+        if (_trades.length === 0) {
+          if (empty)   { empty.style.display = ''; }
+          if (countEl) { countEl.textContent = ''; }
           _updateDots(0);
-          _updateArrows(0);
+          _updateArrows();
           return;
         }
 
         if (empty) empty.style.display = 'none';
-        if (countEl) countEl.textContent = trades.length + ' trade' + (trades.length > 1 ? 's' : '');
+        _updateCount();
 
-        trades.forEach(function (trade, idx) {
+        _trades.forEach(function (trade, i) {
           var day = {
             id: trade.day_id,
             instrument: trade.day_instrument || '-',
-            date: trade.day_date || trade.created_at?.slice(0, 10) || '',
+            date: trade.day_date || (trade.created_at ? trade.created_at.slice(0, 10) : ''),
           };
 
-          var wrap = document.createElement('div');
-          wrap.className = 'fav-carousel-slide';
-          wrap.dataset.index = idx;
+          var slide = document.createElement('div');
+          slide.className = 'fav-carousel-slide';
+          slide.dataset.index = i;
 
-          if (idx === currentIndex && window.journalTradeFlipCardHtml) {
-            var cardHtml = window.journalTradeFlipCardHtml(day, trade, idx + 1, [trade]);
-            wrap.innerHTML = cardHtml;
+          if (typeof journalTradeFlipCardHtml === 'function') {
+            slide.innerHTML = journalTradeFlipCardHtml(day, trade, i + 1, [trade]);
           }
 
-          track.appendChild(wrap);
+          track.appendChild(slide);
         });
 
-        currentIndex = 0;
-        _scrollTo(currentIndex, false);
-        _updateDots(trades.length);
-        _updateArrows(trades.length);
-        _updateCount();
-
-        // Rendre les slides adjacentes (maintenant que trades est peuple)
-        _renderSlide(0);
-        _renderSlide(1);
-
-        // Setup scroll observer apres que les slides soient bien en place
-        _setupScrollObserver();
+        _updateDots(_trades.length);
+        _updateArrows();
+        _setupObserver();
       })
       .catch(function (err) {
-        console.error('[fav-carousel] fetch:', err);
-        // Sur erreur reseau : afficher l'empty state et cacher les fleches
+        console.error('[fav-carousel]', err);
+        track.innerHTML = '';
         if (empty) empty.style.display = '';
         if (countEl) countEl.textContent = '';
-        track.innerHTML = '';
         _updateDots(0);
-        _updateArrows(0);
+        _updateArrows();
       });
   }
 
-  function _renderSlide(idx) {
+  // ── Navigation ───────────────────────────────────────────────
+  function _goTo(idx, smooth) {
+    if (idx < 0 || idx >= _trades.length) return;
     var track = document.getElementById('favCarouselTrack');
     if (!track) return;
     var slide = track.children[idx];
-    if (!slide || slide.querySelector('.journal-flip-card')) return;
-
-    var trade = trades[idx];
-    if (!trade || !window.journalTradeFlipCardHtml) return;
-
-    var day = {
-      id: trade.day_id,
-      instrument: trade.day_instrument || '-',
-      date: trade.day_date || trade.created_at?.slice(0, 10) || '',
-    };
-
-    var cardHtml = window.journalTradeFlipCardHtml(day, trade, idx + 1, trades);
-    slide.innerHTML = cardHtml;
-  }
-
-  function _scrollTo(idx, smooth) {
-    var wrap = document.getElementById('favCarouselWrap');
-    if (!wrap) return;
-    var slide = wrap.querySelector('.fav-carousel-track')?.children[idx];
     if (!slide) return;
-    slide.scrollIntoView({
-      behavior: smooth ? 'smooth' : 'instant',
-      block: 'nearest',
-      inline: 'start',
-    });
-    currentIndex = idx;
+    slide.scrollIntoView({ behavior: smooth === false ? 'instant' : 'smooth', block: 'nearest', inline: 'start' });
+    _currentIndex = idx;
+    _updateDots(_trades.length);
+    _updateArrows();
+    _updateCount();
   }
 
   function _updateDots(count) {
-    var dotsEl = document.getElementById('favCarouselDots');
-    if (!dotsEl) return;
-    if (count <= 1) { dotsEl.innerHTML = ''; return; }
+    var el = document.getElementById('favCarouselDots');
+    if (!el) return;
+    if (count <= 1) { el.innerHTML = ''; return; }
     var html = '';
     for (var i = 0; i < count; i++) {
-      html += '<button type="button" class="fav-carousel-dot' + (i === currentIndex ? ' is-active' : '') + '" data-dot="' + i + '" aria-label="Slide ' + (i + 1) + '"></button>';
+      html += '<button type="button" class="fav-carousel-dot' + (i === _currentIndex ? ' is-active' : '') +
+              '" data-dot="' + i + '" aria-label="Trade ' + (i + 1) + '"></button>';
     }
-    dotsEl.innerHTML = html;
+    el.innerHTML = html;
   }
 
-  function _updateArrows(count) {
-    var left = document.getElementById('favCarouselLeft');
+  function _updateArrows() {
+    var left  = document.getElementById('favCarouselLeft');
     var right = document.getElementById('favCarouselRight');
     if (!left || !right) return;
-    // Cacher les fleches uniquement si zero trades
-    left.style.display = count > 0 ? '' : 'none';
-    right.style.display = count > 0 ? '' : 'none';
-    left.disabled = currentIndex <= 0;
-    right.disabled = currentIndex >= count - 1;
+    var n = _trades.length;
+    left.style.display  = n > 1 ? '' : 'none';
+    right.style.display = n > 1 ? '' : 'none';
+    left.disabled  = _currentIndex <= 0;
+    right.disabled = _currentIndex >= n - 1;
   }
 
   function _updateCount() {
-    var countEl = document.getElementById('favCarouselCount');
-    if (!countEl) return;
-    if (trades.length > 1) {
-      countEl.textContent = (currentIndex + 1) + '/' + trades.length;
+    var el = document.getElementById('favCarouselCount');
+    if (!el) return;
+    if (_trades.length > 1) {
+      el.textContent = (_currentIndex + 1) + ' / ' + _trades.length;
+    } else if (_trades.length === 1) {
+      el.textContent = '1 trade';
+    } else {
+      el.textContent = '';
     }
   }
 
-  function _goTo(idx) {
-    if (idx < 0 || idx >= trades.length || idx === currentIndex) return;
-    _renderSlide(idx);
-    _scrollTo(idx, true);
+  // ── Flip helpers (uses journal-flip-card class) ─────────────
+  function _flipCard(card, toBack) {
+    document.querySelectorAll('.journal-flip-card.is-flipped').forEach(function (c) {
+      if (c !== card) c.classList.remove('is-flipped');
+    });
+    if (toBack === undefined) {
+      card.classList.toggle('is-flipped');
+    } else {
+      card.classList.toggle('is-flipped', toBack);
+    }
   }
 
-  function _goNext() { _goTo(currentIndex + 1); }
-  function _goPrev() { _goTo(currentIndex - 1); }
-
-  // ── Navigation events ──
-
-  document.addEventListener('click', function (e) {
-    var left = e.target.closest('#favCarouselLeft');
-    if (left) { e.preventDefault(); _goPrev(); return; }
-
-    var right = e.target.closest('#favCarouselRight');
-    if (right) { e.preventDefault(); _goNext(); return; }
-
-    var dot = e.target.closest('.fav-carousel-dot');
-    if (dot) {
-      var idx = parseInt(dot.dataset.dot, 10);
-      if (!isNaN(idx)) _goTo(idx);
-    }
-  });
-
-  // Scroll-snap observer pour detecter le changement de slide
-  function _setupScrollObserver() {
-    var wrap = document.getElementById('favCarouselWrap');
-    if (!wrap) return;
+  // ── Intersection observer ────────────────────────────────────
+  function _setupObserver() {
     var track = document.getElementById('favCarouselTrack');
     if (!track) return;
 
-    var observer = new IntersectionObserver(function (entries) {
-      entries.forEach(function (entry) {
-        if (entry.isIntersecting) {
-          var idx = parseInt(entry.target.dataset.index, 10);
-          if (!isNaN(idx) && idx !== currentIndex) {
-            currentIndex = idx;
-            _updateDots(trades.length);
-            _updateArrows(trades.length);
+    _observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          var idx = parseInt(e.target.dataset.index, 10);
+          if (!isNaN(idx) && idx !== _currentIndex) {
+            _currentIndex = idx;
+            _updateDots(_trades.length);
+            _updateArrows();
             _updateCount();
-            // Lazy render les slides adjacents
-            _renderSlide(idx - 1);
-            _renderSlide(idx);
-            _renderSlide(idx + 1);
           }
         }
       });
-    }, {
-      root: wrap,
-      threshold: 0.6,
-    });
+    }, { root: track, threshold: 0.55 });
 
-    Array.from(track.children).forEach(function (slide) {
-      observer.observe(slide);
-    });
+    Array.from(track.children).forEach(function (s) { _observer.observe(s); });
   }
 
-  // ── Hook dans goPage pour init au chargement ──
+  // ── Global delegated click handler ──────────────────────────
+  document.addEventListener('click', function (e) {
 
+    // Arrow left / right
+    var left = e.target.closest('#favCarouselLeft');
+    if (left) { e.preventDefault(); e.stopPropagation(); _goTo(_currentIndex - 1); return; }
+
+    var right = e.target.closest('#favCarouselRight');
+    if (right) { e.preventDefault(); e.stopPropagation(); _goTo(_currentIndex + 1); return; }
+
+    // Dot
+    var dot = e.target.closest('.fav-carousel-dot');
+    if (dot) { _goTo(parseInt(dot.dataset.dot, 10)); return; }
+
+    // Flip back (journal card uses data-journal-day-close or similar)
+    var backBtn = e.target.closest('[data-journal-day-close]');
+    if (backBtn) {
+      e.stopPropagation();
+      var card = backBtn.closest('.journal-flip-card');
+      if (card) _flipCard(card, false);
+      return;
+    }
+
+    // Flip card (click anywhere on journal-flip-card that isn't a button)
+    var card = e.target.closest('.journal-flip-card');
+    if (card) {
+      if (e.target.closest('button, input, textarea, a, select, [data-journal-day-close]')) return;
+      e.stopPropagation();
+      _flipCard(card);
+      return;
+    }
+  }, true); // useCapture = true to intercept before journal handler
+
+  // ── Keyboard support ─────────────────────────────────────────
+  document.addEventListener('keydown', function (e) {
+    var focused = document.activeElement;
+    if (!focused) return;
+
+    var card = focused.closest('.journal-flip-card');
+    if (card) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); _flipCard(card); return; }
+      if (e.key === 'Escape' && card.classList.contains('is-flipped')) { _flipCard(card, false); return; }
+    }
+
+    var wrap = document.getElementById('favCarouselWrap');
+    if (wrap && (wrap.contains(focused) || wrap.matches(':hover'))) {
+      if (e.key === 'ArrowLeft')  { _goTo(_currentIndex - 1); return; }
+      if (e.key === 'ArrowRight') { _goTo(_currentIndex + 1); return; }
+    }
+  });
+
+  // ── Swipe touch support ──────────────────────────────────────
+  (function () {
+    var startX = 0, startY = 0, isDragging = false;
+    document.addEventListener('touchstart', function (e) {
+      var wrap = e.target.closest('#favCarouselWrap');
+      if (!wrap) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      isDragging = true;
+    }, { passive: true });
+    document.addEventListener('touchend', function (e) {
+      if (!isDragging) return;
+      isDragging = false;
+      var dx = e.changedTouches[0].clientX - startX;
+      var dy = e.changedTouches[0].clientY - startY;
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+        _goTo(dx < 0 ? _currentIndex + 1 : _currentIndex - 1);
+      }
+    }, { passive: true });
+  })();
+
+  // ── Boot hooks ───────────────────────────────────────────────
+  var _origGoPage = window.goPage;
   if (_origGoPage) {
     window.goPage = function (pageName) {
       _origGoPage(pageName);
       if (pageName === 'today') {
-        // Laisser le temps aux widgets de se mettre en place
-        setTimeout(function () {
-          initFavCarousel();
-        }, 500);
+        setTimeout(initFavCarousel, 400);
       }
     };
   }
 
-  // Exposer une fonction de refresh pour les mise a jour externes
-  window.refreshFavCarousel = function () {
-    initFavCarousel();
-  };
+  window.refreshFavCarousel = initFavCarousel;
 
-  // ── Aussi au DOMContentLoaded si Today est deja ouvert ──
   document.addEventListener('DOMContentLoaded', function () {
     if (document.querySelector('.page[data-page="today"].active')) {
-      setTimeout(initFavCarousel, 600);
+      setTimeout(initFavCarousel, 500);
     }
   });
 
@@ -12600,6 +12728,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     activeTool: 'cursor',
     isDrawing: false, dragStart: null, previewPoint: null,
     selectedIndex: -1, // -1 = none, >=0 = editing an existing drawing
+    snapEnabled: true, // snap to candle OHLC
     toolOptions: {
       color: '#06b6d4', fillColor: '#06b6d4', opacity: 0.3,
       lineWidth: 1.5, lineStyle: 'solid',
@@ -12705,7 +12834,31 @@ TradeEditorController.renderHtml = function (day, trade) {
     return { time: tp, price: pp };
   }
 
-  // ── DRAWING OBJECT ──
+  // Snap un point {time, price} a la bougie la plus proche (OHLC)
+  function _snapPoint(tp, clientX) {
+    if (!state.snapEnabled || !state.chart || !state.series || !state.container) return tp;
+    try {
+      var rect = state.container.getBoundingClientRect();
+      var x = clientX - rect.left;
+      var logical = state.chart.timeScale().coordinateToLogical(x);
+      if (logical == null) return tp;
+      var index = Math.round(logical);
+      var candle = state.series.dataByIndex(index);
+      if (!candle || typeof candle.high !== 'number' || typeof candle.time !== 'number') return tp;
+      tp.time = candle.time;
+      var candidates = [
+        { val: candle.high,  dist: Math.abs(candle.high - tp.price) },
+        { val: candle.low,   dist: Math.abs(candle.low - tp.price) },
+        { val: candle.open,  dist: Math.abs(candle.open - tp.price) },
+        { val: candle.close, dist: Math.abs(candle.close - tp.price) },
+      ];
+      candidates.sort(function (a, b) { return a.dist - b.dist; });
+      tp.price = candidates[0].val;
+    } catch(e) {
+      console.warn('[drawings] snap error:', e);
+    }
+    return tp;
+  }
 
   function _createDrawing(type, points) {
     var o = state.toolOptions;
@@ -13104,7 +13257,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   function _onCanvasClick(e) {
     if (state.activeTool === 'cursor') return;
     _readOptionsFromUI();
-    var tp = _toTimePrice(e.clientX, e.clientY);
+    var tp = _snapPoint(_toTimePrice(e.clientX, e.clientY), e.clientX);
     if (!tp) return;
 
     var tool = state.activeTool;
@@ -13234,11 +13387,11 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   function _onMouseMove(e) {
     if (state.isDrawing && state.dragStart) {
-      var tp = _toTimePrice(e.clientX, e.clientY);
+      var tp = _snapPoint(_toTimePrice(e.clientX, e.clientY), e.clientX);
       if (tp) { state.previewPoint = { time: tp.time, price: tp.price }; _renderAll(); }
     }
     if (state.activeTool === 'cursor') {
-      var tp = _toTimePrice(e.clientX, e.clientY);
+      var tp = _snapPoint(_toTimePrice(e.clientX, e.clientY), e.clientX);
       if (tp && state.canvas) state.canvas.style.cursor = _hitTest(tp.time, tp.price) ? 'pointer' : '';
     }
   }
@@ -13247,7 +13400,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   function _onDblClick(e) {
     if (state.activeTool !== 'cursor') return;
-    var tp = _toTimePrice(e.clientX, e.clientY);
+    var tp = _snapPoint(_toTimePrice(e.clientX, e.clientY), e.clientX);
     if (!tp) return;
     var idx = _hitTestIndex(tp.time, tp.price);
     if (idx !== -1) {
@@ -13619,6 +13772,8 @@ TradeEditorController.renderHtml = function (day, trade) {
     listTemplates: listTemplates, deleteTemplate: deleteTemplate,
     getDrawings: function () { return state.drawings.slice(); },
     onResize: function () { _resizeCanvas(); _renderAll(); },
+    setSnapEnabled: function (v) { state.snapEnabled = !!v; },
+    getSnapEnabled: function () { return state.snapEnabled; },
     // Session zones
     getSessionSettings: getSessionSettings,
     updateSessions: updateSessions,

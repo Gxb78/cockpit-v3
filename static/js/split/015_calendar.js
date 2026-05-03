@@ -36,7 +36,7 @@ function bindCalendarGridActions(grid) {
       renderJournalDayTrades(key, info.days);
       return;
     }
-    // Aucun trade → afficher le contexte du jour avec bouton Nouveau trade
+    // Aucun trade → carte contexte avec donnees HTF + bouton Nouveau trade
     if (typeof closeJournalDayTrades === "function") closeJournalDayTrades();
     if (typeof renderJournalDayContext === "function") {
       renderJournalDayContext(key, info.days);
@@ -350,7 +350,7 @@ function dayCell(dt, byDay, otherMonth, today) {
   return el;
 }
 
-// ---- Afficher le contexte d'un jour sans trade (contexte seul) ----
+// ---- Afficher le contexte d'un jour sans trade (carte HTF + bouton trade) ----
 function renderJournalDayContext(dateKey, days) {
   var wrap = $("#journalDayTrades");
   if (!wrap) return;
@@ -361,23 +361,77 @@ function renderJournalDayContext(dateKey, days) {
 
   wrap.classList.remove("hidden");
   wrap.dataset.count = "0";
-  wrap.innerHTML = '<div class="journal-day-context-empty">'
-    + '<div class="journal-day-context-head">'
-    +   '<span class="badge-instr">' + escapeHtml(day.instrument || "-") + '</span>'
-    +   '<span class="settings-badge ' + (day.htf_bias === "bullish" ? "ok" : day.htf_bias === "bearish" ? "warn" : "") + '">' + escapeHtml(day.htf_bias || "neutral") + '</span>'
-    +   '<span class="day-date-meta">' + escapeHtml(day.date || "") + '</span>'
-    + '</div>'
-    + '<div class="journal-day-context-notes">'
-    +   escapeHtml(day.daily_notes || day.htf_context || "Aucune note de contexte pour ce jour.")
-    + '</div>'
-    + '<button class="btn-primary" id="journalDayContextAddTrade">+ Nouveau trade</button>'
-    + '</div>';
 
-  var addBtn = document.getElementById("journalDayContextAddTrade");
-  if (addBtn) {
-    addBtn.addEventListener("click", function (e) {
-      e.stopPropagation();
-      wizOpen({ date: dateKey });
-    });
+  // Creer un trade virtuel avec les donnees HTF pour reutiliser journalTradeFlipCardHtml
+  var notes = day.daily_notes || day.htf_context || "";
+  var biasLabel = day.htf_bias || "neutral";
+  var virtualTrade = {
+    id: "context_" + dateKey,
+    day_id: day.id,
+    day_instrument: day.instrument || "-",
+    day_date: day.date || dateKey,
+    strategy: "Contexte du jour",
+    direction: biasLabel,
+    pnl: 0,
+    rr: null,
+    is_win: null,
+    why_trade: notes,
+    scenario: notes,
+    why_entry: "",
+    lessons_learned: "",
+    screenshots: [],
+    tags: ["ctx_card"],
+    session: "",
+    execution_quality: 0,
+  };
+
+  var virtualDay = {
+    id: day.id,
+    instrument: day.instrument || "-",
+    date: day.date || dateKey,
+    htf_bias: day.htf_bias,
+    htf_context: day.htf_context,
+    daily_notes: day.daily_notes,
+  };
+
+  if (typeof journalTradeFlipCardHtml === "function") {
+    wrap.innerHTML = '<div class="journal-day-context-empty">' +
+      journalTradeFlipCardHtml(virtualDay, virtualTrade, 1, [virtualTrade]) +
+      '</div>';
+
+    // Remplacer le bouton "Editer" par "Creer un trade"
+    var editBtn = wrap.querySelector('[data-journal-trade-edit]');
+    if (editBtn) {
+      editBtn.textContent = '+ Créer un trade';
+      editBtn.className = editBtn.className.replace('journal-back-edit', '') + ' btn-primary';
+      editBtn.style.flex = '1';
+      editBtn.removeAttribute('data-journal-trade-edit');
+      editBtn.id = 'journalDayContextAddTrade';
+
+      editBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        wizOpen({
+          date: dateKey,
+          contextCard: true,
+          instrument: day.instrument,
+          htf_context: notes,
+          htf_bias: biasLabel,
+          daily_notes: day.daily_notes || '',
+        });
+      });
+    }
+
+    // Masquer le bouton "Voir dans le journal"
+    var journalBtn = wrap.querySelector('[data-fav-journal]');
+    if (journalBtn) journalBtn.style.display = 'none';
+
+    // Injecter le contexte HTF dans la zone summary de la card
+    var summaryEl = wrap.querySelector('.journal-trade-main p');
+    if (summaryEl && notes) {
+      summaryEl.textContent = notes;
+    }
+  } else {
+    // Fallback : wizard direct
+    wizOpen({ date: dateKey });
   }
 }

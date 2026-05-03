@@ -469,15 +469,34 @@
     tools.forEach(function (t) {
       var btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'draw-toolbar-btn' + (t.id === 'cursor' ? ' is-active' : '');
-      btn.dataset.tool = t.id;
-      btn.dataset.label = t.label;
-      btn.textContent = t.icon;
-      btn.addEventListener('click', function () {
-        toolbar.querySelectorAll('.draw-toolbar-btn').forEach(function (b) { b.classList.remove('is-active'); });
-        btn.classList.add('is-active');
-        window.ChartDrawings.setTool(t.id);
-      });
+      if (t.id === 'cursor') {
+        // Cursor = toggle snap: ⊹ quand snap OFF, 🧲 quand snap ON
+        btn.className = 'draw-toolbar-btn is-active' + (window.ChartDrawings.getSnapEnabled() ? ' draw-snap-on' : '');
+        btn.dataset.tool = 'cursor';
+        btn.dataset.label = window.ChartDrawings.getSnapEnabled() ? 'Snap ON' : 'Curseur';
+        btn.textContent = window.ChartDrawings.getSnapEnabled() ? '🧲' : '⊹';
+        btn.addEventListener('click', function () {
+          var snapOn = !window.ChartDrawings.getSnapEnabled();
+          window.ChartDrawings.setSnapEnabled(snapOn);
+          btn.textContent = snapOn ? '🧲' : '⊹';
+          btn.dataset.label = snapOn ? 'Snap ON' : 'Curseur';
+          btn.classList.toggle('draw-snap-on', snapOn);
+          // Toujours passer en mode curseur
+          toolbar.querySelectorAll('.draw-toolbar-btn').forEach(function (b) { b.classList.remove('is-active'); });
+          btn.classList.add('is-active');
+          window.ChartDrawings.setTool('cursor');
+        });
+      } else {
+        btn.className = 'draw-toolbar-btn';
+        btn.dataset.tool = t.id;
+        btn.dataset.label = t.label;
+        btn.textContent = t.icon;
+        btn.addEventListener('click', function () {
+          toolbar.querySelectorAll('.draw-toolbar-btn').forEach(function (b) { b.classList.remove('is-active'); });
+          btn.classList.add('is-active');
+          window.ChartDrawings.setTool(t.id);
+        });
+      }
       toolbar.appendChild(btn);
     });
 

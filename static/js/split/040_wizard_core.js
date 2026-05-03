@@ -79,9 +79,9 @@ function wizOpen(opts) {
       date:         opts.date        || todayKey(),
       instrument:   instrument       || '',
       strategy:     strategy,
-      htf_bias:     '',
-    htf_context:  '',
-      daily_notes:  '',
+      htf_bias:     opts.htf_bias    || '',
+      htf_context:  opts.htf_context || '',
+      daily_notes:  opts.daily_notes || '',
       tags:         [],
       scenario:     '',
       why_trade:    '',
@@ -107,6 +107,13 @@ function wizOpen(opts) {
     _draft:   draft || null,
   };
 
+  // Auto-resume du draft si la date correspond
+  if (wizState.hasDraft && draft && draft.data && draft.data.date === wizState.data.date) {
+    wizState.data     = Object.assign(wizState.data, draft.data);
+    wizState.stepIdx  = draft.stepIdx || 0;
+    wizState.hasDraft = false;
+  }
+
   _wizRender();
   const el = document.getElementById('wiz');
   if (el) {
@@ -124,9 +131,22 @@ function wizOpen(opts) {
       }
       // Click outside panel = close
       el.onclick = function (e) { if (e.target === el) wizClose(); };
+    } else if (opts.contextCard) {
+      // Ouvrir la wizard pres de la carte contexte (journalDayTrades)
+      var card = document.getElementById('journalDayTrades');
+      if (card) {
+        var rect = card.getBoundingClientRect();
+        el.style.paddingTop = Math.max(8, rect.top - 8) + 'px';
+        el.style.paddingLeft = (rect.left + 8) + 'px';
+        el.style.paddingRight = (window.innerWidth - rect.right + 8) + 'px';
+      }
+      el.classList.add('wiz-context-card');
+      el.onclick = function (e) { if (e.target === el) wizClose(); };
     } else {
       el.style.paddingTop = '';
       el.style.paddingLeft = '';
+      el.style.paddingRight = '';
+      el.classList.remove('wiz-context-card');
       el.onclick = null;
       // Clean up rail button highlight if any
       var oldBtn = document.getElementById('railNewTradeBtn');
@@ -136,8 +156,16 @@ function wizOpen(opts) {
 }
 
 function wizClose() {
+  // Sauvegarder le draft avant de fermer
+  if (wizState && wizState.mode !== 'postmortem') {
+    _wizSaveDraft();
+  }
   const el = document.getElementById('wiz');
-  if (el) el.classList.add('hidden');
+  if (el) {
+    el.classList.add('hidden');
+    el.classList.remove('wiz-context-card');
+    el.style.paddingRight = '';
+  }
   document.body.style.overflow = '';
   wizState = null;
   // Clean up rail button highlight

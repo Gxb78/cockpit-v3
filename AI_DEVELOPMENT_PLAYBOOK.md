@@ -534,5 +534,15 @@ Format obligatoire d'une lesson:
 - Correction du bug: une perte short avec exit_price mais sans TP causait SL=TP=1.00R (nonsensical).
 - Fichiers a surveiller: `app_parts/05_payload_normalizers.py` (normalisation conditionnelle), `static/js/split/021_rr_preview.js` (syncExitMapping), `static/js/split/059_trade_editor_controller.js` (label TP), `templates/partials/pages/journal/table.html`, `static/js/split/056_journal_day_trade_cards.js`, `app_parts/03_core_helpers.py` (skip validation si is_win explicite).
 
+## 9) Lessons apprises et bugs a ne pas reproduire
+
+### BUG-20260503-01 - Carte contexte HTF avec wizard fluide
+
+- Symptome: Clic sur jour sans trade → la wizard s'ouvrait direct ou une carte moche apparaissait.
+- Cause racine: `renderJournalDayContext()` avait un HTML basique et etait supprime/restaure.
+- Regle de prevention: Un jour sans trade affiche une carte style journal (classes `journal-flip-*`) avec les donnees HTF (bias, notes, instrument) et un bouton "+ Creer un trade". La wizard s'ouvre avec `contextCard: true` pour s'aligner pres de la carte (taille reduite a 480px, position fluide).
+- Test de non-regression: Cliquer sur le 1er mai (jour avec contexte, sans trade) → carte HTF avec infos. Cliquer "+ Creer un trade" → wizard positionnee a cote de la carte.
+- Fichiers a surveiller: `static/js/split/015_calendar.js` (renderJournalDayContext), `static/js/split/040_wizard_core.js` (wizOpen contextCard), `static/css/split/022a_wizard_backdrop.css` (.wiz-context-card).
+
 
 

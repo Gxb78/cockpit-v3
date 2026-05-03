@@ -16,3 +16,17 @@
   -webkit-backdrop-filter: blur(6px);
 }
 
+/* Mode carte contexte : wizard aligne sur la card journal */
+.wiz.wiz-context-card {
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+.wiz.wiz-context-card .wiz-panel {
+  max-width: 480px;
+  max-height: 90vh;
+  margin: 0;
+  border-radius: var(--r-lg);
+}
+

@@ -68,6 +68,7 @@
     activeTool: 'cursor',
     isDrawing: false, dragStart: null, previewPoint: null,
     selectedIndex: -1, // -1 = none, >=0 = editing an existing drawing
+    snapEnabled: true, // snap to candle OHLC
     toolOptions: {
       color: '#06b6d4', fillColor: '#06b6d4', opacity: 0.3,
       lineWidth: 1.5, lineStyle: 'solid',
@@ -173,7 +174,31 @@
     return { time: tp, price: pp };
   }
 
-  // ── DRAWING OBJECT ──
+  // Snap un point {time, price} a la bougie la plus proche (OHLC)
+  function _snapPoint(tp, clientX) {
+    if (!state.snapEnabled || !state.chart || !state.series || !state.container) return tp;
+    try {
+      var rect = state.container.getBoundingClientRect();
+      var x = clientX - rect.left;
+      var logical = state.chart.timeScale().coordinateToLogical(x);
+      if (logical == null) return tp;
+      var index = Math.round(logical);
+      var candle = state.series.dataByIndex(index);
+      if (!candle || typeof candle.high !== 'number' || typeof candle.time !== 'number') return tp;
+      tp.time = candle.time;
+      var candidates = [
+        { val: candle.high,  dist: Math.abs(candle.high - tp.price) },
+        { val: candle.low,   dist: Math.abs(candle.low - tp.price) },
+        { val: candle.open,  dist: Math.abs(candle.open - tp.price) },
+        { val: candle.close, dist: Math.abs(candle.close - tp.price) },
+      ];
+      candidates.sort(function (a, b) { return a.dist - b.dist; });
+      tp.price = candidates[0].val;
+    } catch(e) {
+      console.warn('[drawings] snap error:', e);
+    }
+    return tp;
+  }
 
   function _createDrawing(type, points) {
     var o = state.toolOptions;
@@ -572,7 +597,7 @@
   function _onCanvasClick(e) {
     if (state.activeTool === 'cursor') return;
     _readOptionsFromUI();
-    var tp = _toTimePrice(e.clientX, e.clientY);
+    var tp = _snapPoint(_toTimePrice(e.clientX, e.clientY), e.clientX);
     if (!tp) return;
 
     var tool = state.activeTool;
@@ -702,11 +727,11 @@
 
   function _onMouseMove(e) {
     if (state.isDrawing && state.dragStart) {
-      var tp = _toTimePrice(e.clientX, e.clientY);
+      var tp = _snapPoint(_toTimePrice(e.clientX, e.clientY), e.clientX);
       if (tp) { state.previewPoint = { time: tp.time, price: tp.price }; _renderAll(); }
     }
     if (state.activeTool === 'cursor') {
-      var tp = _toTimePrice(e.clientX, e.clientY);
+      var tp = _snapPoint(_toTimePrice(e.clientX, e.clientY), e.clientX);
       if (tp && state.canvas) state.canvas.style.cursor = _hitTest(tp.time, tp.price) ? 'pointer' : '';
     }
   }
@@ -715,7 +740,7 @@
 
   function _onDblClick(e) {
     if (state.activeTool !== 'cursor') return;
-    var tp = _toTimePrice(e.clientX, e.clientY);
+    var tp = _snapPoint(_toTimePrice(e.clientX, e.clientY), e.clientX);
     if (!tp) return;
     var idx = _hitTestIndex(tp.time, tp.price);
     if (idx !== -1) {
@@ -1087,6 +1112,8 @@
     listTemplates: listTemplates, deleteTemplate: deleteTemplate,
     getDrawings: function () { return state.drawings.slice(); },
     onResize: function () { _resizeCanvas(); _renderAll(); },
+    setSnapEnabled: function (v) { state.snapEnabled = !!v; },
+    getSnapEnabled: function () { return state.snapEnabled; },
     // Session zones
     getSessionSettings: getSessionSettings,
     updateSessions: updateSessions,

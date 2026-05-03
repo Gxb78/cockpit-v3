@@ -261,7 +261,7 @@ function refreshDragHandles() {
 
     el.addEventListener("pointerdown", function(e) {
       if (e.button && e.button !== 0) return;
-      if (e.target.closest("input,textarea,button,a,select,[contenteditable],[draggable],[role=\"button\"]")) return;
+      if (e.target.closest("input,textarea,button,a,select,[contenteditable],[draggable],[role=\"button\"],.journal-flip-card,.fav-carousel-arrow")) return;
       if (_dnd) return;
       var widget = el;
       var board = widget.closest(".widget-board[data-widget-board]");

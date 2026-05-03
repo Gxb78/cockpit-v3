@@ -5120,6 +5120,20 @@ body.light-mode .day-dots { gap: 3px; }
   -webkit-backdrop-filter: blur(6px);
 }
 
+/* Mode carte contexte : wizard aligne sur la card journal */
+.wiz.wiz-context-card {
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+.wiz.wiz-context-card .wiz-panel {
+  max-width: 480px;
+  max-height: 90vh;
+  margin: 0;
+  border-radius: var(--r-lg);
+}
+
 /* ---- 023_wiz_hidden.css ---- */
 .wiz.hidden { display: none !important; }
 
@@ -5330,6 +5344,8 @@ body.light-mode .day-dots { gap: 3px; }
   transition: border-color 0.2s var(--ease);
   font-family: inherit;
   min-height: 80px;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 .wiz-textarea:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(0,229,255,0.10); }
 .wiz-textarea.lg { min-height: 110px; font-size: 1rem; }
@@ -12092,6 +12108,7 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   font-weight: 860;
   letter-spacing: 0;
   line-height: 1.04;
+  word-break: break-word;
 }
 
 .journal-trade-main p {
@@ -12103,6 +12120,7 @@ body.ai-panel-open .journal-day-trades { --rpanel-w: 300px; }
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  word-break: break-word;
 }
 
 .journal-trade-pnl {
@@ -12307,6 +12325,7 @@ body:not(.light-mode) .journal-back-icon.is-active:hover {
   color: #7a8391;
   font-size: 13px;
   line-height: 1.48;
+  word-break: break-word;
 }
 
 .journal-back-summary {
@@ -16237,245 +16256,168 @@ body.light-mode .chart-ind-badge.rsi {
 .vp-overlay { z-index: 9; }
 
 /* ---- 063_favorites_carousel.css ---- */
-/* ---------- Favorites Carousel Widget ---------- */
+/* ============================================================
+   063 — Favorites Carousel Widget
+   Carousel mechanics only. Card recto/verso styled by 056_journal_day_trade_cards.css
+   ============================================================ */
 
+/* ── Panel shell ── */
 .fav-carousel-panel {
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  gap: 0;
+  overflow: visible;            /* arrows must overflow the panel */
 }
 
 .fav-carousel-panel .panel-h {
   flex-shrink: 0;
+  padding-bottom: 10px;
 }
 
 .fav-carousel-count {
-  font-size: 12px;
-  color: var(--text-muted, #9ca3af);
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
   margin-left: auto;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 20px;
 }
 
-/* ── Carousel wrap ── */
-
+/* ── Outer wrap: overflow visible so arrows aren't clipped ── */
 .fav-carousel-wrap {
   position: relative;
   flex: 1;
   min-height: 0;
-  overflow: hidden;
-  margin: 0 -4px;
+  overflow: visible;            /* KEY — was overflow:hidden */
+  padding: 0 44px;              /* space for arrows left + right */
 }
 
+/* ── Scrolling track ── */
 .fav-carousel-track {
   display: flex;
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: visible;
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  height: 100%;
-  gap: 16px;
-  padding: 4px 4px 20px;
-  scroll-padding: 4px;
-}
-
-.fav-carousel-track::-webkit-scrollbar {
-  display: none;
-}
-
-/* ── Slides ── */
-
-.fav-carousel-slide {
-  flex: 0 0 92%;
-  scroll-snap-align: start;
-  min-height: 0;
-  display: flex;
+  gap: 12px;
+  padding: 6px 2px 24px;
+  scroll-padding-inline: 2px;
   align-items: flex-start;
+}
+.fav-carousel-track::-webkit-scrollbar { display: none; }
+
+/* ── Each slide ── */
+.fav-carousel-slide {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  display: flex;
   justify-content: center;
+  align-items: flex-start;
+  min-height: 0;
 }
 
+/* ── Journal flip card constrained for carousel context ── */
 .fav-carousel-slide .journal-flip-card {
-  position: static;
   width: 100%;
-  max-width: 520px;
-  transform: none;
-  top: auto;
-  left: auto;
-  box-shadow: var(--shadow, 0 2px 6px rgba(0,0,0,0.06));
+  max-width: 440px;
+  height: 320px;
+  cursor: pointer;
 }
 
-.fav-carousel-slide .journal-flip-card.is-flipped {
-  transform: none;
-}
-
-.fav-carousel-slide .journal-flip-inner {
-  min-height: 380px;
-}
-
-/* ── Arrows ── */
-
+/* ── Arrows — outside the scrolling track ── */
 .fav-carousel-arrow {
   position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 5;
-  width: 36px;
-  height: 36px;
+  top: calc(50% - 20px);       /* vertically centered on card */
+  z-index: 10;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
-  border: 1px solid var(--border, #e5e9f0);
-  background: var(--surface, #fff);
-  color: var(--text, #111827);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
   cursor: pointer;
   display: grid;
   place-items: center;
-  box-shadow: var(--shadow-sm, 0 2px 6px rgba(0,0,0,0.08));
-  opacity: 0.85;
-  transition: opacity 0.2s, transform 0.2s;
+  box-shadow: var(--shadow-xs);
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.15s, opacity 0.2s;
+  opacity: 0.6;
 }
-
-.fav-carousel-wrap:hover .fav-carousel-arrow:not([disabled]) {
-  opacity: 1;
-}
-
-.fav-carousel-arrow[disabled] {
-  opacity: 0.4;
-  cursor: default;
-}
-
+.fav-carousel-wrap:hover .fav-carousel-arrow { opacity: 1; }
 .fav-carousel-arrow:hover:not([disabled]) {
-  transform: translateY(-50%) scale(1.08);
-  border-color: var(--accent, #0891b2);
-  color: var(--accent, #0891b2);
+  background: var(--surface-3);
+  border-color: var(--cyan);
+  color: var(--cyan);
+  transform: scale(1.08);
 }
-
-.fav-carousel-arrow svg {
-  width: 18px;
-  height: 18px;
+.fav-carousel-arrow[disabled] {
+  opacity: 0.2;
+  cursor: default;
+  pointer-events: none;
 }
+.fav-carousel-arrow svg { width: 16px; height: 16px; }
+.fav-carousel-arrow--left  { left: 0; }
+.fav-carousel-arrow--right { right: 0; }
 
-.fav-carousel-arrow--left {
-  left: 8px;
-}
-
-.fav-carousel-arrow--right {
-  right: 8px;
-}
-
-/* ── Dots ── */
-
+/* ── Dots indicator ── */
 .fav-carousel-dots {
   display: flex;
   justify-content: center;
-  gap: 6px;
-  padding: 6px 0 0;
-  flex-shrink: 0;
+  gap: 5px;
+  padding-top: 8px;
 }
-
 .fav-carousel-dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   border: 0;
-  background: var(--border, #d1d5db);
-  cursor: pointer;
   padding: 0;
-  transition: background 0.2s, transform 0.2s;
+  background: var(--border-strong);
+  cursor: pointer;
+  transition: background 0.2s, width 0.25s cubic-bezier(.34,1.56,.64,1), border-radius 0.25s;
 }
-
-.fav-carousel-dot:hover {
-  background: var(--text-muted, #9ca3af);
-  transform: scale(1.2);
-}
-
+.fav-carousel-dot:hover { background: var(--text-muted); }
 .fav-carousel-dot.is-active {
-  background: var(--accent, #0891b2);
-  width: 18px;
+  background: var(--cyan);
+  width: 16px;
   border-radius: 3px;
 }
 
 /* ── Empty state ── */
-
 .fav-carousel-empty {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 40px 20px;
-  color: var(--text-muted, #9ca3af);
+  gap: 8px;
+  padding: 48px 20px;
+  color: var(--text-muted);
   text-align: center;
 }
+.fav-carousel-empty svg { opacity: 0.3; margin-bottom: 4px; }
+.fav-carousel-empty p { font-size: 13px; font-weight: 600; color: var(--text); margin: 0; }
+.fav-carousel-empty span { font-size: 11px; color: var(--text-dim); }
 
-.fav-carousel-empty svg {
-  opacity: 0.4;
-  margin-bottom: 4px;
+/* ── Skeleton loader ── */
+@keyframes fav-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
 }
-
-.fav-carousel-empty p {
-  font-size: 14px;
-  font-weight: 600;
-  margin: 0;
-  color: var(--text, #111827);
-}
-
-.fav-carousel-empty span {
-  font-size: 12px;
-}
-
-/* ── Loading ── */
-
-.fav-carousel-panel.loading .fav-carousel-wrap {
-  min-height: 220px;
-}
-
-.fav-carousel-panel.loading .fav-carousel-track::after {
-  content: '';
-  display: block;
-  width: 90%;
-  height: 380px;
-  margin: auto;
-  border-radius: var(--r, 16px);
-  background: var(--surface-2, #f3f4f6);
-  animation: shimmer 1.6s infinite;
-}
-
-@keyframes shimmer {
-  0% { opacity: 1; }
-  50% { opacity: 0.4; }
-  100% { opacity: 1; }
-}
-
-/* ── Light mode ── */
-
-body.light-mode .fav-carousel-arrow {
-  background: #ffffff;
-  border-color: #e5e9f0;
-  box-shadow: 0 1px 3px rgba(15,23,42,0.06);
-}
-
-body.light-mode .fav-carousel-dot {
-  background: #d1d5db;
-}
-
-body.light-mode .fav-carousel-dot.is-active {
-  background: #0891b2;
-}
-
-/* ── Dark mode ── */
-
-body:not(.light-mode) .fav-carousel-arrow {
-  background: var(--surface-2, #1f2937);
-  border-color: var(--border, #374151);
-  color: var(--text, #f3f4f6);
-}
-
-body:not(.light-mode) .fav-carousel-dot {
-  background: #4b5563;
-}
-
-body:not(.light-mode) .fav-carousel-dot.is-active {
-  background: #06b6d4;
+.fav-skeleton {
+  width: 100%;
+  max-width: 440px;
+  height: 320px;
+  border-radius: var(--r-lg);
+  background: linear-gradient(90deg,
+    var(--surface-2) 25%,
+    var(--surface-3) 50%,
+    var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: fav-shimmer 1.6s ease-in-out infinite;
 }
 
 /* ---- 064_chart_drawings.css ---- */
@@ -16528,6 +16470,12 @@ body:not(.light-mode) .fav-carousel-dot.is-active {
 .draw-toolbar-btn[data-tool="cursor"].is-active {
   background: rgba(255,255,255,0.05);
   color: var(--text);
+}
+
+/* Snap ON : le curseur passe en mode aimanté */
+.draw-toolbar-btn.draw-snap-on.is-active {
+  color: #06b6d4;
+  background: rgba(6,182,212,0.12);
 }
 
 .draw-toolbar-btn + .draw-toolbar-btn {

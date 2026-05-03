@@ -56,6 +56,8 @@
   transition: border-color 0.2s var(--ease);
   font-family: inherit;
   min-height: 80px;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 .wiz-textarea:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(0,229,255,0.10); }
 .wiz-textarea.lg { min-height: 110px; font-size: 1rem; }
