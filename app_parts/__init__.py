@@ -27,6 +27,8 @@ _PART_FILES = [
     "06_query_legacy_helpers.py",   # 06 — helpers requetes legacy
     "07_routes_pages.py",           # 07 — routes pages (index, settings)
     "08_trade_math.py",             # 08 — canonical trade math (PnL, RR, direction)
+    "06a_trade_service.py",         # 06a — couche service trade (CRUD, validations)
+    "06b_day_service.py",           # 06b — couche service day (CRUD, validations)
     "09_routes_days.py",            # 09 — routes API days
     "12_plan_engine.py",            # 09 — moteur coherence plan / PO3
     "10_routes_trades.py",          # 09 — routes API trades

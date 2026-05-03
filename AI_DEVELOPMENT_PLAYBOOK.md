@@ -887,3 +887,8 @@ Cette section documente les features ajoutées, les conventions établies, et le
 - Cause racine: la construction de `cache_key` incluait `pattern|{mtime}|inst={inst}|from={from}` mais pas `|to={to}`.
 - Regle de prevention: TOUS les parametres de requete doivent etre inclus dans la cle de cache. Un parametre oublie = donnees incoherentes silencieuses.
 - Fichiers a surveiller: app_parts/20_ml_engine.py
+
+### CONVENTION-20260507-03 — Couche service extraite (06a_trade_service + 06b_day_service)
+- Motivation: extraire la logique metier des routes pour la rendre reutilisable par l'IA chat et les tests.
+- Regle: Les fonctions `service_*` prennent `db` en parametre explicite, ne dependent pas du contexte Flask. Les routes restent minces (parse → service → jsonify). Charger les services AVANT les routes dans `__init__.py`.
+- Fichiers a surveiller: app_parts/06a_trade_service.py, app_parts/06b_day_service.py, app_parts/__init__.py
