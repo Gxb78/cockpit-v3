@@ -121,14 +121,15 @@ def _purge_cache():
 
 
 def _parse_int_param(name, default=None):
-    """Parse un paramètre entier avec retour 400 propre si invalide."""
+    """Parse un paramètre entier, retourne default si absent, jsonify+400 si invalide."""
     val = request.args.get(name, None)
     if val is None:
         return default
     try:
         return int(val)
     except (ValueError, TypeError):
-        abort(400, f"Parametre '{name}' invalide: doit etre un entier, recu: {val}")
+        # abort(400) peut retourner HTML — on return jsonify direct
+        raise ValueError(f"Parametre '{name}' invalide: doit etre un entier, recu: {val}")
 
 
 def _format_aggTrade(t):
@@ -181,10 +182,14 @@ def market_aggtrades():
     if symbol not in _SYMBOL_WHITELIST:
         return jsonify({"error": f"Symbole non supporte: {symbol}. Supportes: {', '.join(sorted(_SYMBOL_WHITELIST))}"}), 400
 
-    start_time = _parse_int_param("startTime")
-    end_time = _parse_int_param("endTime")
-    limit = _parse_int_param("limit", 1000)
-    force = _parse_int_param("force", 0)
+    # Parser les parametres entiers avec JSON 400 propre
+    try:
+        start_time = _parse_int_param("startTime")
+        end_time = _parse_int_param("endTime")
+        limit = _parse_int_param("limit", 1000)
+        force = _parse_int_param("force", 0)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
 
     # Clamp limit
     limit = max(1, min(limit, MAX_TOTAL_TRADES))
@@ -209,42 +214,50 @@ def market_aggtrades():
 
     # --- Pagination ---
     all_trades = []
-    current_start = start_time
     pages_used = 0
     hit_limit = False
+    # Premier appel avec startTime (si fourni), puis fromId pour les pages suivantes
+    next_from_id = None
 
     while len(all_trades) < desired and pages_used < _MAX_PAGES:
-        # Requests successive uses fromId based on last received trade
         url = f"{BINANCE_API}/api/v3/aggTrades?symbol={symbol}&limit=1000"
-        if current_start:
-            url += f"&startTime={current_start}"
-        if end_time:
-            url += f"&endTime={end_time}"
+        if next_from_id:
+            # Pages suivantes: pagination par fromId (précise, pas de trous)
+            url += f"&fromId={next_from_id}"
+        else:
+            # Première page: avec startTime/endTime
+            if start_time:
+                url += f"&startTime={start_time}"
+            if end_time:
+                url += f"&endTime={end_time}"
 
         batch, err = _fetch_binance_agg(url)
         if err:
             if all_trades:
-                break  # Return what we have
+                break
             return jsonify(err[0]), err[1]
 
         if not batch:
-            break  # No more data
+            break
 
-        # Ajouter (on reçoit déjà dans l'ordre croissant, mais on préfixe pour garder l'ordre temporel)
+        # Si c'est la première page, filtrer les trades > endTime
+        if not next_from_id and end_time:
+            batch = [t for t in batch if t["time"] <= end_time]
+            if not batch:
+                break
+
         all_trades.extend(batch)
         pages_used += 1
 
-        # Next batch: start from last trade time + 1ms
-        last_trade_time = batch[-1]["time"]
-        current_start = last_trade_time + 1
+        # Next page: fromId = dernier aggTradeId + 1
+        last_id = batch[-1]["id"] if batch else 0
+        next_from_id = last_id + 1
 
-        # Si Binance a renvoyé < 1000 trades, on a tout ce qu'il y a pour cette période
+        # Si Batch < 1000, plus de donnees disponibles
         if len(batch) < 1000:
             break
 
-        # Si on a atteint la limite demandée, on arrête
         if len(all_trades) >= desired:
-            # Tronquer si trop
             if len(all_trades) > desired:
                 all_trades = all_trades[:desired]
             break

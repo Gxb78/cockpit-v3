@@ -821,3 +821,19 @@ Cette section documente les features ajoutées, les conventions établies, et le
 - Test de non-regression: /api/market/aggtrades?symbol=BTCUSDT&limit=5000 doit retourner jusqu'a 5000 trades pagines. /api/market/aggtrades?limit=abc doit retourner 400. /api/market/aggtrades?force=1 doit contourner le cache.
 - Changement: Rewrite complet de market_aggtrades(), ajout de _purge_cache(), _parse_int_param(), _fetch_binance_agg(), _MAX_PAGES, MAX_TOTAL_TRADES.
 - Fichiers a surveiller: app_parts/23_routes_market.py
+
+### CONVENTION-20260506-02 — Pagination aggTrades par fromId (pas startTime+1ms)
+- Cause racine: startTime+1ms peut skipper des trades ayant le meme timestamp milliseconde. Plusieurs aggTrades Binance peuvent partager le meme T.
+- Regle de prevention: TOUJOURS paginer par fromId=lastAggTradeId+1 pour les pages suivantes. La premiere page utilise startTime/endTime pour le filtrage temporel. Filtrer cote backend les trades > endTime.
+- Test de non-regression: /api/market/aggtrades?symbol=BTCUSDT&limit=5000 doit retourner exactement 5000 trades sans trous. Verifier que les trades ont des ids consecutifs.
+- Fichiers a surveiller: app_parts/23_routes_market.py
+
+### CONVENTION-20260506-03 — rAF _running guard pour eviter les boucles orphelines
+- Cause racine: start() sans guard peut etre appele plusieurs fois (init + pageChange listener).
+- Regle de prevention: Toujours garder _running flag dans start/stop. start() check _running en tete, return si deja lance. loop() check _running a chaque frame. stop() met _running=false puis cancelAnimationFrame.
+- Fichiers a surveiller: static/js/split/066_orderflow_engine.js
+
+### CONVENTION-20260506-04 — abort(400) retourne HTML → try/except ValueError + jsonify
+- Cause racine: abort(400) dans Flask peut retourner une page HTML si pas de handler errorhandler(400) dedie.
+- Regle de prevention: Ne jamais utiliser abort() dans les routes API. Utiliser raise ValueError dans les helpers, try/except dans la route, return jsonify({"error": str(e)}), 400.
+- Fichiers a surveiller: app_parts/23_routes_market.py

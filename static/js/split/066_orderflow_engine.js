@@ -127,6 +127,7 @@
 
     // rAF handle pour pouvoir stop/start
     this._rafId = null;
+    this._running = false;
 
     // Statut
     this._setStatus('ready');
@@ -817,8 +818,11 @@
   // ============================================================
 
   OrderflowEngine.prototype.start = function () {
+    if (this._running) return;
+    this._running = true;
     var self = this;
     function loop() {
+      if (!self._running) return;
       self.render();
       self._rafId = requestAnimationFrame(loop);
     }
@@ -826,6 +830,7 @@
   };
 
   OrderflowEngine.prototype.stop = function () {
+    this._running = false;
     if (this._rafId) {
       cancelAnimationFrame(this._rafId);
       this._rafId = null;
@@ -842,12 +847,11 @@
     var engine = new OrderflowEngine('ofCanvas');
     window.__ofEngine = engine;
 
-    // Si la page est déjà active, lancer le chargement tout de suite
+    // Si la page est déjà active, lancer le chargement + rAF
     if (container.classList.contains('active')) {
       engine.loadData(engine._symbol, engine._interval);
+      engine.start();
     }
-
-    engine.start();
   }
 
   // Écouter les changements de page pour charger/stoper
