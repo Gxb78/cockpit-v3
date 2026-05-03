@@ -132,8 +132,14 @@
     if (state.ctx) state.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
+  // Cache du pane rect pour eviter querySelectorAll + getBoundingClientRect a 60fps
+  var _cachedPaneRect = null;
+
+  function _invalidatePaneRect() { _cachedPaneRect = null; }
+
   // Trouve le rectangle du pane LWC interne (pas tout le container)
   function _getLwcPaneRect() {
+    if (_cachedPaneRect) return _cachedPaneRect;
     if (!state.container) return null;
     var containerRect = state.container.getBoundingClientRect();
     var canvases = Array.prototype.slice.call(
@@ -162,6 +168,7 @@
       absTop: best.top,
     };
     console.log('[draw] pane rect:', JSON.stringify(result), 'container rect:', JSON.stringify({left: containerRect.left, top: containerRect.top, w: containerRect.width, h: containerRect.height}));
+    _cachedPaneRect = result;
     return result;
   }
 
@@ -608,7 +615,14 @@
                 }
               }
             }
-            state._drag = { idx: hitIdx, startTime: tp.time, startPrice: tp.price, pointIdx: dragPointIdx };
+            state._drag = {
+              idx: hitIdx,
+              startX: e.clientX,
+              startY: e.clientY,
+              pointIdx: dragPointIdx,
+              // Snapshot immuable des points originaux au mousedown
+              origPoints: JSON.parse(JSON.stringify(d.points)),
+            };
             if (state.canvas) state.canvas.style.cursor = 'grabbing';
           }
         }, { capture: true });
@@ -668,36 +682,41 @@
       state.container.addEventListener('mousemove', function (e) {
         // Drag: deplacer le dessin selectionne
         if (state._drag) {
-          var tp = _toTimePrice(e.clientX, e.clientY);
-          if (tp) {
-            var d = state.drawings[state._drag.idx];
-            if (d && d.points) {
-              var dTime = tp.time - state._drag.startTime;
-              var dPrice = tp.price - state._drag.startPrice;
-              if (state._drag.pointIdx >= 0) {
-                // Resize : ne deplacer qu'un seul point
-                var p = state._drag.pointIdx;
-                d.points[p] = {
-                  time: d.points[p].time + dTime,
-                  price: d.points[p].price + dPrice,
+          var d = state.drawings[state._drag.idx];
+          if (d && d.points) {
+            // Delta en pixels depuis le mousedown (origine fixe, pas d'accumulation)
+            var dxPx = e.clientX - state._drag.startX;
+            var dyPx = e.clientY - state._drag.startY;
+            // Convertir dxPx en delta temps via l'axe temporel
+            var t0 = state.chart.timeScale().coordinateToTime(0);
+            var tDx = state.chart.timeScale().coordinateToTime(Math.abs(dxPx));
+            var dt = (t0 != null && tDx != null) ? (dxPx >= 0 ? tDx - t0 : t0 - tDx) : 0;
+            // Convertir dyPx en delta prix via la serie
+            var p0 = state.series.coordinateToPrice(0);
+            var pDy = state.series.coordinateToPrice(Math.abs(dyPx));
+            var dp = (p0 != null && pDy != null) ? (dyPx >= 0 ? p0 - pDy : pDy - p0) : 0;
+            // Appliquer sur le snapshot original (pas d'accumulation)
+            if (state._drag.pointIdx >= 0) {
+              var pi = state._drag.pointIdx;
+              d.points[pi] = {
+                time: state._drag.origPoints[pi].time + dt,
+                price: state._drag.origPoints[pi].price + dp,
+              };
+            } else {
+              for (var pi = 0; pi < d.points.length; pi++) {
+                d.points[pi] = {
+                  time: state._drag.origPoints[pi].time + dt,
+                  price: state._drag.origPoints[pi].price + dp,
                 };
-              } else {
-                // Deplacement complet : tous les points
-                for (var p = 0; p < d.points.length; p++) {
-                  d.points[p] = {
-                    time: d.points[p].time + dTime,
-                    price: d.points[p].price + dPrice,
-                  };
-                }
               }
-              state._drag.startTime = tp.time;
-              state._drag.startPrice = tp.price;
-              _renderAll();
             }
+            _renderAll();
           }
         }
-        _startRenderLoop();
-        _scheduleStop();
+        if (state._drag || state.activeTool !== 'cursor' || (e.buttons & 1)) {
+          _startRenderLoop();
+          _scheduleStop();
+        }
       }, { passive: true });
       state.container.addEventListener('wheel', function () {
         _startRenderLoop();
@@ -752,6 +771,9 @@
     if (state.chart && state.chart.timeScale()) {
       var _debounceTimer = null;
       function _scheduleRender() {
+        _invalidatePaneRect();
+        _startRenderLoop();
+        _scheduleStop();
         if (_debounceTimer) return;
         _debounceTimer = setTimeout(function () { _debounceTimer = null; _renderAll(); }, 16);
       }

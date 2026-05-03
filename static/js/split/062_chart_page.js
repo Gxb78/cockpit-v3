@@ -41,6 +41,9 @@
   var _lastFetchTs = 0;
   var _FETCH_COOLDOWN_MS = 5000;
 
+  // Protection first-view (evite que WS override le zoom initial)
+  var _initialViewSet = false;
+
   // Settings state
   var indSettings = {
     sma: { active: false, period: 20, color: '#f59e0b' },
@@ -1005,12 +1008,6 @@
     // Sauvegarder le zoom utilisateur avant refresh (en temps ET en logique)
     var savedRange = null;
     var savedLogical = null;
-    if (keepZoom && chart && chart.timeScale()) {
-      try { savedRange = chart.timeScale().getVisibleRange(); } catch(e) {}
-      try { savedLogical = chart.timeScale().getVisibleLogicalRange(); } catch(e) {}
-      // Freeze price scale BEFORE setData to prevent auto-jump on new candles
-      try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
-    }
 
     var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=500';
     fetch(url)
@@ -1054,29 +1051,20 @@
           return { time: c.time, value: c.volume, color: c.close >= c.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' };
         }));
 
-        if (!keepZoom) {
-          // Show last ~80 candles instead of ALL data (fitContent zooms too far out)
-          var total = candles.length;
-          var to = total;
-          var from = Math.max(0, total - 80);
-          try { chart.timeScale().setVisibleLogicalRange({ from: from, to: to }); } catch(e) { chart.timeScale().fitContent(); }
-          // Unlock vertical scroll by disabling autoScale AFTER data is visible
+        // Toujours centrer sur les dernieres bougies (desactive le restore keepZoom)
+        var total = candles.length;
+        var from = Math.max(0, total - 80);
+        try {
+          chart.timeScale().setVisibleLogicalRange({ from: from, to: total });
+        } catch(e) {
           setTimeout(function() {
-            try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
-          }, 50);
+            try { chart.timeScale().setVisibleLogicalRange({ from: from, to: total }); } catch(e2) { chart.timeScale().fitContent(); }
+          }, 100);
         }
-
-        // Restaurer le zoom utilisateur apres setData (logique d'abord, temps en fallback)
-        if (keepZoom) {
-          // Le logical range est plus stable que le time range car base sur l'index
-          if (savedLogical) {
-            try { chart.timeScale().setVisibleLogicalRange(savedLogical); } catch(e) {}
-          } else if (savedRange) {
-            try { chart.timeScale().setVisibleRange(savedRange); } catch(e) {}
-          }
-          // Keep price scale unlocked for vertical scroll
+        // Unlock vertical scroll by disabling autoScale AFTER data is visible
+        setTimeout(function() {
           try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
-        }
+        }, 50);
         _isFetching = false;
       })
       .catch(function (err) {

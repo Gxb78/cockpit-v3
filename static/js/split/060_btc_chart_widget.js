@@ -353,6 +353,9 @@
   var _lastFetchTs = 0;
   var _FETCH_COOLDOWN_MS = 5000;
 
+  // Protection first-view (evite que WS override le zoom initial)
+  var _initialViewSet = false;
+
   function _connectWs() {
     if (ws && ws.readyState === WebSocket.CONNECTING) return;
     if (ws) { _wsIntentionalClose = true; try { ws.close(); } catch(e) {} _wsIntentionalClose = false; }
@@ -594,12 +597,6 @@
 
     // Sauvegarder le zoom utilisateur avant refresh (en temps ET en logique)
     var savedRange = null;
-    var savedLogical = null;
-    if (keepZoom && chart && chart.timeScale()) {
-      try { savedRange = chart.timeScale().getVisibleRange(); } catch(e) {}
-      try { savedLogical = chart.timeScale().getVisibleLogicalRange(); } catch(e) {}
-      try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
-    }
 
     var url = '/api/market/klines?symbol=BTCUSDT&interval=' + currentInterval + '&limit=300';
     fetch(url)
@@ -635,25 +632,19 @@
           try { countdownPriceLine.applyOptions({ price: last.close }); } catch(e) {}
         }
         _updateCountdownLabel();
-        if (!keepZoom) {
-          var total = candles.length;
-          var to = total;
-          var from = Math.max(0, total - 80);
-          try { chart.timeScale().setVisibleLogicalRange({ from: from, to: to }); } catch(e) { chart.timeScale().fitContent(); }
+        // Toujours centrer sur les dernieres bougies
+        var total = candles.length;
+        var from = Math.max(0, total - 80);
+        try {
+          chart.timeScale().setVisibleLogicalRange({ from: from, to: total });
+        } catch(e) {
           setTimeout(function() {
-            try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
-          }, 50);
+            try { chart.timeScale().setVisibleLogicalRange({ from: from, to: total }); } catch(e2) { chart.timeScale().fitContent(); }
+          }, 100);
         }
-
-        // Restaurer le zoom utilisateur apres setData (logique d'abord, temps en fallback)
-        if (keepZoom) {
-          if (savedLogical) {
-            try { chart.timeScale().setVisibleLogicalRange(savedLogical); } catch(e) {}
-          } else if (savedRange) {
-            try { chart.timeScale().setVisibleRange(savedRange); } catch(e) {}
-          }
+        setTimeout(function() {
           try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
-        }
+        }, 50);
         _isFetching = false;
       })
       .catch(function (err) {
