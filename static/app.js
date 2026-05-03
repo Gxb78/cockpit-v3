@@ -15292,6 +15292,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 
     // Candles data
     this._candles = [];
+    this._rawTrades = [];
     this._isLiveData = false;
     this._loading = false;
     this._error = null;
@@ -15299,6 +15300,29 @@ TradeEditorController.renderHtml = function (day, trade) {
     this._interval = '3m';
     this._tickSize = 10;
     this._intervalMs = 180000;
+    this._coverageInfo = "";
+    this._currentRange = null; // {start, end} du dernier fetch
+    this._requestedRangeMs = 21600000; // 6h par defaut
+    this._rangeUserOverridden = false;
+    this._fetchTimestamp = null;
+    // Steps config par symbole
+    this._stepsConfig = {
+      BTCUSDT: { steps: [5, 10, 25, 50], default: 10, label: '$' },
+      ETHUSDT: { steps: [1, 2, 5, 10], default: 2, label: '$' },
+      SOLUSDT: { steps: [0.05, 0.10, 0.25, 0.50], default: 0.10, label: '$' },
+    };
+
+    // Layout zones (mise a jour a chaque resize)
+    this.layout = {
+      leftMargin: 10,
+      rightMargin: 10,
+      topMargin: 30,
+      bottomMargin: 40,
+      priceAxisWidth: 60,
+      vpWidth: 40,
+      chartRight: 0,
+      chartWidth: 0,
+    };
 
     // Statut
     this._setStatus('ready');
@@ -15306,11 +15330,25 @@ TradeEditorController.renderHtml = function (day, trade) {
 
     // Load mock data
     this._loadMockData();
+    this._updateStepButtons(this._symbol);
   }
 
   OrderflowEngine.prototype._setStatus = function (msg) {
     var el = document.getElementById('ofStatus');
-    if (el) el.textContent = msg;
+    if (el) {
+      var prefix = '';
+      if (this._isLiveData) prefix = 'LIVE ';
+      else if (this._loading) prefix = '';
+      else if (this._error) prefix = 'ERROR ';
+      else prefix = 'MOCK ';
+      el.textContent = prefix + msg;
+
+      // CSS class pour styling
+      el.classList.toggle('status-live', this._isLiveData);
+      el.classList.toggle('status-mock', !this._isLiveData && !this._loading && !this._error);
+      el.classList.toggle('status-error', !!this._error);
+      el.classList.toggle('status-loading', this._loading);
+    }
   };
 
   // ============================================================
@@ -15335,6 +15373,15 @@ TradeEditorController.renderHtml = function (day, trade) {
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
     this._dirty = true;
+
+      // Mettre a jour le layout
+      var lay = this.layout;
+      lay.topMargin = 30;
+      lay.bottomMargin = 40;
+      lay.priceAxisWidth = 60;
+      lay.vpWidth = 40;
+      lay.chartWidth = rw - lay.priceAxisWidth - lay.vpWidth - 15;
+      lay.chartRight = lay.leftMargin + lay.chartWidth;
   };
 
   // ============================================================
@@ -15418,11 +15465,44 @@ TradeEditorController.renderHtml = function (day, trade) {
       self._handleResize();
     });
 
+    // Keyboard shortcuts (quand la page orderflow est active)
+    document.addEventListener('keydown', self._onKeyDown.bind(self));
+
     // Symbol buttons
     self._bindTopbarClicks();
   };
 
-  /** Bind clicks on topbar symbol/timeframe buttons */
+  /** Hotkeys: H=centrer temps, P=centrer prix, R=reset complet */
+  OrderflowEngine.prototype._onKeyDown = function (e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    if (!document.querySelector('.page[data-page="orderflow"].active')) return;
+
+    var k = e.key.toLowerCase();
+    if (k === 'h') {
+      // Recentrer temps sur les donnees
+      this._fitToData();
+      this._dirty = true;
+    } else if (k === 'p') {
+      // Recentrer prix
+      var candles = this._candles;
+      if (candles && candles.length > 0) {
+        var minP = candles[0].low, maxP = candles[0].high;
+        for (var i = 0; i < candles.length; i++) {
+          if (candles[i].low < minP) minP = candles[i].low;
+          if (candles[i].high > maxP) maxP = candles[i].high;
+        }
+        var pad = (maxP - minP) * 0.15 || 200;
+        this.priceScale.minPrice = minP - pad;
+        this.priceScale.maxPrice = maxP + pad;
+        this._dirty = true;
+      }
+    } else if (k === 'r') {
+      this._resetView();
+      this._dirty = true;
+    }
+  };
+
+  /** Bind clicks on topbar symbol/timeframe buttons (avec debounce) */
   OrderflowEngine.prototype._bindTopbarClicks = function () {
     var self = this;
     var pairBtns = document.querySelectorAll('.of-pair-btn');
@@ -15435,7 +15515,13 @@ TradeEditorController.renderHtml = function (day, trade) {
         pairBtns.forEach(function (b) { b.classList.remove('active'); });
         this.classList.add('active');
         self._symbol = symbol;
-        self.loadData(symbol, self._interval);
+        // Mettre a jour les boutons step pour ce symbole
+        self._updateStepButtons(symbol);
+        if (self._loadTimer) clearTimeout(self._loadTimer);
+        self._loadTimer = setTimeout(function () {
+          self._tickSize = self._stepsConfig[symbol] ? self._stepsConfig[symbol].default : 10;
+          self.loadData(self._symbol, self._interval);
+        }, 200);
       });
     });
 
@@ -15446,9 +15532,67 @@ TradeEditorController.renderHtml = function (day, trade) {
         tfBtns.forEach(function (b) { b.classList.remove('active'); });
         this.classList.add('active');
         self._interval = interval;
-        self.loadData(self._symbol, interval);
+        if (self._loadTimer) clearTimeout(self._loadTimer);
+        self._loadTimer = setTimeout(function () { self.setInterval(interval); }, 200);
       });
     });
+
+    // Price step buttons
+    var stepBtns = document.querySelectorAll('.of-step-btn');
+    stepBtns.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var step = Number(this.dataset.step);
+        if (step === self._tickSize) return;
+        stepBtns.forEach(function (b) { b.classList.remove('active'); });
+        this.classList.add('active');
+        self.setTickSize(step);
+      });
+    });
+
+    // Range buttons
+    var rangeBtns = document.querySelectorAll('.of-range-btn');
+    var autoBtn = document.getElementById('ofAutoRange');
+
+    rangeBtns.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        // Auto button est clicke separement
+        if (this.id === 'ofAutoRange') return;
+        var rangeMs = Number(this.dataset.range);
+        if (rangeMs === self._requestedRangeMs && !self._rangeUserOverridden) return;
+        // Desactiver Auto
+        self._rangeUserOverridden = true;
+        if (autoBtn) autoBtn.classList.remove('active');
+        rangeBtns.forEach(function (b) { b.classList.remove('active'); });
+        this.classList.add('active');
+        if (self._loadTimer) clearTimeout(self._loadTimer);
+        self._loadTimer = setTimeout(function () { self.setRange(rangeMs); }, 200);
+      });
+    });
+
+    // Auto range button
+    if (autoBtn) {
+      autoBtn.addEventListener('click', function () {
+        self._rangeUserOverridden = false;
+        rangeBtns.forEach(function (b) { b.classList.remove('active'); });
+        this.classList.add('active');
+        self.setAutoRange();
+      });
+    }
+
+    // Reload button
+    var reloadBtn = document.getElementById('ofReloadBtn');
+    if (reloadBtn) {
+      reloadBtn.addEventListener('click', function () {
+        this.classList.add('loading');
+        var orig = this.textContent;
+        this.textContent = '⟳';
+        self.reload();
+        setTimeout(function () {
+          reloadBtn.textContent = orig;
+          reloadBtn.classList.remove('loading');
+        }, 1500);
+      });
+    }
   };
 
   // ============================================================
@@ -15524,18 +15668,13 @@ TradeEditorController.renderHtml = function (day, trade) {
    * Pan horizontal + vertical
    */
   OrderflowEngine.prototype._pan = function (dx, dy) {
-    var ps = this.priceScale;
     var ts = this.timeScale;
 
-    // Horizontal
+    // Horizontal ONLY: drag deplace le temps (gauche/droite)
+    // Pour le prix, utiliser la molette (wheel)
     var dt = -dx / ts.pixelsPerMs;
     ts.startTime = this.scrollStart.time + dt;
     ts.endTime = ts.startTime + (this.timeScale.width - ts.leftMargin - ts.rightMargin) / ts.pixelsPerMs;
-
-    // Vertical
-    var dp = dy / ps.pixelsPerUnit;
-    ps.minPrice = this.scrollStart.price + dp;
-    ps.maxPrice = ps.minPrice + (this.priceScale.height - ps.topMargin - ps.bottomMargin) / ps.pixelsPerUnit;
 
     this._dirty = true;
   };
@@ -15633,6 +15772,13 @@ TradeEditorController.renderHtml = function (day, trade) {
     if (this.inCanvas) {
       this._drawTooltip(ctx);
     }
+
+    // --- Hint bar en bas ---
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.font = '9px "JetBrains Mono", monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('Drag: temps  |  Wheel: prix  |  Ctrl+Wheel: zoom  |  Shift+Wheel: scroll temps  |  H:centrer  P:prix  R:reset', 10, h - 2);
   };
 
   /**
@@ -15655,10 +15801,10 @@ TradeEditorController.renderHtml = function (day, trade) {
 
     for (var price = startPrice; price <= ps.maxPrice; price += tickStep) {
       var y = this.priceToY(price);
-      if (y < ps.topMargin || y > h - ps.bottomMargin) continue;
+      if (y < this.layout.topMargin || y > h - this.layout.bottomMargin) continue;
       ctx.beginPath();
-      ctx.moveTo(ts.leftMargin, y);
-      ctx.lineTo(w - 10, y);
+      ctx.moveTo(this.timeScale.leftMargin, y);
+      ctx.lineTo(w - 75, y);
       ctx.stroke();
     }
   };
@@ -15678,7 +15824,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 
     for (var price = startPrice; price <= ps.maxPrice; price += tickStep) {
       var y = this.priceToY(price);
-      if (y < ps.topMargin || y > h - ps.bottomMargin) continue;
+      if (y < this.layout.topMargin || y > h - this.layout.bottomMargin) continue;
       ctx.fillText(price.toFixed(0), w - 12, y);
     }
   };
@@ -15708,8 +15854,8 @@ TradeEditorController.renderHtml = function (day, trade) {
 
       // Petite marque
       ctx.beginPath();
-      ctx.moveTo(x, h - ps.bottomMargin + 4);
-      ctx.lineTo(x, h - ps.bottomMargin + 8);
+      ctx.moveTo(x, h - this.layout.bottomMargin + 4);
+      ctx.lineTo(x, h - this.layout.bottomMargin + 8);
       ctx.strokeStyle = 'rgba(255,255,255,0.15)';
       ctx.lineWidth = 1;
       ctx.stroke();
@@ -15718,7 +15864,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       var d = new Date(t);
       ctx.fillText(
         ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2),
-        x, h - ps.bottomMargin + 10
+        x, h - this.layout.bottomMargin + 10
       );
     }
   };
@@ -15738,14 +15884,14 @@ TradeEditorController.renderHtml = function (day, trade) {
 
     // Ligne verticale
     ctx.beginPath();
-    ctx.moveTo(mx, ps.topMargin);
-    ctx.lineTo(mx, h - ps.bottomMargin);
+    ctx.moveTo(mx, this.layout.topMargin);
+    ctx.lineTo(mx, h - this.layout.bottomMargin);
     ctx.stroke();
 
     // Ligne horizontale
     ctx.beginPath();
     ctx.moveTo(this.timeScale.leftMargin, my);
-    ctx.lineTo(w - 10, my);
+    ctx.lineTo(w - 75, my);
     ctx.stroke();
 
     ctx.restore();
@@ -15885,27 +16031,40 @@ TradeEditorController.renderHtml = function (day, trade) {
     this._setStatus('loading ' + this._symbol + ' ' + this._interval + '...');
 
     var now = Date.now();
-    var rangeMs = 12 * 60 * 60 * 1000; // 12h de données
-    var startTime = now - rangeMs;
+    var startTime = now - this._requestedRangeMs;
 
-    OF.DataService.fetchTrades(this._symbol, startTime, now, 3000)
-      .then(function (trades) {
+    OF.DataService.fetchTrades(this._symbol, startTime, now, 5000)
+      .then(function (res) {
+        // res peut etre {trades, limits} ou directement un array (fallback)
+        var trades = Array.isArray(res) ? res : (res && res.trades ? res.trades : res);
         if (!trades || trades.length === 0) {
           throw new Error('Aucune trade recue pour ' + self._symbol);
         }
+        var limits = !Array.isArray(res) && res ? res.limits || {} : {};
         var candles = OF.Aggregator.aggregate(trades, self._intervalMs, self._tickSize);
         if (candles.length === 0) {
           throw new Error('Aggregation vide');
         }
 
+        self._rawTrades = trades;
         self._candles = candles;
         self._isLiveData = true;
         self._loading = false;
+        self._currentRange = { start: startTime, end: now };
+        self._fetchTimestamp = Date.now();
+        self._fetchMeta = limits;
+
+        // Calculer couverture temporelle
+        var firstTime = candles[0] ? candles[0].time : 0;
+        var lastTime = candles[candles.length - 1] ? candles[candles.length - 1].time : 0;
+        var coverageH = Math.round((lastTime - firstTime) / 3600000 * 10) / 10;
+        self._coverageInfo = coverageH + 'h covered';
 
         // Ajuster les scales
         self._fitToData();
         self._dirty = true;
-        self._setStatus(self._symbol + ' ' + self._interval + ' (' + candles.length + ' candles, ' + trades.length + ' trades)');
+        self._updateStatsPanel();
+        self._setStatus(self._symbol + ' ' + self._interval + ' (' + candles.length + ' candles, ' + trades.length + ' trades, ' + coverageH + 'h)');
       })
       .catch(function (err) {
         console.warn('[OF] API error, fallback mock:', err.message);
@@ -15914,6 +16073,172 @@ TradeEditorController.renderHtml = function (day, trade) {
         self._loadMockData();
         self._setStatus('mock (API: ' + err.message + ')');
       });
+  };
+
+  /** Changer le range — marque comme override utilisateur */
+  OrderflowEngine.prototype.setRange = function (rangeMs) {
+    if (rangeMs === this._requestedRangeMs && this._rawTrades.length > 0) return;
+    this._requestedRangeMs = rangeMs;
+    this._rangeUserOverridden = true;
+    var autoBtn = document.getElementById('ofAutoRange');
+    if (autoBtn) autoBtn.classList.remove('active');
+    if (this._isLiveData) {
+      this.loadData(this._symbol, this._interval);
+    }
+  };
+
+  /** Revenir en mode auto-range */
+  OrderflowEngine.prototype.setAutoRange = function () {
+    this._rangeUserOverridden = false;
+    this.setInterval(this._interval); // va appliquer auto-range
+  };
+
+  /** Recharger les donnees (force fetch) */
+  OrderflowEngine.prototype.reload = function () {
+    OF.DataService.clearCache();
+    this.loadData(this._symbol, this._interval);
+  };
+
+  /** Mettre a jour le panneau stats — enrichi avec metadata */  
+  OrderflowEngine.prototype._updateStatsPanel = function () {
+    var el = document.getElementById('ofStats');
+    if (!el) return;
+    var candles = this._candles;
+    if (!candles || candles.length === 0) { el.classList.add('hidden'); return; }
+    el.classList.remove('hidden');
+
+    var totalDelta = 0, totalVol = 0;
+    for (var i = 0; i < candles.length; i++) {
+      totalDelta += candles[i].delta || 0;
+      totalVol += candles[i].volume || 0;
+    }
+
+    var first = candles[0], last = candles[candles.length - 1];
+    var coverageH = Math.round((last.time - first.time) / 3600000 * 10) / 10;
+    var reqH = Math.round(this._requestedRangeMs / 3600000);
+    var ratio = last.time - first.time > 0 ? (last.time - first.time) / this._requestedRangeMs : 0;
+
+    var from = new Date(first.time);
+    var to = new Date(last.time);
+    var timeStr = ('0' + from.getHours()).slice(-2) + ':' + ('0' + from.getMinutes()).slice(-2);
+    timeStr += ' - ' + ('0' + to.getHours()).slice(-2) + ':' + ('0' + to.getMinutes()).slice(-2);
+
+    var deltaClass = totalDelta >= 0 ? 'stats-delta-pos' : 'stats-delta-neg';
+
+    // Warnings
+    var warns = [];
+    if (candles.length < 20) warns.push('seulement ' + candles.length + ' candles');
+    if (ratio < 0.5) warns.push('cover ' + coverageH + 'h / ' + reqH + 'h demandes');
+    if (this._fetchMeta && this._fetchMeta.hitBinanceLimit) warns.push('limite Binance atteinte');
+    var warnHtml = warns.length > 0 ? '<br><span class="stats-warn">⚠ ' + warns.join(' · ') + '</span>' : '';
+
+    // Timestamp fetch
+    var fetchStr = '';
+    if (this._fetchTimestamp) {
+      var fd = new Date(this._fetchTimestamp);
+      fetchStr = '<br><span class="stats-info">' 
+        + ('0' + fd.getHours()).slice(-2) + ':' + ('0' + fd.getMinutes()).slice(-2) + ':' + ('0' + fd.getSeconds()).slice(-2)
+        + '</span>';
+    }
+
+    el.innerHTML = '<strong>' + this._symbol + '</strong> ' + this._interval + ' $' + this._tickSize
+      + (this._rangeUserOverridden ? '' : ' · auto')
+      + '<br>Trades: <strong>' + this._rawTrades.length + '</strong>  Candles: <strong>' + candles.length + '</strong>'
+      + '<br>' + timeStr
+      + '<br>Δ <strong class="' + deltaClass + '">' + (totalDelta >= 0 ? '+' : '') + totalDelta.toFixed(1) + '</strong>  Vol <strong>' + totalVol.toFixed(1) + '</strong>'
+      + warnHtml
+      + fetchStr;
+  };
+
+  /** Re-agreger les rawTrades — preserve le temps visible, ajuste le prix si necessaire */
+  OrderflowEngine.prototype._reaggregate = function () {
+    if (!this._rawTrades || this._rawTrades.length === 0) return;
+    // Sauvegarder la plage temps visible
+    var savedStart = this.timeScale.startTime;
+    var savedEnd = this.timeScale.endTime;
+
+    var candles = OF.Aggregator.aggregate(this._rawTrades, this._intervalMs, this._tickSize);
+    this._candles = candles;
+
+    // Restaurer la plage temps (ne pas reset le contexte utilisateur)
+    this.timeScale.startTime = savedStart;
+    this.timeScale.endTime = savedEnd;
+
+    // Ajuster le prix uniquement si les bougies sortent du range visible
+    if (candles.length > 0) {
+      var minP = candles[0].low, maxP = candles[0].high;
+      for (var i = 0; i < candles.length; i++) {
+        if (candles[i].low < minP) minP = candles[i].low;
+        if (candles[i].high > maxP) maxP = candles[i].high;
+      }
+      if (minP < this.priceScale.minPrice || maxP > this.priceScale.maxPrice) {
+        var pad = (maxP - minP) * 0.15 || 200;
+        this.priceScale.minPrice = minP - pad;
+        this.priceScale.maxPrice = maxP + pad;
+      }
+    }
+
+    this._dirty = true;
+    this._updateStatsPanel();
+    this._setStatus(this._symbol + ' ' + this._interval + ' (' + candles.length + ' candles, step ' + this._tickSize + ')');
+  };
+
+  /** Auto-range suggere selon le timeframe */
+  OrderflowEngine.prototype._suggestRange = function (interval) {
+    var map = { '1m': 3600000, '3m': 10800000, '5m': 21600000, '15m': 43200000, '1h': 86400000, '4h': 86400000 * 3 };
+    return map[interval] || 21600000;
+  };
+
+  /** Changer le timeframe — re-aggregation locale si on a deja les rawTrades */
+  OrderflowEngine.prototype.setInterval = function (interval) {
+    if (interval === this._interval) return;
+    this._interval = interval;
+    this._intervalMs = this._intervalToMs(interval);
+    if (!this._rangeUserOverridden) {
+      var suggested = this._suggestRange(interval);
+      if (suggested !== this._requestedRangeMs) {
+        this._requestedRangeMs = suggested;
+        // Auto range button active, desactiver les ranges manuels
+        var rangeBtns = document.querySelectorAll('.of-range-btn');
+        var autoBtn = document.getElementById('ofAutoRange');
+        rangeBtns.forEach(function (b) { b.classList.remove('active'); });
+        rangeBtns.forEach(function (b) {
+          if (Number(b.dataset.range) === suggested) b.classList.add('active');
+        });
+        if (autoBtn) autoBtn.classList.add('active');
+      }
+    }
+    if (this._rawTrades && this._rawTrades.length > 0 && this._currentRange) {
+      this._reaggregate();
+    } else {
+      this.loadData(this._symbol, interval);
+    }
+  };
+
+  /** Changer le tick size (price step) — re-aggregation locale uniquement */
+  OrderflowEngine.prototype.setTickSize = function (tickSize) {
+    if (tickSize === this._tickSize) return;
+    this._tickSize = tickSize;
+    this._reaggregate();
+    this._updateStatsPanel();
+    var sc = this._stepsConfig[this._symbol];
+    var label = sc ? sc.label + tickSize : '$' + tickSize;
+    this._setStatus(this._symbol + ' ' + this._interval + ' (step: ' + label + ')');
+  };
+
+  /** Mettre a jour les boutons step selon le symbole */
+  OrderflowEngine.prototype._updateStepButtons = function (symbol) {
+    var cfg = this._stepsConfig[symbol] || this._stepsConfig['BTCUSDT'];
+    var btns = document.querySelectorAll('.of-step-btn');
+    var labels = cfg.steps;
+    btns.forEach(function (btn, i) {
+      if (i < labels.length) {
+        var val = labels[i];
+        btn.dataset.step = String(val);
+        btn.textContent = cfg.label + val;
+        btn.classList.toggle('active', val === cfg.default);
+      }
+    });
   };
 
   /** Convertir timeframe string en ms */
@@ -15932,11 +16257,11 @@ TradeEditorController.renderHtml = function (day, trade) {
       if (candles[i].low < minP) minP = candles[i].low;
       if (candles[i].high > maxP) maxP = candles[i].high;
     }
-    var pad = (maxP - minP) * 0.1 || 100;
+    var pad = (maxP - minP) * 0.15 || 200;
     this.priceScale.minPrice = minP - pad;
     this.priceScale.maxPrice = maxP + pad;
     this.timeScale.startTime = candles[0].time;
-    this.timeScale.endTime = candles[candles.length - 1].time + this._intervalMs * 3;
+    this.timeScale.endTime = candles[candles.length - 1].time + this._intervalMs * 6;
   };
 
   // ============================================================
@@ -16038,11 +16363,14 @@ TradeEditorController.renderHtml = function (day, trade) {
     var visibleStart = ts.startTime;
     var visibleEnd = ts.endTime;
 
-    // Espacement entre bougies
-    var candleGap = 0.2; // 20% de l'espace en gap
+    // Espacement entre bougies — adaptatif
+    var candleGap = 0.2;
     var candleW = (ts.pixelsPerMs * (candles[1] ? (candles[1].time - candles[0].time) : 180000)) * (1 - candleGap);
-    if (candleW < 4) candleW = 4;
-    if (candleW > 40) candleW = 40;
+    if (candleW > 50) candleW = 50;
+    // Seuils de rendu : compact si <18px, skinny si <8px
+    var renderMode = 'full';
+    if (candleW < 18) renderMode = 'compact';
+    if (candleW < 8) renderMode = 'skinny';
 
     for (var i = 0; i < candles.length; i++) {
       var c = candles[i];
@@ -16074,6 +16402,24 @@ TradeEditorController.renderHtml = function (day, trade) {
 
       ctx.fillStyle = isBull ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)';
       ctx.fillRect(cx - candleW / 2, bodyTop, candleW, bodyH);
+
+      // Sauts de rendu selon largeur
+      if (renderMode === 'skinny') {
+        // Skinny: juste une ligne verticale coloree (pas de footprint)
+        ctx.strokeStyle = isBull ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx, yHigh);
+        ctx.lineTo(cx, yLow);
+        ctx.stroke();
+        continue;
+      }
+      if (renderMode === 'compact') {
+        // Compact: candle colore + delta line, pas de footprint levels
+        ctx.fillStyle = isBull ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)';
+        ctx.fillRect(cx - candleW/2, bodyTop, candleW, bodyH);
+        continue;
+      }
 
       // --- Footprint levels ---
       if (!c.levels || c.levels.length === 0) continue;
@@ -16135,8 +16481,9 @@ TradeEditorController.renderHtml = function (day, trade) {
 
     var ps = this.priceScale;
     var ts = this.timeScale;
-    var vpWidth = 60; // pixels for VP panel
-    var vpX = w - vpWidth - 5; // position (just left of price axis)
+    var vpWidth = 40;
+    var vpX = w - vpWidth - 25;
+    var chartRight = vpX - 5; // limite droite du chart
 
     var visibleStart = ts.startTime;
     var visibleEnd = ts.endTime;
@@ -16251,7 +16598,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 
       var self = this;
       var allTrades = [];
-      var pagesLeft = 5;
+      var pagesLeft = 8;
       var currentEnd = endTime;
 
       function fetchPage() {
@@ -16268,15 +16615,22 @@ TradeEditorController.renderHtml = function (day, trade) {
           .then(function (data) {
             if (data.error) throw new Error(data.error);
             var batch = data.trades || [];
-            if (batch.length === 0) return allTrades;
+            if (batch.length === 0) return { trades: allTrades, limits: { count: allTrades.length, hitBinanceLimit: false } };
 
             allTrades = batch.concat(allTrades);
             var lim = limit || 1000;
 
             if (allTrades.length >= lim || batch.length < 1000 || pagesLeft <= 1) {
               if (allTrades.length > lim) allTrades = allTrades.slice(-lim);
+              // Construire les metadata depuis la derniere page
+              var meta = {
+                firstTradeTime: allTrades.length > 0 ? allTrades[0].time : null,
+                lastTradeTime: allTrades.length > 0 ? allTrades[allTrades.length - 1].time : null,
+                count: allTrades.length,
+                hitBinanceLimit: batch.length >= 1000,
+              };
               self._cache[cacheKey] = { ts: Date.now(), trades: allTrades };
-              return allTrades;
+              return { trades: allTrades, limits: meta };
             }
 
             pagesLeft--;

@@ -193,9 +193,30 @@ def market_aggtrades():
         "trades": trades,
     }
 
+    # Calculer couverture reelle
+    first_time = trades[0]["time"] if trades else None
+    last_time = trades[-1]["time"] if trades else None
+
     return jsonify({
         "symbol": symbol,
         "trades": trades,
         "cached": False,
         "count": len(trades),
+        "requested": {
+            "startTime": start_time,
+            "endTime": end_time,
+        },
+        "actual": {
+            "firstTradeTime": first_time,
+            "lastTradeTime": last_time,
+            "coverageMs": (last_time - first_time) if first_time and last_time else 0,
+        },
+        "limits": {
+            "maxTrades": limit,
+            "hitBinanceLimit": len(trades) >= limit,
+        },
+        "cache": {
+            "hit": False,
+            "ttl": _CACHE_TTL_S,
+        },
     })

@@ -8,6 +8,7 @@
       <div class="of-pair-selector">
         <button class="of-pair-btn active" data-symbol="BTCUSDT">BTC/USDT</button>
         <button class="of-pair-btn" data-symbol="ETHUSDT">ETH/USDT</button>
+        <button class="of-pair-btn" data-symbol="SOLUSDT">SOL/USDT</button>
       </div>
       <div class="of-timeframes">
         <button class="of-tf-btn active" data-interval="3m">3m</button>
@@ -16,9 +17,26 @@
         <button class="of-tf-btn" data-interval="1h">1H</button>
         <button class="of-tf-btn" data-interval="4h">4H</button>
       </div>
+      <div class="of-step-group">
+        <button class="of-step-btn" data-step="5">$5</button>
+        <button class="of-step-btn active" data-step="10">$10</button>
+        <button class="of-step-btn" data-step="25">$25</button>
+        <button class="of-step-btn" data-step="50">$50</button>
+      </div>
+      <div class="of-range-group">
+        <button class="of-range-btn active" id="ofAutoRange">Auto</button>
+        <span class="of-range-sep"></span>
+        <button class="of-range-btn" data-range="3600000">1H</button>
+        <button class="of-range-btn" data-range="10800000">3H</button>
+        <button class="of-range-btn" data-range="21600000">6H</button>
+        <button class="of-range-btn" data-range="43200000">12H</button>
+        <button class="of-range-btn" data-range="86400000">24H</button>
+      </div>
       <div class="of-info">
         <span id="ofStatus" class="of-status">initializing…</span>
+        <button id="ofReloadBtn" class="of-reload-btn" title="Recharger les donnees">↻</button>
       </div>
     </div>
+    <div id="ofStats" class="of-stats hidden"></div>
   </div>
 </section>

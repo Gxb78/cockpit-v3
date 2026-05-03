@@ -115,6 +115,147 @@
   background: rgba(56, 211, 238, 0.06);
 }
 
+/* ── Price step selector ── */
+.of-step-group {
+  display: flex;
+  gap: 1px;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.of-step-btn {
+  padding: 3px 7px;
+  border: none;
+  background: rgba(10, 10, 15, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--text-faint, #64748b);
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.of-step-btn:hover {
+  color: var(--text-muted, #94a3b8);
+  background: rgba(10, 10, 15, 0.85);
+}
+
+.of-step-btn.active {
+  color: var(--cyan, #38d3ee);
+  background: rgba(56, 211, 238, 0.12);
+}
+
+/* ── Range selector ── */
+.of-range-group {
+  display: flex;
+  gap: 1px;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.of-range-btn {
+  padding: 3px 7px;
+  border: none;
+  background: rgba(10, 10, 15, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--text-faint, #64748b);
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.of-range-btn:hover {
+  color: var(--text-muted, #94a3b8);
+  background: rgba(10, 10, 15, 0.85);
+}
+
+.of-range-btn.active {
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.12);
+}
+
+.of-range-btn#ofAutoRange {
+  font-style: italic;
+  font-size: 8px;
+  letter-spacing: 0.05em;
+}
+
+.of-range-btn#ofAutoRange.active {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.of-range-sep {
+  width: 1px;
+  background: rgba(255,255,255,0.08);
+  margin: 3px 0;
+}
+
+/* ── Stats panel ── */
+.of-stats {
+  position: absolute;
+  bottom: 44px;
+  right: 12px;
+  z-index: 10;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  color: rgba(255,255,255,0.35);
+  background: rgba(10, 10, 15, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 6px;
+  padding: 6px 10px;
+  line-height: 1.6;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+.of-stats.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.of-stats strong {
+  color: rgba(255,255,255,0.55);
+}
+
+.of-stats .stats-delta-pos { color: rgba(34,197,94,0.6); }
+.of-stats .stats-delta-neg { color: rgba(239,68,68,0.6); }
+.of-stats .stats-warn { color: rgba(245,158,11,0.6); }
+.of-stats .stats-info { color: rgba(56,211,238,0.5); }
+
+/* ── Reload button ── */
+.of-reload-btn {
+  padding: 3px 8px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  background: rgba(10, 10, 15, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--text-faint, #64748b);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  line-height: 1;
+}
+
+.of-reload-btn:hover {
+  color: var(--text, #f1f5f9);
+  border-color: rgba(255,255,255,0.2);
+  background: rgba(10, 10, 15, 0.85);
+}
+
+.of-reload-btn:active {
+  transform: rotate(180deg);
+  transition: transform 0.3s;
+}
+
 /* ── Status ── */
 .of-info {
   display: flex;
@@ -131,6 +272,37 @@
   background: rgba(10, 10, 15, 0.7);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  transition: color 0.2s, background 0.2s;
+}
+
+.of-status.status-live {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.of-status.status-mock {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.15);
+}
+
+.of-status.status-error {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.of-status.status-loading {
+  color: #38d3ee;
+  background: rgba(56, 211, 238, 0.08);
+  border: 1px solid rgba(56, 211, 238, 0.15);
+  animation: ofPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes ofPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
 
 /* ── Light mode ── */
