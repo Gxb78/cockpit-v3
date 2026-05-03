@@ -401,7 +401,7 @@
           timeVisible: true,
           secondsVisible: false,
           borderVisible: false,
-          rightOffset: 15,
+          rightOffset: 20,
           shiftVisibleRangeOnNewBar: true,
         },
         handleScroll: { vertTouchDrag: true, horzTouchDrag: true, pressedMouseMove: true },
@@ -1101,9 +1101,12 @@
           zoomTarget = savedTarget;
         } else if (!keepZoom) {
           // Premier chargement : calculer en timestamps (invariant VWAP)
+          // rightOffset dans les options chart ne s'applique pas avec
+          // setVisibleRange, donc on ajoute la marge au timestamp
+          var intervalSec = Math.floor(_getIntervalMs(currentInterval) / 1000);
           var firstIdx = Math.max(0, candles.length - 100);
           var fromTime = candles[firstIdx].time;
-          var toTime = candles[candles.length - 1].time + Math.floor(_getIntervalMs(currentInterval) / 1000) * 15;
+          var toTime = candles[candles.length - 1].time + intervalSec * 20;
           zoomTarget = { from: fromTime, to: toTime };
         }
         var _firstTotal = zoomTarget ? zoomTarget.to - 15 : 0;
