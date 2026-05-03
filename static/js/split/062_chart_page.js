@@ -46,17 +46,24 @@
   // Timestamp du premier fetch (evite de sauvegarder un zoom pas encore stabilise)
   var _firstFetchMs = 0;
 
-  // ── rAF-retry pour setVisibleLogicalRange ──
   function _applyZoomWithRetry(targetRange, maxAttempts) {
     if (!chart || !chart.timeScale()) return;
+    console.log('[ZOOM] _applyZoomWithRetry target=', JSON.stringify(targetRange), 'current=', JSON.stringify(chart.timeScale().getVisibleLogicalRange()));
     maxAttempts = maxAttempts || 10;
     var attempts = 0;
     function tryApply() {
-      if (++attempts > maxAttempts) return;
+      if (++attempts > maxAttempts) {
+        console.warn('[ZOOM] abandon après', attempts, 'tentatives. Range final:', JSON.stringify(chart.timeScale().getVisibleLogicalRange()));
+        return;
+      }
       try {
         chart.timeScale().setVisibleLogicalRange(targetRange);
         var actual = chart.timeScale().getVisibleLogicalRange();
-        if (actual && Math.abs(actual.from - targetRange.from) <= 1 && Math.abs(actual.to - targetRange.to) <= 1) return;
+        console.log('[ZOOM] tentative', attempts, '→ actual:', JSON.stringify(actual), 'target:', JSON.stringify(targetRange));
+        if (actual && Math.abs(actual.from - targetRange.from) <= 1 && Math.abs(actual.to - targetRange.to) <= 1) {
+          console.log('[ZOOM] ✅ stabilisé en', attempts, 'tentatives');
+          return;
+        }
       } catch(e) {}
       requestAnimationFrame(tryApply);
     }
@@ -663,14 +670,33 @@
   var _vwapDrawing = false;
   var _lastVwapFetch = 0;
 
-  function _removeVwapSeries(key) {
-    var s = vwapSeriesMap[key];
-    if (s) {
-      try { s.applyOptions({ visible: false, lastValueVisible: false }); s.setData([]); } catch(e) {}
+  /** setData avec snapshot/restore synchrone du range (evite drift LWC) */
+  function _safeSetData(series, data) {
+    if (!chart) return;
+    var ts = chart.timeScale();
+    var saved;
+    try { saved = ts.getVisibleLogicalRange(); } catch(e) {}
+    series.setData(data);
+    if (saved) {
+      try { ts.setVisibleLogicalRange(saved); } catch(e) {}
     }
   }
 
-  function _calcAndDrawVwap() {
+  function _removeVwapSeries(key) {
+    var s = vwapSeriesMap[key];
+    if (s) {
+      try {
+        var ts = chart.timeScale();
+        var saved;
+        try { saved = ts.getVisibleLogicalRange(); } catch(e2) {}
+        s.applyOptions({ visible: false, lastValueVisible: false });
+        s.setData([]);
+        if (saved) { try { ts.setVisibleLogicalRange(saved); } catch(e2) {} }
+      } catch(e) {}
+    }
+  }
+
+  function _calcAndDrawVwap(zoomTarget) {
     console.log('[VWAP] 062 triggered by:', new Error().stack.split('\n')[2]);
     // Supprimer les series VWAP pour les periodes desactivees
     Object.keys(vwapSeriesMap).forEach(function (k) {
@@ -709,7 +735,7 @@
       var s = vwapSeriesMap[period];
       if (s) {
         s.applyOptions({ visible: true, color: color, title: label, lastValueVisible: true });
-        s.setData(vwapData);
+        _safeSetData(s, vwapData);
       }
     }
 
@@ -744,12 +770,21 @@
         });
     });
 
-    // Fin du VWAP — restaurer l'auto-shift
+    // Fin du VWAP — appliquer le zoom, puis restaurer l'auto-shift
     return Promise.all(fetches).finally(function () {
       _vwapInFlight = false;
       _vwapDrawing = false;
+
+      // Appliquer le zoom PENDANT que shiftVisibleRangeOnNewBar est encore false
+      if (zoomTarget && chart && chart.timeScale()) {
+        try { chart.timeScale().setVisibleLogicalRange(zoomTarget); } catch(e) {}
+      }
+
       try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true }); } catch(e) {}
       try { chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
+
+      // rAF-retry pour les micro-shifts residuels
+      if (zoomTarget) _applyZoomWithRetry(zoomTarget);
     });
   }
 
@@ -1092,9 +1127,8 @@
         var _firstTotal = zoomTarget ? zoomTarget.to - 15 : 0;
         if (!_lastVwapFetch || Date.now() - _lastVwapFetch > 300000) {
           _lastVwapFetch = Date.now();
-          _calcAndDrawVwap().finally(function () {
+          _calcAndDrawVwap(zoomTarget).finally(function () {
             _isFetching = false;
-            if (zoomTarget) _applyZoomWithRetry(zoomTarget);
           });
         } else {
           _isFetching = false;

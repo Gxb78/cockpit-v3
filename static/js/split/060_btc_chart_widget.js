@@ -216,13 +216,32 @@
   // ── VWAP (multi-periode) ──
   var _vwapInFlight = false;
 
+  /** setData avec snapshot/restore synchrone du range (evite drift LWC) */
+  function _safeSetData(series, data) {
+    if (!chart) return;
+    var ts = chart.timeScale();
+    var saved;
+    try { saved = ts.getVisibleLogicalRange(); } catch(e) {}
+    series.setData(data);
+    if (saved) {
+      try { ts.setVisibleLogicalRange(saved); } catch(e) {}
+    }
+  }
+
   function _removeVwapSeries(key) {
     var s = vwapSeriesMap[key];
     if (s) {
-      try { s.applyOptions({ visible: false, lastValueVisible: false }); s.setData([]); } catch(e) {}
+      try {
+        var ts = chart.timeScale();
+        var saved;
+        try { saved = ts.getVisibleLogicalRange(); } catch(e2) {}
+        s.applyOptions({ visible: false, lastValueVisible: false });
+        s.setData([]);
+        if (saved) { try { ts.setVisibleLogicalRange(saved); } catch(e2) {} }
+      } catch(e) {}
     }
   }
-  function _calcAndDrawVwap() {
+  function _calcAndDrawVwap(zoomTarget) {
     console.log('[VWAP] triggered by:', new Error().stack.split('\n')[2]);
     console.log('[VWAP] _calcAndDrawVwap periods=', activeVwapPeriods, 'range before=', chart && chart.timeScale() ? JSON.stringify(chart.timeScale().getVisibleLogicalRange()) : 'no chart');
     console.log('[VWAP] full stack:', new Error().stack);
@@ -265,7 +284,7 @@
       var s = vwapSeriesMap[period];
       if (s) {
         s.applyOptions({ visible: true, color: color, title: label, lastValueVisible: true });
-        s.setData(vwapData);
+        _safeSetData(s, vwapData);
       }
       console.log('[VWAP] after setData period=', period, 'range=', JSON.stringify(chart.timeScale().getVisibleLogicalRange()));
     }
@@ -302,13 +321,23 @@
         });
     });
 
-    // Fin du VWAP — restaurer l'auto-shift + zoom
+    // Fin du VWAP — appliquer le zoom, puis restaurer l'auto-shift
     return Promise.all(fetches).finally(function () {
       _vwapInFlight = false;
       _vwapDrawing = false;
+
+      // Appliquer le zoom PENDANT que shiftVisibleRangeOnNewBar est encore false
+      if (zoomTarget && chart && chart.timeScale()) {
+        try { chart.timeScale().setVisibleLogicalRange(zoomTarget); } catch(e) {}
+      }
+
       try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true }); } catch(e) {}
       try { chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
+
       console.log('[VWAP] range APRÈS finally:', JSON.stringify(chart.timeScale().getVisibleLogicalRange()));
+
+      // rAF-retry pour les micro-shifts residuels
+      if (zoomTarget) _applyZoomWithRetry(zoomTarget);
     });
   }
 
@@ -378,12 +407,18 @@
     maxAttempts = maxAttempts || 10;
     var attempts = 0;
     function tryApply() {
-      if (++attempts > maxAttempts) return;
+      if (++attempts > maxAttempts) {
+        console.warn('[ZOOM] abandon après', attempts, 'tentatives. Range final:', JSON.stringify(chart.timeScale().getVisibleLogicalRange()));
+        return;
+      }
       try {
         chart.timeScale().setVisibleLogicalRange(targetRange);
-        console.log('[ZOOM] setVisibleLogicalRange called, from=', targetRange.from, 'to=', targetRange.to);
         var actual = chart.timeScale().getVisibleLogicalRange();
-        if (actual && Math.abs(actual.from - targetRange.from) <= 1 && Math.abs(actual.to - targetRange.to) <= 1) return;
+        console.log('[ZOOM] tentative', attempts, '→ actual:', JSON.stringify(actual), 'target:', JSON.stringify(targetRange));
+        if (actual && Math.abs(actual.from - targetRange.from) <= 1 && Math.abs(actual.to - targetRange.to) <= 1) {
+          console.log('[ZOOM] ✅ stabilisé en', attempts, 'tentatives');
+          return;
+        }
       } catch(e) {}
       requestAnimationFrame(tryApply);
     }
@@ -691,9 +726,8 @@
         }
         if (!_lastVwapFetch || Date.now() - _lastVwapFetch > 300000) {
           _lastVwapFetch = Date.now();
-          _calcAndDrawVwap().finally(function () {
+          _calcAndDrawVwap(zoomTarget).finally(function () {
             _isFetching = false;
-            if (zoomTarget) _applyZoomWithRetry(zoomTarget);
           });
         } else {
           _isFetching = false;
@@ -711,7 +745,7 @@
         try {
           chart.timeScale().subscribeVisibleLogicalRangeChange(function(range) {
             if (_vwapDrawing) return;
-            if (range) console.log('[RANGE CHANGE]', JSON.stringify(range), (new Error()).stack.split('\n')[2] || '');
+            if (range) console.log('[RANGE CHANGE]', JSON.stringify(range), (new Error()).stack.split('\n').slice(1,4).join(' | '));
           });
         } catch(e) {}
       })
