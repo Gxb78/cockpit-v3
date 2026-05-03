@@ -394,7 +394,7 @@
           timeVisible: true,
           secondsVisible: false,
           borderVisible: false,
-          rightOffset: 8,
+          rightOffset: 15,
           shiftVisibleRangeOnNewBar: true,
         },
         handleScroll: { vertTouchDrag: true, horzTouchDrag: true, pressedMouseMove: true },
@@ -1091,7 +1091,7 @@
           // Premier chargement : centrer sur les dernieres bougies
           var total = candles.length;
           var firstTotal = total;
-          _applyZoomWithRetry({ from: Math.max(0, total - 80), to: total + 8 });
+          _applyZoomWithRetry({ from: Math.max(0, total - 100), to: total + 15 });
           // One-shot: LWC notifie quand le layout est pret → on re-applique pour confirmation
           var _zoomHandler = function() {
             if (chart && chart.timeScale()) {

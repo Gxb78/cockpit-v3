@@ -517,7 +517,7 @@
           borderColor: isLight ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.08)',
           timeVisible: true,
           secondsVisible: false,
-          rightOffset: 8,
+          rightOffset: 15,
           shiftVisibleRangeOnNewBar: true,
         },
         handleScroll: { vertTouchDrag: true, horzTouchDrag: true, pressedMouseMove: true },
@@ -661,7 +661,7 @@
           _applyZoomWithRetry(savedTarget);
         } else if (!keepZoom) {
           var total = candles.length;
-          _applyZoomWithRetry({ from: Math.max(0, total - 80), to: total + 8 });
+          _applyZoomWithRetry({ from: Math.max(0, total - 100), to: total + 15 });
         }
         setTimeout(function() {
           try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
