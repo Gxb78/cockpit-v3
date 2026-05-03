@@ -16934,3 +16934,37 @@ body.light-mode .draw-toolbar-btn::after {
 body.light-mode .draw-toolbar--inline {
   background: var(--surface-solid);
 }
+
+/* ── Lock toggle ── */
+.draw-opt-row--lock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
+.draw-lock-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.draw-lock-btn:hover {
+  background: var(--surface-hover);
+  border-color: #06b6d4;
+}
+
+.draw-lock-btn[data-locked="true"] {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: #f59e0b;
+}

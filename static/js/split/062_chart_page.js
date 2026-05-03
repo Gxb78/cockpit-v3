@@ -457,10 +457,8 @@
   // ── DRAWING TOOLS ──
 
   function _initDrawingTools() {
-    var chartEl = document.getElementById('chartCanvas');
-    if (!chartEl || !window.ChartDrawings) return;
-    chartEl.style.position = 'relative';
-    chartEl.style.overflow = 'hidden';
+    var wrap = document.getElementById('chartCanvasWrap');
+    if (!wrap || !window.ChartDrawings) return;
 
     // Create toolbar buttons
     var toolbar = document.getElementById('drawToolbar');
@@ -519,15 +517,15 @@
 
     // Init drawing engine
     var isLight = document.body.classList.contains('light-mode');
-    window.ChartDrawings.init(chart, candlestickSeries, chartEl, isLight);
+    window.ChartDrawings.init(chart, candlestickSeries, wrap, isLight);
   }
 
   // ── VOLUME PROFILE ──
 
   function _initVolumeProfile() {
-    var chartEl = document.getElementById('chartCanvas');
-    if (!chartEl || !window.VolumeProfile) return;
-    window.VolumeProfile.init(chart, candlestickSeries, chartEl);
+    var wrap = document.getElementById('chartCanvasWrap');
+    if (!wrap || !window.VolumeProfile) return;
+    window.VolumeProfile.init(chart, candlestickSeries, wrap);
   }
 
   // ── VWAP ──

@@ -70,6 +70,7 @@
     selectedIndex: -1, // -1 = none, >=0 = editing an existing drawing
     snapEnabled: false, // false = snap actif (OHLC) — cf. _snapPoint inverse
     _crosshairPos: null, // position souris pour crosshair canvas
+    _drag: null, // drag state: { idx, startTime, startPrice, pointIdx }
     toolOptions: {
       color: '#06b6d4', fillColor: '#06b6d4', opacity: 0.3,
       lineWidth: 1.5, lineStyle: 'solid',
@@ -140,17 +141,19 @@
     ).filter(function (c) {
       return c !== state.canvas && !c.classList.contains('draw-overlay');
     });
+    console.log('[draw] _getLwcPaneRect canvases found:', canvases.length, 'overlay:', !!state.canvas);
     if (!canvases.length) return null;
     var best = null, bestArea = 0;
     for (var i = 0; i < canvases.length; i++) {
       var r = canvases[i].getBoundingClientRect();
       var area = r.width * r.height;
+      console.log('[draw] canvas', i, 'size:', r.width, 'x', r.height, 'area:', area);
       if (r.width > 100 && r.height > 100 && area > bestArea) {
         best = r; bestArea = area;
       }
     }
     if (!best) return null;
-    return {
+    var result = {
       left: best.left - containerRect.left,
       top: best.top - containerRect.top,
       width: best.width,
@@ -158,6 +161,8 @@
       absLeft: best.left,
       absTop: best.top,
     };
+    console.log('[draw] pane rect:', JSON.stringify(result), 'container rect:', JSON.stringify({left: containerRect.left, top: containerRect.top, w: containerRect.width, h: containerRect.height}));
+    return result;
   }
 
   // ── COORDINATES ──
@@ -248,6 +253,7 @@
       extendLeft: o.extendLeft, extendRight: o.extendRight,
       text: o.text || '',
       fibLevels: type === 'fibonacci' ? Object.assign({}, o.fibLevels) : null,
+      locked: false,
       createdAt: Date.now(),
     };
     return d;
@@ -383,13 +389,34 @@
     state.canvas.style.cursor = state.activeTool === 'cursor' ? '' : 'crosshair';
   }
 
-  // ── OPTIONS UI ──
+  // ── LOCK TOGGLE ──
+
+  function _syncLockButton(d) {
+    var btn = document.getElementById('drawLockToggle');
+    if (!btn) return;
+    var locked = d && d.locked;
+    btn.textContent = locked ? '🔒' : '🔓';
+    btn.title = locked ? 'Déverrouiller le dessin' : 'Verrouiller le dessin (clic traverse vers le chart)';
+    btn.dataset.locked = locked ? 'true' : 'false';
+  }
+
+  function _toggleLock() {
+    if (state.selectedIndex < 0 || state.selectedIndex >= state.drawings.length) return;
+    var d = state.drawings[state.selectedIndex];
+    d.locked = !d.locked;
+    _saveDrawings();
+    _syncLockButton(d);
+    _renderAll();
+    toast('Dessin ' + (d.locked ? 'verrouillé' : 'déverrouillé'), 'info');
+  }
+
+  // ── / LOCK TOGGLE
 
   function _syncOptionsUI() {
     ['drawOptionsPanel', 'drawOptionsPanelWidget'].forEach(function (id) {
       var panel = document.getElementById(id);
       if (panel) {
-        if (state.activeTool === 'cursor') { panel.classList.add('hidden'); }
+        if (state.activeTool === 'cursor' && state.selectedIndex < 0) { panel.classList.add('hidden'); }
         else { panel.classList.remove('hidden'); }
       }
     });
@@ -405,8 +432,13 @@
     _setChecked('drawExtRight', state.toolOptions.extendRight);
     _setVal('drawText', state.toolOptions.text);
 
-    // Row visibility
+    // Row visibility : selon le tool actif OU le dessin selectionne
     var tool = state.activeTool;
+    if (tool === 'cursor' && state.selectedIndex >= 0) {
+      // Utiliser le type du dessin selectionne
+      var sel = state.drawings[state.selectedIndex];
+      if (sel) tool = sel.type;
+    }
     _showEl('drawExtRow', tool === 'trendline');
     _showEl('drawTextRow', tool === 'text' || tool === 'trendline' || tool === 'horizontal' || tool === 'horizontalray' || tool === 'vertical' || tool === 'box');
     _showEl('drawFillRow', tool === 'box');
@@ -427,6 +459,7 @@
           this.classList.add('is-active');
           state.toolOptions.color = c;
           _setVal('drawColorPick', c);
+          _readOptionsFromUI();
         });
         swatches.appendChild(sw);
       });
@@ -548,40 +581,121 @@
     state.canvas.addEventListener('mouseleave', _onMouseLeave);
     state.canvas.addEventListener('dblclick', _onDblClick);
 
-    // Click handler sur le conteneur pour hit-test en mode curseur
-    if (state.container) {
-      state.container.addEventListener('click', function (e) {
-        if (state.activeTool === 'cursor') {
+      // Click handler sur le conteneur pour hit-test en mode curseur
+      if (state.container) {
+        // Mousedown en phase CAPTURE pour intercepter avant LWC
+        state.container.addEventListener('mousedown', function (e) {
+          if (state.activeTool !== 'cursor' || e.button !== 0) return;
+          if (e.target.closest('#drawOptionsPanel, #drawOptionsPanelWidget')) return;
+          var tp = _toTimePrice(e.clientX, e.clientY);
+          if (!tp) return;
+          var hitIdx = _hitTestIndex(tp.time, tp.price);
+          if (hitIdx >= 0 && !state.drawings[hitIdx].locked) {
+            e.stopPropagation();
+            e.preventDefault();
+            // Detecter si le clic est sur une extremite (resize) ou le corps (deplacer)
+            var dragPointIdx = -1; // -1 = deplacement complet
+            var d = state.drawings[hitIdx];
+            if (d.points && tp) {
+              var cpx = _toPixel(tp.time, tp.price);
+              if (cpx) {
+                for (var p = 0; p < Math.min(d.points.length, 2); p++) {
+                  var ppx = _toPixel(d.points[p].time, d.points[p].price);
+                  if (ppx) {
+                    var dist = Math.sqrt((cpx.x - ppx.x) * (cpx.x - ppx.x) + (cpx.y - ppx.y) * (cpx.y - ppx.y));
+                    if (dist < 15) { dragPointIdx = p; break; }
+                  }
+                }
+              }
+            }
+            state._drag = { idx: hitIdx, startTime: tp.time, startPrice: tp.price, pointIdx: dragPointIdx };
+            if (state.canvas) state.canvas.style.cursor = 'grabbing';
+          }
+        }, { capture: true });
+
+        state.container.addEventListener('mouseup', function (e) {
+          if (state._drag) {
+            // Drag termine : sauvegarder
+            _saveDrawings();
+            state._drag = null;
+            state.canvas.style.cursor = state.activeTool === 'cursor' ? '' : 'crosshair';
+            _scheduleStop();
+          }
+        });
+
+        state.container.addEventListener('click', function (e) {
+          if (state.activeTool !== 'cursor') return;
+          // Ne pas interferer avec les clics dans le panneau d'options
+          if (e.target.closest('#drawOptionsPanel, #drawOptionsPanelWidget')) return;
+          // Ignorer si on vient de draguer
+          if (state._drag) return;
           var tp = _toTimePrice(e.clientX, e.clientY);
           if (tp) {
             var hitIdx = _hitTestIndex(tp.time, tp.price);
             if (hitIdx >= 0) {
               e.stopPropagation();
               _selectDrawing(hitIdx);
+            } else {
+              _deselectDrawing();
             }
+          } else {
+            _deselectDrawing();
           }
-        }
-      });
-      // Fallback: document-level click si le container ne capte pas
-      document.addEventListener('click', function (e) {
-        if (state.activeTool !== 'cursor') return;
-        if (!state.container || !state.container.contains(e.target)) return;
-        var tp = _toTimePrice(e.clientX, e.clientY);
-        console.log('[drawings] cursor click', e.clientX, e.clientY, tp);
-        if (tp) {
-          var hitIdx = _hitTestIndex(tp.time, tp.price);
-          console.log('[drawings] hitIdx', hitIdx);
-          if (hitIdx >= 0) {
-            e.stopPropagation();
-            _selectDrawing(hitIdx);
+        });
+        // Fallback: document-level click si le container ne capte pas
+        document.addEventListener('click', function (e) {
+          if (state.activeTool !== 'cursor') return;
+          if (!state.container || !state.container.contains(e.target)) return;
+          // Ne pas interferer avec les clics dans le panneau d'options
+          if (e.target.closest('#drawOptionsPanel, #drawOptionsPanelWidget')) return;
+          var tp = _toTimePrice(e.clientX, e.clientY);
+          if (tp) {
+            var hitIdx = _hitTestIndex(tp.time, tp.price);
+            if (hitIdx >= 0) {
+              e.stopPropagation();
+              _selectDrawing(hitIdx);
+            } else {
+              _deselectDrawing();
+            }
+          } else {
+            _deselectDrawing();
           }
-        }
-      });
-    }
+        });
+      }
 
     // Render loop synchro parfaite pendant interaction souris
     if (state.container) {
-      state.container.addEventListener('mousemove', function () {
+      state.container.addEventListener('mousemove', function (e) {
+        // Drag: deplacer le dessin selectionne
+        if (state._drag) {
+          var tp = _toTimePrice(e.clientX, e.clientY);
+          if (tp) {
+            var d = state.drawings[state._drag.idx];
+            if (d && d.points) {
+              var dTime = tp.time - state._drag.startTime;
+              var dPrice = tp.price - state._drag.startPrice;
+              if (state._drag.pointIdx >= 0) {
+                // Resize : ne deplacer qu'un seul point
+                var p = state._drag.pointIdx;
+                d.points[p] = {
+                  time: d.points[p].time + dTime,
+                  price: d.points[p].price + dPrice,
+                };
+              } else {
+                // Deplacement complet : tous les points
+                for (var p = 0; p < d.points.length; p++) {
+                  d.points[p] = {
+                    time: d.points[p].time + dTime,
+                    price: d.points[p].price + dPrice,
+                  };
+                }
+              }
+              state._drag.startTime = tp.time;
+              state._drag.startPrice = tp.price;
+              _renderAll();
+            }
+          }
+        }
         _startRenderLoop();
         _scheduleStop();
       }, { passive: true });
@@ -612,8 +726,18 @@
     document.addEventListener('click', function (e) {
       if (e.target.id === 'drawTemplateSave') _onTemplateSave();
       if (e.target.id === 'drawTemplateDelete') _onTemplateDelete();
+      if (e.target.id === 'drawTypeBtn') _onDrawTypeBtn();
+      if (e.target.id === 'drawLockToggle') _toggleLock();
     });
 
+    // Mouseup global pour finaliser le drag meme hors container
+    document.addEventListener('mouseup', function () {
+      if (state._drag) {
+        _saveDrawings();
+        state._drag = null;
+        if (state.canvas) state.canvas.style.cursor = state.activeTool === 'cursor' ? '' : 'crosshair';
+      }
+    });
     // Keyboard: Ctrl+Z for undo + Escape to deselect
     document.addEventListener('keydown', function (e) {
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
@@ -749,6 +873,13 @@
       });
     }
     _syncOptionsUI();
+    // Forcer l'affichage du panneau d'options meme en mode curseur
+    ['drawOptionsPanel', 'drawOptionsPanelWidget'].forEach(function (id) {
+      var panel = document.getElementById(id);
+      if (panel) panel.classList.remove('hidden');
+    });
+    // Sync lock button
+    _syncLockButton(d);
     _renderAll();
     if (typeof toast === 'function') toast('Dessin sélectionné — modifie les options en direct', 'info');
   }
@@ -757,6 +888,9 @@
     if (state.selectedIndex < 0) return;
     state.selectedIndex = -1;
     _syncOptionsUI();
+    // Reset lock button
+    var btn = document.getElementById('drawLockToggle');
+    if (btn) { btn.textContent = '🔓'; btn.dataset.locked = 'false'; btn.title = 'Verrouiller le dessin (clic traverse vers le chart)'; }
     _renderAll();
   }
 
@@ -856,19 +990,113 @@
 
   function _hitTestIndex(time, price) {
     var threshold = 10;
-    var tx = state.chart.timeScale().timeToCoordinate(time);
-    var ty = state.series.priceToCoordinate(price);
-    if (tx == null || ty == null) return -1;
+    var clickPx = _toPixel(time, price);
+    if (!clickPx) return -1;
+    var cx = clickPx.x, cy = clickPx.y;
     for (var i = state.drawings.length - 1; i >= 0; i--) {
       var d = state.drawings[i];
       if (!d.points || !d.points[0]) continue;
+
+      // Toujours tester les endpoints (points d'extremite)
       for (var p = 0; p < Math.min(d.points.length, 2); p++) {
         var px = _toPixel(d.points[p].time, d.points[p].price);
         if (!px) continue;
-        if (Math.sqrt((tx - px.x) * (tx - px.x) + (ty - px.y) * (ty - px.y)) < threshold) return i;
+        var dist = Math.sqrt((cx - px.x) * (cx - px.x) + (cy - px.y) * (cy - px.y));
+        if (dist < threshold) return i;
+      }
+
+      // Si locke : seulement les endpoints, pas les segments/aires
+      if (d.locked) continue;
+
+      // Hit-test par type (segments de ligne, aires)
+      switch (d.type) {
+        case 'box':
+          // Unlock: integre (tout le rectangle). Lock: seulement endpoints (deja teste plus haut)
+          if (!d.locked && d.points.length >= 2) {
+            var p1 = _toPixel(d.points[0].time, d.points[0].price);
+            var p2 = _toPixel(d.points[1].time, d.points[1].price);
+            if (p1 && p2) {
+              var bX1 = Math.min(p1.x, p2.x), bY1 = Math.min(p1.y, p2.y);
+              var bX2 = Math.max(p1.x, p2.x), bY2 = Math.max(p1.y, p2.y);
+              // Marge 10px autour pour le confort
+              if (cx >= bX1 - 10 && cx <= bX2 + 10 && cy >= bY1 - 10 && cy <= bY2 + 10) return i;
+            }
+          }
+          break;
+
+        case 'trendline':
+          if (d.points.length >= 2) {
+            var p1 = _toPixel(d.points[0].time, d.points[0].price);
+            var p2 = _toPixel(d.points[1].time, d.points[1].price);
+            if (p1 && p2) {
+              var cw = state.canvas ? state.canvas.width / (window.devicePixelRatio || 1) : 0;
+              var x1 = p1.x, y1 = p1.y, x2 = p2.x, y2 = p2.y;
+              if (d.extendLeft) { var tL = (0 - x1) / (x2 - x1 || 1); x1 = 0; y1 = y1 + (y2 - y1) * tL; }
+              if (d.extendRight) { var tR = (cw - x1) / (x2 - x1 || 1); x2 = cw; y2 = y1 + (y2 - y1) * tR; }
+              if (_distToSegment(cx, cy, x1, y1, x2, y2) < threshold) return i;
+            }
+          }
+          break;
+
+        case 'horizontal':
+        case 'horizontalray':
+          {
+            var px = _toPixel(d.points[0].time, d.points[0].price);
+            if (px) {
+              var cw = state.canvas ? state.canvas.width / (window.devicePixelRatio || 1) : 0;
+              var rx1 = d.type === 'horizontal' ? 0 : px.x;
+              var rx2 = cw;
+              if (Math.abs(cy - px.y) < threshold && cx >= rx1 - threshold && cx <= rx2 + threshold) return i;
+            }
+          }
+          break;
+
+        case 'vertical':
+          {
+            var px = _toPixel(d.points[0].time, d.points[0].price);
+            if (px) {
+              var ch = state.canvas ? state.canvas.height / (window.devicePixelRatio || 1) : 0;
+              if (Math.abs(cx - px.x) < threshold && cy >= -threshold && cy <= ch + threshold) return i;
+            }
+          }
+          break;
+
+        case 'fibonacci':
+          if (d.points.length >= 2) {
+            var p1 = _toPixel(d.points[0].time, d.points[0].price);
+            var p2 = _toPixel(d.points[1].time, d.points[1].price);
+            if (p1 && p2) {
+              if (_distToSegment(cx, cy, p1.x, p1.y, p2.x, p2.y) < threshold) return i;
+              var price1 = d.points[0].price, price2 = d.points[1].price, diff = price2 - price1;
+              var fibKeys = d.fibLevels || {};
+              for (var f = 0; f < FIB_LEVELS.length; f++) {
+                var l = FIB_LEVELS[f];
+                if (fibKeys[l.key] === false) continue;
+                var fPrice = price1 + diff * l.key;
+                var fp = _toPixel(d.points[0].time, fPrice);
+                if (!fp) continue;
+                if (Math.abs(cy - fp.y) < threshold) return i;
+              }
+            }
+          }
+          break;
+
+        case 'text':
+          // Deja teste via endpoints (un seul point)
+          break;
       }
     }
     return -1;
+  }
+
+  // Distance d'un point (px,py) a un segment (x1,y1)-(x2,y2)
+  function _distToSegment(px, py, x1, y1, x2, y2) {
+    var dx = x2 - x1, dy = y2 - y1;
+    var lenSq = dx * dx + dy * dy;
+    if (lenSq === 0) return Math.sqrt((px - x1) * (px - x1) + (py - y1) * (py - y1));
+    var t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq));
+    var nearX = x1 + t * dx, nearY = y1 + t * dy;
+    return Math.sqrt((px - nearX) * (px - nearX) + (py - nearY) * (py - nearY));
   }
 
   // ── RENDER ──
@@ -885,7 +1113,7 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     _renderSessions();
-    for (var i = 0; i < state.drawings.length; i++) { _renderDrawing(state.drawings[i], i); _drawSelectionIndicators(state.drawings[i], i); }
+    for (var i = 0; i < state.drawings.length; i++) { _renderDrawing(state.drawings[i], i); _drawSelectionIndicators(state.drawings[i], i); _drawLockIcon(state.drawings[i], i); _drawLockedDots(state.drawings[i], i); }
     if (state.dragStart && state.previewPoint && state.activeTool !== 'cursor') {
       _renderPreview(state.activeTool, state.dragStart, state.previewPoint);
     }
@@ -910,6 +1138,40 @@
       // Inner dot
       ctx.beginPath(); ctx.arc(px.x, px.y, 3, 0, Math.PI * 2);
       ctx.fillStyle = '#06b6d4'; ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function _drawLockIcon(d, index) {
+    if (!d.locked || !d.points || !d.points[0]) return;
+    var px = _toPixel(d.points[0].time, d.points[0].price);
+    if (!px) return;
+    var ctx = state.ctx;
+    ctx.save();
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = '#f59e0b';
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 4;
+    ctx.fillText('🔒', px.x, px.y - 8);
+    ctx.restore();
+  }
+
+  // Points d'extremite visibles pour les dessins lockes (pour pouvoir les selectionner)
+  function _drawLockedDots(d, index) {
+    if (!d.locked || !d.points) return;
+    if (index === state.selectedIndex) return; // deja dessine par _drawSelectionIndicators
+    var ctx = state.ctx;
+    ctx.save();
+    for (var p = 0; p < Math.min(d.points.length, 2); p++) {
+      var px = _toPixel(d.points[p].time, d.points[p].price);
+      if (!px) continue;
+      ctx.beginPath(); ctx.arc(px.x, px.y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = d.color || '#06b6d4';
+      ctx.globalAlpha = 0.5;
+      ctx.fill();
+      ctx.globalAlpha = 1;
     }
     ctx.restore();
   }
@@ -1050,7 +1312,7 @@
   function _getDash(style) { for (var i = 0; i < LINE_STYLES.length; i++) { if (LINE_STYLES[i].id === style) return LINE_STYLES[i].dash; } return []; }
   function _getAlpha(d) { var a = parseFloat(d.opacity); return (a >= 0 && a <= 1) ? a : 0.3; }
 
-  function _drawBox(points, d) {
+  function _drawBox(points, d, index) {
     if (points.length < 2) return;
     var ctx = state.ctx;
     var p1 = _toPixel(points[0].time, points[0].price);
@@ -1071,15 +1333,17 @@
     ctx.lineWidth = d.lineWidth || 1.5;
     ctx.setLineDash(_getDash(d.lineStyle));
     ctx.strokeRect(x, y, w, h);
-    // Dots
-    _drawDot(p1.x, p1.y, d.color);
-    _drawDot(p2.x, p2.y, d.color);
+    // Dots (seulement si selectionne)
+    if (index === state.selectedIndex) {
+      _drawDot(p1.x, p1.y, d.color);
+      _drawDot(p2.x, p2.y, d.color);
+    }
     // Label
     if (d.text) _drawLabel(p2.x + 6, p1.y - 4, d.text, d.color);
     ctx.restore();
   }
 
-  function _drawLine(points, d) {
+  function _drawLine(points, d, index) {
     if (points.length < 2) return;
     var ctx = state.ctx;
     var p1 = _toPixel(points[0].time, points[0].price);
@@ -1104,7 +1368,9 @@
 
     ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
     ctx.globalAlpha = 1;
-    _drawDot(p1.x, p1.y, d.color); _drawDot(p2.x, p2.y, d.color);
+    if (index === state.selectedIndex) {
+      _drawDot(p1.x, p1.y, d.color); _drawDot(p2.x, p2.y, d.color);
+    }
     if (d.text) _drawLabel(p2.x + 6, p2.y - 6, d.text, d.color);
     ctx.restore();
   }
@@ -1128,7 +1394,7 @@
     ctx.restore();
   }
 
-  function _drawHorizRay(point, d) {
+  function _drawHorizRay(point, d, index) {
     var ctx = state.ctx;
     var px = _toPixel(point.time, point.price);
     if (!px) return;
@@ -1145,11 +1411,11 @@
     ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
     ctx.fillText(point.price.toFixed(2), px.x + 6, px.y - 6);
     if (d.text) ctx.fillText(d.text, px.x + 6, px.y + 14);
-    _drawDot(px.x, px.y, d.color);
+    if (index === state.selectedIndex) _drawDot(px.x, px.y, d.color);
     ctx.restore();
   }
 
-  function _drawVertLine(point, d) {
+  function _drawVertLine(point, d, index) {
     var ctx = state.ctx;
     var px = _toPixel(point.time, point.price);
     if (!px) return;
@@ -1163,11 +1429,11 @@
     ctx.fillStyle = d.color; ctx.font = '10px "JetBrains Mono", monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     ctx.fillText(d.text || '', px.x, ch - 4);
-    _drawDot(px.x, 0, d.color);
+    if (index === state.selectedIndex) _drawDot(px.x, 0, d.color);
     ctx.restore();
   }
 
-  function _drawFibonacci(d) {
+  function _drawFibonacci(d, index) {
     var points = d.points;
     if (points.length < 2) return;
     var ctx = state.ctx;
@@ -1203,11 +1469,13 @@
       ctx.restore();
     }
 
-    _drawDot(p1.x, p1.y, d.color); _drawDot(p2.x, p2.y, d.color);
+    if (index === state.selectedIndex) {
+      _drawDot(p1.x, p1.y, d.color); _drawDot(p2.x, p2.y, d.color);
+    }
     ctx.restore();
   }
 
-  function _drawText(point, d) {
+  function _drawText(point, d, index) {
     var ctx = state.ctx;
     var px = _toPixel(point.time, point.price);
     if (!px) return;
@@ -1218,7 +1486,7 @@
     ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
     ctx.fillText(d.text || 'Texte', px.x + 6, px.y - 6);
     ctx.globalAlpha = 1;
-    _drawDot(px.x, px.y, d.color);
+    if (index === state.selectedIndex) _drawDot(px.x, px.y, d.color);
     ctx.restore();
   }
 
