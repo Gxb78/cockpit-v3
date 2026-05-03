@@ -50,6 +50,9 @@ function updateJournalRangeToggleUI() {
   const showCustom = state.journalViewMode === "month" && state.journalRangeMode === "custom";
   if (customWrap) customWrap.classList.toggle("hidden", !showCustom);
 
+  const quickWrap = $("#calendarQuickRange");
+  if (quickWrap) quickWrap.classList.toggle("hidden", !showCustom);
+
   const customLabel = $("#calendarCustomLabel");
   if (customLabel) {
     const from = state.journalCustomFrom || "";

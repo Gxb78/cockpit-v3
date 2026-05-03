@@ -4,6 +4,14 @@
   font-size: 12px;
   font-style: italic;
 }
+
+/* Drag to reorder chips */
+.settings-chip[draggable="true"] { cursor: grab; }
+.settings-chip[draggable="true"]:active { cursor: grabbing; }
+.settings-chip.dragging { opacity: 0.4; }
+.settings-chip.drag-over { border-color: var(--accent, #38d3ee); background: color-mix(in srgb, var(--accent, #38d3ee) 10%, transparent); }
+.settings-chip-drag { pointer-events: none; }
+
 .settings-switch {
   display: flex;
   align-items: center;

@@ -26,6 +26,7 @@ _PART_FILES = [
     "15_parse_trade.py",            # 15 — parseur de narration trading
     "16_export.py",                 # 16 — export des donnees
     "17_backups.py",                # 17 — sauvegarde automatique
+    "17_reset.py",                  # 17 — reset toutes les donnees (danger zone)
     "18_launcher.py",               # 18 — point d entree serveur
     "19_ai_chat.py",                # 19 — IA chat DeepSeek
     "20_ml_engine.py",              # 20 — ML Engine : apprentissage automatique

@@ -369,6 +369,9 @@
   color: var(--text);
   letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .jfilter-stats-label {

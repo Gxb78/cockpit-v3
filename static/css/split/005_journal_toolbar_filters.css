@@ -4,8 +4,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 8px 14px;
+  gap: 8px;
+  padding: 6px 12px;
   background: var(--surface, #fff);
   border: 1px solid var(--border-soft, #eef1f6);
   border-radius: var(--r-lg, 22px);
@@ -110,12 +110,12 @@
 
 /* Today button */
 .journal-today-btn {
-  height: 30px;
-  padding: 0 14px;
+  height: 28px;
+  padding: 0 10px;
   border-radius: 999px;
-  font-size: 12px;
-  font-weight: 850;
-  letter-spacing: 0.4px;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.3px;
   background: #08090c;
   color: #fff;
   border: 0;
@@ -139,43 +139,45 @@
   flex-shrink: 0;
 }
 
-/* View / Layout / Range toggles */
+/* View / Layout / Range toggles — version allegee */
 .calendar-view-toggle,
 .calendar-layout-toggle,
 .calendar-range-toggle {
   display: inline-flex;
-  gap: 1px;
-  border: 1px solid var(--border, #e3e7ee);
-  border-radius: 999px;
-  overflow: hidden;
-  background: #f4f6f9;
+  gap: 2px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
 }
 
 .calendar-view-btn,
 .calendar-layout-btn,
 .calendar-range-btn {
   font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
   text-transform: uppercase;
-  padding: 5px 12px;
+  padding: 4px 8px;
   border: 0;
+  border-radius: 6px;
   background: transparent;
-  color: #626b7a;
+  color: #98a1af;
   cursor: pointer;
   transition: background 0.14s, color 0.14s;
 }
 .calendar-view-btn.active,
 .calendar-layout-btn.active,
 .calendar-range-btn.active {
-  background: #fff;
+  background: rgba(0,0,0,0.04);
   color: #10131b;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  box-shadow: none;
 }
 .calendar-view-btn:hover,
 .calendar-layout-btn:hover,
 .calendar-range-btn:hover {
   color: #10131b;
+  background: rgba(0,0,0,0.02);
 }
 
 /* Quick range presets */
@@ -203,73 +205,75 @@
 
 /* ---------- Month picker popover ---------- */
 
-.calendar-month-picker {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-#monthLabel {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 800;
-  color: #626b7a;
-  letter-spacing: -0.01em;
-}
-
-.month-pop {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 100;
-  background: var(--surface, #fff);
-  border: 1px solid var(--border, #e3e7ee);
-  border-radius: var(--r-sm, 12px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.10);
-  padding: 10px;
-  min-width: 180px;
-}
-.month-pop.hidden { display: none; }
-
-.month-pop-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-.month-pop-year {
-  font-size: 13px;
-  font-weight: 800;
-  font-family: "JetBrains Mono", monospace;
-}
-.month-year-btn {
-  width: 28px; height: 28px;
+/* Journal night mode */
+.journal-night-btn {
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  border: 0;
+  border: 1px solid var(--border, #e3e7ee);
   background: transparent;
   cursor: pointer;
   display: grid;
   place-items: center;
+  font-size: 13px;
+  line-height: 1;
+  color: #98a1af;
+  transition: all 0.14s;
+  flex-shrink: 0;
 }
-.month-year-btn:hover { background: rgba(0,0,0,0.05); }
+.journal-night-btn:hover {
+  background: rgba(0,0,0,0.04);
+  color: #10131b;
+}
+.journal-night-btn.active {
+  background: #08090c;
+  color: #ffd166;
+  border-color: #08090c;
+}
 
-.month-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 3px;
+/* Night mode overrides */
+.page[data-page="journal"].journal-night .journal-page-head {
+  border-color: rgba(255,255,255,0.06);
+  background: rgba(0,0,0,0.15);
 }
-.month-btn {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 5px;
-  border-radius: 6px;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  transition: background 0.1s;
+.page[data-page="journal"].journal-night .journal-nav-inline .btn-icon {
+  border-color: rgba(255,255,255,0.06);
+  color: #6b7ba0;
 }
-.month-btn:hover { background: rgba(0,0,0,0.05); }
-.month-btn.active { background: #08090c; color: #fff; }
+.page[data-page="journal"].journal-night .calendar-view-btn,
+.page[data-page="journal"].journal-night .calendar-layout-btn,
+.page[data-page="journal"].journal-night .calendar-range-btn {
+  color: #4a5568;
+}
+.page[data-page="journal"].journal-night .calendar-view-btn.active,
+.page[data-page="journal"].journal-night .calendar-layout-btn.active,
+.page[data-page="journal"].journal-night .calendar-range-btn.active {
+  background: rgba(255,255,255,0.06);
+  color: #b0c4de;
+}
+.page[data-page="journal"].journal-night .jfilter-stats-value {
+  color: #b0c4de;
+}
+.page[data-page="journal"].journal-night .jfilter-stats-label {
+  color: #4a5568;
+}
+.page[data-page="journal"].journal-night .journal-filter-field select,
+.page[data-page="journal"].journal-night .journal-filter-field input {
+  background: rgba(0,0,0,0.2);
+  border-color: rgba(255,255,255,0.06);
+  color: #b0c4de;
+}
+.page[data-page="journal"].journal-night .journal-filters {
+  background: rgba(0,0,0,0.1);
+  border-color: rgba(255,255,255,0.04);
+}
+.page[data-page="journal"].journal-night .journal-filter-reset {
+  color: #4a5568;
+  border-color: rgba(255,255,255,0.06);
+}
+.page[data-page="journal"].journal-night .journal-filter-stats-label {
+  color: #4a5568;
+}
 
 /* ---------- Journal filters ---------- */
 
@@ -381,6 +385,9 @@
   font-weight: 850;
   font-family: "JetBrains Mono", monospace;
   color: #10131b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .jfilter-stats-value.pos { color: #20570b; }
 .jfilter-stats-value.neg { color: #8a1429; }

@@ -988,9 +988,9 @@
 
     var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=500';
     fetch(url)
-      .then(function (r) { return r.json(); })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
-        if (data.error) { console.error('[chart]', data.error); return; }
+        if (data.error) { console.error('[chart]', data.error); toast(data.error, 'error'); return; }
         var candles = data.candles || [];
         if (!candles.length) return;
         _lastCandles = candles;

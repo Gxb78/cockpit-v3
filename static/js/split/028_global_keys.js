@@ -19,7 +19,7 @@ function bindGlobalKeys() {
     if (!meta && !e.altKey) {
       if (e.key === "t" || e.key === "T") { e.preventDefault(); goPage("today"); }
       if (e.key === "j" || e.key === "J") { e.preventDefault(); goPage("journal"); }
-      if (e.key === "s" || e.key === "S") { e.preventDefault(); goPage("stats"); }
+      
       if (e.key === "g" || e.key === "G") { e.preventDefault(); goPage("settings"); }
       if (e.key === "c" || e.key === "C") { e.preventDefault(); goPage("chart"); }
       if (e.key === "/") {

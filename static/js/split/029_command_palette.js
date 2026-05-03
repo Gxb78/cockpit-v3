@@ -84,7 +84,7 @@ function buildCmdkItems(query) {
     { kind:"action", label:"Journal (calendrier)",          icon:"cal",  run:()=>{ closeCmdk(); goPage("journal"); }},
     { kind:"action", label:"Journal en vue semaine",        icon:"cal",  run:()=>{ closeCmdk(); goPage("journal"); setJournalViewMode("week", { persist:true, reload:true }); }},
     { kind:"action", label:"Journal en vue mois",           icon:"cal",  run:()=>{ closeCmdk(); goPage("journal"); setJournalViewMode("month", { persist:true, reload:true }); }},
-    { kind:"action", label:"Voir les Stats",                icon:"chart",run:()=>{ closeCmdk(); goPage("stats"); }},
+    
     { kind:"action", label:"Ouvrir Settings",               icon:"gear", run:()=>{ closeCmdk(); goPage("settings"); }},
     { kind:"action", label:"Exporter en JSON",              icon:"down", run:()=>{ closeCmdk(); $("#exportBtn").click(); }},
   ];

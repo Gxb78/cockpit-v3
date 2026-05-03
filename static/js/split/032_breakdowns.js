@@ -236,6 +236,14 @@ function renderPeriodCompare(periodCompare) {
 
   curPnl.textContent = cur.pnl != null ? fmtMoney(cur.pnl) : "\u2014";
   prevPnl.textContent = prev.pnl != null ? fmtMoney(prev.pnl) : "\u2014";
+
+  // Delta avec fleche et couleur
+  var deltaVal = Number(delta.pnl || 0);
+  var deltaArrow = $("#periodDeltaArrow");
+  if (delta.pnl != null && deltaArrow) {
+    deltaArrow.textContent = deltaVal > 0 ? "\u25B2" : deltaVal < 0 ? "\u25BC" : "\u2014";
+    deltaArrow.className = "period-delta-arrow " + (deltaVal > 0 ? "pos" : deltaVal < 0 ? "neg" : "");
+  }
   deltaPnl.textContent = delta.pnl != null ? fmtMoney(delta.pnl) : "\u2014";
 
   setSignedClass(curPnl, Number(cur.pnl || 0));
@@ -245,11 +253,17 @@ function renderPeriodCompare(periodCompare) {
   curMeta.textContent = `${Number(cur.num_trades || 0)} trade${Number(cur.num_trades || 0) > 1 ? "s" : ""} - ${(Number(cur.winrate || 0)).toFixed(0)}%`;
   prevMeta.textContent = `${Number(prev.num_trades || 0)} trade${Number(prev.num_trades || 0) > 1 ? "s" : ""} - ${(Number(prev.winrate || 0)).toFixed(0)}%`;
 
+  // Delta meta: pourcentage, fleche, trades, winrate
+  var pnlPct = "";
+  if (cur.pnl != null && prev.pnl != null && Number(prev.pnl) !== 0) {
+    var pct = ((Number(cur.pnl) - Number(prev.pnl)) / Math.abs(Number(prev.pnl))) * 100;
+    pnlPct = (pct > 0 ? "+" : "") + pct.toFixed(1) + "%";
+  }
   const tradesDelta = Number(delta.num_trades || 0);
   const wrDelta = Number(delta.winrate || 0);
   const wrPrefix = wrDelta > 0 ? "+" : "";
-  deltaMeta.textContent = `${tradesDelta > 0 ? "+" : ""}${tradesDelta} trade${Math.abs(tradesDelta) > 1 ? "s" : ""} - ${wrPrefix}${wrDelta.toFixed(1)} pts`;
-  setSignedClass(deltaMeta, Number(delta.pnl || 0));
+  deltaMeta.textContent = (pnlPct ? pnlPct + " - " : "") + (tradesDelta > 0 ? "+" : "") + tradesDelta + " trade" + (Math.abs(tradesDelta) > 1 ? "s" : "") + " - " + wrPrefix + wrDelta.toFixed(1) + " pts";
+  setSignedClass(deltaMeta, deltaVal);
 }
 
 function renderPnlHistogram(buckets) {

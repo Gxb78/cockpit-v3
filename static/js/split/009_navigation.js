@@ -33,6 +33,7 @@ function goPage(pageName) {
   var targetPage = document.querySelector('.page[data-page="' + pageName + '"]');
   if (!targetPage || state.currentPage === pageName) return;
   state.currentPage = pageName;
+  localStorage.setItem("lastPage", pageName);
   document.body.setAttribute("data-current-page", pageName);
   $$(".nav-item").forEach(function (b) {
     b.classList.toggle("active", b.dataset.page === pageName);
@@ -64,14 +65,7 @@ function goPage(pageName) {
     loadMonth();
     initJournalFilters();
   }
-  if (pageName === "stats") {
-    // Rendre le template stats dans la section (une seule fois)
-    var statsSection = document.querySelector('.page[data-page="stats"]');
-    var statsTmpl = document.getElementById("statsTemplate");
-    if (statsSection && statsTmpl && !statsSection._rendered) {
-      statsSection.appendChild(statsTmpl.content.cloneNode(true));
-      statsSection._rendered = true;
-    }
+  if (pageName === "insights") {
     updateBreakdownSortUI();
     renderPerformance();
   }

@@ -206,7 +206,7 @@ function bindJournalTradeFilters() {
       state.journalTradeFilters.search = val;
       if (val.length >= 2) {
         fetch("/api/journal/search?q=" + encodeURIComponent(val), { credentials: "same-origin" })
-          .then(function(r) { return r.json(); })
+          .then(function(r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
           .then(function(data) {
             if (data && data.days) {
               state._savedDays = state._savedDays || state.days;

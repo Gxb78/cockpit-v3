@@ -20,7 +20,7 @@
     if (empty) empty.style.display = 'none';
 
     fetch('/api/trades/favorites')
-      .then(function (r) { return r.json(); })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
         _trades = Array.isArray(data) ? data : [];
         _currentIndex = 0;
@@ -227,12 +227,28 @@
   })();
 
   // ── Boot hooks ───────────────────────────────────────────────
+  function _waitForFavContainer(callback, maxRetries, interval) {
+    maxRetries = maxRetries || 20;
+    interval = interval || 50;
+    var retries = 0;
+    function poll() {
+      if (document.getElementById('favCarouselTrack')) {
+        callback();
+        return;
+      }
+      retries++;
+      if (retries >= maxRetries) { console.warn('[fav-carousel] container introuvable'); return; }
+      setTimeout(poll, interval);
+    }
+    poll();
+  }
+
   var _origGoPage = window.goPage;
   if (_origGoPage) {
     window.goPage = function (pageName) {
       _origGoPage(pageName);
       if (pageName === 'today') {
-        setTimeout(initFavCarousel, 400);
+        _waitForFavContainer(initFavCarousel);
       }
     };
   }
@@ -241,7 +257,7 @@
 
   document.addEventListener('DOMContentLoaded', function () {
     if (document.querySelector('.page[data-page="today"].active')) {
-      setTimeout(initFavCarousel, 500);
+      _waitForFavContainer(initFavCarousel);
     }
   });
 

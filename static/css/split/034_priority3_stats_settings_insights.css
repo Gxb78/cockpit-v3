@@ -178,6 +178,17 @@
   border-color: var(--border);
 }
 
+/* Cards hero (profil) : largeur complete, plus proeminent */
+.settings-panel--hero {
+  grid-column: 1 / -1;
+  min-height: 0;
+}
+
+/* Cards featured (API key) : largeur complete */
+.settings-panel--featured {
+  grid-column: 1 / -1;
+}
+
 .settings-panel .panel-h h3 {
   letter-spacing: 0;
   text-transform: none;
@@ -405,5 +416,78 @@
 
   .profile-banner {
     grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* ---------- Danger zone ---------- */
+.settings-panel--danger {
+  grid-column: 1 / -1;
+  border-color: var(--loss, #ef4444);
+  border-width: 1.5px;
+  background: color-mix(in srgb, var(--loss, #ef4444) 4%, var(--surface, #fff));
+}
+.settings-panel--danger .panel-h--danger h3 {
+  color: var(--loss, #ef4444);
+}
+.settings-help--danger {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.settings-danger-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+.settings-danger-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--loss, #ef4444) 6%, var(--surface, #fff));
+}
+.settings-danger-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.settings-danger-info strong {
+  font-size: 13px;
+}
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--loss, #ef4444);
+  background: transparent;
+  color: var(--loss, #ef4444);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.btn-danger:hover {
+  background: var(--loss, #ef4444);
+  color: #fff;
+}
+.btn-danger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (max-width: 700px) {
+  .settings-danger-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .settings-danger-row .btn-danger {
+    align-self: flex-end;
   }
 }

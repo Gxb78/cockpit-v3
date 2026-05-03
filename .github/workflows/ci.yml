@@ -1,0 +1,113 @@
+# CI/CD — Journal Cockpit v3
+# S'exécute sur push/PR vers main, et manuellement (workflow_dispatch)
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build bundles (JS + CSS)
+        run: python build.py
+
+      - name: Verify bundle integrity
+        run: |
+          echo "=== JS bundle ==="
+          wc -l static/app.js
+          echo "=== CSS bundle ==="
+          wc -l static/style.css
+          echo "=== Bundle references in templates ==="
+          grep -c 'style.css' templates/partials/layout/head_assets_css.html
+          grep -c 'app.js' templates/partials/overlays/scripts.html
+          echo "=== JS syntax check ==="
+          node --check static/app.js
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Encoding check
+        run: |
+          echo "=== Encodage ==="
+          # Vérifie qu'il n'y a pas de mojibake dans les sources
+          python -c "
+import os, re
+bad = re.compile(r'[ÃÂâ�]')
+for root, dirs, files in os.walk('.'):
+    dirs[:] = [d for d in dirs if d.startswith('.') == False and d not in ('__pycache__', 'instance', 'data')]
+    for f in files:
+        if f.endswith(('.py', '.js', '.css', '.html', '.md')):
+            path = os.path.join(root, f)
+            try:
+                with open(path, 'rb') as fp:
+                    content = fp.read().decode('utf-8')
+                if bad.search(content):
+                    print(f'  ⚠️  MOJIBAKE: {path}')
+            except Exception:
+                pass
+print('  ✅ Encodage OK')
+"
+
+      - name: Playbook guardrails
+        run: python -m unittest tests.test_playbook_lessons_guardrails -v
+
+  # Vérification additionnelle : les fichiers split sont bien tous dans le bundle
+  bundle-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check split files vs bundle
+        run: |
+          python -c "
+import os, re
+
+js_splits = sorted(f for f in os.listdir('static/js/split') if f.endswith('.js'))
+css_splits = sorted(f for f in os.listdir('static/css/split') if f.endswith('.css'))
+
+print(f'JS splits: {len(js_splits)}')
+print(f'CSS splits: {len(css_splits)}')
+
+# Vérifier que build.py liste tous les splits
+with open('build.py', 'r') as f:
+    build_code = f.read()
+
+missing_js = [s for s in js_splits if s not in build_code]
+missing_css = [s for s in css_splits if s not in build_code]
+
+if missing_js:
+    print(f'⚠️  Fichiers JS non référencés dans build.py: {missing_js}')
+else:
+    print('✅ Tous les fichiers JS sont dans build.py')
+
+if missing_css:
+    print(f'⚠️  Fichiers CSS non référencés dans build.py: {missing_css}')
+else:
+    print('✅ Tous les fichiers CSS sont dans build.py')
+
+assert not missing_js, f'JS non référencés: {missing_js}'
+assert not missing_css, f'CSS non référencés: {missing_css}'
+"

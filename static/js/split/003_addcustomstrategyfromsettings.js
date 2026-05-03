@@ -48,7 +48,7 @@ function addCustomStrategyFromSettings() {
   saveSettingsState();
   applySettingsState();
   renderSettingsPage();
-  if (state.currentPage === "stats") renderPerformance();
+  if (state.currentPage === "insights") renderPerformance();
   toast("Stratégie custom ajoutée ✓", "success");
 }
 
@@ -61,20 +61,23 @@ function removeCustomStrategy(value) {
   applySettingsState();
   renderSettingsPage();
   if (current === value) setPill("strategy", null);
-  if (state.currentPage === "stats") renderPerformance();
+  if (state.currentPage === "insights") renderPerformance();
   toast("Stratégie supprimée", "success");
 }
 
 function savePreferenceSettings() {
   if (!state.settings) return;
+  var btn = $("#settingsSavePrefsBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "Application..."; }
   state.settings.preferences.animations = !!$("#prefAnimations")?.checked;
   state.settings.preferences.dark_mode = !!$("#prefDarkMode")?.checked;
   var themeVal = $("#prefTheme")?.value || "default";
   if (["default", "claude"].includes(themeVal)) state.settings.preferences.theme = themeVal;
   saveSettingsState();
   applySettingsState();
-  if (state.currentPage === "stats") renderPerformance();
+  if (state.currentPage === "insights") renderPerformance();
   toast("Préférences appliquées ✓", "success");
+  if (btn) { setTimeout(function () { btn.disabled = false; btn.textContent = "Appliquer"; }, 1500); }
 }
 
 async function refreshApiKeyStatus() {
@@ -264,10 +267,39 @@ function bindSettings() {
 
   // Data card: load DB info
   loadDbInfo();
+
+  // Danger zone: reset all data
+  var resetBtn = document.getElementById("settingsResetDataBtn");
+  if (resetBtn) {
+    resetBtn.addEventListener("click", async function () {
+      if (!confirm("ES-TU SUR DE VOULOIR SUPPRIMER TOUTES LES DONNEES ?\n\nCette action est irreversible. Un backup automatique sera cree avant la suppression.")) return;
+      if (!confirm("CONFIRMATION FINALE :\n\nTape OK pour confirmer la suppression definitive de tous tes jours, trades et screenshots.")) return;
+      resetBtn.disabled = true;
+      resetBtn.textContent = "Suppression...";
+      try {
+        var r = await fetch("/api/data/reset", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ confirm: "RESET ALL DATA" }),
+        });
+        var data = await r.json();
+        if (data.error) { toast(data.error, "error"); return; }
+        toast(data.message, "success");
+        var resultEl = document.getElementById("settingsResetResult");
+        if (resultEl) {
+          resultEl.textContent = "Supprime: " + data.deleted.days + " jours, " + data.deleted.trades + " trades, " + data.deleted.screenshots + " screenshots. Backup: " + data.backup;
+          resultEl.style.display = "block";
+        }
+        // Reload state
+        if (typeof loadAll === "function") loadAll();
+      } catch (e) { toast("Erreur: " + e.message, "error"); }
+      finally { resetBtn.disabled = false; resetBtn.textContent = "Tout reset"; }
+    });
+  }
 }
 
 function loadDbInfo() {
-  fetch("/api/db/info").then(function (r) { return r.json(); }).then(function (d) {
+  fetch("/api/db/info").then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function (d) {
     var pathEl = document.getElementById("dbPathDisplay");
     if (pathEl) pathEl.textContent = d.db_path || "—";
     var sizeEl = document.getElementById("dbSizeDisplay");

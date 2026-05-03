@@ -17,7 +17,7 @@ async function loadAll() {
     ]);
     if (state.currentPage === "today") renderToday();
     if (state._stats) renderKPIs(state._stats);
-    if (state.currentPage === "stats") renderPerformance();
+    if (state.currentPage === "insights") renderPerformance();
   } finally {
     loading(false);
   }

@@ -173,6 +173,29 @@ body.light-mode .page[data-page="today"] .kpi:hover {
   color: var(--text-faint);
 }
 
+/* Zero line on sparkline */
+.page[data-page="today"] .kpi-spark .spark-zero {
+  stroke: var(--border, #e3e7ee);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  opacity: 0.5;
+}
+
+/* Date labels below sparkline */
+.page[data-page="today"] .kpi-spark-labels {
+  display: flex;
+  justify-content: space-between;
+  padding: 1px 2px 0;
+}
+.page[data-page="today"] .kpi-spark-labels .spark-label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 8px;
+  color: var(--text-faint);
+  opacity: 0.6;
+}
+  color: var(--text-faint);
+}
+
 /* ---------- Winrate value inline ---------- */
 .page[data-page="today"] .kpi-value.wr-inline {
   display: flex;

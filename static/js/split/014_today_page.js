@@ -53,6 +53,15 @@ function renderTodayContextWidget(force) {
 
   const tk = todayKey();
   const day = findTodayContextDay();
+  const hasDay = day !== null;
+
+  // Empty state vs formulaire
+  const emptyEl = $("#todayContextEmpty");
+  if (emptyEl) emptyEl.classList.toggle("hidden", hasDay);
+  form.classList.toggle("hidden", !hasDay);
+
+  if (!hasDay) return;
+
   $("#dayId").value = day?.id || "";
   $("#entryDate").value = day?.date || tk;
   $("#entryInstrument").value = day?.instrument || _lastInstrument();
@@ -122,4 +131,16 @@ function dayCardEl(day) {
   card.addEventListener("click", () => openExistingDay(day));
   return card;
 }
+
+// Créer un contexte jour depuis l'état vide
+document.addEventListener("click", function (e) {
+  var btn = e.target.closest("#todayContextCreateBtn");
+  if (!btn) return;
+  var emptyEl = document.getElementById("todayContextEmpty");
+  var form = document.getElementById("dayForm");
+  if (emptyEl) emptyEl.classList.add("hidden");
+  if (form) form.classList.remove("hidden");
+  var instr = document.getElementById("entryInstrument");
+  if (instr) setTimeout(function () { instr.focus(); }, 100);
+});
 

@@ -205,11 +205,12 @@ function renderSettingsStrategies() {
     return;
   }
   list.innerHTML = strategies.map(s => `
-    <span class="settings-chip">
-      <span>${escapeHtml(s.label)}</span>
+    <span class="settings-chip" draggable="true" data-reorder-value="${escapeHtml(s.value)}">
+      <span class="settings-chip-drag">${escapeHtml(s.label)}</span>
       <button type="button" class="settings-chip-remove" data-remove-strategy="${escapeHtml(s.value)}" title="Supprimer">x</button>
     </span>
   `).join("");
+  _makeChipsDraggable(list, "_reorderStrategies");
 }
 
 function renderSettingsTags() {
@@ -221,11 +222,12 @@ function renderSettingsTags() {
     return;
   }
   list.innerHTML = tags.map(function(t) {
-    return '<span class="settings-chip">' +
-      '<span>' + escapeHtml(t) + '</span>' +
+    return '<span class="settings-chip" draggable="true" data-reorder-value="' + escapeHtml(t) + '">' +
+      '<span class="settings-chip-drag">' + escapeHtml(t) + '</span>' +
       '<button type="button" class="settings-chip-remove" data-remove-tag="' + escapeHtml(t) + '" title="Supprimer">x</button>' +
       '</span>';
   }).join("");
+  _makeChipsDraggable(list, "_reorderTags");
 }
 
 function renderSettingsPage() {
@@ -240,6 +242,68 @@ function renderSettingsPage() {
   if (themeSel) themeSel.value = state.settings.preferences?.theme || "default";
   renderSettingsStrategies();
   renderSettingsTags();
+}
+
+// ── Settings : drag-to-reorder chips ──
+function _makeChipsDraggable(list, reorderFn) {
+  var dragSrc = null;
+  list.addEventListener("dragstart", function (e) {
+    var chip = e.target.closest(".settings-chip");
+    if (!chip) return;
+    dragSrc = chip;
+    chip.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+  });
+  list.addEventListener("dragend", function (e) {
+    var chip = e.target.closest(".settings-chip");
+    if (chip) chip.classList.remove("dragging");
+    list.querySelectorAll(".settings-chip").forEach(function (c) { c.classList.remove("drag-over"); });
+  });
+  list.addEventListener("dragover", function (e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    var target = e.target.closest(".settings-chip");
+    if (!target || target === dragSrc) return;
+    list.querySelectorAll(".settings-chip").forEach(function (c) { c.classList.remove("drag-over"); });
+    target.classList.add("drag-over");
+  });
+  list.addEventListener("drop", function (e) {
+    e.preventDefault();
+    if (!dragSrc) return;
+    var target = e.target.closest(".settings-chip");
+    if (!target || target === dragSrc) return;
+    var fromVal = dragSrc.dataset.reorderValue;
+    var toVal = target.dataset.reorderValue;
+    if (!fromVal || !toVal) return;
+    if (typeof window[reorderFn] === "function") {
+      window[reorderFn](fromVal, toVal);
+    }
+    dragSrc = null;
+  });
+}
+
+function _reorderStrategies(fromVal, toVal) {
+  var arr = state.settings?.custom_strategies || [];
+  var fromIdx = arr.findIndex(function (s) { return s.value === fromVal; });
+  var toIdx = arr.findIndex(function (s) { return s.value === toVal; });
+  if (fromIdx < 0 || toIdx < 0) return;
+  var item = arr.splice(fromIdx, 1)[0];
+  arr.splice(toIdx, 0, item);
+  saveSettingsState();
+  applySettingsState();
+  renderSettingsPage();
+  if (state.currentPage === "insights") renderPerformance();
+}
+
+function _reorderTags(fromVal, toVal) {
+  var arr = state.settings?.custom_tags || [];
+  var fromIdx = arr.indexOf(fromVal);
+  var toIdx = arr.indexOf(toVal);
+  if (fromIdx < 0 || toIdx < 0) return;
+  var item = arr.splice(fromIdx, 1)[0];
+  arr.splice(toIdx, 0, item);
+  saveSettingsState();
+  renderSettingsPage();
 }
 
 function saveProfileSettings() {

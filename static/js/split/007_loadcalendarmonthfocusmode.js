@@ -19,7 +19,7 @@ function setBreakdownSortMode(mode, opts = {}) {
   state.breakdownSortMode = mode;
   updateBreakdownSortUI();
   if (persist) localStorage.setItem(BREAKDOWN_SORT_KEY, mode);
-  if (rerender && state.currentPage === "stats") renderPerformance();
+  if (rerender && state.currentPage === "insights") renderPerformance();
 }
 
 function bindBreakdownSort() {

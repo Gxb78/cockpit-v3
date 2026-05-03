@@ -167,13 +167,11 @@
   .calendar-range-toggle { gap: 3px; padding: 3px; }
   .calendar-view-btn,
   .calendar-layout-btn,
-  .calendar-range-btn { font-size: 9.5px; padding: 4px 8px; }
+  .calendar-range-btn { font-size: 9px; padding: 3px 6px; }
   .calendar-nav { margin-bottom: 0; padding: 4px 6px; gap: 6px; }
   .journal-today-btn { font-size: 9.5px; padding: 0 10px; }
   .month-label-btn { min-width: 152px; height: 34px; padding: 0 11px; }
   .month-label-btn h2 { font-size: 15px; }
-  .month-pop { width: 220px; }
-  .month-btn { font-size: 10px; }
   .calendar-metric-toggle { gap: 3px; padding: 3px; }
   .calendar-metric-btn { font-size: 9.5px; padding: 4px 8px; }
   .journal-filters { gap: 8px; }

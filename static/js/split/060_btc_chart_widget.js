@@ -270,7 +270,7 @@
       var needed = Math.max(Math.ceil(days * 1440 / (INTERVAL_MINUTES[fetchInterval] || 60)) + 10, 100);
       var url = '/api/market/klines?symbol=BTCUSDT&interval=' + fetchInterval + '&limit=' + needed;
       fetch(url)
-        .then(function (r) { return r.json(); })
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function (data) {
           if (data.error || !data.candles || !data.candles.length) { _removeVwapSeries(period); return; }
           _computeVwap(data.candles, function () {});
@@ -561,11 +561,11 @@
 
     var url = '/api/market/klines?symbol=BTCUSDT&interval=' + currentInterval + '&limit=300';
     fetch(url)
-      .then(function (r) { return r.json(); })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
-        if (data.error) { console.error('[btc-chart]', data.error); return; }
+        if (data.error) { console.error('[btc-chart]', data.error); toast(data.error, 'error'); return; }
         var candles = data.candles || [];
-        if (!candles.length) return;
+        if (!candles.length) { toast('Aucune donnee disponible pour ' + currentInterval, 'error'); return; }
         _lastCandles = candles;
         var last = candles[candles.length - 1];
         lastCandleTime = last.time * 1000;
@@ -603,23 +603,39 @@
 
   // ── INIT ──
 
+  function _waitForContainer(callback, maxRetries, interval) {
+    maxRetries = maxRetries || 20;
+    interval = interval || 50;
+    var retries = 0;
+    function poll() {
+      if (document.getElementById('btcChartContainer')) {
+        callback();
+        return;
+      }
+      retries++;
+      if (retries >= maxRetries) {
+        console.warn('[btc-chart] #btcChartContainer introuvable apres ' + (maxRetries * interval) + 'ms');
+        return;
+      }
+      setTimeout(poll, interval);
+    }
+    poll();
+  }
+
   function _tryInit() {
     if (chartReady) return;
-    initBtcChart();
-    if (!chartReady) {
-      setTimeout(_tryInit, 500);
-    }
+    _waitForContainer(initBtcChart);
   }
 
   document.addEventListener('DOMContentLoaded', function () {
-    setTimeout(_tryInit, 300);
+    setTimeout(_tryInit, 50);
   });
 
   var _origGoPage = window.goPage;
   if (_origGoPage) {
     window.goPage = function (pageName) {
       _origGoPage(pageName);
-      if (pageName === 'today') setTimeout(_tryInit, 400);
+      if (pageName === 'today') _waitForContainer(initBtcChart);
     };
   }
 

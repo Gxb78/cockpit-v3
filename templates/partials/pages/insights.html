@@ -35,6 +35,163 @@
   <!-- Contenu injecte par JS -->
   <div id="insightsContent" style="display:none"></div>
 
+  <!-- Stats sections ajoutees a Insights -->
+  <div id="insightsStatsContent">
+          <div id="statsEmpty" class="card-surface card-surface--ghost hidden stats-empty-state">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        <p>Aucune donnee pour le moment.</p>
+        <span>Ajoute tes premiers trades dans le Journal pour voir les statistiques apparaitre ici.</span>
+      </div>
+      <div id="statsContent">
+      <div class="page-head stats-page-head">
+        <div>
+          <h1 class="page-title">Stats <span class="accent">&amp; Patterns</span></h1>
+          <p class="page-subtitle">Performance, activite, drawdown et breakdowns actionnables.</p>
+        </div>
+        <div class="page-actions">
+          <div class="field stats-sort-field">
+            <label for="breakdownSort">Tri des breakdowns</label>
+            <div class="select-wrapper">
+              <select id="breakdownSort">
+                <option value="count">Nb trades</option>
+                <option value="winrate">Winrate</option>
+                <option value="avg_rr">RR moyen</option>
+                <option value="pnl">PnL</option>
+              </select>
+              <svg class="select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="insights-row widget-board" id="insightsRow" data-widget-board="stats-insights"></div>
+
+      <div class="streak-row widget-board" data-widget-board="stats-streaks">
+        <div class="streak-tile card-surface card-surface--sm widget" data-widget-key="stats_streak_current" data-widget-kind="tile">
+          <div class="streak-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          </div>
+          <div>
+            <div class="streak-count"><span id="statStreakCur">0</span> jours</div>
+            <div class="streak-label">Streak actuelle</div>
+          </div>
+        </div>
+        <div class="streak-tile card-surface card-surface--sm alt widget" data-widget-key="stats_streak_best" data-widget-kind="tile">
+          <div class="streak-icon alt">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15 8.5 22 9.3 17 14 18 21 12 17.8 6 21 7 14 2 9.3 9 8.5"/></svg>
+          </div>
+          <div>
+            <div class="streak-count"><span id="statStreakBest">0</span> jours</div>
+            <div class="streak-label">Record absolu</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel card-surface card-surface--sm widget widget-panel stats-heatmap-panel" data-widget-key="stats_heatmap" data-widget-kind="panel">
+        <div class="panel-h">
+          <h3>Activite - 365 derniers jours</h3>
+          <div class="heatmap-legend">
+            <span class="hm-legend-label">PnL</span>
+            <span class="muted">moins</span>
+            <span class="hm-sample" data-l="0"></span>
+            <span class="hm-sample" data-l="1"></span>
+            <span class="hm-sample" data-l="2"></span>
+            <span class="hm-sample" data-l="3"></span>
+            <span class="hm-sample" data-l="4"></span>
+            <span class="muted">plus</span>
+          </div>
+        </div>
+        <div class="heatmap-wrap">
+          <div class="heatmap-month-labels" id="heatmapMonths"></div>
+          <div class="heatmap-row-labels">
+            <span>Lun</span><span>Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span><span>Sam</span><span>Dim</span>
+          </div>
+          <div class="heatmap" id="heatmap"></div>
+        </div>
+      </div>
+      </div>
+
+    <div class="insights-section-sep" style="grid-column:1/-1;border:0;border-top:1px solid var(--border-soft,#eef1f6);margin:12px 0"></div>
+          <div class="period-compare-grid widget-board" data-widget-board="stats-period-compare">
+        <div class="panel period-compare-card card-surface card-surface--sm widget widget-panel" data-widget-key="stats_period_current" data-widget-kind="panel">
+          <div class="panel-h"><h3>P&eacute;riode courante</h3></div>
+          <div class="period-range mono" id="periodCurrentRange">-</div>
+          <div class="period-main mono" id="periodCurrentPnl">&mdash;</div>
+          <div class="period-meta" id="periodCurrentMeta">&mdash;</div>
+        </div>
+        <div class="panel period-compare-card card-surface card-surface--sm widget widget-panel" data-widget-key="stats_period_previous" data-widget-kind="panel">
+          <div class="panel-h"><h3>P&eacute;riode pr&eacute;c&eacute;dente</h3></div>
+          <div class="period-range mono" id="periodPreviousRange">-</div>
+          <div class="period-main mono" id="periodPreviousPnl">&mdash;</div>
+          <div class="period-meta" id="periodPreviousMeta">&mdash;</div>
+        </div>
+        <div class="panel period-compare-card delta card-surface card-surface--sm widget widget-panel" data-widget-key="stats_period_delta" data-widget-kind="panel">
+          <div class="panel-h"><h3>Delta</h3></div>
+          <div class="period-delta-value">
+            <span class="period-delta-arrow" id="periodDeltaArrow"></span>
+            <span class="period-main mono" id="periodDeltaPnl">&mdash;</span>
+          </div>
+          <div class="period-meta" id="periodDeltaMeta">&mdash;</div>
+        </div>
+      </div>
+
+      <div class="panel widget widget-panel stats-main-chart" data-widget-key="stats_cumulative_pnl" data-widget-kind="panel">
+        <div class="panel-h"><h3>PnL cumule</h3></div>
+        <canvas id="cumChart"></canvas>
+      </div>
+
+      <div class="stats-chart-grid widget-board" data-widget-board="stats-secondary-charts">
+        <div class="panel widget widget-panel" data-widget-key="stats_drawdown_chart" data-widget-kind="panel">
+          <div class="panel-h">
+            <h3>Drawdown</h3>
+            <div class="panel-meta mono" id="drawdownMeta">Max 0.00$ - Courant 0.00$</div>
+          </div>
+          <canvas id="drawdownChart"></canvas>
+        </div>
+        <div class="panel widget widget-panel" data-widget-key="stats_pnl_distribution" data-widget-kind="panel">
+          <div class="panel-h"><h3>Distribution PnL</h3></div>
+          <div id="pnlHist" class="pnl-hist"></div>
+        </div>
+      </div>
+
+    <div class="insights-section-sep" style="grid-column:1/-1;border:0;border-top:1px solid var(--border-soft,#eef1f6);margin:12px 0"></div>
+          <div class="breakdowns-grid widget-board" data-widget-board="stats-breakdowns">
+        <div class="panel card-surface card-surface--sm widget widget-panel" data-widget-key="stats_bd_setup" data-widget-kind="panel">
+          <div class="panel-h"><h3>Par strat&eacute;gie</h3></div>
+          <div id="bdSetup" class="breakdown-list"></div>
+        </div>
+        <div class="panel card-surface card-surface--sm widget widget-panel" data-widget-key="stats_bd_session" data-widget-kind="panel">
+          <div class="panel-h"><h3>Par session</h3></div>
+          <div id="bdSession" class="breakdown-list"></div>
+        </div>
+        <div class="panel card-surface card-surface--sm widget widget-panel" data-widget-key="stats_bd_dow" data-widget-kind="panel">
+          <div class="panel-h"><h3>Par jour de la semaine</h3></div>
+          <div id="bdDow" class="breakdown-list"></div>
+        </div>
+        <div class="panel card-surface card-surface--sm widget widget-panel" data-widget-key="stats_bd_tag" data-widget-kind="panel">
+          <div class="panel-h"><h3>Par tag</h3></div>
+          <div id="bdTag" class="breakdown-list"></div>
+        </div>
+        <div class="panel card-surface card-surface--sm widget widget-panel" data-widget-key="stats_plan_matrix" data-widget-kind="panel">
+          <div class="panel-h"><h3>Plan x R&eacute;sultat</h3></div>
+          <div id="planMatrix" class="plan-matrix"></div>
+        </div>
+        <div class="panel card-surface card-surface--sm widget widget-panel" data-widget-key="stats_bd_plan_error" data-widget-kind="panel">
+          <div class="panel-h"><h3>Erreurs de plan</h3></div>
+          <div id="bdPlanError" class="breakdown-list"></div>
+        </div>
+        <div class="panel card-surface card-surface--sm widget widget-panel" data-widget-key="stats_bd_instrument" data-widget-kind="panel">
+          <div class="panel-h"><h3>Par instrument</h3></div>
+          <div id="pairsList"></div>
+        </div>
+        <div class="panel card-surface card-surface--sm widget widget-panel" data-widget-key="stats_bd_rr_distribution" data-widget-kind="panel">
+          <div class="panel-h"><h3>Distribution R:R</h3></div>
+          <div id="rrDist" class="rr-dist"></div>
+        </div>
+      </div>
+
+  </div>
+
   <!-- Toast insight -->
   <div class="toast-insight" id="toastInsight">
     <button class="toast-insight__close" id="toastInsightClose">&times;</button>

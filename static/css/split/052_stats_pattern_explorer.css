@@ -179,6 +179,23 @@
   font-size: 12px;
 }
 
+.page[data-page="stats"] .period-delta-value {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.page[data-page="stats"] .period-delta-arrow {
+  font-size: 13px;
+  line-height: 1;
+}
+.page[data-page="stats"] .period-delta-arrow.pos {
+  color: var(--win, #22c55e);
+}
+.page[data-page="stats"] .period-delta-arrow.neg {
+  color: var(--loss, #ef4444);
+}
+
 /* === Hero chart — cercle d'or comme "Next Projected Leg" === */
 .page[data-page="stats"] .stats-main-chart {
   position: relative;

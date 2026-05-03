@@ -192,7 +192,7 @@ function _journalRefreshStateDebounced() {
   clearTimeout(_journalRefreshTimer);
   _journalRefreshTimer = setTimeout(function () {
     if (typeof loadMonth === 'function') loadMonth();
-    if (typeof loadStats === 'function') loadStats({ refreshDays: false, skipRender: false });
+    if (typeof loadStats === 'function') loadStats({ refreshDays: true, skipRender: false });
   }, 400);
 }
 
@@ -252,352 +252,131 @@ function closeJournalTradeEditor(opts) {
   TradeEditorController.close(opts);
 }
 
+
+function _bindJournalClick(wrap) {
+  wrap.addEventListener("click", function (e) {
+    if (window._consumeClick) { window._consumeClick = false; e.stopImmediatePropagation(); e.preventDefault(); return; }
+    var ec = e.target.closest("[data-journal-editor-close]"); if (ec) { e.stopPropagation(); closeJournalTradeEditor(); return; }
+    var es = e.target.closest("[data-journal-editor-save]"); if (es) { e.stopPropagation(); var st = es.dataset.journalEditorSave || TradeEditorController.activeTradeId; if (st) TradeEditorController.save(st); return; }
+    var cb = e.target.closest("[data-journal-day-close]"); if (cb) { closeJournalDayTrades(); return; }
+    var eb = e.target.closest("[data-journal-trade-edit]");
+    if (!eb && e.target.tagName === "BUTTON" && e.target.classList.contains("journal-back-edit")) eb = e.target;
+    if (eb) { e.stopPropagation(); try { openJournalTradeEditor(eb.dataset.journalTradeEdit); } catch (_e) { console.error("[cockpit] Erreur ouverture editeur:", _e); } return; }
+    var ep = e.target.closest(".jedit-pill"); if (ep) { e.stopPropagation(); var eg = ep.closest(".jedit-pills"); if (eg) { eg.querySelectorAll(".jedit-pill").forEach(function (p) { p.classList.remove("is-active"); }); ep.classList.add("is-active"); var ed = ep.closest(".journal-trade-editor"); var et = ed && ed.dataset.tradeId; if (et) TradeEditorController.scheduleSave(et); } return; }
+    var est = e.target.closest(".jedit-star"); if (est) { e.stopPropagation(); var esw = est.closest(".jedit-stars"); if (esw) { var ev = Number(est.dataset.val); if (String(esw.dataset.value) === String(ev)) ev = 0; esw.dataset.value = String(ev); esw.querySelectorAll(".jedit-star").forEach(function (s) { s.classList.toggle("is-lit", Number(s.dataset.val) <= ev); }); var ed2 = esw.closest(".journal-trade-editor"); var et2 = ed2 && ed2.dataset.tradeId; if (et2) TradeEditorController.scheduleSave(et2); } return; }
+    var pill = e.target.closest(".jcard-pill"); if (pill) { e.stopPropagation(); var g = pill.closest(".jcard-pills"); if (g) { g.querySelectorAll(".jcard-pill").forEach(function (p) { p.classList.remove("is-active"); }); pill.classList.add("is-active"); var s = pill.closest(".journal-flip-back-scroll"); var t = s && s.dataset.tradeId; if (t) _journalCardScheduleSave(t); } return; }
+    var star = e.target.closest(".jcard-star"); if (star) { e.stopPropagation(); var sw = star.closest(".jcard-stars"); if (sw) { var v = Number(star.dataset.val); if (String(sw.dataset.value) === String(v)) v = 0; sw.dataset.value = String(v); sw.querySelectorAll(".jcard-star").forEach(function (s) { s.classList.toggle("is-lit", Number(s.dataset.val) <= v); }); var s2 = sw.closest(".journal-flip-back-scroll"); var t3 = s2 && s2.dataset.tradeId; if (t3) _journalCardScheduleSave(t3); } return; }
+    var fav = e.target.closest("[data-journal-fav]"); if (fav) { e.stopPropagation(); _toggleTradeFavorite(fav.dataset.journalFav, fav); return; }
+    var dup = e.target.closest("[data-journal-dup]"); if (dup) { e.stopPropagation(); _duplicateTrade(dup.dataset.journalDup); return; }
+    if (e.target.closest(".journal-back-icon")) { e.stopPropagation(); return; }
+    if (e.target.closest(".journal-trade-editor")) { e.stopPropagation(); return; }
+    if (_jcardFieldFocused) return;
+    if (e.target.closest("input, textarea, select, .jcard-pills, .jcard-stars")) return;
+    if (document.documentElement.classList.contains("html-editor-open")) { closeJournalTradeEditor(); return; }
+    if (TradeEditorController.activeTradeId !== null) { closeJournalTradeEditor(); return; }
+    if (TradeEditorController.justClosed) return;
+    if (Date.now() - TradeEditorController.closeTime < 1200) return;
+    if (document.querySelector("#journalDayTrades .journal-trade-editor")) return;
+    var card = e.target.closest(".journal-flip-card"); if (!card || !wrap.contains(card)) return;
+    card.classList.toggle("is-flipped");
+  });
+}
+
+function _bindJournalFocusEvents(wrap) {
+  wrap.addEventListener("focusin", function (e) { if (e.target.closest(".jcard-field")) _jcardFieldFocused = true; });
+  wrap.addEventListener("focusout", function (e) { if (e.target.closest(".jcard-field")) { setTimeout(function () { _jcardFieldFocused = false; }, 300); } });
+}
+
+function _bindJournalFieldSaves(wrap) {
+  wrap.addEventListener("focusout", function (e) {
+    var field = e.target.closest(".jcard-field");
+    if (field) { var s = field.closest(".journal-flip-back-scroll"); var t = s && s.dataset.tradeId; if (t) _journalCardScheduleSave(t); return; }
+    var ef = e.target.closest(".jedit-field"); if (ef) { var ed = ef.closest(".journal-trade-editor"); var et = ed && ed.dataset.tradeId; if (et) TradeEditorController.scheduleSave(et); }
+  });
+}
+
+function _bindJournalChangeSelect(wrap) {
+  wrap.addEventListener("change", function (e) {
+    var ef = e.target.closest(".jedit-field"); if (!ef) return;
+    if (ef.tagName === "SELECT" && ef.dataset.field === "strategy") {
+      var ed = ef.closest(".journal-trade-editor");
+      var title = ed && ed.querySelector(".jedit-hero-copy h3");
+      if (title) title.textContent = ef.options[ef.selectedIndex] ? ef.options[ef.selectedIndex].text : ef.value;
+    }
+  });
+}
+
+function _bindJournalKeydown(wrap) {
+  wrap.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && TradeEditorController.activeTradeId) { e.preventDefault(); closeJournalTradeEditor(); return; }
+    if (e.key !== "Enter" && e.key !== " ") return;
+    if (e.target.matches("input, textarea, select, button")) return;
+    if (e.target.closest(".journal-trade-editor")) return;
+    if (wrap.querySelector(".jcard-field:focus, .journal-flip-back-scroll:focus-within")) return;
+    if (document.documentElement.classList.contains("html-editor-open")) return;
+    if (TradeEditorController.activeTradeId !== null) return;
+    if (Date.now() - TradeEditorController.closeTime < 1200) return;
+    if (document.querySelector("#journalDayTrades .journal-trade-editor")) return;
+    var card = e.target.closest(".journal-flip-card"); if (!card || !wrap.contains(card)) return;
+    e.preventDefault(); card.classList.toggle("is-flipped");
+  });
+}
+
+function _bindJournalMarginInput(wrap) {
+  wrap.addEventListener("input", function (e) {
+    var field = e.target.closest(".journal-flip-back-scroll .jcard-margin-input, .journal-flip-back-scroll .jcard-field[data-field=\"leverage\"], .journal-flip-back-scroll .jcard-field[data-field=\"entry_price\"]");
+    if (!field) return; var scroll = field.closest(".journal-flip-back-scroll"); if (!scroll) return; var tid = scroll.dataset.tradeId; if (!tid) return;
+    var mi = scroll.querySelector(".jcard-margin-input"); var li = scroll.querySelector(".jcard-field[data-field=\"leverage\"]");
+    var ei = scroll.querySelector(".jcard-field[data-field=\"entry_price\"]"); var pi = scroll.querySelector(".jcard-field[data-field=\"position_size\"]");
+    if (!mi || !li || !ei || !pi) return;
+    if (field === mi || field.dataset.field === "leverage") {
+      var m = Number(mi.value); var l = Number(li.value); var e = Number(ei.value);
+      if (m > 0 && l > 0 && e > 0) { var c = computePositionSize(m, l, e); if (c != null) { pi.value = String(c); _journalCardScheduleSave(tid); } }
+    }
+    if (field === pi) {
+      var p = Number(pi.value); var l2 = Number(li.value); var e2 = Number(ei.value);
+      if (p > 0 && l2 > 0 && e2 > 0) { var cm = computeMarginUsd(p, l2, e2); if (cm != null) mi.value = String(cm); }
+    }
+  });
+}
+
+function _bindJournalScreenshotUpload(wrap) {
+  wrap.addEventListener("click", function (e) { var se = e.target.closest(".journal-back-shot"); if (!se) return; var si = se.querySelector(".journal-shot-input"); if (!si) return; si.click(); });
+  wrap.addEventListener("change", function (e) {
+    var input = e.target.closest(".journal-shot-input"); if (!input || !input.files || !input.files[0]) return;
+    var file = input.files[0]; var scroll = input.closest(".journal-flip-back-scroll"); if (!scroll) return;
+    var tid = scroll.dataset.tradeId; if (!tid) return;
+    var fd = new FormData(); fd.append("file", file);
+    fetch("/api/trades/" + tid + "/screenshots", { method: "POST", body: fd })
+      .then(function (r) { if (!r.ok) throw new Error("Upload echoue"); return r.json(); })
+      .then(function () { return api("/api/trades/" + tid); })
+      .then(function (u) { _journalDayTradeCache[String(tid)] = u; _journalCardRefreshFull(String(tid), u); _journalRefreshStateDebounced(); })
+      .catch(function (err) { toast(err.message || "Erreur upload screenshot", "error"); });
+    input.value = "";
+  });
+}
+
 function bindJournalDayTrades() {
   var wrap = $("#journalDayTrades");
   if (!wrap || _journalDayTradeCardsBound) return;
-
-  wrap.addEventListener("click", function (e) {
-
-    // 🛡️ Bouclier anti re-fired click du navigateur
-    if (window._consumeClick) {
-      window._consumeClick = false;
-      e.stopImmediatePropagation();
-      e.preventDefault();
-      return;
-    }
-
-    var editorClose = e.target.closest("[data-journal-editor-close]");
-    if (editorClose) {
-      e.stopPropagation();
-      closeJournalTradeEditor();
-      return;
-    }
-
-    var editorSave = e.target.closest("[data-journal-editor-save]");
-    if (editorSave) {
-      e.stopPropagation();
-      var saveTid = editorSave.dataset.journalEditorSave || TradeEditorController.activeTradeId;
-      if (saveTid) TradeEditorController.save(saveTid);
-      return;
-    }
-
-    // Close button
-    var closeBtn = e.target.closest("[data-journal-day-close]");
-    if (closeBtn) { closeJournalDayTrades(); return; }
-
-    // Edit button → open full modal
-    var editBtn = e.target.closest("[data-journal-trade-edit]");
-    // Fallback: match by class if data attribute lookup fails (3D transform hit-test edge case)
-    if (!editBtn && e.target.tagName === 'BUTTON' && e.target.classList.contains('journal-back-edit')) {
-      editBtn = e.target;
-    }
-    if (editBtn) {
-      e.stopPropagation();
-      try {
-        var tid = editBtn.dataset.journalTradeEdit;
-        openJournalTradeEditor(tid);
-      } catch (_e) {
-        console.error("[cockpit] Erreur ouverture editeur:", _e);
-      }
-      return;
-    }
-
-    var editorPill = e.target.closest('.jedit-pill');
-    if (editorPill) {
-      e.stopPropagation();
-      var editorGroup = editorPill.closest('.jedit-pills');
-      if (editorGroup) {
-        editorGroup.querySelectorAll('.jedit-pill').forEach(function (p) { p.classList.remove('is-active'); });
-        editorPill.classList.add('is-active');
-        var editor = editorPill.closest('.journal-trade-editor');
-        var editorTid = editor && editor.dataset.tradeId;
-        if (editorTid) TradeEditorController.scheduleSave(editorTid);
-      }
-      return;
-    }
-
-    var editorStar = e.target.closest('.jedit-star');
-    if (editorStar) {
-      e.stopPropagation();
-      var editorStars = editorStar.closest('.jedit-stars');
-      if (editorStars) {
-        var editorVal = Number(editorStar.dataset.val);
-        if (String(editorStars.dataset.value) === String(editorVal)) editorVal = 0;
-        editorStars.dataset.value = String(editorVal);
-        editorStars.querySelectorAll('.jedit-star').forEach(function (s) {
-          s.classList.toggle('is-lit', Number(s.dataset.val) <= editorVal);
-        });
-        var editor2 = editorStars.closest('.journal-trade-editor');
-        var editorTid2 = editor2 && editor2.dataset.tradeId;
-        if (editorTid2) TradeEditorController.scheduleSave(editorTid2);
-      }
-      return;
-    }
-
-    // Pill toggle (thesis, etc.)
-    var pill = e.target.closest('.jcard-pill');
-    if (pill) {
-      e.stopPropagation();
-      var group = pill.closest('.jcard-pills');
-      if (group) {
-        group.querySelectorAll('.jcard-pill').forEach(function (p) { p.classList.remove('is-active'); });
-        pill.classList.add('is-active');
-        var scroll = pill.closest('.journal-flip-back-scroll');
-        var tid2 = scroll && scroll.dataset.tradeId;
-        if (tid2) _journalCardScheduleSave(tid2);
-      }
-      return;
-    }
-
-    // Star rating
-    var star = e.target.closest('.jcard-star');
-    if (star) {
-      e.stopPropagation();
-      var starsWrap = star.closest('.jcard-stars');
-      if (starsWrap) {
-        var val = Number(star.dataset.val);
-        // Click same value again → clear
-        if (String(starsWrap.dataset.value) === String(val)) val = 0;
-        starsWrap.dataset.value = String(val);
-        starsWrap.querySelectorAll('.jcard-star').forEach(function (s) {
-          s.classList.toggle('is-lit', Number(s.dataset.val) <= val);
-        });
-        var scroll2 = starsWrap.closest('.journal-flip-back-scroll');
-        var tid3 = scroll2 && scroll2.dataset.tradeId;
-        if (tid3) _journalCardScheduleSave(tid3);
-      }
-      return;
-    }
-
-    // Favoris button
-    var favBtn = e.target.closest("[data-journal-fav]");
-    if (favBtn) {
-      e.stopPropagation();
-      _toggleTradeFavorite(favBtn.dataset.journalFav, favBtn);
-      return;
-    }
-
-    // Dupliquer button
-    var dupBtn = e.target.closest("[data-journal-dup]");
-    if (dupBtn) {
-      e.stopPropagation();
-      _duplicateTrade(dupBtn.dataset.journalDup);
-      return;
-    }
-
-    // Back-face icon buttons — don't flip
-    if (e.target.closest(".journal-back-icon")) { e.stopPropagation(); return; }
-
-    if (e.target.closest(".journal-trade-editor")) { e.stopPropagation(); return; }
-
-    // 🛡️ Si un champ jcard-field a (ou avait récemment) le focus
-    // → l'utilisateur est en train d'éditer → ne pas flipper
-    if (_jcardFieldFocused) {
-      return;
-    }
-
-    // Don't flip when clicking editable elements
-    if (e.target.closest('input, textarea, select, .jcard-pills, .jcard-stars')) return;
-
-    // 🛡️ GUARD ULTIME : classe html-editor-open sur <html>.
-    if (document.documentElement.classList.contains('html-editor-open')) {
-      closeJournalTradeEditor();
-      return;
-    }
-
-    // Si l'éditeur est ouvert → ferme-le, ne flip pas
-    if (TradeEditorController.activeTradeId !== null) {
-      closeJournalTradeEditor();
-      return;
-    }
-
-    // Cooldown booléen fermeture editeur (1000ms)
-    if (TradeEditorController.justClosed) return;
-
-    // 🛡️ Grace period timestamp — ne dépend PAS d'un setTimeout
-    if (Date.now() - TradeEditorController.closeTime < 1200) return;
-
-    // 🛡️ Bouclier DOM : éditeur encore dans le DOM (invisible, pointer-events: none)
-    if (document.querySelector('#journalDayTrades .journal-trade-editor')) return;
-
-    var card = e.target.closest(".journal-flip-card");
-    if (!card || !wrap.contains(card)) return;
-    card.classList.toggle("is-flipped");
-  });
-
-  // ---- Track focus on jcard-field pour éviter le flip ----
-  wrap.addEventListener("focusin", function (e) {
-    if (e.target.closest('.jcard-field')) {
-      _jcardFieldFocused = true;
-    }
-  });
-  wrap.addEventListener("focusout", function (e) {
-    if (e.target.closest('.jcard-field')) {
-      // Le focus est perdu AVANT le click event. On diffère le flag
-      // pour que le flip handler du click qui suit le voie encore.
-      setTimeout(function () { _jcardFieldFocused = false; }, 300);
-    }
-  });
-
-  // Save on blur for inputs / textareas
-  wrap.addEventListener("focusout", function (e) {
-    var field = e.target.closest('.jcard-field');
-    if (field) {
-      var scroll = field.closest('.journal-flip-back-scroll');
-      var tid = scroll && scroll.dataset.tradeId;
-      if (tid) _journalCardScheduleSave(tid);
-      return;
-    }
-
-    var editorField = e.target.closest('.jedit-field');
-    if (editorField) {
-      var editor = editorField.closest('.journal-trade-editor');
-      var editorTid = editor && editor.dataset.tradeId;
-      if (editorTid) TradeEditorController.scheduleSave(editorTid);
-    }
-  });
-
-  wrap.addEventListener("change", function (e) {
-    var editorField = e.target.closest('.jedit-field');
-    if (!editorField) return;
-    var editor = editorField.closest('.journal-trade-editor');
-    var editorTid = editor && editor.dataset.tradeId;
-    // Live preview: update strategy title on select change
-    if (editorField.tagName === 'SELECT' && editorField.dataset.field === 'strategy') {
-      var title = editor && editor.querySelector('.jedit-hero-copy h3');
-      if (title) title.textContent = editorField.options[editorField.selectedIndex] ?
-        editorField.options[editorField.selectedIndex].text : editorField.value;
-    }
-  });
-
-  wrap.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && TradeEditorController.activeTradeId) {
-      e.preventDefault();
-      closeJournalTradeEditor();
-      return;
-    }
-    if (e.key !== "Enter" && e.key !== " ") return;
-    if (e.target.matches('input, textarea, select, button')) return;
-    if (e.target.closest(".journal-trade-editor")) return;
-
-    // 🛡️ Si un champ a le focus → ne pas flipper
-    if (wrap.querySelector('.jcard-field:focus, .journal-flip-back-scroll:focus-within')) return;
-
-    // 🛡️ GUARD ULTIME : classe html-editor-open
-    if (document.documentElement.classList.contains('html-editor-open')) return;
-
-    // Éditeur ouvert → pas de flip
-    if (TradeEditorController.activeTradeId !== null) return;
-
-    // 🛡️ Grace period timestamp
-    if (Date.now() - TradeEditorController.closeTime < 1200) return;
-
-    // 🛡️ Bouclier DOM re-fired click
-    if (document.querySelector('#journalDayTrades .journal-trade-editor')) return;
-
-    var card = e.target.closest(".journal-flip-card");
-    if (!card || !wrap.contains(card)) return;
-    e.preventDefault();
-    card.classList.toggle("is-flipped");
-  });
-
-  // Auto-compute position_size from Marge + Levier + Entry (verso flip card uniquement)
-  wrap.addEventListener("input", function (e) {
-    var field = e.target.closest('.journal-flip-back-scroll .jcard-margin-input, .journal-flip-back-scroll .jcard-field[data-field="leverage"], .journal-flip-back-scroll .jcard-field[data-field="entry_price"]');
-    if (!field) return;
-    var scroll = field.closest('.journal-flip-back-scroll');
-    if (!scroll) return;
-    var tid = scroll.dataset.tradeId;
-    if (!tid) return;
-
-    var marginInput = scroll.querySelector('.jcard-margin-input');
-    var levInput = scroll.querySelector('.jcard-field[data-field="leverage"]');
-    var entryInput = scroll.querySelector('.jcard-field[data-field="entry_price"]');
-    var posInput = scroll.querySelector('.jcard-field[data-field="position_size"]');
-    if (!marginInput || !levInput || !entryInput || !posInput) return;
-
-    if (field === marginInput || field.dataset.field === 'leverage') {
-      var margin = Number(marginInput.value);
-      var lev = Number(levInput.value);
-      var entry = Number(entryInput.value);
-      if (margin > 0 && lev > 0 && entry > 0) {
-        var computed = computePositionSize(margin, lev, entry);
-        if (computed != null) {
-          posInput.value = String(computed);
-          // Trigger save indicator
-          _journalCardScheduleSave(tid);
-        }
-      }
-    }
-
-    // If user changed position_size, update margin display
-    if (field === posInput) {
-      var pos = Number(posInput.value);
-      var lev2 = Number(levInput.value);
-      var entry2 = Number(entryInput.value);
-      if (pos > 0 && lev2 > 0 && entry2 > 0) {
-        var computedMargin = computeMarginUsd(pos, lev2, entry2);
-        if (computedMargin != null) marginInput.value = String(computedMargin);
-      }
-    }
-  });
-
-  // Screenshot upload on card back face
-  wrap.addEventListener("click", function (e) {
-    var shotEl = e.target.closest(".journal-back-shot");
-    if (!shotEl) return;
-    var input = shotEl.querySelector(".journal-shot-input");
-    if (!input) return;
-    input.click();
-  });
-
-  wrap.addEventListener("change", function (e) {
-    var input = e.target.closest(".journal-shot-input");
-    if (!input || !input.files || !input.files[0]) return;
-    var file = input.files[0];
-    var scroll = input.closest(".journal-flip-back-scroll");
-    if (!scroll) return;
-    var tid = scroll.dataset.tradeId;
-    if (!tid) return;
-
-    var fd = new FormData();
-    fd.append("file", file);
-    fetch("/api/trades/" + tid + "/screenshots", { method: "POST", body: fd })
-      .then(function (r) {
-        if (!r.ok) throw new Error("Upload echoue");
-        return r.json();
-      })
-      .then(function () {
-        // Recharge le trade pour mettre a jour la capture
-        return api("/api/trades/" + tid);
-      })
-      .then(function (updated) {
-        _journalDayTradeCache[String(tid)] = updated;
-        _journalCardRefreshFull(String(tid), updated);
-        _journalRefreshStateDebounced();
-      })
-      .catch(function (err) {
-        toast(err.message || "Erreur upload screenshot", "error");
-      });
-    input.value = "";
-  });
-
+  _bindJournalClick(wrap);
+  _bindJournalFocusEvents(wrap);
+  _bindJournalFieldSaves(wrap);
+  _bindJournalChangeSelect(wrap);
+  _bindJournalKeydown(wrap);
+  _bindJournalMarginInput(wrap);
+  _bindJournalScreenshotUpload(wrap);
   _journalDayTradeCardsBound = true;
-
-  // Close on click outside — registered once globally
   if (!window._journalCloseBound) {
     window._journalCloseBound = true;
     document.addEventListener("click", function _closeOnOutside(e) {
-      var w = $("#journalDayTrades");
-      if (!w || w.classList.contains("hidden")) return;
-      // Ne pas fermer si le clic est sur une card, un input verso, le tableau, ou un bouton editer
+      var w = $("#journalDayTrades"); if (!w || w.classList.contains("hidden")) return;
       if (e.target.closest(".journal-flip-card, #journalDayTrades, .day, #journalTradesTbody, [data-journal-trade-edit]")) return;
-      if (!w.contains(e.target)) {
-        closeJournalDayTrades();
-      }
+      if (!w.contains(e.target)) closeJournalDayTrades();
     });
   }
 }
+
 
 // ---- render / close ----
 function renderJournalDayTrades(dateKey, days) {
@@ -703,6 +482,99 @@ function journalEditorStrategyOptions(current) { return TradeEditorController.st
 
 // ---- flip card HTML ----
 
+function _flipCardFrontInner(day, trade, m, pnl, pnlClass, resultClass, resultLabel, direction, strategy, rr, summary, shot, shotStyle, shotClass, tid, idx) {
+  return `<div class="journal-flip-face journal-flip-front">
+    <div class="journal-flip-top">
+      <span class="metric-pill metric-pill--muted journal-trade-index">#${idx}</span>
+      <span class="metric-pill metric-pill--cyan journal-trade-instrument">${escapeHtml(day.instrument || "-")}</span>
+      <span class="metric-pill metric-pill--${pnlClass === 'pos' ? 'win' : pnlClass === 'neg' ? 'loss' : 'muted'} journal-trade-top-pnl ${pnlClass}">${fmtMoney(pnl)}</span>
+      <span class="metric-pill metric-pill--${resultClass === 'win' ? 'win' : resultClass === 'loss' ? 'loss' : 'muted'} journal-trade-result ${resultClass}">${resultLabel}</span>
+      <button type="button" class="journal-card-close" data-journal-day-close aria-label="Fermer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="journal-trade-shot ${shotClass}"${shotStyle}>
+      ${shot ? "" : "<span>Aucune capture</span>"}
+    </div>
+    <div class="journal-trade-content">
+      <div class="journal-trade-main">
+        <div>
+          <h4>${escapeHtml(strategy)}</h4>
+          <p>${escapeHtml(summary)}</p>
+        </div>
+        <strong class="journal-trade-pnl ${pnlClass}">${fmtMoney(pnl)}</strong>
+      </div>
+      <div class="journal-trade-strip">
+        <span class="metric-pill">${escapeHtml(direction)}</span>
+        <span class="metric-pill">${escapeHtml(rr)}</span>
+        <span class="metric-pill metric-pill--${resultClass === 'win' ? 'win' : resultClass === 'loss' ? 'loss' : 'muted'}">${escapeHtml(resultLabel)}</span>
+      </div>
+      <div class="journal-trade-card-actions">
+        <span>${escapeHtml(resultLabel)}</span>
+        <button type="button">Voir details</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function _flipCardBackInner(day, trade, m, pnl, pnlClass, resultClass, resultLabel, direction, strategy, rr, summary, shot, shotStyle, shotClass, tid, idx, dateLabel, htf, starsHtml, qualityRaw, lessonsRaw) {
+  var isFav = (trade.tags || []).includes("favoris");
+  return `<div class="journal-flip-face journal-flip-back">
+    <div class="journal-flip-back-scroll" data-trade-id="${tid}">
+      <div class="journal-back-actions">
+        <button type="button" class="journal-back-icon${isFav ? " is-active" : ""}" aria-label="Favoris" aria-pressed="${isFav}" data-journal-fav="${tid}">
+          <svg viewBox="0 0 24 24" fill="${isFav ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>
+        </button>
+        <button type="button" class="journal-back-icon" aria-label="Dupliquer" data-journal-dup="${tid}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+        <span class="jcard-save-ind" data-state=""></span>
+        <button type="button" class="journal-back-edit" data-journal-trade-edit="${tid}">Editer</button>
+      </div>
+      <h4>${escapeHtml(strategy)}</h4>
+      <p class="journal-back-sub">${escapeHtml(dateLabel)} &middot; ${escapeHtml(day.instrument || "-")} &middot; ${escapeHtml(direction)}</p>
+      <p class="journal-back-summary">${escapeHtml(summary)}</p>
+      <div class="journal-back-stats">
+        <div><strong>${escapeHtml(direction)}</strong><span>Direction</span></div>
+        <div><strong>${escapeHtml(trade.session || '-')}</strong><span>Session</span></div>
+        <div><strong class="jcard-rr-display">${escapeHtml(rr)}</strong><span>R multiple</span></div>
+        <div><strong class="jcard-pnl-display ${pnlClass}">${fmtMoney(pnl)}</strong><span>PnL</span></div>
+      </div>
+      <h5>Niveaux</h5>
+      <div class="journal-trade-detail-grid">
+        <div style="grid-column:1/-1">
+          <span>Entree</span>
+          <input class="jcard-field" type="number" step="0.01" data-field="entry_price" value="${trade.entry_price != null ? escapeHtml(String(trade.entry_price)) : ''}" placeholder="&mdash;"/>
+        </div>
+        <div>
+          <span>SL</span>
+          <input class="jcard-field" type="number" step="0.01" data-field="stop_loss" value="${trade.stop_loss != null ? escapeHtml(String(trade.stop_loss)) : ''}" placeholder="&mdash;"/>
+        </div>
+        <div>
+          <span>Sortie</span>
+          <input class="jcard-field" type="number" step="0.01" data-field="exit_price" value="${trade.exit_price != null ? escapeHtml(String(trade.exit_price)) : ''}" placeholder="&mdash;"/>
+        </div>
+      </div>
+      <h5>Capture</h5>
+      <div class="journal-back-shot" data-trade-shot="${tid}">
+        ${shot ? `<img class="journal-back-shot-img" src="/screenshots/${escapeHtml(shot.filename)}" alt="Screenshot" />` : '<div class="journal-back-shot-empty"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg><span>Ajouter une photo</span></div>'}
+        <input type="file" accept="image/*" class="journal-shot-input hidden" data-trade-shot-input="${tid}" />
+      </div>
+      <h5>Execution</h5>
+      <div class="journal-trade-detail-grid jcard-exec-grid">
+        <div><span>Resultat</span><strong class="jcard-result-display ${resultClass}">${escapeHtml(resultLabel)}</strong></div>
+        <div><span>Marge $</span><input class="jcard-field jcard-margin-input" type="number" step="0.01" min="0" data-margin-input="1" value="${trade.position_size != null && trade.leverage != null && trade.entry_price != null ? escapeHtml(String(computeMarginUsd(trade.position_size, trade.leverage, trade.entry_price))) : ''}" placeholder="0.00"/></div>
+        <div><span>Levier</span><input class="jcard-field" type="number" step="1" min="1" data-field="leverage" value="${trade.leverage != null ? escapeHtml(String(trade.leverage)) : ''}" placeholder="1x"/></div>
+        <div><span>Position</span><input class="jcard-field" type="number" step="0.01" data-field="position_size" value="${trade.position_size != null ? escapeHtml(String(trade.position_size)) : ''}" placeholder="&mdash;"/></div>
+        <div><span>Qualite</span><div class="jcard-stars" data-field="execution_quality" data-value="${qualityRaw}">${starsHtml}</div></div>
+      </div>
+      <h5>Contexte</h5>
+      <div class="journal-trade-back-note"><span>HTF / plan</span><p>${escapeHtml(htf)}</p></div>
+      <div class="journal-trade-back-note"><span>Review</span><textarea class="jcard-field jcard-textarea" data-field="lessons_learned" rows="3" placeholder="Lecons apprises&hellip;">${escapeHtml(lessonsRaw)}</textarea></div>
+    </div>
+  </div>`;
+}
+
 function journalTradeFlipCardHtml(day, trade, idx, deck) {
   var m           = deriveTradeMetrics(trade);
   var pnl         = Number(m.pnl || 0);
@@ -726,144 +598,11 @@ function journalTradeFlipCardHtml(day, trade, idx, deck) {
     return '<button type="button" class="jcard-star' + (qualityRaw >= i ? ' is-lit' : '') + '" data-val="' + i + '">★</button>';
   }).join('');
 
-  return `
-    <article class="journal-flip-card" tabindex="0" data-trade-id="${tid}">
-      <div class="journal-flip-card-inner">
-
-        <!-- ── FRONT ── -->
-        <div class="journal-flip-face journal-flip-front">
-          <div class="journal-flip-top">
-            <span class="metric-pill metric-pill--muted journal-trade-index">#${idx}</span>
-            <span class="metric-pill metric-pill--cyan journal-trade-instrument">${escapeHtml(day.instrument || "-")}</span>
-            <span class="metric-pill metric-pill--${pnlClass === 'pos' ? 'win' : pnlClass === 'neg' ? 'loss' : 'muted'} journal-trade-top-pnl ${pnlClass}">${fmtMoney(pnl)}</span>
-            <span class="metric-pill metric-pill--${resultClass === 'win' ? 'win' : resultClass === 'loss' ? 'loss' : 'muted'} journal-trade-result ${resultClass}">${resultLabel}</span>
-            <button type="button" class="journal-card-close" data-journal-day-close aria-label="Fermer">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </div>
-          <div class="journal-trade-shot ${shotClass}"${shotStyle}>
-            ${shot ? "" : "<span>Aucune capture</span>"}
-          </div>
-          <div class="journal-trade-content">
-            <div class="journal-trade-main">
-              <div>
-                <h4>${escapeHtml(strategy)}</h4>
-                <p>${escapeHtml(summary)}</p>
-              </div>
-              <strong class="journal-trade-pnl ${pnlClass}">${fmtMoney(pnl)}</strong>
-            </div>
-            <div class="journal-trade-strip">
-              <span class="metric-pill">${escapeHtml(direction)}</span>
-              <span class="metric-pill">${escapeHtml(rr)}</span>
-              <span class="metric-pill metric-pill--${resultClass === 'win' ? 'win' : resultClass === 'loss' ? 'loss' : 'muted'}">${escapeHtml(resultLabel)}</span>
-            </div>
-            <div class="journal-trade-card-actions">
-              <span>${escapeHtml(resultLabel)}</span>
-              <button type="button">Voir details</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- ── BACK ── -->
-        <div class="journal-flip-face journal-flip-back">
-          <div class="journal-flip-back-scroll" data-trade-id="${tid}">
-
-            <div class="journal-back-actions">
-              <button type="button" class="journal-back-icon${(trade.tags || []).includes('favoris') ? ' is-active' : ''}" aria-label="Favoris" aria-pressed="${(trade.tags || []).includes('favoris')}" data-journal-fav="${tid}">
-                <svg viewBox="0 0 24 24" fill="${(trade.tags || []).includes('favoris') ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>
-              </button>
-              <button type="button" class="journal-back-icon" aria-label="Dupliquer" data-journal-dup="${tid}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              </button>
-              <span class="jcard-save-ind" data-state=""></span>
-              <button type="button" class="journal-back-edit" data-journal-trade-edit="${tid}">Editer</button>
-            </div>
-
-            <h4>${escapeHtml(strategy)}</h4>
-            <p class="journal-back-sub">${escapeHtml(dateLabel)} · ${escapeHtml(day.instrument || "-")} · ${escapeHtml(direction)}</p>
-            <p class="journal-back-summary">${escapeHtml(summary)}</p>
-
-            <div class="journal-back-stats">
-              <div><strong>${escapeHtml(direction)}</strong><span>Direction</span></div>
-              <div><strong>${escapeHtml(trade.session || '-')}</strong><span>Session</span></div>
-              <div><strong class="jcard-rr-display">${escapeHtml(rr)}</strong><span>R multiple</span></div>
-              <div><strong class="jcard-pnl-display ${pnlClass}">${fmtMoney(pnl)}</strong><span>PnL</span></div>
-            </div>
-
-            <h5>Niveaux</h5>
-            <div class="journal-trade-detail-grid">
-              <div style="grid-column:1/-1">
-                <span>Entree</span>
-                <input class="jcard-field" type="number" step="0.01" data-field="entry_price"
-                  value="${trade.entry_price != null ? escapeHtml(String(trade.entry_price)) : ''}" placeholder="—"/>
-              </div>
-              <div>
-                <span>SL</span>
-                <input class="jcard-field" type="number" step="0.01" data-field="stop_loss"
-                  value="${trade.stop_loss != null ? escapeHtml(String(trade.stop_loss)) : ''}" placeholder="—"/>
-              </div>
-              <div>
-                <span>Sortie</span>
-                <input class="jcard-field" type="number" step="0.01" data-field="exit_price"
-                  value="${trade.exit_price != null ? escapeHtml(String(trade.exit_price)) : ''}" placeholder="—"/>
-              </div>
-            </div>
-
-            <h5>Capture</h5>
-            <div class="journal-back-shot" data-trade-shot="${tid}">
-              ${shot
-                ? `<img class="journal-back-shot-img" src="/screenshots/${escapeHtml(shot.filename)}" alt="Screenshot" />`
-                : '<div class="journal-back-shot-empty"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg><span>Ajouter une photo</span></div>'}
-              <input type="file" accept="image/*" class="journal-shot-input hidden" data-trade-shot-input="${tid}" />
-            </div>
-
-            <h5>Execution</h5>
-            <div class="journal-trade-detail-grid jcard-exec-grid">
-              <div>
-                <span>Resultat</span>
-                <strong class="jcard-result-display ${resultClass}">${escapeHtml(resultLabel)}</strong>
-              </div>
-              <div>
-                <span>Marge $</span>
-                <input class="jcard-field jcard-margin-input" type="number" step="0.01" min="0" data-margin-input="1"
-                  value="${trade.position_size != null && trade.leverage != null && trade.entry_price != null
-                    ? escapeHtml(String(computeMarginUsd(trade.position_size, trade.leverage, trade.entry_price)))
-                    : ''}" placeholder="0.00"/>
-              </div>
-              <div>
-                <span>Levier</span>
-                <input class="jcard-field" type="number" step="1" min="1" data-field="leverage"
-                  value="${trade.leverage != null ? escapeHtml(String(trade.leverage)) : ''}" placeholder="1x"/>
-              </div>
-              <div>
-                <span>Position</span>
-                <input class="jcard-field" type="number" step="0.01" data-field="position_size"
-                  value="${trade.position_size != null ? escapeHtml(String(trade.position_size)) : ''}" placeholder="—"/>
-              </div>
-              <div>
-                <span>Qualite</span>
-                <div class="jcard-stars" data-field="execution_quality" data-value="${qualityRaw}">${starsHtml}</div>
-              </div>
-            </div>
-
-            <h5>Contexte</h5>
-            <div class="journal-trade-back-note">
-              <span>HTF / plan</span>
-              <p>${escapeHtml(htf)}</p>
-            </div>
-            <div class="journal-trade-back-note">
-              <span>Review</span>
-              <textarea class="jcard-field jcard-textarea" data-field="lessons_learned"
-                rows="3" placeholder="Lecons apprises…">${escapeHtml(lessonsRaw)}</textarea>
-            </div>
-
-          </div>
-        </div>
-
-      </div>
-    </article>
-  `;
-
+  return '<article class="journal-flip-card" tabindex="0" data-trade-id="' + tid + '">' +
+    '<div class="journal-flip-card-inner">' +
+    _flipCardFrontInner(day, trade, m, pnl, pnlClass, resultClass, resultLabel, direction, strategy, rr, summary, shot, shotStyle, shotClass, tid, idx) +
+    _flipCardBackInner(day, trade, m, pnl, pnlClass, resultClass, resultLabel, direction, strategy, rr, summary, shot, shotStyle, shotClass, tid, idx, dateLabel, htf, starsHtml, qualityRaw, lessonsRaw) +
+    '</div></article>';
 }
 // ---------- Favoris toggle ----------
 function _toggleTradeFavorite(tid, btnEl) {

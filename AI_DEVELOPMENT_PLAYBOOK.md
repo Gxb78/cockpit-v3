@@ -552,3 +552,27 @@ Format obligatoire d'une lesson:
 - Test de non-regression: Table journal >100 trades → scroll infini charge par 100. Input month → meme rendu Chrome/Firefox. Settings → card Donnees affiche path/taille DB. API key → bouton Modifier → saisie → Enregistrer → POST /api/settings/key.
 - Fichiers a surveiller: `static/js/split/006_comparetext.js` (lazy load IntersectionObserver), `static/js/split/013_kpis.js` (ARIA progressbar), `static/js/split/015_calendar.js` (search empty msg), `static/js/split/028_global_keys.js` (shortcuts / et F), `static/js/split/032_breakdowns.js` (sort badge), `static/js/split/047_today_widget_board.js` (confirm reset), `static/js/split/049_insights.js` (debounce + aria-label), `static/css/split/005_journal_toolbar_filters.css` (input month cross-browser), `templates/partials/pages/settings.html` (ordre), `templates/partials/pages/settings/data_card.html` (nouveau), `app_parts/07_routes_pages.py` (POST /api/settings/key), `app_parts/16_export.py` (GET /api/db/info).
 
+### BUG-20260504-02 - Knowledge cards unsave en 2 appels + pas de cache
+- Symptome: Unsave d'une knowledge card nécessitait un GET (liste) puis un DELETE (par ID) → 2 appels réseau. `_markSavedCards()` fetchait l'API à chaque render Insights.
+- Cause racine: `toggleSave()` faisait un GET pour trouver l'ID de la card, puis un DELETE par ID. `_markSavedCards()` n'avait pas de cache.
+- Regle de prevention: Utiliser un DELETE par kind+title (query params) pour unsave en 1 appel. Ajouter un cache in-memory (`_savedCardCache`) pour `_markSavedCards`, invalider après chaque save/unsave.
+- Test de non-regression: Cliquer sur l'étoile d'une insight card → elle se remplit (save) ou se vide (unsave) sans erreur réseau. Recharger la page → les étoiles remplies sont toujours remplies.
+- Changement: Nouvelle route `DELETE /api/ml/knowledge?kind=X&title=Y` dans `21_routes_ml.py`. Refacto de `toggleSave()` et `_markSavedCards()` dans `049_insights.js`.
+- Fichiers a surveiller: `app_parts/21_routes_ml.py`, `static/js/split/049_insights.js`.
+
+### BUG-20260504-03 - Settings : pas de Danger Zone pour les actions destructrices
+- Symptome: Aucune section visuellement distincte pour le reset de donnees. Les actions destructrices n'existaient pas dans l'UI.
+- Cause racine: Pas de backend de reset, pas de template, pas de CSS.
+- Regle de prevention: Toute action destructive doit avoir: 1) backend avec backup automatique, 2) double confirmation utilisateur, 3) zone rouge visuellement separee, 4) rate limiting.
+- Test de non-regression: POST /api/data/reset avec confirm=RESET ALL DATA → 200 + backup cree. Sans confirmation → 400.
+- Changement: Nouvelle route POST /api/data/reset avec backup automatique (17_reset.py). Template danger_card.html avec bouton btn-danger rouge. CSS danger zone avec bordures rouges. JS: double confirm() avant appel API.
+- Fichiers a surveiller: `app_parts/17_reset.py`, `app_parts/__init__.py`, `templates/partials/pages/settings/danger_card.html`, `templates/partials/pages/settings.html`, `static/js/split/003_addcustomstrategyfromsettings.js`, `static/css/split/034_priority3_stats_settings_insights.css`.
+
+### BUG-20260504-04 - Stats fusionnees dans la page Insights
+- Symptome: La page Stats etait separee d'Insights, avec un design different.
+- Cause racine: Separation artificielle Stats vs Insights.
+- Regle de prevention: Les donnees de performance doivent apparaitre dans Insights.
+- Test de non-regression: Naviguer vers Insights → breakdowns et period compare s'affichent.
+- Changement: Suppression complete de la page Stats (template, rail, navigation, raccourci S, commande palette). Contenu Stats deplace dans Insights. Filtres Insights synchronises avec localStorage et heritage de la periode du journal.
+- Fichiers a surveiller: `templates/index.html`, `templates/partials/layout/rail.html`, `templates/partials/pages/stats/*` (supprimes), `templates/partials/pages/insights.html`, `static/js/split/009_navigation.js`, `static/js/split/028_global_keys.js`, `static/js/split/029_command_palette.js`, `static/js/split/008_boot.js`, `static/js/split/049_insights.js`, `static/js/split/002_prettify.js`, `static/js/split/003_addcustomstrategyfromsettings.js`, `static/js/split/007_loadcalendarmonthfocusmode.js`, `static/js/split/012_data_loading.js`.
+

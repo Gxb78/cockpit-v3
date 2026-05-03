@@ -118,86 +118,27 @@ function bindCalendarNav() {
   });
 }
 
-function getMonthPickerYear() {
-  const yearEl = $("#monthPickerYear");
-  const fallback = state.currentMonth.getFullYear();
-  if (!yearEl) return fallback;
-  const parsed = Number(yearEl.dataset.year || yearEl.textContent);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
+// closeMonthPicker — no-op, le popover custom a ete supprime (#49)
+function closeMonthPicker() {}
 
-function setMonthPickerYear(year) {
-  const yearEl = $("#monthPickerYear");
-  if (!yearEl) return;
-  yearEl.dataset.year = String(year);
-  yearEl.textContent = String(year);
-  const activeMonth = state.currentMonth.getFullYear() === year ? state.currentMonth.getMonth() : -1;
-  const now = new Date();
-  const isCurrentYear = now.getFullYear() === year;
-  $$("#monthGrid .month-btn").forEach(btn => {
-    const m = Number(btn.dataset.month);
-    btn.classList.toggle("active", m === activeMonth);
-    btn.classList.toggle("current", isCurrentYear && m === now.getMonth());
-  });
-}
+// ── Journal night mode ──
+function bindJournalNightToggle() {
+  var btn = document.getElementById("journalNightToggle");
+  if (!btn) return;
+  var page = document.querySelector('.page[data-page="journal"]');
+  if (!page) return;
 
-function closeMonthPicker() {
-  const pop = $("#monthPopover");
-  const wrap = $("#calendarMonthPicker");
-  if (pop) pop.classList.add("hidden");
-  if (wrap) wrap.classList.remove("open");
-}
+  // Restore saved state
+  var saved = localStorage.getItem("journalNightMode");
+  if (saved === "true") {
+    page.classList.add("journal-night");
+    btn.classList.add("active");
+  }
 
-function openMonthPicker() {
-  const pop = $("#monthPopover");
-  const wrap = $("#calendarMonthPicker");
-  if (!pop || !wrap) return;
-  if (wrap.classList.contains("hidden")) return;
-  setMonthPickerYear(state.currentMonth.getFullYear());
-  pop.classList.remove("hidden");
-  wrap.classList.add("open");
-}
-
-function bindCalendarMonthPicker() {
-  // Le popover picker est binde meme si #journalMonthInput existe
-  const wrap = $("#calendarMonthPicker");
-  const trigger = $("#monthLabel");
-  const pop = $("#monthPopover");
-  if (!wrap || !trigger || !pop) return;
-
-  trigger.addEventListener("click", e => {
-    e.stopPropagation();
-    if (pop.classList.contains("hidden")) openMonthPicker();
-    else closeMonthPicker();
-  });
-
-  $("#monthYearPrev")?.addEventListener("click", e => {
-    e.stopPropagation();
-    setMonthPickerYear(getMonthPickerYear() - 1);
-  });
-  $("#monthYearNext")?.addEventListener("click", e => {
-    e.stopPropagation();
-    setMonthPickerYear(getMonthPickerYear() + 1);
-  });
-
-  $("#monthGrid")?.addEventListener("click", e => {
-    const btn = e.target.closest(".month-btn");
-    if (!btn) return;
-    const month = Number(btn.dataset.month);
-    if (!Number.isFinite(month)) return;
-    state.currentMonth = new Date(getMonthPickerYear(), month, 1);
-    closeMonthPicker();
-    loadMonth();
-  });
-
-  document.addEventListener("click", e => {
-    if (pop.classList.contains("hidden")) return;
-    if (wrap.contains(e.target)) return;
-    closeMonthPicker();
-  });
-
-  document.addEventListener("keydown", e => {
-    if (e.key === "Escape") closeMonthPicker();
+  btn.addEventListener("click", function () {
+    var on = page.classList.toggle("journal-night");
+    btn.classList.toggle("active", on);
+    localStorage.setItem("journalNightMode", on ? "true" : "false");
   });
 }
 

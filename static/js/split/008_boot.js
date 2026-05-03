@@ -35,10 +35,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     localStorage.setItem(JOURNAL_CUSTOM_RANGE_KEY, JSON.stringify({ from: def.from, to: def.to }));
   }
   state.breakdownSortMode = loadBreakdownSortMode();
+  // Restaurer la derniere page active (#55)
+  var lastPage = localStorage.getItem("lastPage");
+  if (lastPage && ["today","journal","settings"].indexOf(lastPage) >= 0) {
+    state.currentPage = lastPage;
+  }
   bindNav();
   bindAiPanelToggle();
   bindCalendarNav();
-  bindCalendarMonthPicker();
+  bindJournalNightToggle();
   bindCalendarMetricToggle();
   bindJournalViewToggle();
   bindJournalLayoutToggle();
@@ -89,4 +94,3 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderKPIs(stats);
   });
 });
-

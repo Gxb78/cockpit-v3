@@ -6,6 +6,7 @@
   var _insightsInitialized = false;
   var _insightsToastTimeout = null;
   var _insightsRefreshing = false;
+  var _savedCardCache = null; // cache pour _markSavedCards
 
   var INSIGHT_ICONS = {
     best_strategy: { icon: "+", cls: "success" },
@@ -303,8 +304,29 @@
     var refresh = document.getElementById("insightsRefreshBtn");
     if (!from || !to) return;
 
-    from.value = _getFirstDayOfMonth();
-    to.value = _getTodayStr();
+    // Restore saved filter state, or use journal's current month
+    var saved = _loadInsightFilters();
+    if (saved) {
+      from.value = saved.from || _getFirstDayOfMonth();
+      to.value = saved.to || _getTodayStr();
+      if (saved.instrument && instr) instr.value = saved.instrument;
+      if (saved.strategy && strat) strat.value = saved.strategy;
+    } else {
+      // Try to inherit from journal: use current month range
+      if (typeof getJournalCustomWindow === "function" && typeof fmtDateKey === "function") {
+        var cw = getJournalCustomWindow();
+        if (cw && cw.from && cw.to) {
+          from.value = fmtDateKey(cw.from);
+          to.value = fmtDateKey(cw.to);
+        } else {
+          from.value = _getFirstDayOfMonth();
+          to.value = _getTodayStr();
+        }
+      } else {
+        from.value = _getFirstDayOfMonth();
+        to.value = _getTodayStr();
+      }
+    }
     populateInstruments('filterInstrument');
 
     var quickBtns = [
@@ -314,7 +336,27 @@
       { label: "Ce mois", fn: _getFirstDayOfMonth },
     ];
 
+    function _saveFilterState() {
+      try {
+        localStorage.setItem("insightFilters", JSON.stringify({
+          from: from ? from.value : "",
+          to: to ? to.value : "",
+          instrument: instr ? instr.value : "ALL",
+          strategy: strat ? strat.value : "ALL",
+        }));
+      } catch(e) {}
+    }
+
+    function _loadInsightFilters() {
+      try {
+        var raw = JSON.parse(localStorage.getItem("insightFilters"));
+        if (raw && raw.from && raw.to) return raw;
+      } catch(e) {}
+      return null;
+    }
+
     function _applyFilter() {
+      _saveFilterState();
       loadInsights({
         from: from.value || undefined,
         to: to.value || undefined,
@@ -368,6 +410,7 @@
     _renderPretradeWidget();
     _initPostTradeToast();
     _initFilters();
+    if (typeof renderPerformance === "function") renderPerformance();
 
     document.addEventListener("trade:saved", function (e) {
       onTradeSaved(e.detail);
@@ -375,19 +418,28 @@
   }
 
   function _markSavedCards() {
+    if (_savedCardCache) {
+      _applySavedCards(_savedCardCache);
+      return;
+    }
     fetch('/api/ml/knowledge').then(function (r) { return r.json(); }).then(function (cards) {
-      if (!cards || !cards.length) return;
-      var lookup = {};
-      cards.forEach(function (c) { lookup[c.kind + '|' + c.title] = true; });
-      document.querySelectorAll('.insight-card').forEach(function (card) {
-        var key = (card.dataset.kind || '') + '|' + (card.dataset.title || '');
-        if (lookup[key]) {
-          card.classList.add('is-saved');
-          var btn = card.querySelector('.insight-save-btn');
-          if (btn) btn.title = 'Retirer des sauvegardes';
-        }
-      });
+      _savedCardCache = cards || [];
+      _applySavedCards(_savedCardCache);
     }).catch(function () {});
+  }
+
+  function _applySavedCards(cards) {
+    if (!cards || !cards.length) return;
+    var lookup = {};
+    cards.forEach(function (c) { lookup[c.kind + '|' + c.title] = true; });
+    document.querySelectorAll('.insight-card').forEach(function (card) {
+      var key = (card.dataset.kind || '') + '|' + (card.dataset.title || '');
+      if (lookup[key]) {
+        card.classList.add('is-saved');
+        var btn = card.querySelector('.insight-save-btn');
+        if (btn) btn.title = 'Retirer des sauvegardes';
+      }
+    });
   }
 
   function _escapeHtml(str) {
@@ -405,30 +457,25 @@
       if (!kind || !title) return;
 
       var isSaved = card.classList.contains('is-saved');
-      var url = isSaved ? '' : '/api/ml/knowledge';
-      var method = isSaved ? 'GET' : 'POST';
 
       if (isSaved) {
-        // Unsaved: find card ID from saved data
-        fetch('/api/ml/knowledge').then(function (r) { return r.json(); }).then(function (cards) {
-          var match = cards.filter(function (c) { return c.kind === kind && c.title === title; })[0];
-          if (match) {
-            fetch('/api/ml/knowledge/' + match.id, { method: 'DELETE' }).then(function () {
-              card.classList.remove('is-saved');
-              btn.title = 'Sauvegarder';
-            });
-          }
-        }).catch(function () {});
+        fetch('/api/ml/knowledge?kind=' + encodeURIComponent(kind) + '&title=' + encodeURIComponent(title), { method: 'DELETE' })
+          .then(function () {
+            card.classList.remove('is-saved');
+            btn.title = 'Sauvegarder';
+            _savedCardCache = null; // invalider le cache
+          }).catch(function () {});
       } else {
         var body = JSON.stringify({
           kind: kind, title: title,
           body: card.querySelector('.insight-body')?.textContent || '',
           confidence: parseFloat(card.querySelector('.insight-badge')?.textContent || '0') / 100,
         });
-        fetch(url, { method: 'POST', body: body, headers: { 'Content-Type': 'application/json' } })
+        fetch('/api/ml/knowledge', { method: 'POST', body: body, headers: { 'Content-Type': 'application/json' } })
           .then(function () {
             card.classList.add('is-saved');
             btn.title = 'Retirer des sauvegardes';
+            _savedCardCache = null; // invalider le cache
           }).catch(function () {});
       }
     }

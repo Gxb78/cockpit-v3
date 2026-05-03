@@ -215,11 +215,36 @@ def ml_save_knowledge():
 
 @app.delete("/api/ml/knowledge/<int:card_id>")
 def ml_delete_knowledge(card_id):
-    """Supprime (archive) une knowledge card."""
+    """Supprime (archive) une knowledge card par ID."""
     db = get_db()
     db.execute(
         "UPDATE knowledge_cards SET is_user_saved=0, updated_at=? WHERE id=?",
         (now_iso(), card_id),
+    )
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@app.delete("/api/ml/knowledge")
+def ml_delete_knowledge_by_key():
+    """Supprime (archive) une knowledge card par kind + title (query params)."""
+    kind = request.args.get("kind", "").strip()
+    title = request.args.get("title", "").strip()
+    if not kind or not title:
+        return jsonify({"error": "kind et title requis"}), 400
+
+    db = get_db()
+    existing = db.execute(
+        "SELECT id FROM knowledge_cards WHERE kind=? AND title=? AND is_user_saved=1",
+        (kind, title),
+    ).fetchone()
+
+    if not existing:
+        return jsonify({"ok": True})  # deja supprime
+
+    db.execute(
+        "UPDATE knowledge_cards SET is_user_saved=0, updated_at=? WHERE id=?",
+        (now_iso(), existing["id"]),
     )
     db.commit()
     return jsonify({"ok": True})
