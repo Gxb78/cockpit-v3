@@ -10058,10 +10058,46 @@ function bindJournalStatsArrows() {
     s.setData(aligned);
   }
 
+  // ── EVENT BUS VWAP — normalisation + synchro cross-component ──
+  function normalizeVwapPeriods(periods) {
+    var legacyMap = { '1D': 'D-NY' };
+    var seen = {};
+    var out = [];
+    (periods || []).forEach(function (p) {
+      p = legacyMap[p] || p;
+      if (!VWAP_SOURCE_CONFIG[p]) return;
+      if (seen[p]) return;
+      seen[p] = true;
+      out.push(p);
+    });
+    return out;
+  }
+
+  function readActiveVwapPeriods() {
+    try {
+      var raw = JSON.parse(localStorage.getItem('chartVwapPeriods'));
+      return normalizeVwapPeriods(Array.isArray(raw) ? raw : []);
+    } catch(e) {
+      return [];
+    }
+  }
+
+  function saveActiveVwapPeriods(periods) {
+    var normalized = normalizeVwapPeriods(periods);
+    localStorage.setItem('chartVwapPeriods', JSON.stringify(normalized));
+    window.dispatchEvent(new CustomEvent('chart:vwap-periods-changed', {
+      detail: { periods: normalized }
+    }));
+    return normalized;
+  }
+
   // ── EXPOSE ────────────────────────────────────────────────
   window.BtcVwap = {
     VWAP_SOURCE_CONFIG: VWAP_SOURCE_CONFIG,
     VWAP_COLORS: VWAP_COLORS,
+    normalizeVwapPeriods: normalizeVwapPeriods,
+    readActiveVwapPeriods: readActiveVwapPeriods,
+    saveActiveVwapPeriods: saveActiveVwapPeriods,
     normalizeCandlesForLwc: normalizeCandlesForLwc,
     computeVwapSeries: computeVwapSeries,
     getCanonicalVwap: getCanonicalVwap,
@@ -11501,7 +11537,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   };
 
   // VWAP periods from localStorage
-  try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) S.activeVwapPeriods = s.filter(function(p) { return window.BtcVwap && window.BtcVwap.VWAP_SOURCE_CONFIG && window.BtcVwap.VWAP_SOURCE_CONFIG[p]; }); } catch(e) {}
+  try { S.activeVwapPeriods = (window.BtcVwap && window.BtcVwap.readActiveVwapPeriods) ? window.BtcVwap.readActiveVwapPeriods() : []; } catch(e) {}
 
   // Indicator settings from localStorage
   var indSettings = {
@@ -11660,7 +11696,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   async function _calcAndDrawVwap() {
     var token = S.renderToken;
     var tf = S.timeframe;
-    try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) S.activeVwapPeriods = s.filter(function(p) { return window.BtcVwap && window.BtcVwap.VWAP_SOURCE_CONFIG && window.BtcVwap.VWAP_SOURCE_CONFIG[p]; }); } catch(e) {}
+    try { S.activeVwapPeriods = (window.BtcVwap && window.BtcVwap.readActiveVwapPeriods) ? window.BtcVwap.readActiveVwapPeriods() : []; } catch(e) {}
     Object.keys(S.vwapSeriesMap).forEach(function (k) { if (S.activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k); });
     if (!S.activeVwapPeriods.length) return;
     if (!window.BtcVwap) return;
@@ -11691,6 +11727,35 @@ TradeEditorController.renderHtml = function (day, trade) {
       try { S.chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: true }); } catch(e) {}
     }
   }
+
+  function _refreshWidgetVwapFromPrefs() {
+    if (window.BtcVwap && window.BtcVwap.readActiveVwapPeriods) {
+      S.activeVwapPeriods = window.BtcVwap.readActiveVwapPeriods();
+    } else {
+      try {
+        var raw = JSON.parse(localStorage.getItem('chartVwapPeriods'));
+        S.activeVwapPeriods = Array.isArray(raw) ? raw : [];
+      } catch(e) {
+        S.activeVwapPeriods = [];
+      }
+    }
+
+    if (!S.chartReady || !S.candles || !S.candles.length) return;
+
+    _calcAndDrawVwap().catch(function (e) {
+      console.warn('[BTC-WIDGET] refresh VWAP failed', e);
+    });
+  }
+
+  window.addEventListener('chart:vwap-periods-changed', function () {
+    _refreshWidgetVwapFromPrefs();
+  });
+
+  window.addEventListener('storage', function (e) {
+    if (e.key === 'chartVwapPeriods') {
+      _refreshWidgetVwapFromPrefs();
+    }
+  });
   // ──────────────────────────────────────────────
   //  PRICE RANGE MANAGEMENT
   // ──────────────────────────────────────────────
@@ -11956,11 +12021,24 @@ TradeEditorController.renderHtml = function (day, trade) {
     var openMs = _toMs(candle.time != null ? (candle.openTime != null ? candle.openTime : candle.time) : (candle.t != null ? candle.t : 0));
     var closeMs = _getCandleCloseMs(candle, intervalMs);
     if (!Number.isFinite(openMs) || !Number.isFinite(closeMs)) return;
-    // Utiliser Date.now() — la diff locale est fiable meme si l'absolu est decale
     var remaining = closeMs - Date.now();
-    // Guard anti valeur aberrante
-    if (remaining < -intervalMs || remaining > intervalMs * 2) {
-      console.warn('[COUNTDOWN] anchor rejected', { source, tf: S.timeframe, openMs, closeMs, remaining });
+    if (remaining < -intervalMs) {
+      console.warn('[COUNTDOWN] stale candle anchor, forcing latest fetch', { source, tf: S.timeframe, openMs, closeMs, remaining });
+      S.countdownAnchor = {
+        candleOpenMs: openMs,
+        candleCloseMs: closeMs,
+        remainingAtAnchorMs: 0,
+        perfAtAnchor: performance.now(),
+        source: 'stale-' + (source || 'unknown'),
+      };
+      if (Date.now() - (S.lastCountdownFetchAt || 0) > 5000) {
+        S.lastCountdownFetchAt = Date.now();
+        _fetchLatestCandleOnly();
+      }
+      return;
+    }
+    if (remaining > intervalMs * 2) {
+      console.warn('[COUNTDOWN] future candle anchor rejected', { source, tf: S.timeframe, openMs, closeMs, remaining });
       return;
     }
     remaining = Math.max(0, Math.min(remaining, intervalMs));
@@ -11984,7 +12062,14 @@ TradeEditorController.renderHtml = function (day, trade) {
     S.countdownTimer = setInterval(function () {
       if (!S.countdownPriceLine) { _updateCountdownLabel('—'); return; }
       var anchor = S.countdownAnchor;
-      if (!anchor) { _updateCountdownLabel('—'); return; }
+      if (!anchor) {
+        _updateCountdownLabel('—');
+        if (S.chartReady && Date.now() - (S.lastCountdownFetchAt || 0) > 5000) {
+          S.lastCountdownFetchAt = Date.now();
+          _fetchLatestCandleOnly();
+        }
+        return;
+      }
       var elapsed = performance.now() - anchor.perfAtAnchor;
       var remaining = anchor.remainingAtAnchorMs - elapsed;
       if (remaining <= 0) {
@@ -12024,7 +12109,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   function _fetchLatestCandleOnly() {
     var token = S.renderToken;
     var tf = S.timeframe;
-    return fetch('/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=3')
+    return fetch('/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=3&force=1')
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
         if (token !== S.renderToken) return;
@@ -12313,7 +12398,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 
     _clearAllSeries();
 
-    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + S.timeframe + '&limit=300';
+    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + S.timeframe + '&limit=300&force=1';
     fetch(url)
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
@@ -12802,6 +12887,13 @@ TradeEditorController.renderHtml = function (day, trade) {
     var newWs = new WebSocket(url);
     ws = newWs;
 
+    newWs.onopen = function () {
+      if (generation !== wsGeneration || newWs !== ws) return;
+      wsConnected = true;
+      wsError = false;
+      wsReconnectAttempts = 0;
+    };
+
     newWs.onmessage = function (event) {
       if (generation !== wsGeneration || newWs !== ws) return;
       try { _handleWsMessage(event.data); } catch(e) { console.warn('[chart][WS] msg', e); }
@@ -13209,7 +13301,14 @@ TradeEditorController.renderHtml = function (day, trade) {
         if (idx >= 0) { activeVwapPeriods.splice(idx, 1); }
         else { activeVwapPeriods.push(period); }
         vwapToggle.classList.toggle('active', activeVwapPeriods.length > 0);
-        try { localStorage.setItem('chartVwapPeriods', JSON.stringify(activeVwapPeriods)); } catch(e) {}
+        if (window.BtcVwap && window.BtcVwap.saveActiveVwapPeriods) {
+          activeVwapPeriods = window.BtcVwap.saveActiveVwapPeriods(activeVwapPeriods);
+        } else {
+          try { localStorage.setItem('chartVwapPeriods', JSON.stringify(activeVwapPeriods)); } catch(e) {}
+          window.dispatchEvent(new CustomEvent('chart:vwap-periods-changed', {
+            detail: { periods: activeVwapPeriods }
+          }));
+        }
         vwapDropdown.classList.add('hidden');
         _fetchAndRender(true, 'user');
       });
@@ -13543,7 +13642,14 @@ TradeEditorController.renderHtml = function (day, trade) {
       localStorage.setItem('chartDefInterval', currentInterval);
       localStorage.setItem('chartDefSymbol', currentSymbol);
       localStorage.setItem('chartDefStyle', chartStyle);
-      localStorage.setItem('chartVwapPeriods', JSON.stringify(activeVwapPeriods));
+      if (window.BtcVwap && window.BtcVwap.saveActiveVwapPeriods) {
+        window.BtcVwap.saveActiveVwapPeriods(activeVwapPeriods);
+      } else {
+        localStorage.setItem('chartVwapPeriods', JSON.stringify(activeVwapPeriods));
+        window.dispatchEvent(new CustomEvent('chart:vwap-periods-changed', {
+          detail: { periods: activeVwapPeriods }
+        }));
+      }
     } catch(e) {}
   }
 
@@ -13587,7 +13693,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
     }
 
-    var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=500';
+    var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=500&force=1';
     fetch(url)
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
@@ -13705,8 +13811,23 @@ TradeEditorController.renderHtml = function (day, trade) {
     var closeMs = _getCandleCloseMs(candle, intervalMs);
     if (!Number.isFinite(openMs) || !Number.isFinite(closeMs)) return;
     var remaining = closeMs - Date.now();
-    if (remaining < -intervalMs || remaining > intervalMs * 2) {
-      console.warn('[COUNTDOWN] anchor rejected', { source, tf: currentInterval, openMs, closeMs, remaining });
+    if (remaining < -intervalMs) {
+      console.warn('[COUNTDOWN] stale candle anchor, forcing latest fetch', { source, tf: currentInterval, openMs, closeMs, remaining });
+      countdownAnchor = {
+        candleOpenMs: openMs,
+        candleCloseMs: closeMs,
+        remainingAtAnchorMs: 0,
+        perfAtAnchor: performance.now(),
+        source: 'stale-' + (source || 'unknown'),
+      };
+      if (Date.now() - (lastCountdownFetchAt || 0) > 5000) {
+        lastCountdownFetchAt = Date.now();
+        _fetchLatestCandleOnly();
+      }
+      return;
+    }
+    if (remaining > intervalMs * 2) {
+      console.warn('[COUNTDOWN] future candle anchor rejected', { source, tf: currentInterval, openMs, closeMs, remaining });
       return;
     }
     remaining = Math.max(0, Math.min(remaining, intervalMs));
@@ -13729,7 +13850,14 @@ TradeEditorController.renderHtml = function (day, trade) {
     if (countdownTimer) clearInterval(countdownTimer);
     countdownTimer = setInterval(function () {
       if (!countdownPriceLine) { _updateCountdownLabel('—'); return; }
-      if (!countdownAnchor) { _updateCountdownLabel('—'); return; }
+      if (!countdownAnchor) {
+        _updateCountdownLabel('—');
+        if (chartReady && Date.now() - (lastCountdownFetchAt || 0) > 5000) {
+          lastCountdownFetchAt = Date.now();
+          _fetchLatestCandleOnly();
+        }
+        return;
+      }
       var elapsed = performance.now() - countdownAnchor.perfAtAnchor;
       var remaining = countdownAnchor.remainingAtAnchorMs - elapsed;
       if (remaining <= 0) {
@@ -13769,7 +13897,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   function _fetchLatestCandleOnly() {
     var interval = currentInterval;
     var sym = currentSymbol;
-    var url = '/api/market/klines?symbol=' + sym + '&interval=' + interval + '&limit=3';
+    var url = '/api/market/klines?symbol=' + sym + '&interval=' + interval + '&limit=3&force=1';
     return fetch(url)
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {

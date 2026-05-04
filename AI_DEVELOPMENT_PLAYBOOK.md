@@ -988,3 +988,33 @@ les fenetres temporelles non-bornees.
   Filtrage des periodes inconnues au chargement depuis localStorage.
 - **Template `chart.html`** : boutons VWAP : 'Jour NY' + '24h' remplacent '1 jour'.
 - Ne pas toucher au mapping timeframe `'1D' → '1d'` (c'est Binance, pas VWAP).
+
+### Event bus VWAP — synchro widget ↔ page chart (4 mai 2026)
+**Cause** : quand 062 modifie `localStorage.chartVwapPeriods`, le widget 060 ne recoit aucun
+signal car l'event natif `storage` ne se declenche PAS dans le meme document/onglet.
+Le widget relisait la config au chargement mais pas apres changement.
+**Fix** :
+- **055** : `readActiveVwapPeriods()`, `saveActiveVwapPeriods()`, `normalizeVwapPeriods()`
+  (legacy '1D' → 'D-NY'). `saveActiveVwapPeriods()` declenche `CustomEvent('chart:vwap-periods-changed')`.
+  Tout expose dans `window.BtcVwap`.
+- **062** : toggle VWAP passe par `BtcVwap.saveActiveVwapPeriods()` au lieu de `localStorage.setItem()` direct.
+- **060** : `_refreshWidgetVwapFromPrefs()` ecoute `chart:vwap-periods-changed` ET l'event natif `storage`.
+  Recalcul VWAP a chaque changement de periode.
+
+### Countdown `—` — cache klines TTL 5min + force=1 (4 mai 2026)
+**Cause** : le cache backend `_KLINES_CACHE_TTL = 300` (5 min) renvoyait des bougies expirees
+pour les fetchs live sans `endTime`. `_updateCountdownAnchor()` rejetait l'anchor stale → `countdownAnchor = null` → affichage `—`.
+**Fix** :
+- **Backend** : ajout du parametre `force` sur `fetch_klines()` et `market_klines()`.
+  `force=True` skip le cache, mais le cache est quand meme mis a jour apres fetch.
+- **Frontend 060 + 062** : `force=1` sur `_fetchAndRender()` et `_fetchLatestCandleOnly()`,
+  pas sur les VWAP canoniques (startTime/endTime → cache stable).
+- **Fallback stale anchor** : si `remaining < -intervalMs`, log warning + `_fetchLatestCandleOnly()` auto.
+  `_startCountdown()` appelle aussi `_fetchLatestCandleOnly()` si pas d'anchor.
+- **wsConnected** : `newWs.onopen` manquant dans 062 ajoute (set `wsConnected = true`).
+
+### Timeout Binance 10s → 3s + threaded=True (6 mai 2026)
+**Cause** : `urllib.request.urlopen(req, timeout=10)` bloquait le thread Flask 10s sur Binance lent/unreachable.
+Flask mono-thread → `app.js` (657 KB) reste en Pending → page noire sans data.
+**Fix** : timeout Binance 3s max, `threaded=True` sur `app.run()` en dev.
+- Fichiers: `app_parts/23_routes_market.py`, `app_parts/18_launcher.py`

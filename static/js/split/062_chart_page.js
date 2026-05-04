@@ -377,6 +377,13 @@
     var newWs = new WebSocket(url);
     ws = newWs;
 
+    newWs.onopen = function () {
+      if (generation !== wsGeneration || newWs !== ws) return;
+      wsConnected = true;
+      wsError = false;
+      wsReconnectAttempts = 0;
+    };
+
     newWs.onmessage = function (event) {
       if (generation !== wsGeneration || newWs !== ws) return;
       try { _handleWsMessage(event.data); } catch(e) { console.warn('[chart][WS] msg', e); }
@@ -784,7 +791,14 @@
         if (idx >= 0) { activeVwapPeriods.splice(idx, 1); }
         else { activeVwapPeriods.push(period); }
         vwapToggle.classList.toggle('active', activeVwapPeriods.length > 0);
-        try { localStorage.setItem('chartVwapPeriods', JSON.stringify(activeVwapPeriods)); } catch(e) {}
+        if (window.BtcVwap && window.BtcVwap.saveActiveVwapPeriods) {
+          activeVwapPeriods = window.BtcVwap.saveActiveVwapPeriods(activeVwapPeriods);
+        } else {
+          try { localStorage.setItem('chartVwapPeriods', JSON.stringify(activeVwapPeriods)); } catch(e) {}
+          window.dispatchEvent(new CustomEvent('chart:vwap-periods-changed', {
+            detail: { periods: activeVwapPeriods }
+          }));
+        }
         vwapDropdown.classList.add('hidden');
         _fetchAndRender(true, 'user');
       });
@@ -1118,7 +1132,14 @@
       localStorage.setItem('chartDefInterval', currentInterval);
       localStorage.setItem('chartDefSymbol', currentSymbol);
       localStorage.setItem('chartDefStyle', chartStyle);
-      localStorage.setItem('chartVwapPeriods', JSON.stringify(activeVwapPeriods));
+      if (window.BtcVwap && window.BtcVwap.saveActiveVwapPeriods) {
+        window.BtcVwap.saveActiveVwapPeriods(activeVwapPeriods);
+      } else {
+        localStorage.setItem('chartVwapPeriods', JSON.stringify(activeVwapPeriods));
+        window.dispatchEvent(new CustomEvent('chart:vwap-periods-changed', {
+          detail: { periods: activeVwapPeriods }
+        }));
+      }
     } catch(e) {}
   }
 
@@ -1162,7 +1183,7 @@
       try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
     }
 
-    var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=500';
+    var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=500&force=1';
     fetch(url)
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
@@ -1280,8 +1301,23 @@
     var closeMs = _getCandleCloseMs(candle, intervalMs);
     if (!Number.isFinite(openMs) || !Number.isFinite(closeMs)) return;
     var remaining = closeMs - Date.now();
-    if (remaining < -intervalMs || remaining > intervalMs * 2) {
-      console.warn('[COUNTDOWN] anchor rejected', { source, tf: currentInterval, openMs, closeMs, remaining });
+    if (remaining < -intervalMs) {
+      console.warn('[COUNTDOWN] stale candle anchor, forcing latest fetch', { source, tf: currentInterval, openMs, closeMs, remaining });
+      countdownAnchor = {
+        candleOpenMs: openMs,
+        candleCloseMs: closeMs,
+        remainingAtAnchorMs: 0,
+        perfAtAnchor: performance.now(),
+        source: 'stale-' + (source || 'unknown'),
+      };
+      if (Date.now() - (lastCountdownFetchAt || 0) > 5000) {
+        lastCountdownFetchAt = Date.now();
+        _fetchLatestCandleOnly();
+      }
+      return;
+    }
+    if (remaining > intervalMs * 2) {
+      console.warn('[COUNTDOWN] future candle anchor rejected', { source, tf: currentInterval, openMs, closeMs, remaining });
       return;
     }
     remaining = Math.max(0, Math.min(remaining, intervalMs));
@@ -1304,7 +1340,14 @@
     if (countdownTimer) clearInterval(countdownTimer);
     countdownTimer = setInterval(function () {
       if (!countdownPriceLine) { _updateCountdownLabel('—'); return; }
-      if (!countdownAnchor) { _updateCountdownLabel('—'); return; }
+      if (!countdownAnchor) {
+        _updateCountdownLabel('—');
+        if (chartReady && Date.now() - (lastCountdownFetchAt || 0) > 5000) {
+          lastCountdownFetchAt = Date.now();
+          _fetchLatestCandleOnly();
+        }
+        return;
+      }
       var elapsed = performance.now() - countdownAnchor.perfAtAnchor;
       var remaining = countdownAnchor.remainingAtAnchorMs - elapsed;
       if (remaining <= 0) {
@@ -1344,7 +1387,7 @@
   function _fetchLatestCandleOnly() {
     var interval = currentInterval;
     var sym = currentSymbol;
-    var url = '/api/market/klines?symbol=' + sym + '&interval=' + interval + '&limit=3';
+    var url = '/api/market/klines?symbol=' + sym + '&interval=' + interval + '&limit=3&force=1';
     return fetch(url)
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {

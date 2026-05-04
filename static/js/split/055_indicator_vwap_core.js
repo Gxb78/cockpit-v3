@@ -271,10 +271,46 @@
     s.setData(aligned);
   }
 
+  // ── EVENT BUS VWAP — normalisation + synchro cross-component ──
+  function normalizeVwapPeriods(periods) {
+    var legacyMap = { '1D': 'D-NY' };
+    var seen = {};
+    var out = [];
+    (periods || []).forEach(function (p) {
+      p = legacyMap[p] || p;
+      if (!VWAP_SOURCE_CONFIG[p]) return;
+      if (seen[p]) return;
+      seen[p] = true;
+      out.push(p);
+    });
+    return out;
+  }
+
+  function readActiveVwapPeriods() {
+    try {
+      var raw = JSON.parse(localStorage.getItem('chartVwapPeriods'));
+      return normalizeVwapPeriods(Array.isArray(raw) ? raw : []);
+    } catch(e) {
+      return [];
+    }
+  }
+
+  function saveActiveVwapPeriods(periods) {
+    var normalized = normalizeVwapPeriods(periods);
+    localStorage.setItem('chartVwapPeriods', JSON.stringify(normalized));
+    window.dispatchEvent(new CustomEvent('chart:vwap-periods-changed', {
+      detail: { periods: normalized }
+    }));
+    return normalized;
+  }
+
   // ── EXPOSE ────────────────────────────────────────────────
   window.BtcVwap = {
     VWAP_SOURCE_CONFIG: VWAP_SOURCE_CONFIG,
     VWAP_COLORS: VWAP_COLORS,
+    normalizeVwapPeriods: normalizeVwapPeriods,
+    readActiveVwapPeriods: readActiveVwapPeriods,
+    saveActiveVwapPeriods: saveActiveVwapPeriods,
     normalizeCandlesForLwc: normalizeCandlesForLwc,
     computeVwapSeries: computeVwapSeries,
     getCanonicalVwap: getCanonicalVwap,

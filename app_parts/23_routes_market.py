@@ -98,7 +98,7 @@ def _dedupe_klines(candles):
     return result
 
 
-def fetch_klines(symbol, interval, limit, start_time=None, end_time=None):
+def fetch_klines(symbol, interval, limit, start_time=None, end_time=None, force=False):
     """Fetch klines avec cache, stale fallback, pagination dedupee.
 
     Retourne un dict avec le nouveau contrat :
@@ -119,7 +119,7 @@ def fetch_klines(symbol, interval, limit, start_time=None, end_time=None):
     # Cache lookup
     cache_key = _klines_cache_key(symbol, interval, limit, start_time, end_time)
     cached = _klines_cache.get(cache_key)
-    if cached and (now - cached["ts"]) < _KLINES_CACHE_TTL:
+    if not force and cached and (now - cached["ts"]) < _KLINES_CACHE_TTL:
         # Cache hit fresh — retourner directement
         resp = copy.deepcopy(cached["response"])
         resp["cache"]["hit"] = True
@@ -222,6 +222,7 @@ def market_klines():
       limit     (int) : nb bougies max (defaut 100, max 1000)
       startTime (int) : timestamp ms optionnel pour paginer
       endTime   (int) : timestamp ms optionnel (borne stricte)
+      force     (int) : bypass cache si 1 (defaut 0)
     """
     symbol = request.args.get("symbol", "BTCUSDT").upper().strip()
     interval = request.args.get("interval", "1h").strip()
@@ -229,10 +230,11 @@ def market_klines():
         limit = _parse_int_param("limit", 100)
         start_time = _parse_int_param("startTime")
         end_time = _parse_int_param("endTime")
+        force = bool(_parse_int_param("force", 0))
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
-    data, status = fetch_klines(symbol, interval, limit, start_time, end_time)
+    data, status = fetch_klines(symbol, interval, limit, start_time, end_time, force=force)
     if status != 200 and isinstance(data, dict) and "error" in data:
         return jsonify(data), status
 
