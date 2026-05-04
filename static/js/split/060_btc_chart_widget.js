@@ -231,6 +231,8 @@
     }
   }
   async function _calcAndDrawVwap(zoomTarget) {
+    // Relire les periodes depuis localStorage (peuvent avoir ete changees dans settings)
+    try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) activeVwapPeriods = s; } catch(e) {}
     console.log('[VWAP] triggered by:', new Error().stack.split('\n')[2]);
     console.log('[VWAP] _calcAndDrawVwap periods=', activeVwapPeriods, '_mainCandles=', _mainCandles.length);
     // Nettoyer les periodes desactivees
@@ -271,6 +273,22 @@
       return result;
     }
 
+    // Helper: resample des points VWAP sur les timestamps des bougies principales
+    function _resampleVwap(vwapPoints) {
+      if (!vwapPoints || !vwapPoints.length || !_mainCandles || !_mainCandles.length) return vwapPoints;
+      // Si les points sont deja sur les memes timestamps que _mainCandles, pas besoin
+      if (vwapPoints.length <= _mainCandles.length + 10) return vwapPoints;
+      var sorted = vwapPoints.slice().sort(function(a, b) { return a.time - b.time; });
+      var out = [], j = 0;
+      for (var ci = 0; ci < _mainCandles.length; ci++) {
+        var t = _mainCandles[ci].time;
+        while (j + 1 < sorted.length && sorted[j + 1].time <= t) j++;
+        if (sorted[j] && sorted[j].time <= t) out.push({ time: t, value: sorted[j].value });
+      }
+      console.log('[VWAP] resampled', vwapPoints.length, '→', out.length, 'points');
+      return out;
+    }
+
     // Helper: rAF en promesse (module-level plus bas)
 
     // Verrouiller completement LWC pendant les setData
@@ -302,6 +320,8 @@
       }
 
       var vw = _computeVwap(candles, periodSec);
+      // Resample sur les timestamps des bougies principales si fallback
+      if (candles !== _mainCandles) vw = _resampleVwap(vw);
       if (vw.length < 2) { _removeVwapSeries(p); continue; }
       var s = vwapSeriesMap[p];
       if (s) {

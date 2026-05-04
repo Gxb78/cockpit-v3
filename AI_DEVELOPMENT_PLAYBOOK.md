@@ -897,5 +897,21 @@ Cette section documente les features ajoutées, les conventions établies, et le
 - Symptome: quand _auto_calc_pnl() ne set pas pnl (pas d'entry/exit/size), le DEFAULT 0 en DB prenait le relais, rendant impossible la distinction entre "pnl non fourni" (None) et "pnl=0 explicite". Cassait le recalcul en update (le pnl=0 existant bloquait le guard `payload.get("pnl") is not None`).
 - Cause racine: `pnl REAL DEFAULT 0` dans le CREATE TABLE de 02_database.py.
 - Regle de prevention: les colonnes avec une semantique "optionnelle/inconnue" ne doivent PAS avoir de DEFAULT. NULL est la valeur correcte pour "non renseigne". Uniquement les colonnes ou 0 a un sens metier (ex: position_size) peuvent avoir DEFAULT 0.
+
+## Leçons retenues (mai 2026)
+
+### VWAP — ne pas polluer l'axe logique LWC
+Les series VWAP 7D/30D/90D en fallback 15m/1h/4h ajoutent des centaines de points
+supplementaires sur l'axe logique de Lightweight Charts (~1800 vs 300 bougies 3m).
+Cela rend le zoom instable et les calculs de range invalides.
+**Fix** : resampler les points VWAP fallback sur les timestamps des bougies
+principales (`_mainCandles`) avant `setData()`. Le VWAP direct depuis
+`_mainCandles` (quand coveredSecs >= periodSec) est deja aligne, pas besoin.
+
+### localStorage — relire au besoin
+Les settings VWAP sont stockes dans localStorage (`chartVwapPeriods`) mais
+le widget 060 (today) ne lisait cette valeur qu'a l'init. Les changements
+depuis le menu settings n'etaient pas visibles.
+**Fix** : relire localStorage au debut de chaque `_calcAndDrawVwap()`.
 - Test de non-regression: creer un trade sans entry/exit/size → pnl=None (pas 0.0). Update avec exit_price → pnl recalcule depuis les donnees existantes.
 - Fichiers a surveiller: app_parts/02_database.py (CREATE TABLE trades), app_parts/05_payload_normalizers.py, app_parts/03_core_helpers.py

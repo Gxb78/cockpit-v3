@@ -776,6 +776,21 @@
       }
 
       var vw = _computeVwap(candles, periodSec);
+      // Resample sur les timestamps des bougies principales si fallback
+      if (candles !== _mainCandles) {
+        if (!vw.length) { _removeVwapSeries(p); continue; }
+        // Resample approx: snapper au timestamp 3m le plus proche
+        var snapped = [], snapSet = {};
+        for (var si = 0; si < _mainCandles.length; si++) snapSet[_mainCandles[si].time] = true;
+        var j = 0;
+        for (var si = 0; si < _mainCandles.length; si++) {
+          var t = _mainCandles[si].time;
+          while (j < vw.length && vw[j].time <= t) j++;
+          if (j > 0 && snapSet[t]) snapped.push({ time: t, value: vw[j-1].value });
+        }
+        vw = snapped;
+        console.log('[VWAP] 062 resampled to', vw.length, 'points');
+      }
       if (vw.length < 2) { _removeVwapSeries(p); continue; }
       var s = vwapSeriesMap[p];
       if (s) { s.applyOptions({ visible: true, color: VWAP_COLORS[p], title: 'VWAP ' + p, lastValueVisible: true }); s.setData(vw); }

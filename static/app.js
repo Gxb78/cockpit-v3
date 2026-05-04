@@ -11258,6 +11258,8 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
   }
   async function _calcAndDrawVwap(zoomTarget) {
+    // Relire les periodes depuis localStorage (peuvent avoir ete changees dans settings)
+    try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) activeVwapPeriods = s; } catch(e) {}
     console.log('[VWAP] triggered by:', new Error().stack.split('\n')[2]);
     console.log('[VWAP] _calcAndDrawVwap periods=', activeVwapPeriods, '_mainCandles=', _mainCandles.length);
     // Nettoyer les periodes desactivees
@@ -11298,6 +11300,22 @@ TradeEditorController.renderHtml = function (day, trade) {
       return result;
     }
 
+    // Helper: resample des points VWAP sur les timestamps des bougies principales
+    function _resampleVwap(vwapPoints) {
+      if (!vwapPoints || !vwapPoints.length || !_mainCandles || !_mainCandles.length) return vwapPoints;
+      // Si les points sont deja sur les memes timestamps que _mainCandles, pas besoin
+      if (vwapPoints.length <= _mainCandles.length + 10) return vwapPoints;
+      var sorted = vwapPoints.slice().sort(function(a, b) { return a.time - b.time; });
+      var out = [], j = 0;
+      for (var ci = 0; ci < _mainCandles.length; ci++) {
+        var t = _mainCandles[ci].time;
+        while (j + 1 < sorted.length && sorted[j + 1].time <= t) j++;
+        if (sorted[j] && sorted[j].time <= t) out.push({ time: t, value: sorted[j].value });
+      }
+      console.log('[VWAP] resampled', vwapPoints.length, '→', out.length, 'points');
+      return out;
+    }
+
     // Helper: rAF en promesse (module-level plus bas)
 
     // Verrouiller completement LWC pendant les setData
@@ -11329,6 +11347,8 @@ TradeEditorController.renderHtml = function (day, trade) {
       }
 
       var vw = _computeVwap(candles, periodSec);
+      // Resample sur les timestamps des bougies principales si fallback
+      if (candles !== _mainCandles) vw = _resampleVwap(vw);
       if (vw.length < 2) { _removeVwapSeries(p); continue; }
       var s = vwapSeriesMap[p];
       if (s) {
@@ -12667,6 +12687,21 @@ TradeEditorController.renderHtml = function (day, trade) {
       }
 
       var vw = _computeVwap(candles, periodSec);
+      // Resample sur les timestamps des bougies principales si fallback
+      if (candles !== _mainCandles) {
+        if (!vw.length) { _removeVwapSeries(p); continue; }
+        // Resample approx: snapper au timestamp 3m le plus proche
+        var snapped = [], snapSet = {};
+        for (var si = 0; si < _mainCandles.length; si++) snapSet[_mainCandles[si].time] = true;
+        var j = 0;
+        for (var si = 0; si < _mainCandles.length; si++) {
+          var t = _mainCandles[si].time;
+          while (j < vw.length && vw[j].time <= t) j++;
+          if (j > 0 && snapSet[t]) snapped.push({ time: t, value: vw[j-1].value });
+        }
+        vw = snapped;
+        console.log('[VWAP] 062 resampled to', vw.length, 'points');
+      }
       if (vw.length < 2) { _removeVwapSeries(p); continue; }
       var s = vwapSeriesMap[p];
       if (s) { s.applyOptions({ visible: true, color: VWAP_COLORS[p], title: 'VWAP ' + p, lastValueVisible: true }); s.setData(vw); }
