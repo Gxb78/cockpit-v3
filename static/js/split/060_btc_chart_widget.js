@@ -273,19 +273,24 @@
       return result;
     }
 
-    // Helper: resample des points VWAP sur les timestamps des bougies principales
-    function _resampleVwap(vwapPoints) {
-      if (!vwapPoints || !vwapPoints.length || !_mainCandles || !_mainCandles.length) return vwapPoints;
-      // Si les points sont deja sur les memes timestamps que _mainCandles, pas besoin
-      if (vwapPoints.length <= _mainCandles.length + 10) return vwapPoints;
-      var sorted = vwapPoints.slice().sort(function(a, b) { return a.time - b.time; });
+    // Helper: aligner des points indicateurs sur les timestamps des bougies principales
+    // Garantit que les timestamps de sortie sont exactement ceux de _mainCandles
+    function _alignIndicatorToCandles(indicatorPoints) {
+      if (!indicatorPoints || !indicatorPoints.length || !_mainCandles || !_mainCandles.length) return [];
+      var sorted = indicatorPoints.slice().filter(function(p) {
+        return p && Number.isFinite(p.time) && Number.isFinite(p.value);
+      }).sort(function(a, b) { return a.time - b.time; });
       var out = [], j = 0;
       for (var ci = 0; ci < _mainCandles.length; ci++) {
         var t = _mainCandles[ci].time;
         while (j + 1 < sorted.length && sorted[j + 1].time <= t) j++;
         if (sorted[j] && sorted[j].time <= t) out.push({ time: t, value: sorted[j].value });
       }
-      console.log('[VWAP] resampled', vwapPoints.length, '→', out.length, 'points');
+      console.log('[VWAP] aligned', indicatorPoints.length, '->', out.length, 'points');
+      if (out.length > 0) {
+        console.log('[VWAP] aligned first=', new Date(out[0].time*1000).toISOString(),
+          'last=', new Date(out[out.length-1].time*1000).toISOString());
+      }
       return out;
     }
 
@@ -321,7 +326,7 @@
 
       var vw = _computeVwap(candles, periodSec);
       // Resample sur les timestamps des bougies principales si fallback
-      if (candles !== _mainCandles) vw = _resampleVwap(vw);
+      if (candles !== _mainCandles) vw = _alignIndicatorToCandles(vw);
       if (vw.length < 2) { _removeVwapSeries(p); continue; }
       var s = vwapSeriesMap[p];
       if (s) {
@@ -656,6 +661,7 @@
           crosshairMarkerVisible: false,
           title: 'VWAP ' + p,
           visible: true,
+          autoscaleInfoProvider: function () { return null; },
         });
         vwapSeriesMap[p].setData([]); // données vides = pas de rendu, mais LWC sait que la série existe
       });

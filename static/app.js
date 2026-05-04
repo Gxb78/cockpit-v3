@@ -11300,19 +11300,24 @@ TradeEditorController.renderHtml = function (day, trade) {
       return result;
     }
 
-    // Helper: resample des points VWAP sur les timestamps des bougies principales
-    function _resampleVwap(vwapPoints) {
-      if (!vwapPoints || !vwapPoints.length || !_mainCandles || !_mainCandles.length) return vwapPoints;
-      // Si les points sont deja sur les memes timestamps que _mainCandles, pas besoin
-      if (vwapPoints.length <= _mainCandles.length + 10) return vwapPoints;
-      var sorted = vwapPoints.slice().sort(function(a, b) { return a.time - b.time; });
+    // Helper: aligner des points indicateurs sur les timestamps des bougies principales
+    // Garantit que les timestamps de sortie sont exactement ceux de _mainCandles
+    function _alignIndicatorToCandles(indicatorPoints) {
+      if (!indicatorPoints || !indicatorPoints.length || !_mainCandles || !_mainCandles.length) return [];
+      var sorted = indicatorPoints.slice().filter(function(p) {
+        return p && Number.isFinite(p.time) && Number.isFinite(p.value);
+      }).sort(function(a, b) { return a.time - b.time; });
       var out = [], j = 0;
       for (var ci = 0; ci < _mainCandles.length; ci++) {
         var t = _mainCandles[ci].time;
         while (j + 1 < sorted.length && sorted[j + 1].time <= t) j++;
         if (sorted[j] && sorted[j].time <= t) out.push({ time: t, value: sorted[j].value });
       }
-      console.log('[VWAP] resampled', vwapPoints.length, '→', out.length, 'points');
+      console.log('[VWAP] aligned', indicatorPoints.length, '->', out.length, 'points');
+      if (out.length > 0) {
+        console.log('[VWAP] aligned first=', new Date(out[0].time*1000).toISOString(),
+          'last=', new Date(out[out.length-1].time*1000).toISOString());
+      }
       return out;
     }
 
@@ -11348,7 +11353,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 
       var vw = _computeVwap(candles, periodSec);
       // Resample sur les timestamps des bougies principales si fallback
-      if (candles !== _mainCandles) vw = _resampleVwap(vw);
+      if (candles !== _mainCandles) vw = _alignIndicatorToCandles(vw);
       if (vw.length < 2) { _removeVwapSeries(p); continue; }
       var s = vwapSeriesMap[p];
       if (s) {
@@ -11683,6 +11688,7 @@ TradeEditorController.renderHtml = function (day, trade) {
           crosshairMarkerVisible: false,
           title: 'VWAP ' + p,
           visible: true,
+          autoscaleInfoProvider: function () { return null; },
         });
         vwapSeriesMap[p].setData([]); // données vides = pas de rendu, mais LWC sait que la série existe
       });
@@ -12403,6 +12409,7 @@ TradeEditorController.renderHtml = function (day, trade) {
           crosshairMarkerVisible: false,
           title: 'VWAP ' + p,
           visible: true,
+          autoscaleInfoProvider: function () { return null; },
         });
         vwapSeriesMap[p].setData([]); // données vides = pas de rendu, mais LWC sait que la série existe
       });
@@ -12638,8 +12645,6 @@ TradeEditorController.renderHtml = function (day, trade) {
         .then(function (r) { return r.json(); })
         .then(function (data) { return data.candles || []; });
     }
-
-    // Helper: compute VWAP
     function _computeVwap(candles, periodSec) {
       if (!candles || !candles.length) return [];
       var lastTime = candles[candles.length - 1].time;
@@ -12654,6 +12659,26 @@ TradeEditorController.renderHtml = function (day, trade) {
         if (cumV > 0) result.push({ time: c.time, value: cumVP / cumV });
       }
       return result;
+    }
+
+    // Helper: aligner des points indicateurs sur les timestamps des bougies principales
+    function _alignIndicatorToCandles(indicatorPoints) {
+      if (!indicatorPoints || !indicatorPoints.length || !_mainCandles || !_mainCandles.length) return [];
+      var sorted = indicatorPoints.slice().filter(function(p) {
+        return p && Number.isFinite(p.time) && Number.isFinite(p.value);
+      }).sort(function(a, b) { return a.time - b.time; });
+      var out = [], j = 0;
+      for (var ci = 0; ci < _mainCandles.length; ci++) {
+        var t = _mainCandles[ci].time;
+        while (j + 1 < sorted.length && sorted[j + 1].time <= t) j++;
+        if (sorted[j] && sorted[j].time <= t) out.push({ time: t, value: sorted[j].value });
+      }
+      console.log('[VWAP] 062 aligned', indicatorPoints.length, '->', out.length, 'points');
+      if (out.length > 0) {
+        console.log('[VWAP] 062 aligned first=', new Date(out[0].time*1000).toISOString(),
+          'last=', new Date(out[out.length-1].time*1000).toISOString());
+      }
+      return out;
     }
 
     // Helper: rAF en promesse (module-level definit plus haut)
@@ -12687,21 +12712,8 @@ TradeEditorController.renderHtml = function (day, trade) {
       }
 
       var vw = _computeVwap(candles, periodSec);
-      // Resample sur les timestamps des bougies principales si fallback
-      if (candles !== _mainCandles) {
-        if (!vw.length) { _removeVwapSeries(p); continue; }
-        // Resample approx: snapper au timestamp 3m le plus proche
-        var snapped = [], snapSet = {};
-        for (var si = 0; si < _mainCandles.length; si++) snapSet[_mainCandles[si].time] = true;
-        var j = 0;
-        for (var si = 0; si < _mainCandles.length; si++) {
-          var t = _mainCandles[si].time;
-          while (j < vw.length && vw[j].time <= t) j++;
-          if (j > 0 && snapSet[t]) snapped.push({ time: t, value: vw[j-1].value });
-        }
-        vw = snapped;
-        console.log('[VWAP] 062 resampled to', vw.length, 'points');
-      }
+      // Aligner sur les timestamps des bougies principales si fallback
+      if (candles !== _mainCandles) vw = _alignIndicatorToCandles(vw);
       if (vw.length < 2) { _removeVwapSeries(p); continue; }
       var s = vwapSeriesMap[p];
       if (s) { s.applyOptions({ visible: true, color: VWAP_COLORS[p], title: 'VWAP ' + p, lastValueVisible: true }); s.setData(vw); }
@@ -15716,7 +15728,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     this._intervalMs = 180000;
     this._coverageInfo = "";
     this._currentRange = null; // {start, end} du dernier fetch
-    this._requestedRangeMs = 1800000; // 30min par defaut
+    this._requestedRangeMs = 7200000; // 2h par defaut (3m → ~40 bougies)
     this._rangeUserOverridden = false;
     this._fetchTimestamp = null;
     // Steps config par symbole
@@ -15850,42 +15862,87 @@ TradeEditorController.renderHtml = function (day, trade) {
       }
     }, { passive: false });
 
-    // Mouse down — début du drag (UNIQUEMENT dans la zone chart)
-    c.addEventListener('mousedown', function (e) {
-      var inPriceAxis = e.offsetX > self.layout.chartRight;
-      if (inPriceAxis) return; // ignorer les clics sur l'axe prix
-      self.isDragging = true;
+    // Pointer events — drag/pan/crosshair avec setPointerCapture
+    self._dragThreshold = 4; // px
+    self._isPointerDown = false;
+    self._hasMoved = false;
+    self._dragMode = null; // 'h' (horizontal/time) ou 'v' (vertical/price)
+
+    c.addEventListener('pointerdown', function (e) {
+      self._inPriceAxis = e.offsetX > self.layout.chartRight;
+      c.setPointerCapture(e.pointerId);
+      self._isPointerDown = true;
+      self._hasMoved = false;
+      self._dragMode = null;
       self.dragStart.x = e.offsetX;
       self.dragStart.y = e.offsetY;
       self.scrollStart.time = self.timeScale.startTime;
       self.scrollStart.priceMin = self.priceScale.minPrice;
       self.scrollStart.priceMax = self.priceScale.maxPrice;
+      c.style.cursor = 'grabbing';
     });
 
-    // Mouse move — drag / crosshair
-    c.addEventListener('mousemove', function (e) {
+    c.addEventListener('pointermove', function (e) {
       self.mousePos.x = e.offsetX;
       self.mousePos.y = e.offsetY;
       self.inCanvas = true;
 
-      if (self.isDragging) {
+      if (self._isPointerDown) {
         var dx = e.offsetX - self.dragStart.x;
         var dy = e.offsetY - self.dragStart.y;
+        var dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < self._dragThreshold) return; // click, pas encore de drag
+
+        self._hasMoved = true;
+
+        // === VERROUILLAGE DU MODE ===
+        if (!self._dragMode) {
+          var absDx = Math.abs(dx);
+          var absDy = Math.abs(dy);
+          if (self._inPriceAxis) {
+            // Sur l'axe prix → vertical seulement
+            self._dragMode = 'v';
+          } else if (e.shiftKey) {
+            // Shift+drag en zone chart → vertical (prix)
+            self._dragMode = 'v';
+          } else if (absDx > absDy * 1.5) {
+            // Dominante horizontale → temps
+            self._dragMode = 'h';
+          } else if (absDy > absDx * 1.5) {
+            // Dominante verticale → prix
+            self._dragMode = 'v';
+          } else {
+            // Diagonale → temps seulement (comportement par défaut chart)
+            self._dragMode = 'h';
+          }
+        }
+
         self._pan(dx, dy);
       } else {
         self._dirty = true;
+        if (e.offsetX > self.layout.chartRight) {
+          c.style.cursor = 'ns-resize';
+        } else {
+          c.style.cursor = 'grab';
+        }
       }
     });
 
-    // Mouse up — fin du drag
-    c.addEventListener('mouseup', function () {
-      self.isDragging = false;
+    c.addEventListener('pointerup', function (e) {
+      c.releasePointerCapture(e.pointerId);
+      self._isPointerDown = false;
+      self._hasMoved = false;
+      self._dragMode = null;
+      c.style.cursor = 'grab';
     });
 
-    // Mouse leave
-    c.addEventListener('mouseleave', function () {
+    c.addEventListener('pointerleave', function () {
       self.inCanvas = false;
-      self.isDragging = false;
+      self._isPointerDown = false;
+      self._hasMoved = false;
+      self._dragMode = null;
+      c.style.cursor = 'default';
       self._dirty = true;
     });
 
@@ -16134,21 +16191,24 @@ TradeEditorController.renderHtml = function (day, trade) {
   };
 
   /**
-   * Pan horizontal + vertical
+   * Pan horizontal + vertical, avec mode verrouille
    */
   OrderflowEngine.prototype._pan = function (dx, dy) {
     var ts = this.timeScale;
+    var mode = this._dragMode || 'both';
 
-    // Horizontal: drag deplace le temps (gauche/droite)
-    var dt = -dx / ts.pixelsPerMs;
-    ts.startTime = this.scrollStart.time + dt;
-    ts.endTime = ts.startTime + (this.timeScale.width - ts.leftMargin - ts.rightMargin) / ts.pixelsPerMs;
+    if (mode === 'h' || mode === 'both') {
+      var dt = -dx / ts.pixelsPerMs;
+      ts.startTime = this.scrollStart.time + dt;
+      ts.endTime = ts.startTime + (this.timeScale.width - ts.leftMargin - ts.rightMargin) / ts.pixelsPerMs;
+    }
 
-    // Vertical: drag deplace le prix (haut/bas)
-    var ps = this.priceScale;
-    var dp = -dy / ps.pixelsPerUnit;
-    ps.minPrice = this.scrollStart.priceMin + dp;
-    ps.maxPrice = this.scrollStart.priceMax + dp;
+    if (mode === 'v' || mode === 'both') {
+      var ps = this.priceScale;
+      var dp = -dy / ps.pixelsPerUnit;
+      ps.minPrice = this.scrollStart.priceMin + dp;
+      ps.maxPrice = this.scrollStart.priceMax + dp;
+    }
 
     this._dirty = true;
   };
@@ -16169,10 +16229,10 @@ TradeEditorController.renderHtml = function (day, trade) {
    */
   OrderflowEngine.prototype._resetView = function () {
     var now = Date.now();
-    this.timeScale.startTime = now - 24 * 60 * 60 * 1000;
-    this.timeScale.endTime = now;
-    this.priceScale.minPrice = 60000;
-    this.priceScale.maxPrice = 75000;
+    var range = this._requestedRangeMs || 1800000;
+    this.timeScale.startTime = now - range;
+    this.timeScale.endTime = now + this._intervalMs * 4;
+    this._fitPrice(0.05);
     this._dirty = true;
   };
 
@@ -16924,8 +16984,8 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   /** Auto-range suggere selon le timeframe */
   OrderflowEngine.prototype._suggestRange = function (interval) {
-    var map = { '1m': 3600000, '3m': 10800000, '5m': 21600000, '15m': 43200000, '1h': 86400000, '4h': 86400000 * 3 };
-    return map[interval] || 21600000;
+    var map = { '1m': 3600000, '3m': 7200000, '5m': 10800000, '15m': 21600000, '1h': 86400000, '4h': 432000000 };
+    return map[interval] || 7200000;
   };
 
   /** Changer le timeframe — re-aggregation locale si on a deja les rawTrades */
@@ -17000,8 +17060,14 @@ TradeEditorController.renderHtml = function (day, trade) {
     var pad = (maxP - minP) * 0.15 || 200;
     this.priceScale.minPrice = minP - pad;
     this.priceScale.maxPrice = maxP + pad;
-    this.timeScale.startTime = candles[0].time;
-    this.timeScale.endTime = candles[candles.length - 1].time + this._intervalMs * 6;
+
+    // Fit temps: centrer les dernieres N bougies
+    var dataRange = candles[candles.length - 1].time - candles[0].time;
+    var visibleCount = Math.min(candles.length, 30); // max 30 bougies visibles
+    var endTime = candles[candles.length - 1].time + this._intervalMs * 4;
+    var startTime = candles[Math.max(0, candles.length - visibleCount)].time;
+    this.timeScale.startTime = startTime - this._intervalMs;
+    this.timeScale.endTime = endTime;
   };
 
   /** Fit price seulement — centrer le range prix sur les bougies visibles */
@@ -17158,78 +17224,77 @@ TradeEditorController.renderHtml = function (day, trade) {
     var candleGap = 0.2;
     var candleW = (ts.pixelsPerMs * (candles[1] ? (candles[1].time - candles[0].time) : 180000)) * (1 - candleGap);
     if (candleW > 50) candleW = 50;
-    // Seuils de rendu : compact si <18px, skinny si <8px
+    var minCandleW = Math.max(6, candleW);
     var renderMode = 'full';
-    if (candleW < 18) renderMode = 'compact';
-    if (candleW < 8) renderMode = 'skinny';
+    if (minCandleW < 18) renderMode = 'compact';
+    if (minCandleW < 8) renderMode = 'skinny';
 
     for (var i = 0; i < candles.length; i++) {
       var c = candles[i];
+      if (!c || !Number.isFinite(c.time)) continue;
       if (c.time < visibleStart - 60000 || c.time > visibleEnd + 60000) continue;
 
       var cx = this.timeToX(c.time);
-      if (cx < -candleW || cx > this.layout.chartRight) continue;
+      if (cx < -minCandleW || cx > this.layout.chartRight) continue;
 
+      var isBull = c.close >= c.open;
       var yOpen = this.priceToY(c.open);
       var yClose = this.priceToY(c.close);
       var yHigh = this.priceToY(c.high);
       var yLow = this.priceToY(c.low);
 
-      var isBull = c.close >= c.open;
-
-      // --- Wick ---
-      ctx.strokeStyle = isBull ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)';
+      // === 1. WICK ===
+      ctx.strokeStyle = isBull ? '#22c55e' : '#ef4444';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(cx, yHigh);
       ctx.lineTo(cx, yLow);
       ctx.stroke();
 
-      // --- Body ---
-      var bodyTop = Math.max(yOpen, yClose);
-      var bodyBottom = Math.min(yOpen, yClose);
-      var bodyH = bodyBottom - bodyTop;
-      if (bodyH < 2) bodyH = 2;
+      // === 2. BODY OHLC ===
+      var bodyTop = Math.min(yOpen, yClose);
+      var bodyBottom = Math.max(yOpen, yClose);
+      var bodyH = Math.max(2, bodyBottom - bodyTop);
 
-      ctx.fillStyle = isBull ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)';
-      ctx.fillRect(cx - candleW / 2, bodyTop, candleW, bodyH);
+      ctx.fillStyle = isBull ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)';
+      ctx.fillRect(cx - minCandleW / 2, bodyTop, minCandleW, bodyH);
+      // Contour du body
+      ctx.strokeStyle = isBull ? '#22c55e' : '#ef4444';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(cx - minCandleW / 2, bodyTop, minCandleW, bodyH);
 
-      // Sauts de rendu selon largeur
-      if (renderMode === 'skinny') {
-        // Skinny: juste une ligne verticale coloree (pas de footprint)
-        ctx.strokeStyle = isBull ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(cx, yHigh);
-        ctx.lineTo(cx, yLow);
-        ctx.stroke();
+      // Skinny: pas de footprint
+      if (renderMode === 'skinny') continue;
+
+      // === 3. FOOTPRINT LEVELS (overlay, seulement si disponibles) ===
+      var levels = Array.isArray(c.levels) ? c.levels : [];
+      if (levels.length === 0) {
+        // Compact sans footprint: body transparent
+        if (renderMode === 'compact') {
+          ctx.fillStyle = isBull ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)';
+          ctx.fillRect(cx - minCandleW/2, bodyTop, minCandleW, bodyH);
+        }
         continue;
       }
-      if (renderMode === 'compact') {
-        // Compact: candle colore + delta line, pas de footprint levels
-        ctx.fillStyle = isBull ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)';
-        ctx.fillRect(cx - candleW/2, bodyTop, candleW, bodyH);
-        continue;
-      }
 
-      // --- Footprint levels ---
-      if (!c.levels || c.levels.length === 0) continue;
-
-      // Find max volumes in this candle for scaling
+      // Trouver les volumes max
       var maxBid = 0, maxAsk = 0;
-      for (var li = 0; li < c.levels.length; li++) {
-        var lv = c.levels[li];
+      for (var li = 0; li < levels.length; li++) {
+        var lv = levels[li];
+        if (!lv) continue;
         if (lv.bid > maxBid) maxBid = lv.bid;
         if (lv.ask > maxAsk) maxAsk = lv.ask;
       }
       if (maxBid < 1) maxBid = 1;
       if (maxAsk < 1) maxAsk = 1;
 
-      var halfW = candleW / 2;
+      var halfW = minCandleW / 2;
 
-      for (var li = 0; li < c.levels.length; li++) {
-        var lv = c.levels[li];
+      for (var li = 0; li < levels.length; li++) {
+        var lv = levels[li];
+        if (!lv || !Number.isFinite(lv.price)) continue;
         var y = this.priceToY(lv.price);
+        if (!Number.isFinite(y)) continue;
 
         // Skip levels outside candle range (high→low)
         if (y > yHigh - 2 || y < yLow + 2) continue;
@@ -17806,11 +17871,31 @@ TradeEditorController.renderHtml = function (day, trade) {
     mergeOHLCWithFootprint: function (ohlcCandles, footprintMap) {
       return ohlcCandles.map(function (c) {
         var fp = footprintMap[c.time];
-        if (fp) {
-          c.delta = fp.delta;
-          c.levels = fp.levels;
+        if (fp && fp.levels) {
+          c.delta = Number(fp.delta || 0);
+          // Convertir l'objet levels (cle=priceKey) en tableau trie
+          var levelsArr = [];
+          var keys = Object.keys(fp.levels);
+          for (var ki = 0; ki < keys.length; ki++) {
+            var lv = fp.levels[keys[ki]];
+            if (lv && Number.isFinite(lv.price)) {
+              levelsArr.push({
+                price: Number(lv.price),
+                bid: Number(lv.bid || 0),
+                ask: Number(lv.ask || 0),
+                delta: Number(lv.delta || 0),
+              });
+            }
+          }
+          levelsArr.sort(function(a, b) { return a.price - b.price; });
+          c.levels = levelsArr;
+          c._hasFootprint = true;
+        } else {
+          c.levels = [];
+          c.delta = 0;
+          c._hasFootprint = false;
         }
-        // Si pas de footprint, levels reste [] — la bougie sera dessinée en OHLC simple
+        c._fromKline = true;
         return c;
       });
     },

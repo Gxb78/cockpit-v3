@@ -492,6 +492,7 @@
           crosshairMarkerVisible: false,
           title: 'VWAP ' + p,
           visible: true,
+          autoscaleInfoProvider: function () { return null; },
         });
         vwapSeriesMap[p].setData([]); // données vides = pas de rendu, mais LWC sait que la série existe
       });
@@ -727,8 +728,6 @@
         .then(function (r) { return r.json(); })
         .then(function (data) { return data.candles || []; });
     }
-
-    // Helper: compute VWAP
     function _computeVwap(candles, periodSec) {
       if (!candles || !candles.length) return [];
       var lastTime = candles[candles.length - 1].time;
@@ -743,6 +742,26 @@
         if (cumV > 0) result.push({ time: c.time, value: cumVP / cumV });
       }
       return result;
+    }
+
+    // Helper: aligner des points indicateurs sur les timestamps des bougies principales
+    function _alignIndicatorToCandles(indicatorPoints) {
+      if (!indicatorPoints || !indicatorPoints.length || !_mainCandles || !_mainCandles.length) return [];
+      var sorted = indicatorPoints.slice().filter(function(p) {
+        return p && Number.isFinite(p.time) && Number.isFinite(p.value);
+      }).sort(function(a, b) { return a.time - b.time; });
+      var out = [], j = 0;
+      for (var ci = 0; ci < _mainCandles.length; ci++) {
+        var t = _mainCandles[ci].time;
+        while (j + 1 < sorted.length && sorted[j + 1].time <= t) j++;
+        if (sorted[j] && sorted[j].time <= t) out.push({ time: t, value: sorted[j].value });
+      }
+      console.log('[VWAP] 062 aligned', indicatorPoints.length, '->', out.length, 'points');
+      if (out.length > 0) {
+        console.log('[VWAP] 062 aligned first=', new Date(out[0].time*1000).toISOString(),
+          'last=', new Date(out[out.length-1].time*1000).toISOString());
+      }
+      return out;
     }
 
     // Helper: rAF en promesse (module-level definit plus haut)
@@ -776,21 +795,8 @@
       }
 
       var vw = _computeVwap(candles, periodSec);
-      // Resample sur les timestamps des bougies principales si fallback
-      if (candles !== _mainCandles) {
-        if (!vw.length) { _removeVwapSeries(p); continue; }
-        // Resample approx: snapper au timestamp 3m le plus proche
-        var snapped = [], snapSet = {};
-        for (var si = 0; si < _mainCandles.length; si++) snapSet[_mainCandles[si].time] = true;
-        var j = 0;
-        for (var si = 0; si < _mainCandles.length; si++) {
-          var t = _mainCandles[si].time;
-          while (j < vw.length && vw[j].time <= t) j++;
-          if (j > 0 && snapSet[t]) snapped.push({ time: t, value: vw[j-1].value });
-        }
-        vw = snapped;
-        console.log('[VWAP] 062 resampled to', vw.length, 'points');
-      }
+      // Aligner sur les timestamps des bougies principales si fallback
+      if (candles !== _mainCandles) vw = _alignIndicatorToCandles(vw);
       if (vw.length < 2) { _removeVwapSeries(p); continue; }
       var s = vwapSeriesMap[p];
       if (s) { s.applyOptions({ visible: true, color: VWAP_COLORS[p], title: 'VWAP ' + p, lastValueVisible: true }); s.setData(vw); }

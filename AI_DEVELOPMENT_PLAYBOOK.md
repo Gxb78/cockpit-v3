@@ -915,3 +915,13 @@ depuis le menu settings n'etaient pas visibles.
 **Fix** : relire localStorage au debut de chaque `_calcAndDrawVwap()`.
 - Test de non-regression: creer un trade sans entry/exit/size → pnl=None (pas 0.0). Update avec exit_price → pnl recalcule depuis les donnees existantes.
 - Fichiers a surveiller: app_parts/02_database.py (CREATE TABLE trades), app_parts/05_payload_normalizers.py, app_parts/03_core_helpers.py
+
+### VWAP — ne pas tirer l'echelle prix vers le bas
+Les VWAP multi-TF (7D, 30D, 90D) peuvent avoir des prix bien en dessous de la
+bougie courante (marche baissier, vieilles donnees). Sans precaution, la price
+scale autoscale s'etend pour inclure TOUTES les series visibles, tirant l'axe Y
+vers le bas et rendant les bougies courantes toutes petites.
+**Fix** : ajouter `autoscaleInfoProvider: function () { return null; }` sur
+chaque serie VWAP. Les VWAP restent sur la price scale `'right'` (alignees avec
+les bougies) mais n'influencent pas le calcul du range vertical.
+- Applique dans `060_btc_chart_widget.js` et `062_chart_page.js`.
