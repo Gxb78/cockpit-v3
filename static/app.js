@@ -12085,7 +12085,8 @@ TradeEditorController.renderHtml = function (day, trade) {
     var priceEl = document.getElementById('btcChartPrice');
     if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
     S.lastCandleTime = k.t;
-    S.clockOffset = k.t - Date.now();
+    // clockOffset NON mis à jour ici — l'offset serveur est fixe,
+    // le recalculer sur chaque WS remettrait le countdown à 3:00
     if (S.candleSeries) { try { S.candleSeries.update(candle); } catch(e) {} }
     if (S.countdownPriceLine) { try { S.countdownPriceLine.applyOptions({ price: candle.close }); } catch(e) {} }
     if (S.follow && !S.userDragging) { _withProgrammaticRange(function () { maybeFollowBtcWidgetPriceY(); }); }
@@ -12755,7 +12756,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     var priceEl = document.getElementById('chartPrice');
     if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
     lastCandleTime = k.t;
-    clockOffset = k.t - Date.now();
+    // clockOffset non mis a jour ici (l'offset serveur est fixe)
     if (candlestickSeries) {
       try {
         if (chartStyle === 'candlestick') {

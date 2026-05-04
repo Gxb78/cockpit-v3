@@ -422,7 +422,7 @@
     var priceEl = document.getElementById('chartPrice');
     if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
     lastCandleTime = k.t;
-    clockOffset = k.t - Date.now();
+    // clockOffset non mis a jour ici (l'offset serveur est fixe)
     if (candlestickSeries) {
       try {
         if (chartStyle === 'candlestick') {
