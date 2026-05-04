@@ -11062,6 +11062,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     timeframe: '3m',
     follow: true,
     userDragging: false,
+    programmaticRangeChange: false,
     renderToken: 0,
     manualPriceRange: null,
     // VWAP
@@ -11386,9 +11387,11 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   function applyBtcWidgetBestView() {
     if (!S.candles || !S.candles.length || !S.chart) return;
+    S.programmaticRangeChange = true;
     applyBtcWidgetLiveXRange();
     var priceRange = computeBtcWidgetPriceRange(S.candles, S.timeframe);
     setBtcWidgetPriceRange(priceRange);
+    requestAnimationFrame(function () { S.programmaticRangeChange = false; });
   }
 
   // ──────────────────────────────────────────────
@@ -11418,64 +11421,90 @@ TradeEditorController.renderHtml = function (day, trade) {
   function bindBtcWidgetFreePan() {
     var el = S.container;
     if (!el) return;
-    var drag = null;
+    var gesture = null;
+    var DRAG_THRESHOLD_PX = 5;
+
+    function resetGesture() {
+      if (!gesture) return;
+      try { if (gesture.pointerId != null && el.hasPointerCapture && el.hasPointerCapture(gesture.pointerId)) el.releasePointerCapture(gesture.pointerId); } catch(e) {}
+      gesture = null;
+      S.userDragging = false;
+      el.classList.remove('btc-widget-dragging');
+      document.body.classList.remove('btc-widget-dragging-body');
+      _updateBtcWidgetLiveButton();
+    }
 
     el.addEventListener('pointerdown', function (e) {
       if (e.button !== 0) return;
-      if (e.target.closest('button, .tf-btn, .widget-btn, .btc-chart-interval, #btcChartCustom')) return;
+      if (e.target.closest('button, .tf-btn, .widget-btn, .btc-chart-interval, #btcChartCustom, #btc-widget-live-btn')) return;
       var logicalRange;
       try { logicalRange = S.chart.timeScale().getVisibleLogicalRange(); } catch(e) {}
       var priceRange = getBtcWidgetCurrentPriceRange();
       if (!logicalRange || !priceRange) return;
-
-      S.follow = false;
-      S.userDragging = true;
-      drag = {
+      gesture = {
         pointerId: e.pointerId, startX: e.clientX, startY: e.clientY,
         logicalRange: { from: logicalRange.from, to: logicalRange.to },
         priceRange: { from: priceRange.from, to: priceRange.to },
+        dragging: false,
       };
-      el.setPointerCapture(e.pointerId);
+      // Ne PAS set userDragging ici — attendre un vrai mouvement
     });
 
-    el.addEventListener('pointermove', function (e) {
-      if (!drag || e.pointerId !== drag.pointerId) return;
+    window.addEventListener('pointermove', function (e) {
+      if (!gesture || e.pointerId !== gesture.pointerId) return;
+      var dx = e.clientX - gesture.startX;
+      var dy = e.clientY - gesture.startY;
+      if (!gesture.dragging) {
+        if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD_PX) return;
+        gesture.dragging = true;
+        S.follow = false;
+        S.userDragging = true;
+        try { el.setPointerCapture(gesture.pointerId); } catch(e) {}
+        el.classList.add('btc-widget-dragging');
+        document.body.classList.add('btc-widget-dragging-body');
+        _updateBtcWidgetLiveButton();
+      }
       e.preventDefault();
-      var dx = e.clientX - drag.startX;
-      var dy = e.clientY - drag.startY;
       var rect = el.getBoundingClientRect();
-      var priceScaleW = 60;
-      var plotW = Math.max(1, rect.width - priceScaleW);
-      var plotH = Math.max(1, rect.height - 28);
-      var barsPerPx = (drag.logicalRange.to - drag.logicalRange.from) / plotW;
-      var pricePerPx = (drag.priceRange.to - drag.priceRange.from) / plotH;
+      var plotW = Math.max(1, rect.width - 70);
+      var plotH = Math.max(1, rect.height - 30);
+      var logicalWidth = gesture.logicalRange.to - gesture.logicalRange.from;
+      var priceHeight = gesture.priceRange.to - gesture.priceRange.from;
+      var barsPerPx = logicalWidth / plotW;
+      var pricePerPx = priceHeight / plotH;
       var logicalShift = -dx * barsPerPx;
       var priceShift = dy * pricePerPx;
-      try {
-        S.chart.timeScale().setVisibleLogicalRange({
-          from: drag.logicalRange.from + logicalShift,
-          to: drag.logicalRange.to + logicalShift,
-        });
-      } catch(e) {}
-      setBtcWidgetPriceRange({
-        from: drag.priceRange.from + priceShift,
-        to: drag.priceRange.to + priceShift,
-      });
-    });
+      try { S.chart.timeScale().setVisibleLogicalRange({ from: gesture.logicalRange.from + logicalShift, to: gesture.logicalRange.to + logicalShift }); } catch(e) {}
+      setBtcWidgetPriceRange({ from: gesture.priceRange.from + priceShift, to: gesture.priceRange.to + priceShift });
+    }, { passive: false });
 
-    function endDrag(e) {
-      if (!drag || e.pointerId !== drag.pointerId) return;
-      drag = null;
-      S.userDragging = false;
-    }
-    el.addEventListener('pointerup', endDrag);
-    el.addEventListener('pointercancel', endDrag);
+    window.addEventListener('pointerup', resetGesture);
+    window.addEventListener('pointercancel', resetGesture);
+    window.addEventListener('blur', resetGesture);
+    el.addEventListener('lostpointercapture', resetGesture);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') resetGesture(); });
 
     // Double-click = re-live + best view
     el.addEventListener('dblclick', function () {
+      resetGesture();
       S.follow = true;
       applyBtcWidgetBestView();
+      _updateBtcWidgetLiveButton();
     });
+
+    // Desactiver follow si l'utilisateur scroll/zoom via la lib
+    try { S.chart.timeScale().subscribeVisibleLogicalRangeChange(function () {
+      if (S.userDragging) return;
+      if (S.programmaticRangeChange) return;
+      S.follow = false;
+      _updateBtcWidgetLiveButton();
+    }); } catch(e) {}
+  }
+
+  function _updateBtcWidgetLiveButton() {
+    var btn = document.getElementById('btc-widget-live-btn');
+    if (!btn) return;
+    btn.classList.toggle('hidden', S.follow);
   }
 
   // ──────────────────────────────────────────────
@@ -11636,6 +11665,16 @@ TradeEditorController.renderHtml = function (day, trade) {
       }
     });
     S.resizeObserver.observe(container);
+
+    // Live button
+    var liveBtn = document.getElementById('btc-widget-live-btn');
+    if (liveBtn) {
+      liveBtn.addEventListener('click', function () {
+        S.follow = true;
+        applyBtcWidgetBestView();
+        _updateBtcWidgetLiveButton();
+      });
+    }
 
     // Custom drag
     bindBtcWidgetFreePan();
