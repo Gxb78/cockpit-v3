@@ -436,7 +436,12 @@
     var priceEl = document.getElementById('chartPrice');
     if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
     lastCandleTime = k.t;
-    _updateCountdownAnchor(candle, 'ws');
+
+    var eventMs = Number(d.E);
+    if (window.BtcMarketClock && Number.isFinite(eventMs)) {
+      window.BtcMarketClock.sync(eventMs, 'ws-event');
+    }
+    _updateCountdownAnchor(candle, 'ws', Number.isFinite(eventMs) ? eventMs : undefined);
     if (candlestickSeries) {
       try {
         if (chartStyle === 'candlestick') {
@@ -1310,7 +1315,7 @@
     return NaN;
   }
 
-  function _updateCountdownAnchor(candle, source) {
+  function _updateCountdownAnchor(candle, source, nowMsOverride) {
     if (!candle) return;
     var intervalMs = _getIntervalMs(currentInterval);
     if (!intervalMs) return;
@@ -1318,8 +1323,15 @@
     var closeMs = _getCandleCloseMs(candle, intervalMs);
     if (!Number.isFinite(openMs) || !Number.isFinite(closeMs)) return;
 
-    var marketNow = window.BtcMarketClock ? window.BtcMarketClock.now() : Date.now();
-    var clockSynced = window.BtcMarketClock && window.BtcMarketClock.isSynced && window.BtcMarketClock.isSynced();
+    var overrideNow = Number(nowMsOverride);
+    var hasOverrideNow = Number.isFinite(overrideNow);
+
+    var clockSynced = hasOverrideNow ||
+      (window.BtcMarketClock && window.BtcMarketClock.isSynced && window.BtcMarketClock.isSynced());
+
+    var marketNow = hasOverrideNow
+      ? overrideNow
+      : (window.BtcMarketClock ? window.BtcMarketClock.now() : Date.now());
 
     // Pas de reject si clock pas sync et source pas WS — on attend la sync
     if (!clockSynced && source !== 'ws') return;
