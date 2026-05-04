@@ -51,7 +51,25 @@
     return new Promise(function (resolve) { requestAnimationFrame(resolve); });
   }
 
-  // ── rAF-retry pour setVisibleRange/setVisibleLogicalRange avec inertie flush ──
+  // ── Compat LWC v4/v5 ──
+  function _addCandleSeries(api, opts) {
+    if (typeof api.addSeries === 'function') return api.addSeries(window.LightweightCharts.CandlestickSeries, opts);
+    return api.addCandlestickSeries(opts);
+  }
+  function _addLineSeries(api, opts) {
+    if (typeof api.addSeries === 'function') return api.addSeries(window.LightweightCharts.LineSeries, opts);
+    return api.addLineSeries(opts);
+  }
+  function _addHistogramSeries(api, opts) {
+    if (typeof api.addSeries === 'function') return api.addSeries(window.LightweightCharts.HistogramSeries, opts);
+    return api.addHistogramSeries(opts);
+  }
+  function _addAreaSeries(api, opts) {
+    if (typeof api.addSeries === 'function') return api.addSeries(window.LightweightCharts.AreaSeries, opts);
+    return api.addAreaSeries(opts);
+  }
+
+  // ── INDICATOR CALCULATIONS ──
   async function _applyZoomWithRetry(target, maxAttempts) {
     if (!target || !chart || !chart.timeScale()) return;
     var isLogical = target.to < 1e9;
@@ -216,7 +234,7 @@
     // SMA
     if (s.sma.active && candles.length >= s.sma.period) {
       var smaData = calcSMA(candles, s.sma.period);
-      indicatorSeries.sma = chart.addLineSeries({
+      indicatorSeries.sma = _addLineSeries(chart, {
         color: s.sma.color, lineWidth: 1.5, priceLineVisible: false,
         lastValueVisible: true, crosshairMarkerVisible: false,
         title: 'SMA ' + s.sma.period,
@@ -227,7 +245,7 @@
     // EMA
     if (s.ema.active && candles.length >= s.ema.period) {
       var emaData = calcEMA(candles, s.ema.period);
-      indicatorSeries.ema = chart.addLineSeries({
+      indicatorSeries.ema = _addLineSeries(chart, {
         color: s.ema.color, lineWidth: 1.5, priceLineVisible: false,
         lastValueVisible: true, crosshairMarkerVisible: false,
         title: 'EMA ' + s.ema.period,
@@ -235,23 +253,21 @@
       indicatorSeries.ema.setData(emaData);
     }
 
-    // Bollinger Bands
+    // Bollinger
     if (s.boll.active && candles.length >= s.boll.period) {
       var bollData = calcBollinger(candles, s.boll.period);
-      indicatorSeries.bollMid = chart.addLineSeries({
+      indicatorSeries.bollMid = _addLineSeries(chart, {
         color: s.boll.color, lineWidth: 1, priceLineVisible: false,
         lastValueVisible: true, crosshairMarkerVisible: false,
         title: 'BB ' + s.boll.period,
       });
-      indicatorSeries.bollUpper = chart.addLineSeries({
+      indicatorSeries.bollUpper = _addLineSeries(chart, {
         color: s.boll.color, lineWidth: 1, priceLineVisible: false,
-        lastValueVisible: false, crosshairMarkerVisible: false,
-        lineStyle: 2, // dashed
+        lastValueVisible: false, crosshairMarkerVisible: false, lineStyle: 2,
       });
-      indicatorSeries.bollLower = chart.addLineSeries({
+      indicatorSeries.bollLower = _addLineSeries(chart, {
         color: s.boll.color, lineWidth: 1, priceLineVisible: false,
-        lastValueVisible: false, crosshairMarkerVisible: false,
-        lineStyle: 2,
+        lastValueVisible: false, crosshairMarkerVisible: false, lineStyle: 2,
       });
       indicatorSeries.bollMid.setData(bollData.map(function (d) { return { time: d.time, value: d.middle }; }));
       indicatorSeries.bollUpper.setData(bollData.map(function (d) { return { time: d.time, value: d.upper }; }));
@@ -261,7 +277,7 @@
     // RSI (separate pane)
     if (s.rsi.active && candles.length >= s.rsi.period + 1) {
       try {
-        rsiSeries = chart.addLineSeries({
+        rsiSeries = _addLineSeries(chart, {
           color: s.rsi.color, lineWidth: 1.5, priceLineVisible: false,
           lastValueVisible: true, crosshairMarkerVisible: false,
           priceScaleId: rsiPaneId,
@@ -353,8 +369,8 @@
   function _loadLibrary(cb) {
     if (typeof window.LightweightCharts !== 'undefined') { cb(); return; }
     var urls = [
-      'https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js',
-      'https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js',
+      'https://unpkg.com/lightweight-charts@5.0.7/dist/lightweight-charts.standalone.production.js',
+      'https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.7/dist/lightweight-charts.standalone.production.js',
     ];
     function tryCdn(idx) {
       if (idx >= urls.length) { console.error('[chart] CDN indisponible'); return; }
@@ -446,14 +462,14 @@
 
       // Handle chart style
       if (chartStyle === 'line') {
-        candlestickSeries = chart.addLineSeries({
+        candlestickSeries = _addLineSeries(chart, {
           color: '#22c55e',
           lineWidth: 2,
           lastValueVisible: false,
           priceLineVisible: false,
         });
       } else if (chartStyle === 'area') {
-        candlestickSeries = chart.addAreaSeries({
+        candlestickSeries = _addAreaSeries(chart, {
           lineColor: '#22c55e',
           topColor: 'rgba(34,197,94,0.3)',
           bottomColor: 'rgba(34,197,94,0.02)',
@@ -462,7 +478,7 @@
           priceLineVisible: false,
         });
       } else {
-        candlestickSeries = chart.addCandlestickSeries(seriesOpts);
+        candlestickSeries = _addCandleSeries(chart, seriesOpts);
       }
 
       // Price line + countdown
@@ -476,7 +492,7 @@
       });
 
       // Volume
-      volumeSeries = chart.addHistogramSeries({
+      volumeSeries = _addHistogramSeries(chart, {
         priceFormat: { type: 'volume' },
         priceScaleId: 'volume',
       });
@@ -486,7 +502,7 @@
 
       // Pré-créer les 4 séries VWAP — visibles dès le départ avec données vides
       Object.keys(VWAP_COLORS).forEach(function (p) {
-        vwapSeriesMap[p] = chart.addLineSeries({
+        vwapSeriesMap[p] = _addLineSeries(chart, {
           color: VWAP_COLORS[p], lineWidth: 1.5,
           priceLineVisible: false, lastValueVisible: false,
           crosshairMarkerVisible: false,

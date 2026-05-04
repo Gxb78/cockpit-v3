@@ -97,6 +97,18 @@
   }
 
   // ──────────────────────────────────────────────
+  //  COMPAT LWC v4/v5
+  // ──────────────────────────────────────────────
+  function _addCandleSeries(api, opts) {
+    if (typeof api.addSeries === 'function') return api.addSeries(window.LightweightCharts.CandlestickSeries, opts);
+    return api.addCandlestickSeries(opts);
+  }
+  function _addLineSeries(api, opts) {
+    if (typeof api.addSeries === 'function') return api.addSeries(window.LightweightCharts.LineSeries, opts);
+    return api.addLineSeries(opts);
+  }
+
+  // ──────────────────────────────────────────────
   //  INDICATORS (idem 062)
   // ──────────────────────────────────────────────
   function _calcSMA(candles, period) {
@@ -161,26 +173,26 @@
     var s = indSettings;
     if (s.sma.active && candles.length >= s.sma.period) {
       var smaData = _calcSMA(candles, s.sma.period);
-      S.indicatorSeries.sma = S.chart.addLineSeries({ color: s.sma.color, lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false, title: 'SMA ' + s.sma.period });
+      S.indicatorSeries.sma = _addLineSeries(S.chart, { color: s.sma.color, lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false, title: 'SMA ' + s.sma.period });
       S.indicatorSeries.sma.setData(smaData);
     }
     if (s.ema.active && candles.length >= s.ema.period) {
       var emaData = _calcEMA(candles, s.ema.period);
-      S.indicatorSeries.ema = S.chart.addLineSeries({ color: s.ema.color, lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false, title: 'EMA ' + s.ema.period });
+      S.indicatorSeries.ema = _addLineSeries(S.chart, { color: s.ema.color, lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false, title: 'EMA ' + s.ema.period });
       S.indicatorSeries.ema.setData(emaData);
     }
     if (s.boll.active && candles.length >= s.boll.period) {
       var bollData = _calcBollinger(candles, s.boll.period);
-      S.indicatorSeries.bollMid = S.chart.addLineSeries({ color: s.boll.color, lineWidth: 1, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false, title: 'BB ' + s.boll.period });
-      S.indicatorSeries.bollUpper = S.chart.addLineSeries({ color: s.boll.color, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, lineStyle: 2 });
-      S.indicatorSeries.bollLower = S.chart.addLineSeries({ color: s.boll.color, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, lineStyle: 2 });
+      S.indicatorSeries.bollMid = _addLineSeries(S.chart, { color: s.boll.color, lineWidth: 1, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false, title: 'BB ' + s.boll.period });
+      S.indicatorSeries.bollUpper = _addLineSeries(S.chart, { color: s.boll.color, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, lineStyle: 2 });
+      S.indicatorSeries.bollLower = _addLineSeries(S.chart, { color: s.boll.color, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, lineStyle: 2 });
       S.indicatorSeries.bollMid.setData(bollData.map(function (d) { return { time: d.time, value: d.middle }; }));
       S.indicatorSeries.bollUpper.setData(bollData.map(function (d) { return { time: d.time, value: d.upper }; }));
       S.indicatorSeries.bollLower.setData(bollData.map(function (d) { return { time: d.time, value: d.lower }; }));
     }
     if (s.rsi.active && candles.length >= s.rsi.period + 1) {
       try {
-        S.rsiSeries = S.chart.addLineSeries({ color: s.rsi.color, lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false, priceScaleId: 'rsi_pane', title: 'RSI ' + s.rsi.period });
+        S.rsiSeries = _addLineSeries(S.chart, { color: s.rsi.color, lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false, priceScaleId: 'rsi_pane', title: 'RSI ' + s.rsi.period });
         S.chart.priceScale('rsi_pane').applyOptions({ scaleMargins: { top: 0.7, bottom: 0 }, visible: true });
         S.rsiSeries.setData(_calcRSI(candles, s.rsi.period));
       } catch(e) { console.error('[btc-widget] RSI:', e); }
@@ -564,7 +576,7 @@
     });
 
     // Candle series
-    S.candleSeries = S.chart.addCandlestickSeries({
+    S.candleSeries = _addCandleSeries(S.chart, {
       priceScaleId: 'right',
       upColor: '#22c55e', downColor: '#ef4444',
       borderVisible: false, wickUpColor: '#22c55e', wickDownColor: '#ef4444',
@@ -580,7 +592,7 @@
 
     // VWAP series
     Object.keys(VWAP_COLORS).forEach(function (p) {
-      S.vwapSeriesMap[p] = S.chart.addLineSeries({
+      S.vwapSeriesMap[p] = _addLineSeries(S.chart, {
         color: VWAP_COLORS[p], lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false,
         crosshairMarkerVisible: false, title: 'VWAP ' + p, visible: true,
         autoscaleInfoProvider: function () { return null; },
@@ -728,9 +740,9 @@
       return;
     }
     var urls = [
-      'https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js',
-      'https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js',
-      'https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.1.3/lightweight-charts.standalone.production.js',
+      'https://unpkg.com/lightweight-charts@5.0.7/dist/lightweight-charts.standalone.production.js',
+      'https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.7/dist/lightweight-charts.standalone.production.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/5.0.7/lightweight-charts.standalone.production.js',
     ];
     function tryCdn(idx) {
       if (idx >= urls.length) { container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">Impossible de charger le graphique (CDN bloque)</div>'; return; }

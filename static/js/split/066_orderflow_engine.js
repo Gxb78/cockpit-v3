@@ -200,41 +200,56 @@
     var self = this;
     var c = this.canvas;
 
-    // Mouse wheel — scroll temps (defaut), zoom prix (Shift+wheel)
+    // ===== WHEEL / TRACKPAD EVENTS =====
+    // Support pour: molette standard, trackpad 2-finger scroll, pinch zoom
     c.addEventListener('wheel', function (e) {
       e.preventDefault();
 
+      // Ctrl+Wheel OR Meta+Wheel = pinch zoom simulation (global)
       if (e.ctrlKey || e.metaKey) {
-        // Ctrl+Wheel = zoom prix
-        self._zoomPrice(e.offsetY, e.deltaY < 0 ? 1.08 : 0.92);
+        // Ctrl/Cmd + Wheel/Pinch = zoom global (temps + prix ensemble)
+        var zoomIn = e.deltaY < 0;
+        var factor = zoomIn ? 1.12 : 0.89;
+        self._zoomGlobal(e.offsetY, factor);
         return;
       }
 
-      if (e.deltaY !== 0) {
-        if (e.shiftKey) {
-          // Shift+Wheel = scroll temps (horizontal)
-          var p = Math.abs(e.deltaY) * 0.6;
-          self._scrollTime(e.deltaY > 0 ? 1 : -1, p);
-        } else {
-          // Wheel = scroll prix (vertical) - comme une page
-          self._panPrice(e.deltaY * 0.5);
-        }
+      // Shift+Wheel = scroll horizontal (temps) — pour trackpad vertical avec modifier
+      if (e.shiftKey && e.deltaY !== 0) {
+        var pxScroll = Math.abs(e.deltaY) * 0.75; // sensibilité modérée
+        self._scrollTime(e.deltaY > 0 ? 1 : -1, pxScroll);
+        return;
       }
 
+      // Trackpad 2-finger horizontal (deltaX) = scroll temps naturel
       if (e.deltaX !== 0) {
-        // Trackpad lateral = scroll temps
-        self._scrollTime(e.deltaX > 0 ? 1 : -1, Math.abs(e.deltaX) * 0.6);
+        var pxHorizontal = Math.abs(e.deltaX) * 0.75;
+        self._scrollTime(e.deltaX > 0 ? 1 : -1, pxHorizontal);
+        return;
+      }
+
+      // Molette verticale standard OU trackpad vertical = ZOOM TEMPS (rétrécir/agrandir axe X)
+      // Scroll up (deltaY < 0) = rétrécir temps = zoom in
+      // Scroll down (deltaY > 0) = agrandir temps = zoom out
+      if (e.deltaY !== 0) {
+        var zoomIn = e.deltaY < 0;
+        var factor = zoomIn ? 1.10 : 0.91; // 10% / 9% zoom temps
+        self._zoomTime(factor);
       }
     }, { passive: false });
 
-    // Pointer events — drag/pan/crosshair avec setPointerCapture
-    self._dragThreshold = 4; // px
+    // ===== POINTER EVENTS (souris, trackpad, touch) =====
+    self._dragThreshold = 5; // px — légèrement plus généreux
     self._isPointerDown = false;
     self._hasMoved = false;
     self._dragMode = null; // 'h' (horizontal/time) ou 'v' (vertical/price)
+    self._lastPinchDistance = null; // pour détection pinch on touch
 
     c.addEventListener('pointerdown', function (e) {
+      // Ignorer drag sur l'axe prix (c'est pour le scroll prix uniquement)
       self._inPriceAxis = e.offsetX > self.layout.chartRight;
+      if (self._inPriceAxis && e.pointerType === 'mouse') return;
+
       c.setPointerCapture(e.pointerId);
       self._isPointerDown = true;
       self._hasMoved = false;
@@ -257,39 +272,39 @@
         var dy = e.offsetY - self.dragStart.y;
         var dist = Math.sqrt(dx * dx + dy * dy);
 
-        if (dist < self._dragThreshold) return; // click, pas encore de drag
+        if (dist < self._dragThreshold) return; // Pas encore du drag — seuil de 5px
 
         self._hasMoved = true;
 
-        // === VERROUILLAGE DU MODE ===
+        // === MODE VERROUILLAGE (premier mouvement décisif) ===
         if (!self._dragMode) {
           var absDx = Math.abs(dx);
           var absDy = Math.abs(dy);
+
+          // Sur l'axe prix → forcer vertical (prix scroll)
           if (self._inPriceAxis) {
-            // Sur l'axe prix → vertical seulement
             self._dragMode = 'v';
-          } else if (e.shiftKey) {
-            // Shift+drag en zone chart → vertical (prix)
+          }
+          // Shift+drag dans la zone chart → forcer prix (zoom en glissant)
+          else if (e.shiftKey) {
             self._dragMode = 'v';
-          } else if (absDx > absDy * 1.5) {
-            // Dominante horizontale → temps
-            self._dragMode = 'h';
-          } else if (absDy > absDx * 1.5) {
-            // Dominante verticale → prix
-            self._dragMode = 'v';
-          } else {
-            // Diagonale → temps seulement (comportement par défaut chart)
-            self._dragMode = 'h';
+          }
+          // Par défaut: drag LIBRE (mode 'free') = pan temps ET prix ensemble
+          // Aucun verrouillage directionnel — suivre le mouvement de la souris
+          else {
+            self._dragMode = 'free';
           }
         }
 
-        self._pan(dx, dy);
+        // Passer le flag shift courant (vérifié dynamiquement, pas mémorisé)
+        self._pan(dx, dy, e.shiftKey);
       } else {
+        // Hover feedback
         self._dirty = true;
         if (e.offsetX > self.layout.chartRight) {
-          c.style.cursor = 'ns-resize';
+          c.style.cursor = 'ns-resize'; // Sur axe prix → redimensionner
         } else {
-          c.style.cursor = 'grab';
+          c.style.cursor = 'grab'; // Zone chart → draggable
         }
       }
     });
@@ -300,6 +315,7 @@
       self._hasMoved = false;
       self._dragMode = null;
       c.style.cursor = 'grab';
+      self._dirty = true;
     });
 
     c.addEventListener('pointerleave', function () {
@@ -311,7 +327,7 @@
       self._dirty = true;
     });
 
-    // Double-click — reset zoom
+    // Double-click — reset zoom + vue complète
     c.addEventListener('dblclick', function () {
       self._resetView();
     });
@@ -321,25 +337,33 @@
       self._handleResize();
     });
 
-    // Keyboard shortcuts (quand la page orderflow est active)
+    // Keyboard shortcuts
     document.addEventListener('keydown', self._onKeyDown.bind(self));
 
     // Symbol buttons
     self._bindTopbarClicks();
   };
 
-  /** Hotkeys: H=centrer temps, P=centrer prix, R=reset complet */
+  /** Hotkeys: Space=reset, H=centrer temps, P=centrer prix, +/-=zoom, I/O=zoom, Arrow keys=scroll fin */
   OrderflowEngine.prototype._onKeyDown = function (e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
     if (!document.querySelector('.page[data-page="orderflow"].active')) return;
 
     var k = e.key.toLowerCase();
-    if (k === 'h') {
-      // Recentrer temps sur les donnees
+    var handled = false;
+
+    // Space = reset vue complète
+    if (k === ' ' || k === 'enter') {
+      this._resetView();
+      handled = true;
+    }
+    // H = centrer times (fit horizontal)
+    else if (k === 'h') {
       this._fitToData();
-      this._dirty = true;
-    } else if (k === 'p') {
-      // Recentrer prix
+      handled = true;
+    }
+    // P = centrer prix (fit vertical)
+    else if (k === 'p') {
       var candles = this._candles;
       if (candles && candles.length > 0) {
         var minP = candles[0].low, maxP = candles[0].high;
@@ -350,10 +374,71 @@
         var pad = (maxP - minP) * 0.15 || 200;
         this.priceScale.minPrice = minP - pad;
         this.priceScale.maxPrice = maxP + pad;
-        this._dirty = true;
       }
-    } else if (k === 'r') {
-      this._resetView();
+      handled = true;
+    }
+    // +/= = zoom prix IN (12%)
+    else if (k === '+' || k === '=') {
+      var centerY = this.canvas.height / 2 / (this.dpr || 1);
+      this._zoomPrice(centerY, 1.12);
+      handled = true;
+    }
+    // - = zoom prix OUT (11%)
+    else if (k === '-' || k === '_') {
+      var centerY = this.canvas.height / 2 / (this.dpr || 1);
+      this._zoomPrice(centerY, 0.89);
+      handled = true;
+    }
+    // I = zoom IN prix
+    else if (k === 'i') {
+      var centerY = this.canvas.height / 2 / (this.dpr || 1);
+      this._zoomPrice(centerY, 1.15);
+      handled = true;
+    }
+    // O = zoom OUT prix
+    else if (k === 'o') {
+      var centerY = this.canvas.height / 2 / (this.dpr || 1);
+      this._zoomPrice(centerY, 0.87);
+      handled = true;
+    }
+    // R = reset complètement (vue par défaut)
+    else if (k === 'r') {
+      this._resetDefaultView();
+      handled = true;
+    }
+    // Arrow keys = fine scroll temps
+    else if (k === 'arrowleft') {
+      var ts = this.timeScale;
+      var dt = -(ts.endTime - ts.startTime) * 0.05; // 5% du range
+      ts.startTime += dt;
+      ts.endTime += dt;
+      handled = true;
+    } else if (k === 'arrowright') {
+      var ts = this.timeScale;
+      var dt = (ts.endTime - ts.startTime) * 0.05;
+      ts.startTime += dt;
+      ts.endTime += dt;
+      handled = true;
+    }
+    // Arrow up = pan prix DOWN (zoom out visuel, prix monte)
+    else if (k === 'arrowup') {
+      var ps = this.priceScale;
+      var dp = (ps.maxPrice - ps.minPrice) * 0.02; // 2% du range
+      ps.minPrice -= dp;
+      ps.maxPrice -= dp;
+      handled = true;
+    }
+    // Arrow down = pan prix UP (zoom in visuel, prix baisse)
+    else if (k === 'arrowdown') {
+      var ps = this.priceScale;
+      var dp = (ps.maxPrice - ps.minPrice) * 0.02;
+      ps.minPrice += dp;
+      ps.maxPrice += dp;
+      handled = true;
+    }
+
+    if (handled) {
+      e.preventDefault();
       this._dirty = true;
     }
   };
@@ -535,7 +620,7 @@
   // ============================================================
 
   /**
-   * Zoom vertical centré sur un pixel Y
+   * Zoom vertical (prix seulement) centré sur un pixel Y
    * @param {number} y - centre du zoom en pixels
    * @param {number} factor - >1 zoom in, <1 zoom out
    */
@@ -556,39 +641,94 @@
   };
 
   /**
-   * Pan horizontal + vertical, avec mode verrouille
+   * Zoom global (prix + temps ensemble) — comme pincher une carte
+   * Les deux axes zooment proportionnellement autour du point central
+   * @param {number} y - centre vertical du zoom en pixels
+   * @param {number} factor - >1 zoom in, <1 zoom out
    */
-  OrderflowEngine.prototype._pan = function (dx, dy) {
+  OrderflowEngine.prototype._zoomGlobal = function (y, factor) {
     var ts = this.timeScale;
-    var mode = this._dragMode || 'both';
+    var ps = this.priceScale;
 
-    if (mode === 'h' || mode === 'both') {
+    // === ZOOM PRIX ===
+    var centerPrice = this.yToPrice(y);
+    var priceRange = ps.maxPrice - ps.minPrice;
+    var newPriceRange = priceRange * (1 / factor);
+
+    if (newPriceRange < 10) newPriceRange = 10;
+    if (newPriceRange > 100000) newPriceRange = 100000;
+
+    ps.minPrice = centerPrice - (centerPrice - ps.minPrice) * (newPriceRange / priceRange);
+    ps.maxPrice = ps.minPrice + newPriceRange;
+
+    // === ZOOM TEMPS (proportionnel) ===
+    // Zoom centré sur le milieu du temps visible
+    var timeRange = ts.endTime - ts.startTime;
+    var newTimeRange = timeRange * (1 / factor);
+    var midTime = ts.startTime + timeRange / 2;
+
+    ts.startTime = midTime - newTimeRange / 2;
+    ts.endTime = ts.startTime + newTimeRange;
+
+    this._dirty = true;
+  };
+
+  /**
+   * Pan horizontal + vertical, avec mode verrouille
+   * - Mode 'free': drag libre = pan temps + prix ensemble (proportion souris)
+   * - Mode 'h': glisser horizontal = scroll temps seulement
+   * - Mode 'v': glisser vertical = scroll prix seulement OU zoom si shift+drag
+   * @param {number} dx - déplacement horizontal en pixels
+   * @param {number} dy - déplacement vertical en pixels
+   * @param {boolean} shiftDown - true si Shift est appuyé en ce moment
+   */
+  OrderflowEngine.prototype._pan = function (dx, dy, shiftDown) {
+    var ts = this.timeScale;
+    var ps = this.priceScale;
+    var mode = this._dragMode || 'free';
+
+    // === MODE LIBRE: DRAG LIBRE (pan temps + prix ensemble) ===
+    if (mode === 'free') {
+      // Pan horizontal = scroll temps
+      var dt = -dx / ts.pixelsPerMs;
+      ts.startTime = this.scrollStart.time + dt;
+      ts.endTime = ts.startTime + (this.timeScale.width - ts.leftMargin - ts.rightMargin) / ts.pixelsPerMs;
+
+      // Pan vertical = scroll prix
+      var dp = -dy / ps.pixelsPerUnit;
+      ps.minPrice = this.scrollStart.priceMin + dp;
+      ps.maxPrice = this.scrollStart.priceMax + dp;
+    }
+    // === PAN HORIZONTAL = SCROLL TEMPS (mode 'h' forcé) ===
+    else if (mode === 'h') {
       var dt = -dx / ts.pixelsPerMs;
       ts.startTime = this.scrollStart.time + dt;
       ts.endTime = ts.startTime + (this.timeScale.width - ts.leftMargin - ts.rightMargin) / ts.pixelsPerMs;
     }
-
-    if (mode === 'v') {
-      // Vertical drag = zoom prix continu
-      // Glisser vers le haut (dy < 0) = zoom in. Vers le bas (dy > 0) = zoom out.
-      var ps = this.priceScale;
-      var startMin = this.scrollStart.priceMin;
-      var startMax = this.scrollStart.priceMax;
-      var startRange = startMax - startMin;
-      var centerPrice = this.yToPrice(this.dragStart.y);
-      if (!Number.isFinite(centerPrice)) centerPrice = (startMin + startMax) / 2;
-      var zoomFactor = Math.exp(-dy * 0.004);
-      var newRange = startRange / zoomFactor;
-      if (newRange < 10) newRange = 10;
-      if (newRange > 100000) newRange = 100000;
-      var centerRatio = (centerPrice - startMin) / startRange;
-      ps.minPrice = centerPrice - newRange * centerRatio;
-      ps.maxPrice = ps.minPrice + newRange;
-    } else if (mode === 'both') {
-      // Fallback drag diagonal (rare) : pan temps seulement
-      var dt = -dx / ts.pixelsPerMs;
-      ts.startTime = this.scrollStart.time + dt;
-      ts.endTime = ts.startTime + (this.timeScale.width - ts.leftMargin - ts.rightMargin) / ts.pixelsPerMs;
+    // === PAN VERTICAL (mode 'v' forcé) ===
+    else if (mode === 'v') {
+      // Vérifier si shift est appuyé EN CE MOMENT (pas mémorisé)
+      if (shiftDown) {
+        // Shift+drag vertical = zoom prix continu (exponential)
+        // Glisser vers le haut (dy < 0) = zoom in. Vers le bas (dy > 0) = zoom out.
+        var startMin = this.scrollStart.priceMin;
+        var startMax = this.scrollStart.priceMax;
+        var startRange = startMax - startMin;
+        var centerPrice = this.yToPrice(this.dragStart.y);
+        if (!Number.isFinite(centerPrice)) centerPrice = (startMin + startMax) / 2;
+        var zoomFactor = Math.exp(-dy * 0.005); // 0.5% per pixel
+        var newRange = startRange / zoomFactor;
+        if (newRange < 10) newRange = 10;
+        if (newRange > 100000) newRange = 100000;
+        var centerRatio = (centerPrice - startMin) / startRange;
+        ps.minPrice = centerPrice - newRange * centerRatio;
+        ps.maxPrice = ps.minPrice + newRange;
+      } else {
+        // Drag vertical NORMAL (sans shift) = simple pan prix — linéaire et prévisible
+        var dp = -dy / ps.pixelsPerUnit;
+        ps.minPrice = this.scrollStart.priceMin + dp;
+        ps.maxPrice = this.scrollStart.priceMax + dp;
+      }
     }
 
     this._dirty = true;
@@ -698,7 +838,7 @@
     ctx.font = '9px "JetBrains Mono", monospace';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'bottom';
-    ctx.fillText('Drag: temps  |  Wheel: prix  |  Ctrl+Wheel: zoom  |  Shift+Wheel: scroll temps  |  H:centrer  P:prix  R:reset', 10, h - 2);
+    ctx.fillText('Drag libre=pan temps+prix  Shift+Drag↕=zoom prix  Wheel↑=rétrécir temps  Wheel↓=agrandir temps  Ctrl+Wheel=zoom global  +/-=zoom prix  Space=reset  H=temps  P=prix  R=défaut', 10, h - 2);
   };
 
   /**
@@ -907,6 +1047,23 @@
     var dp = pixels / ps.pixelsPerUnit;
     ps.minPrice += dp;
     ps.maxPrice += dp;
+    this._dirty = true;
+  };
+
+  /**
+   * Zoom horizontal (temps seulement) — rétrécir/agrandir l'axe X
+   * Zoom centré au milieu du range visible
+   * @param {number} factor - >1 zoom in (rétrécir temps), <1 zoom out (agrandir temps)
+   */
+  OrderflowEngine.prototype._zoomTime = function (factor) {
+    var ts = this.timeScale;
+    var timeRange = ts.endTime - ts.startTime;
+    var newTimeRange = timeRange * (1 / factor);
+    var midTime = ts.startTime + timeRange / 2;
+
+    ts.startTime = midTime - newTimeRange / 2;
+    ts.endTime = ts.startTime + newTimeRange;
+
     this._dirty = true;
   };
 

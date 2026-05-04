@@ -28,9 +28,10 @@
   display: block;
   width: 100%;
   height: 100%;
-  cursor: crosshair;
+  cursor: grab;
   /* Désactiver le comportement natif du navigateur pour le wheel/pan */
   touch-action: none;
+  user-select: none;
 }
 
 /* ── Top bar flottant — deux lignes ── */
