@@ -65,30 +65,25 @@
   min-height: 0;
 }
 
-/* ── Flip card: format portrait, mêmes proportions que le journal ── */
+/* ── Flip card: format portrait, vue "de loin" ── */
 .fav-carousel-slide .journal-flip-card {
-  width: min(460px, 100%);
-  height: clamp(460px, 58dvh, 510px);
+  width: min(400px, 100%);
+  height: clamp(520px, 64dvh, 580px);
   min-height: 0;
   cursor: pointer;
   perspective: 1500px;
 }
 
-/* ── Shot colle en haut de la card ── */
+/* ── Shot : hauteur proportionnelle, marges conservées ── */
 .fav-carousel-slide .journal-trade-shot {
-  height: clamp(200px, 28dvh, 250px);
+  height: clamp(210px, 30dvh, 260px);
   flex: 0 0 auto;
-  border-radius: 20px 20px 14px 14px;
+  border-radius: 20px;
 }
 
-/* ── Supprimer le padding-top pour que le shot parte du bord haut ── */
-.fav-carousel-slide .journal-flip-front {
-  padding-top: 0;
-}
-
-/* ── Badges recto : alignés sur le bord haut du shot ── */
+/* ── Badges recto : position d'origine ── */
 .fav-carousel-slide .journal-flip-top {
-  top: 12px;
+  top: 14px;
   left: 14px;
   right: 14px;
 }
@@ -222,8 +217,8 @@
   100% { background-position:  200% 0; }
 }
 .fav-skeleton {
-  width: min(460px, 100%);
-  height: clamp(460px, 58dvh, 510px);
+  width: min(400px, 100%);
+  height: clamp(520px, 64dvh, 580px);
   border-radius: var(--r-lg);
   background: linear-gradient(
     90deg,
