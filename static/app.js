@@ -11478,6 +11478,8 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   // Délègue à BtcVwap (055) — cache global, source canonique, dedup
   async function _calcAndDrawVwap() {
+    var token = S.renderToken;
+    var tf = S.timeframe;
     try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) S.activeVwapPeriods = s; } catch(e) {}
     Object.keys(S.vwapSeriesMap).forEach(function (k) { if (S.activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k); });
     if (!S.activeVwapPeriods.length) return;
@@ -11486,7 +11488,6 @@ TradeEditorController.renderHtml = function (day, trade) {
     try { S.chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
     try { S.chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
 
-    // State wrapper pour BtcVwap.drawVwapForChart
     var state = {
       symbol: 'BTCUSDT',
       candles: S.candles,
@@ -11497,6 +11498,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     for (var vi = 0; vi < vwapOrder.length; vi++) {
       var p = vwapOrder[vi];
       if (S.activeVwapPeriods.indexOf(p) < 0) continue;
+      if (token !== S.renderToken || tf !== S.timeframe) return;
       await window.BtcVwap.drawVwapForChart(state, p);
       await _waitFrame();
     }
@@ -11778,9 +11780,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         var remaining = ms - elapsed;
         if (remaining <= 0) {
           _updateCountdownLabel('0:00');
-          if (S.countdownTimer) clearInterval(S.countdownTimer);
-          S.countdownTimer = null;
-          // Fallback REST léger si WS down (max 1x/10s)
+          // Ne PAS clear le timer — le WS ou REST fallback mettra lastCandleTime à jour
           if (!S.wsConnected && now - (S.lastCountdownFetchAt || 0) > 10000) {
             S.lastCountdownFetchAt = now;
             _fetchLatestCandleOnly();
@@ -11818,10 +11818,13 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   // REST fallback léger — update la dernière bougie, pas de full render
   function _fetchLatestCandleOnly() {
-    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + S.timeframe + '&limit=3';
-    return fetch(url)
+    var token = S.renderToken;
+    var tf = S.timeframe;
+    return fetch('/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=3')
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
+        if (token !== S.renderToken) return;
+        if (tf !== S.timeframe) return;
         var raw = data.candles || [];
         if (!raw.length) return;
         var candles = _normalizeCandles(raw);
@@ -11858,7 +11861,14 @@ TradeEditorController.renderHtml = function (day, trade) {
   }
 
   function _normalizeTfForBinance(tf) {
-    return tf;
+    var map = {
+      '1m': '1m', '3m': '3m', '5m': '5m', '15m': '15m', '30m': '30m',
+      '1h': '1h', '2h': '2h', '4h': '4h', '6h': '6h', '8h': '8h', '12h': '12h',
+      '1d': '1d', '3d': '3d', '1w': '1w', '1M': '1M',
+      '1H': '1h', '2H': '2h', '4H': '4h', '6H': '6h', '8H': '8h', '12H': '12h',
+      '1D': '1d', '3D': '3d', '1W': '1w',
+    };
+    return map[tf] || String(tf || '3m').toLowerCase();
   }
 
   function _disconnectWs(reason) {
@@ -11883,7 +11893,9 @@ TradeEditorController.renderHtml = function (day, trade) {
     setTimeout(function () { S.wsClosing = false; }, 500);
   }
 
-  function _connectWs(reason) {
+  function _connectWs(reason, opts) {
+    opts = opts || {};
+    var force = !!opts.force;
     var wsKey = _getWsKey();
     var now = Date.now();
 
@@ -11893,8 +11905,8 @@ TradeEditorController.renderHtml = function (day, trade) {
       if (alive) return;
     }
 
-    // Throttle 10s
-    if (now - S.lastWsConnectAt < 10000) { return; }
+    // Throttle 10s — sauf si force (timeframe/user)
+    if (!force && now - S.lastWsConnectAt < 10000) { return; }
     S.lastWsConnectAt = now;
 
     S.wsGeneration++;
@@ -12129,7 +12141,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         if (shouldResetWs) {
           setTimeout(function () {
             if (token !== S.renderToken) return;
-            _connectWs('after-render:' + _source);
+            _connectWs('after-render:' + _source, { force: true });
           }, 250);
         }
 
@@ -12530,7 +12542,9 @@ TradeEditorController.renderHtml = function (day, trade) {
     setTimeout(function () { wsClosing = false; }, 500);
   }
 
-  function _connectWs(reason) {
+  function _connectWs(reason, opts) {
+    opts = opts || {};
+    var force = !!opts.force;
     var wsKey = _getWsKey();
     var now = Date.now();
 
@@ -12539,7 +12553,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       if (alive) return;
     }
 
-    if (now - lastWsConnectAt < 10000) return;
+    if (!force && now - lastWsConnectAt < 10000) return;
     lastWsConnectAt = now;
 
     wsGeneration++;
@@ -12989,6 +13003,8 @@ TradeEditorController.renderHtml = function (day, trade) {
   }
 
   async function _calcAndDrawVwap() {
+    var interval = currentInterval;
+    var sym = currentSymbol;
     Object.keys(vwapSeriesMap).forEach(function (k) {
       if (activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
     });
@@ -13008,6 +13024,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     for (var vi = 0; vi < vwapOrder.length; vi++) {
       var p = vwapOrder[vi];
       if (activeVwapPeriods.indexOf(p) < 0) continue;
+      if (interval !== currentInterval || sym !== currentSymbol) return;
       await window.BtcVwap.drawVwapForChart(state, p);
       await _waitFrame();
     }
@@ -13355,7 +13372,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         // WS : connecter APRES setData
         if (shouldResetWs) {
           setTimeout(function () {
-            _connectWs('after-render:' + _source);
+            _connectWs('after-render:' + _source, { force: true });
           }, 250);
         }
 
@@ -13440,9 +13457,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       var remaining = ms - elapsed;
       if (remaining <= 0) {
         _updateCountdownLabel('0:00');
-        if (countdownTimer) clearInterval(countdownTimer);
-        countdownTimer = null;
-        // Fallback REST léger si WS down (max 1x/10s)
+        // Ne PAS clear le timer — le WS ou REST fallback mettra lastCandleTime à jour
         if (!wsConnected && now - (lastCountdownFetchAt || 0) > 10000) {
           lastCountdownFetchAt = now;
           _fetchLatestCandleOnly();
@@ -13484,10 +13499,13 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   // ── REST FALLBACK LÉGER ──
   function _fetchLatestCandleOnly() {
-    var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=3';
+    var interval = currentInterval;
+    var sym = currentSymbol;
+    var url = '/api/market/klines?symbol=' + sym + '&interval=' + interval + '&limit=3';
     return fetch(url)
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
+        if (interval !== currentInterval || sym !== currentSymbol) return;
         var raw = data.candles || [];
         if (!raw.length) return;
         var candles = raw.map(function (c) { return { time: Number(c.time), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close), volume: Number(c.volume) }; });

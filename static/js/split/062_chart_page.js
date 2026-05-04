@@ -324,7 +324,9 @@
     setTimeout(function () { wsClosing = false; }, 500);
   }
 
-  function _connectWs(reason) {
+  function _connectWs(reason, opts) {
+    opts = opts || {};
+    var force = !!opts.force;
     var wsKey = _getWsKey();
     var now = Date.now();
 
@@ -333,7 +335,7 @@
       if (alive) return;
     }
 
-    if (now - lastWsConnectAt < 10000) return;
+    if (!force && now - lastWsConnectAt < 10000) return;
     lastWsConnectAt = now;
 
     wsGeneration++;
@@ -783,6 +785,8 @@
   }
 
   async function _calcAndDrawVwap() {
+    var interval = currentInterval;
+    var sym = currentSymbol;
     Object.keys(vwapSeriesMap).forEach(function (k) {
       if (activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
     });
@@ -802,6 +806,7 @@
     for (var vi = 0; vi < vwapOrder.length; vi++) {
       var p = vwapOrder[vi];
       if (activeVwapPeriods.indexOf(p) < 0) continue;
+      if (interval !== currentInterval || sym !== currentSymbol) return;
       await window.BtcVwap.drawVwapForChart(state, p);
       await _waitFrame();
     }
@@ -1149,7 +1154,7 @@
         // WS : connecter APRES setData
         if (shouldResetWs) {
           setTimeout(function () {
-            _connectWs('after-render:' + _source);
+            _connectWs('after-render:' + _source, { force: true });
           }, 250);
         }
 
@@ -1234,9 +1239,7 @@
       var remaining = ms - elapsed;
       if (remaining <= 0) {
         _updateCountdownLabel('0:00');
-        if (countdownTimer) clearInterval(countdownTimer);
-        countdownTimer = null;
-        // Fallback REST léger si WS down (max 1x/10s)
+        // Ne PAS clear le timer — le WS ou REST fallback mettra lastCandleTime à jour
         if (!wsConnected && now - (lastCountdownFetchAt || 0) > 10000) {
           lastCountdownFetchAt = now;
           _fetchLatestCandleOnly();
@@ -1278,10 +1281,13 @@
 
   // ── REST FALLBACK LÉGER ──
   function _fetchLatestCandleOnly() {
-    var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=3';
+    var interval = currentInterval;
+    var sym = currentSymbol;
+    var url = '/api/market/klines?symbol=' + sym + '&interval=' + interval + '&limit=3';
     return fetch(url)
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
+        if (interval !== currentInterval || sym !== currentSymbol) return;
         var raw = data.candles || [];
         if (!raw.length) return;
         var candles = raw.map(function (c) { return { time: Number(c.time), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close), volume: Number(c.volume) }; });
