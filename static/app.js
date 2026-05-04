@@ -9669,6 +9669,229 @@ function bindJournalStatsArrows() {
   });
 }
 
+// ---- 055_indicator_vwap_core.js ----
+// ---------- VWAP Core — Canonical source, stable by design ----------
+// Module unique pour 060 (widget BTC) et 062 (chart page).
+// Règle absolue : VWAP ne dépend JAMAIS du timeframe affiché.
+// Le chart choisit juste comment AFFICHER, pas comment CALCULER.
+//
+// Architecture:
+//   VWAP_SOURCE_CONFIG  → source canonique fixe par période
+//   getCanonicalVwap()  → cache global + pending dedup
+//   alignIndicatorToCandles() → alignement vers les bougies du chart
+//   drawVwapForChart()  → helper haut niveau pour 060/062
+
+(function () {
+
+  // ── CONFIG CANONIQUE ──────────────────────────────────────
+  // Indépendante du timeframe actif du chart.
+  // Chaque période a une source stable, prévisible, rapide.
+  var VWAP_SOURCE_CONFIG = {
+    '1D': { days: 1,  interval: '15m', limit: 106, refreshMs:  60000 },
+    '7D': { days: 7,  interval: '15m', limit: 682, refreshMs:  60000 },
+    '30D':{ days: 30, interval: '1h',  limit: 730, refreshMs: 300000 },
+    '90D':{ days: 90, interval: '4h',  limit: 550, refreshMs: 900000 },
+  };
+
+  var VWAP_COLORS = {
+    '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6',
+  };
+
+  // ── HELPERS TEMPS ─────────────────────────────────────────
+  function _intervalToMs(interval) {
+    var m = {
+      '3m': 3*60000, '5m': 5*60000, '15m': 15*60000, '30m': 30*60000,
+      '1h': 3600000, '2h': 7200000, '4h': 14400000, '6h': 21600000,
+      '8h': 28800000, '12h': 43200000, '1d': 86400000,
+    };
+    return m[interval] || 3600000;
+  }
+
+  // endTime fixé sur la dernière bougie FERMÉE de l'intervalle source
+  // garanti identique entre deux appels à quelques ms d'écart
+  function _getLastClosedCandleEndTime(interval, now) {
+    now = now || Date.now();
+    var ms = _intervalToMs(interval);
+    return Math.floor(now / ms) * ms - 1;
+  }
+
+  // ── NORMALISATION ─────────────────────────────────────────
+  function _normalizeTimeToSeconds(t) {
+    if (t == null) return NaN;
+    if (typeof t === 'number') return t > 1e12 ? Math.floor(t / 1000) : t;
+    if (typeof t === 'string') {
+      var n = parseInt(t, 10);
+      return n > 1e12 ? Math.floor(n / 1000) : n;
+    }
+    return NaN;
+  }
+
+  function normalizeCandlesForLwc(raw) {
+    return (raw || [])
+      .map(function (c) {
+        var rawTime = c.time != null ? c.time : (c.openTime != null ? c.openTime : c.t);
+        return {
+          time: _normalizeTimeToSeconds(rawTime),
+          open: Number(c.open),
+          high: Number(c.high),
+          low: Number(c.low),
+          close: Number(c.close),
+          volume: Number(c.volume),
+        };
+      })
+      .filter(function (c) {
+        return Number.isFinite(c.time) && Number.isFinite(c.open)
+          && Number.isFinite(c.high) && Number.isFinite(c.low)
+          && Number.isFinite(c.close);
+      })
+      .sort(function (a, b) { return a.time - b.time; });
+  }
+
+  // ── CALCUL VWAP ───────────────────────────────────────────
+  // Cumul strict : typicalPrice * volume, running average
+  function computeVwapSeries(candles) {
+    var cumPV = 0, cumVol = 0, out = [];
+    for (var i = 0; i < candles.length; i++) {
+      var c = candles[i];
+      var vol = Number(c.volume);
+      if (!Number.isFinite(vol) || vol <= 0) continue;
+      var tp = (c.high + c.low + c.close) / 3;
+      cumPV += tp * vol;
+      cumVol += vol;
+      out.push({ time: c.time, value: cumPV / cumVol });
+    }
+    return out;
+  }
+
+  // ── FETCH KLINES ──────────────────────────────────────────
+  function _fetchKlines(symbol, interval, startTime, endTime, limit) {
+    var params = 'symbol=' + symbol + '&interval=' + interval + '&limit=' + limit;
+    if (startTime) params += '&startTime=' + startTime;
+    if (endTime) params += '&endTime=' + endTime;
+    return fetch('/api/market/klines?' + params)
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (data) { return data.candles || []; });
+  }
+
+  async function _fetchAndComputeCanonicalVwap(symbol, period) {
+    var config = VWAP_SOURCE_CONFIG[period];
+    if (!config) throw new Error('Unknown VWAP period: ' + period);
+
+    var endTime = _getLastClosedCandleEndTime(config.interval);
+    var startTime = endTime - config.days * 86400000;
+
+    var raw = await _fetchKlines(symbol, config.interval, startTime, endTime, config.limit);
+
+    var candles = normalizeCandlesForLwc(raw)
+      .filter(function (c) {
+        var ms = c.time * 1000;
+        return ms >= startTime && ms <= endTime && Number.isFinite(c.volume) && c.volume > 0;
+      });
+
+    return computeVwapSeries(candles);
+  }
+
+  // ── CACHE GLOBAL ──────────────────────────────────────────
+  var _cache = {};
+  var _pending = {};
+
+  function _cacheKey(symbol, period) { return symbol + ':' + period; }
+
+  async function getCanonicalVwap(symbol, period) {
+    var config = VWAP_SOURCE_CONFIG[period];
+    if (!config) throw new Error('Unknown VWAP period: ' + period);
+
+    var key = _cacheKey(symbol, period);
+    var cached = _cache[key];
+    var now = Date.now();
+
+    // Cache valide ?
+    if (cached && now - cached.createdAt < config.refreshMs) {
+      return cached.data;
+    }
+
+    // Évite les doubles fetchs simultanés (widget + chart page)
+    if (_pending[key]) {
+      return _pending[key];
+    }
+
+    var promise = _fetchAndComputeCanonicalVwap(symbol, period)
+      .then(function (data) {
+        _cache[key] = { createdAt: Date.now(), data: data };
+        return data;
+      })
+      .finally(function () {
+        delete _pending[key];
+      });
+
+    _pending[key] = promise;
+    return promise;
+  }
+
+  // ── ALIGNEMENT ────────────────────────────────────────────
+  // Transforme les points VWAP canoniques pour qu'ils aient les
+  // timestamps des bougies du chart actif.
+  // Le temps du point canonique est préservé (time: candle.time)
+  function alignIndicatorToCandles(indicatorPoints, candles) {
+    if (!indicatorPoints || !indicatorPoints.length || !candles || !candles.length) return [];
+
+    // Filtrer et trier les points indicateurs
+    var sorted = indicatorPoints.slice()
+      .filter(function (p) { return p && Number.isFinite(p.time) && Number.isFinite(p.value); })
+      .sort(function (a, b) { return a.time - b.time; });
+
+    var out = [], j = 0;
+
+    for (var ci = 0; ci < candles.length; ci++) {
+      var t = candles[ci].time;
+      // Avancer j jusqu'au dernier point ≤ candle.time
+      while (j + 1 < sorted.length && sorted[j + 1].time <= t) j++;
+      var p = sorted[j];
+      if (p && p.time <= t) {
+        out.push({ time: t, value: p.value });
+      }
+    }
+    return out;
+  }
+
+  // ── DRAW HIGH-LEVEL ───────────────────────────────────────
+  // Helper pour 060 et 062 — fetch le VWAP canonique, aligne, setData
+  async function drawVwapForChart(state, period) {
+    // state doit avoir: symbol, candles, vwapSeriesMap
+    var canonicalVwap = await getCanonicalVwap(state.symbol || 'BTCUSDT', period);
+    if (!state.candles || !state.candles.length) return;
+
+    var aligned = alignIndicatorToCandles(canonicalVwap, state.candles);
+    if (aligned.length < 2) return;
+
+    var s = state.vwapSeriesMap[period];
+    if (!s) return;
+
+    s.applyOptions({
+      visible: true,
+      color: VWAP_COLORS[period] || '#f59e0b',
+      title: 'VWAP ' + period,
+      lastValueVisible: true,
+    });
+    s.setData(aligned);
+  }
+
+  // ── EXPOSE ────────────────────────────────────────────────
+  window.BtcVwap = {
+    VWAP_SOURCE_CONFIG: VWAP_SOURCE_CONFIG,
+    VWAP_COLORS: VWAP_COLORS,
+    normalizeCandlesForLwc: normalizeCandlesForLwc,
+    computeVwapSeries: computeVwapSeries,
+    getCanonicalVwap: getCanonicalVwap,
+    alignIndicatorToCandles: alignIndicatorToCandles,
+    drawVwapForChart: drawVwapForChart,
+  };
+
+})();
+
 // ---- 056_journal_day_trade_cards.js ----
 function journalTradeEditorHtml(day, trade) { return TradeEditorController.renderHtml(day, trade); }
 
@@ -11039,7 +11262,6 @@ TradeEditorController.renderHtml = function (day, trade) {
   };
 
   var VWAP_COLORS = { '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
-  var VWAP_SECONDS = { '1D': 86400, '7D': 604800, '30D': 2592000, '90D': 7776000 };
   var INTERVAL_MS = {
     '1m': 60000, '3m': 180000, '5m': 300000, '15m': 900000,
     '30m': 1800000, '1h': 3600000, '2h': 7200000, '4h': 14400000,
@@ -11073,15 +11295,21 @@ TradeEditorController.renderHtml = function (day, trade) {
     manualPriceRange: null,
     // VWAP
     activeVwapPeriods: [],
-    vwapInFlight: false,
     // Timers
     countdownTimer: null,
     refreshTimer: null,
     lastCandleTime: 0,
+    lastCountdownFetchAt: 0,
     // WS
     ws: null,
+    wsGeneration: 0,
+    wsClosing: false,
     wsReconnectTimer: null,
-    wsIntentionalClose: false,
+    wsReconnectAttempts: 0,
+    wsConnected: false,
+    wsError: false,
+    lastWsConnectAt: 0,
+    activeWsKey: null,
     // Flags
     chartReady: false,
     userIsInteracting: false,
@@ -11247,106 +11475,36 @@ TradeEditorController.renderHtml = function (day, trade) {
       } catch(e) {}
     }
   }
-  function _computeVwap(candles, periodSec) {
-    if (!candles || !candles.length) return [];
-    var lastTime = candles[candles.length - 1].time, cutoff = lastTime - periodSec;
-    var cumVP = 0, cumV = 0, result = [];
-    for (var i = 0; i < candles.length; i++) {
-      var c = candles[i];
-      if (c.time < cutoff) continue;
-      var tp = (c.high + c.low + c.close) / 3;
-      cumVP += tp * c.volume; cumV += c.volume;
-      if (cumV > 0) result.push({ time: c.time, value: cumVP / cumV });
-    }
-    return result;
-  }
-  function _alignIndicatorToCandles(points, mainCandles) {
-    if (!points || !points.length || !mainCandles || !mainCandles.length) return [];
-    var sorted = points.slice().filter(function(p) { return p && Number.isFinite(p.time) && Number.isFinite(p.value); }).sort(function(a, b) { return a.time - b.time; });
-    var out = [], j = 0;
-    for (var ci = 0; ci < mainCandles.length; ci++) {
-      var t = mainCandles[ci].time;
-      while (j + 1 < sorted.length && sorted[j + 1].time <= t) j++;
-      if (sorted[j] && sorted[j].time <= t) out.push({ time: t, value: sorted[j].value });
-    }
-    return out;
-  }
-  // Cache des résultats VWAP calculés (évite re-fetch + re-calcul au changement de timeframe)
-  var _vwapResultCache = {};
 
+  // Délègue à BtcVwap (055) — cache global, source canonique, dedup
   async function _calcAndDrawVwap() {
-    var currentRenderToken = S.renderToken;
     try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) S.activeVwapPeriods = s; } catch(e) {}
     Object.keys(S.vwapSeriesMap).forEach(function (k) { if (S.activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k); });
     if (!S.activeVwapPeriods.length) return;
-    if (S.vwapInFlight) return;
-    S.vwapInFlight = true;
-
-    function _fetchKlines(interval, limit) {
-      return fetch('/api/market/klines?symbol=BTCUSDT&interval=' + interval + '&limit=' + limit)
-        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-        .then(function (data) { return data.candles || []; });
-    }
+    if (!window.BtcVwap) return;
 
     try { S.chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
     try { S.chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
 
-    // Toujours utiliser les données les plus granulaires pour VWAP (pas S.candles)
-    // sinon les valeurs changent selon le timeframe
-    var vwapOrder = ['1D', '7D', '30D', '90D'];
+    // State wrapper pour BtcVwap.drawVwapForChart
+    var state = {
+      symbol: 'BTCUSDT',
+      candles: S.candles,
+      vwapSeriesMap: S.vwapSeriesMap,
+    };
 
+    var vwapOrder = ['1D', '7D', '30D', '90D'];
     for (var vi = 0; vi < vwapOrder.length; vi++) {
       var p = vwapOrder[vi];
       if (S.activeVwapPeriods.indexOf(p) < 0) continue;
-      var periodSec = VWAP_SECONDS[p] || 86400;
-
-      // Vérifier le cache du résultat VWAP
-      var cached = _vwapResultCache[p];
-      if (cached && (Date.now() - cached.ts < 300000)) {
-        // Résultat encore valide → juste re-afficher
-        var vw = cached.data;
-        if (vw.length < 2) { _removeVwapSeries(p); continue; }
-        var s = S.vwapSeriesMap[p];
-        if (s) {
-          s.applyOptions({ visible: true, color: VWAP_COLORS[p] || '#f59e0b', title: 'VWAP ' + p, lastValueVisible: true });
-          s.setData(vw);
-        }
-        await _waitFrame();
-        continue;
-      }
-
-      // Pas de cache → fetch les klines les plus granulaires
-      var interval, limit;
-      if (periodSec <= 604800) { interval = '15m'; limit = Math.min(Math.ceil(periodSec / 900) + 10, 1000); }
-      else if (periodSec <= 2592000) { interval = '1h'; limit = Math.min(Math.ceil(periodSec / 3600) + 10, 1000); }
-      else { interval = '4h'; limit = Math.min(Math.ceil(periodSec / 14400) + 10, 1000); }
-      var src = await _fetchKlines(interval, limit);
-      if (S.renderToken !== currentRenderToken) {
-        S.vwapInFlight = false;
-        return;
-      }
-
-      var vw = _computeVwap(src, periodSec);
-      // Aligner sur les timestamps des bougies principales (pour un rendu cohérent)
-      vw = _alignIndicatorToCandles(vw, S.candles);
-      // Mettre en cache
-      _vwapResultCache[p] = { data: vw, ts: Date.now() };
-
-      if (vw.length < 2) { _removeVwapSeries(p); continue; }
-      var s = S.vwapSeriesMap[p];
-      if (s) {
-        s.applyOptions({ visible: true, color: VWAP_COLORS[p] || '#f59e0b', title: 'VWAP ' + p, lastValueVisible: true });
-        s.setData(vw);
-      }
+      await window.BtcVwap.drawVwapForChart(state, p);
       await _waitFrame();
     }
-    S.vwapInFlight = false;
+
+    try { S.chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
+    try { S.chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: false }); } catch(e) {}
     if (S.chart) {
-      try { S.chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
-      try { S.chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: false }); } catch(e) {}
-      if (S.renderToken === currentRenderToken) {
-        try { S.chart.timeScale().applyOptions({ rightBarStaysOnScroll: true }); } catch(e) {}
-      }
+      try { S.chart.timeScale().applyOptions({ rightBarStaysOnScroll: true }); } catch(e) {}
     }
   }
 
@@ -11604,20 +11762,29 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   function _startCountdown() {
     if (S.countdownTimer) clearInterval(S.countdownTimer);
+    S.lastCountdownFetchAt = 0;
     setTimeout(function () {
       function tick() {
         if (!S.countdownPriceLine) { _updateCountdownLabel('—'); return; }
         if (!S.lastCandleTime) { _updateCountdownLabel('—'); return; }
         var now = Date.now();
         var ms = _getIntervalMs(S.timeframe);
+        // Guard anti timestamp corrompu
+        if (S.lastCandleTime < now - ms * 500 || S.lastCandleTime > now + ms * 2) {
+          _updateCountdownLabel('—');
+          return;
+        }
         var elapsed = now - S.lastCandleTime;
         var remaining = ms - elapsed;
         if (remaining <= 0) {
           _updateCountdownLabel('0:00');
           if (S.countdownTimer) clearInterval(S.countdownTimer);
           S.countdownTimer = null;
-          if (!S.ws || S.ws.readyState !== WebSocket.OPEN) { /* WS en reconnexion */ }
-          else { _fetchAndRender(true, 'auto'); }
+          // Fallback REST léger si WS down (max 1x/10s)
+          if (!S.wsConnected && now - (S.lastCountdownFetchAt || 0) > 10000) {
+            S.lastCountdownFetchAt = now;
+            _fetchLatestCandleOnly();
+          }
           return;
         }
         var totalSec = Math.ceil(remaining / 1000);
@@ -11634,64 +11801,173 @@ TradeEditorController.renderHtml = function (day, trade) {
   function _startAutoRefresh() {
     if (S.refreshTimer) clearInterval(S.refreshTimer);
     var ms = _getIntervalMs(S.timeframe);
-    var interval = ms < 3600000 ? 15000 : ms < 14400000 ? 30000 : 60000;
+    var interval = Math.min(60000, Math.max(15000, Math.floor(ms / 4)));
     S.refreshTimer = setInterval(function () {
+      if (!S.chartReady) return;
       if (!S.lastCandleTime) return;
-      if (Date.now() - S.lastCandleTime < _getIntervalMs(S.timeframe) * 0.95) {
-        _fetchAndRender(true, 'auto');
-      }
+      // Si WS fonctionne, pas besoin de REST refresh
+      if (S.wsConnected && !S.wsError) return;
+      // Fallback REST seulement proche de la cloture
+      var nextCloseMs = S.lastCandleTime + ms;
+      var now = Date.now();
+      if (now < nextCloseMs + 1500) return;
+      // REST fallback — update la derniere bougie seulement
+      _fetchLatestCandleOnly();
     }, interval);
   }
 
-  // ──────────────────────────────────────────────
-  //  NETWORK (WS)
-  // ──────────────────────────────────────────────
-  var currentSymbol = 'btcusdt';
-  function _connectWs() {
-    if (S.ws && S.ws.readyState === WebSocket.CONNECTING) return;
-    if (S.ws) { S.wsIntentionalClose = true; try { S.ws.close(); } catch(e) {} S.wsIntentionalClose = false; }
-    var url = 'wss://stream.binance.com:9443/ws/' + currentSymbol + '@kline_' + S.timeframe;
-    try {
-      S.ws = new WebSocket(url);
-      S.ws.onopen = function() { _hideWsError(); };
-      S.ws.onmessage = function (msg) {
-        try {
-          var d = JSON.parse(msg.data), k = d && d.k;
-          if (!k) return;
-          var candle = { time: Math.floor(k.t / 1000), open: parseFloat(k.o), high: parseFloat(k.h), low: parseFloat(k.l), close: parseFloat(k.c), volume: parseFloat(k.v) };
-          var priceEl = document.getElementById('btcChartPrice');
-          if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
-          S.lastCandleTime = k.t;
-          if (S.candleSeries) {
-            try { S.candleSeries.update(candle); } catch(e) {}
-          }
-          if (S.countdownPriceLine) {
-            try { S.countdownPriceLine.applyOptions({ price: candle.close }); } catch(e) {}
-          }
-          // Follow Y si actif
-          if (S.follow && !S.userDragging) {
-            _withProgrammaticRange(function () { maybeFollowBtcWidgetPriceY(); });
-          }
-        } catch(e) {}
-      };
-      S.ws.onclose = function () {
-        if (S.wsIntentionalClose) return;
-        if (S.wsReconnectTimer) clearTimeout(S.wsReconnectTimer);
-        S.wsReconnectTimer = setTimeout(_connectWs, 3000);
-        _showWsError();
-      };
-      S.ws.onerror = function() { _showWsError(); };
-    } catch(e) { console.error('[btc-widget] ws:', e); }
+  // REST fallback léger — update la dernière bougie, pas de full render
+  function _fetchLatestCandleOnly() {
+    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + S.timeframe + '&limit=3';
+    return fetch(url)
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (data) {
+        var raw = data.candles || [];
+        if (!raw.length) return;
+        var candles = _normalizeCandles(raw);
+        var latest = candles[candles.length - 1];
+        if (!latest || !latest.time) return;
+        var last = S.candles && S.candles.length > 0 ? S.candles[S.candles.length - 1] : null;
+        if (last && latest.time === last.time) {
+          // Même bougie — update
+          S.candles[S.candles.length - 1] = latest;
+        } else if (latest.time > (last ? last.time : 0)) {
+          // Nouvelle bougie — push
+          S.candles.push(latest);
+          if (S.candles.length > 300) S.candles = S.candles.slice(-300);
+        }
+        S.lastCandleTime = latest.time * 1000;
+        S.candleSeries.update(latest);
+        if (S.follow && !S.userDragging) {
+          applyBtcWidgetBestView();
+        }
+      })
+      .catch(function (e) {
+        console.warn('[BTC-WIDGET] REST fallback failed', e);
+      });
   }
+
+  // ──────────────────────────────────────────────
+  //  WS — Architecture générationnelle
+  //  Un seul propriétaire du cycle data.
+  //  Seul init/user/timeframe reset le WS.
+  // ──────────────────────────────────────────────
+
+  function _getWsKey() {
+    return 'BTCUSDT:' + (S.timeframe || '3m');
+  }
+
+  function _normalizeTfForBinance(tf) {
+    return tf;
+  }
+
+  function _disconnectWs(reason) {
+    S.wsGeneration++;
+    if (S.wsReconnectTimer) { clearTimeout(S.wsReconnectTimer); S.wsReconnectTimer = null; }
+    S.wsConnected = false;
+    S.wsClosing = true;
+    var ws = S.ws;
+    S.ws = null;
+    S.activeWsKey = null;
+    if (ws) {
+      try {
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onerror = null;
+        ws.onclose = null;
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+          ws.close(1000, reason || 'intentional');
+        }
+      } catch(e) { console.warn('[BTC-WIDGET][WS] close error', e); }
+    }
+    setTimeout(function () { S.wsClosing = false; }, 500);
+  }
+
+  function _connectWs(reason) {
+    var wsKey = _getWsKey();
+    var now = Date.now();
+
+    // Déjà connecté au bon flux ?
+    if (S.ws && S.activeWsKey === wsKey) {
+      var alive = S.ws.readyState === WebSocket.OPEN || S.ws.readyState === WebSocket.CONNECTING;
+      if (alive) return;
+    }
+
+    // Throttle 10s
+    if (now - S.lastWsConnectAt < 10000) { return; }
+    S.lastWsConnectAt = now;
+
+    S.wsGeneration++;
+    var generation = S.wsGeneration;
+
+    if (S.wsReconnectTimer) { clearTimeout(S.wsReconnectTimer); S.wsReconnectTimer = null; }
+
+    var symbol = 'btcusdt';
+    var interval = _normalizeTfForBinance(S.timeframe || '3m');
+    var url = 'wss://stream.binance.com:9443/ws/' + symbol + '@kline_' + interval;
+
+    S.wsClosing = false;
+    S.wsError = false;
+    S.wsConnected = false;
+    S.activeWsKey = wsKey;
+
+    var ws = new WebSocket(url);
+    S.ws = ws;
+
+    ws.onopen = function () {
+      if (generation !== S.wsGeneration || ws !== S.ws) return;
+      S.wsConnected = true;
+      S.wsError = false;
+      S.wsReconnectAttempts = 0;
+      _hideWsError();
+    };
+
+    ws.onmessage = function (event) {
+      if (generation !== S.wsGeneration || ws !== S.ws) return;
+      try { _handleWsMessage(event.data); } catch(e) { console.warn('[BTC-WIDGET][WS] msg', e); }
+    };
+
+    ws.onerror = function () {
+      if (generation !== S.wsGeneration || ws !== S.ws) return;
+      S.wsError = true;
+      _showWsError();
+    };
+
+    ws.onclose = function (event) {
+      if (generation !== S.wsGeneration || ws !== S.ws) return;
+      S.wsConnected = false;
+      var intentional = S.wsClosing || event.code === 1000 || event.code === 1001;
+      if (intentional) return;
+      S.wsError = true;
+      _scheduleWsReconnect('unexpected-close');
+      _showWsError();
+    };
+  }
+
+  function _scheduleWsReconnect(reason) {
+    if (S.wsReconnectTimer) return;
+    S.wsReconnectAttempts = Math.min((S.wsReconnectAttempts || 0) + 1, 6);
+    var delay = Math.min(60000, 2000 * Math.pow(2, S.wsReconnectAttempts - 1));
+    S.wsReconnectTimer = setTimeout(function () {
+      S.wsReconnectTimer = null;
+      _connectWs('reconnect:' + reason);
+    }, delay);
+  }
+
+  function _handleWsMessage(raw) {
+    var d = JSON.parse(raw), k = d && d.k;
+    if (!k) return;
+    var candle = { time: Math.floor(k.t / 1000), open: parseFloat(k.o), high: parseFloat(k.h), low: parseFloat(k.l), close: parseFloat(k.c), volume: parseFloat(k.v) };
+    var priceEl = document.getElementById('btcChartPrice');
+    if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
+    S.lastCandleTime = k.t;
+    if (S.candleSeries) { try { S.candleSeries.update(candle); } catch(e) {} }
+    if (S.countdownPriceLine) { try { S.countdownPriceLine.applyOptions({ price: candle.close }); } catch(e) {} }
+    if (S.follow && !S.userDragging) { _withProgrammaticRange(function () { maybeFollowBtcWidgetPriceY(); }); }
+  }
+
   function _showWsError() { var el = document.getElementById('btcChartWsStatus'); if (el) el.className = 'btc-chart-ws-error visible'; }
   function _hideWsError() { var el = document.getElementById('btcChartWsStatus'); if (el) el.className = 'btc-chart-ws-error'; }
-  function _disconnectWs() {
-    if (S.wsReconnectTimer) { clearTimeout(S.wsReconnectTimer); S.wsReconnectTimer = null; }
-    if (S.ws) {
-      if (S.ws.readyState === WebSocket.CONNECTING) { S.ws = null; return; }
-      S.wsIntentionalClose = true; try { S.ws.close(); } catch(e) {} S.ws = null; S.wsIntentionalClose = false;
-    }
-  }
 
   // ──────────────────────────────────────────────
   //  CHART CREATION
@@ -11767,7 +12043,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
         btn.classList.add('active');
         S.timeframe = btn.dataset.interval;
-        _disconnectWs();
+        _disconnectWs('timeframe');
         var ci = document.getElementById('btcChartCustom');
         if (ci) ci.value = '';
         _fetchAndRender(false, 'user');
@@ -11783,7 +12059,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         this.classList.remove('jedit-field-error'); this.title = '';
         document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
         S.timeframe = val;
-        _disconnectWs();
+        _disconnectWs('timeframe');
         _fetchAndRender(false, 'user');
       });
       customInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') this.blur(); });
@@ -11814,6 +12090,10 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
     if (!S.firstFetchMs) S.firstFetchMs = Date.now();
 
+    // WS reset : UNIQUEMENT sur init/user/timeframe
+    var shouldResetWs = _source === 'init' || _source === 'user' || _source === 'timeframe';
+    if (shouldResetWs) _disconnectWs('render:' + _source);
+
     _clearAllSeries();
 
     var url = '/api/market/klines?symbol=BTCUSDT&interval=' + S.timeframe + '&limit=300';
@@ -11833,7 +12113,6 @@ TradeEditorController.renderHtml = function (day, trade) {
 
         _startCountdown();
         _startAutoRefresh();
-        if (_source !== 'ws') { _disconnectWs(); _connectWs(); }
 
         var priceEl = document.getElementById('btcChartPrice');
         if (priceEl) priceEl.textContent = '$' + Number(last.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
@@ -11841,9 +12120,17 @@ TradeEditorController.renderHtml = function (day, trade) {
         S.candleSeries.setData(candles);
         _renderIndicators(candles);
 
-        // VWAP — toujours recalculer (le cache évite le flood réseau)
-        if (S.activeVwapPeriods.length > 0) {
+        // VWAP — seulement sur init/user/timeframe (pas sur auto)
+        if (S.activeVwapPeriods.length > 0 && shouldResetWs) {
           _calcAndDrawVwap().finally(function () {});
+        }
+
+        // WS : connecter APRES setData
+        if (shouldResetWs) {
+          setTimeout(function () {
+            if (token !== S.renderToken) return;
+            _connectWs('after-render:' + _source);
+          }, 250);
         }
 
         // Best view (range horizontal + vertical)
@@ -11938,8 +12225,6 @@ TradeEditorController.renderHtml = function (day, trade) {
     if (Array.isArray(savedVwap)) activeVwapPeriods = savedVwap;
   } catch(e) {}
   var VWAP_COLORS = { '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
-  var VWAP_INTERVALS = { '1D': '1h', '7D': '1h', '30D': '4h', '90D': '1d' };
-  var VWAP_DAYS = { '1D': 1, '7D': 7, '30D': 30, '90D': 90 };
 
   // State
   var countdownPriceLine = null;
@@ -12621,15 +12906,8 @@ TradeEditorController.renderHtml = function (day, trade) {
     if (activeVwapPeriods.length > 0) vwapToggle.classList.add('active');
   }
 
-  var VWAP_COLORS = { '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
-  var VWAP_SECONDS = { '1D': 86400, '7D': 604800, '30D': 2592000, '90D': 7776000 };
-  var VWAP_INTERVALS = { '1D': '1h', '7D': '1h', '30D': '4h', '90D': '1d' };
-  var VWAP_DAYS = { '1D': 1, '7D': 7, '30D': 30, '90D': 90 };
-  var VWAP_LIMITS = { '1D': 24, '7D': 168, '30D': 190, '90D': 100 };
-  var INTERVAL_MINUTES = { '1m':1,'3m':3,'5m':5,'15m':15,'30m':30,'1h':60,'2h':120,'4h':240,'6h':360,'8h':480,'12h':720,'1d':1440,'3d':4320,'1w':10080,'1M':43200 };
-  // ── VWAP (multi-periode) ──
-  var _vwapInFlight = false;
-  var _mainCandles = [];  // Bougies principales (stockees pour VWAP inline)
+  // ── VWAP (multi-periode) — délègue à BtcVwap (055) ──
+  var _mainCandles = [];  // Bougies principales (stockees pour alignment VWAP)
 
   function _removeVwapSeries(key) {
     var s = vwapSeriesMap[key];
@@ -12645,101 +12923,30 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
   }
 
-  // Cache des résultats VWAP calculés (évite re-fetch + re-calcul au changement de timeframe)
-  var _vwapResultCache = {};
-
   async function _calcAndDrawVwap() {
-    console.log('[VWAP] 062 triggered by:', new Error().stack.split('\n')[2]);
-    console.log('[VWAP] 062 _calcAndDrawVwap periods=', activeVwapPeriods, '_mainCandles=', _mainCandles.length);
     Object.keys(vwapSeriesMap).forEach(function (k) {
       if (activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
     });
     if (!activeVwapPeriods.length) return;
-    if (_vwapInFlight) return;
-    _vwapInFlight = true;
+    if (!window.BtcVwap) return;
 
-    // Helper: fetch klines
-    function _fetchKlines(interval, limit) {
-      return fetch('/api/market/klines?symbol=' + currentSymbol + '&interval=' + interval + '&limit=' + limit)
-        .then(function (r) { return r.json(); })
-        .then(function (data) { return data.candles || []; });
-    }
-    function _computeVwap(candles, periodSec) {
-      if (!candles || !candles.length) return [];
-      var lastTime = candles[candles.length - 1].time;
-      var cutoff = lastTime - periodSec;
-      var cumVP = 0, cumV = 0, result = [];
-      for (var i = 0; i < candles.length; i++) {
-        var c = candles[i];
-        if (c.time < cutoff) continue;
-        var tp = (c.high + c.low + c.close) / 3;
-        cumVP += tp * c.volume;
-        cumV += c.volume;
-        if (cumV > 0) result.push({ time: c.time, value: cumVP / cumV });
-      }
-      return result;
-    }
-
-    // Helper: aligner des points indicateurs sur les timestamps des bougies principales
-    function _alignIndicatorToCandles(indicatorPoints) {
-      if (!indicatorPoints || !indicatorPoints.length || !_mainCandles || !_mainCandles.length) return [];
-      var sorted = indicatorPoints.slice().filter(function(p) {
-        return p && Number.isFinite(p.time) && Number.isFinite(p.value);
-      }).sort(function(a, b) { return a.time - b.time; });
-      var out = [], j = 0;
-      for (var ci = 0; ci < _mainCandles.length; ci++) {
-        var t = _mainCandles[ci].time;
-        while (j + 1 < sorted.length && sorted[j + 1].time <= t) j++;
-        if (sorted[j] && sorted[j].time <= t) out.push({ time: t, value: sorted[j].value });
-      }
-      return out;
-    }
-
-    // Verrouiller LWC pendant les setData
     try { chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
     try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
 
-    // Toujours utiliser les données les plus granulaires pour VWAP (pas _mainCandles)
+    var state = {
+      symbol: currentSymbol,
+      candles: _mainCandles,
+      vwapSeriesMap: vwapSeriesMap,
+    };
+
     var vwapOrder = ['1D', '7D', '30D', '90D'];
     for (var vi = 0; vi < vwapOrder.length; vi++) {
       var p = vwapOrder[vi];
       if (activeVwapPeriods.indexOf(p) < 0) continue;
-      var periodSec = VWAP_SECONDS[p] || 86400;
-
-      // Vérifier le cache du résultat VWAP
-      var cached = _vwapResultCache[p];
-      if (cached && (Date.now() - cached.ts < 300000)) {
-        // Résultat encore valide → juste re-afficher
-        var vw = cached.data;
-        if (vw.length < 2) { _removeVwapSeries(p); continue; }
-        var s = vwapSeriesMap[p];
-        if (s) { s.applyOptions({ visible: true, color: VWAP_COLORS[p], title: 'VWAP ' + p, lastValueVisible: true }); s.setData(vw); }
-        await _waitFrame();
-        continue;
-      }
-
-      // Pas de cache → fetch les klines les plus granulaires
-      var interval, limit;
-      if (periodSec <= 604800) { interval = '15m'; limit = Math.min(Math.ceil(periodSec / 900) + 10, 1000); }
-      else if (periodSec <= 2592000) { interval = '1h'; limit = Math.min(Math.ceil(periodSec / 3600) + 10, 1000); }
-      else { interval = '4h'; limit = Math.min(Math.ceil(periodSec / 14400) + 10, 1000); }
-      var src = await _fetchKlines(interval, limit);
-
-      var vw = _computeVwap(src, periodSec);
-      // Aligner sur les timestamps des bougies principales
-      vw = _alignIndicatorToCandles(vw);
-      // Mettre en cache
-      _vwapResultCache[p] = { data: vw, ts: Date.now() };
-
-      if (vw.length < 2) { _removeVwapSeries(p); continue; }
-      var s = vwapSeriesMap[p];
-      if (s) { s.applyOptions({ visible: true, color: VWAP_COLORS[p], title: 'VWAP ' + p, lastValueVisible: true }); s.setData(vw); }
-
+      await window.BtcVwap.drawVwapForChart(state, p);
       await _waitFrame();
     }
 
-    // Tous les setData finis → cleanup
-    _vwapInFlight = false;
     try { chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
     try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: true }); } catch(e) {}
   }

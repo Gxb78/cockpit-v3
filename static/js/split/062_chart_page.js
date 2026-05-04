@@ -19,8 +19,6 @@
     if (Array.isArray(savedVwap)) activeVwapPeriods = savedVwap;
   } catch(e) {}
   var VWAP_COLORS = { '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
-  var VWAP_INTERVALS = { '1D': '1h', '7D': '1h', '30D': '4h', '90D': '1d' };
-  var VWAP_DAYS = { '1D': 1, '7D': 7, '30D': 30, '90D': 90 };
 
   // State
   var countdownPriceLine = null;
@@ -702,15 +700,8 @@
     if (activeVwapPeriods.length > 0) vwapToggle.classList.add('active');
   }
 
-  var VWAP_COLORS = { '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
-  var VWAP_SECONDS = { '1D': 86400, '7D': 604800, '30D': 2592000, '90D': 7776000 };
-  var VWAP_INTERVALS = { '1D': '1h', '7D': '1h', '30D': '4h', '90D': '1d' };
-  var VWAP_DAYS = { '1D': 1, '7D': 7, '30D': 30, '90D': 90 };
-  var VWAP_LIMITS = { '1D': 24, '7D': 168, '30D': 190, '90D': 100 };
-  var INTERVAL_MINUTES = { '1m':1,'3m':3,'5m':5,'15m':15,'30m':30,'1h':60,'2h':120,'4h':240,'6h':360,'8h':480,'12h':720,'1d':1440,'3d':4320,'1w':10080,'1M':43200 };
-  // ── VWAP (multi-periode) ──
-  var _vwapInFlight = false;
-  var _mainCandles = [];  // Bougies principales (stockees pour VWAP inline)
+  // ── VWAP (multi-periode) — délègue à BtcVwap (055) ──
+  var _mainCandles = [];  // Bougies principales (stockees pour alignment VWAP)
 
   function _removeVwapSeries(key) {
     var s = vwapSeriesMap[key];
@@ -726,101 +717,30 @@
     }
   }
 
-  // Cache des résultats VWAP calculés (évite re-fetch + re-calcul au changement de timeframe)
-  var _vwapResultCache = {};
-
   async function _calcAndDrawVwap() {
-    console.log('[VWAP] 062 triggered by:', new Error().stack.split('\n')[2]);
-    console.log('[VWAP] 062 _calcAndDrawVwap periods=', activeVwapPeriods, '_mainCandles=', _mainCandles.length);
     Object.keys(vwapSeriesMap).forEach(function (k) {
       if (activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
     });
     if (!activeVwapPeriods.length) return;
-    if (_vwapInFlight) return;
-    _vwapInFlight = true;
+    if (!window.BtcVwap) return;
 
-    // Helper: fetch klines
-    function _fetchKlines(interval, limit) {
-      return fetch('/api/market/klines?symbol=' + currentSymbol + '&interval=' + interval + '&limit=' + limit)
-        .then(function (r) { return r.json(); })
-        .then(function (data) { return data.candles || []; });
-    }
-    function _computeVwap(candles, periodSec) {
-      if (!candles || !candles.length) return [];
-      var lastTime = candles[candles.length - 1].time;
-      var cutoff = lastTime - periodSec;
-      var cumVP = 0, cumV = 0, result = [];
-      for (var i = 0; i < candles.length; i++) {
-        var c = candles[i];
-        if (c.time < cutoff) continue;
-        var tp = (c.high + c.low + c.close) / 3;
-        cumVP += tp * c.volume;
-        cumV += c.volume;
-        if (cumV > 0) result.push({ time: c.time, value: cumVP / cumV });
-      }
-      return result;
-    }
-
-    // Helper: aligner des points indicateurs sur les timestamps des bougies principales
-    function _alignIndicatorToCandles(indicatorPoints) {
-      if (!indicatorPoints || !indicatorPoints.length || !_mainCandles || !_mainCandles.length) return [];
-      var sorted = indicatorPoints.slice().filter(function(p) {
-        return p && Number.isFinite(p.time) && Number.isFinite(p.value);
-      }).sort(function(a, b) { return a.time - b.time; });
-      var out = [], j = 0;
-      for (var ci = 0; ci < _mainCandles.length; ci++) {
-        var t = _mainCandles[ci].time;
-        while (j + 1 < sorted.length && sorted[j + 1].time <= t) j++;
-        if (sorted[j] && sorted[j].time <= t) out.push({ time: t, value: sorted[j].value });
-      }
-      return out;
-    }
-
-    // Verrouiller LWC pendant les setData
     try { chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
     try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
 
-    // Toujours utiliser les données les plus granulaires pour VWAP (pas _mainCandles)
+    var state = {
+      symbol: currentSymbol,
+      candles: _mainCandles,
+      vwapSeriesMap: vwapSeriesMap,
+    };
+
     var vwapOrder = ['1D', '7D', '30D', '90D'];
     for (var vi = 0; vi < vwapOrder.length; vi++) {
       var p = vwapOrder[vi];
       if (activeVwapPeriods.indexOf(p) < 0) continue;
-      var periodSec = VWAP_SECONDS[p] || 86400;
-
-      // Vérifier le cache du résultat VWAP
-      var cached = _vwapResultCache[p];
-      if (cached && (Date.now() - cached.ts < 300000)) {
-        // Résultat encore valide → juste re-afficher
-        var vw = cached.data;
-        if (vw.length < 2) { _removeVwapSeries(p); continue; }
-        var s = vwapSeriesMap[p];
-        if (s) { s.applyOptions({ visible: true, color: VWAP_COLORS[p], title: 'VWAP ' + p, lastValueVisible: true }); s.setData(vw); }
-        await _waitFrame();
-        continue;
-      }
-
-      // Pas de cache → fetch les klines les plus granulaires
-      var interval, limit;
-      if (periodSec <= 604800) { interval = '15m'; limit = Math.min(Math.ceil(periodSec / 900) + 10, 1000); }
-      else if (periodSec <= 2592000) { interval = '1h'; limit = Math.min(Math.ceil(periodSec / 3600) + 10, 1000); }
-      else { interval = '4h'; limit = Math.min(Math.ceil(periodSec / 14400) + 10, 1000); }
-      var src = await _fetchKlines(interval, limit);
-
-      var vw = _computeVwap(src, periodSec);
-      // Aligner sur les timestamps des bougies principales
-      vw = _alignIndicatorToCandles(vw);
-      // Mettre en cache
-      _vwapResultCache[p] = { data: vw, ts: Date.now() };
-
-      if (vw.length < 2) { _removeVwapSeries(p); continue; }
-      var s = vwapSeriesMap[p];
-      if (s) { s.applyOptions({ visible: true, color: VWAP_COLORS[p], title: 'VWAP ' + p, lastValueVisible: true }); s.setData(vw); }
-
+      await window.BtcVwap.drawVwapForChart(state, p);
       await _waitFrame();
     }
 
-    // Tous les setData finis → cleanup
-    _vwapInFlight = false;
     try { chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
     try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: true }); } catch(e) {}
   }
