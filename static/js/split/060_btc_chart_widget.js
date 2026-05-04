@@ -911,7 +911,21 @@
     Object.keys(S.vwapSeriesMap).forEach(function (k) { if (S.vwapSeriesMap[k]) S.vwapSeriesMap[k].setData([]); });
   }
 
-  function _fetchAndRender(keepZoom, _source) {
+  async function _fetchWidgetCandles(tf) {
+    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=300';
+    var r = await fetch(url);
+
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+
+    var data = await r.json();
+    var candles = _normalizeCandles(data.candles || []);
+
+    if (!candles.length) throw new Error('empty candles');
+
+    return candles;
+  }
+
+  async function _fetchAndRender(keepZoom, _source) {
     if (!S.candleSeries) return;
     var token = ++S.renderToken;
     console.log('[BTC-WIDGET] render start token=', token, 'tf=', S.timeframe, 'source=', _source);
@@ -933,65 +947,69 @@
 
     _clearAllSeries();
 
-    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + S.timeframe + '&limit=300&force=1';
-    fetch(url)
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(function (data) {
-        if (data.error) { console.error('[btc-widget]', data.error); toast(data.error, 'error'); return; }
-        var raw = data.candles || [];
-        if (!raw.length) { toast('Aucune donnee pour ' + S.timeframe, 'error'); return; }
+    try {
+      var candles = await _fetchWidgetCandles(S.timeframe);
 
-        if (token !== S.renderToken) { console.warn('[BTC-WIDGET] stale candles ignored'); return; }
+      if (token !== S.renderToken) { console.warn('[BTC-WIDGET] stale candles ignored'); return; }
 
-        var candles = _normalizeCandles(raw);
-        var last = candles[candles.length - 1];
-        var candleTimeMs = last.time * 1000;
-        S.lastCandleTime = candleTimeMs;
-        _updateCountdownAnchor(last, 'fetch');
-        S.candles = candles;
+      var last = candles[candles.length - 1];
+      var candleTimeMs = last.time * 1000;
+      S.lastCandleTime = candleTimeMs;
+      _updateCountdownAnchor(last, 'fetch');
+      S.candles = candles;
 
-        _startCountdown();
-        _startAutoRefresh();
+      _startCountdown();
+      _startAutoRefresh();
 
-        var priceEl = document.getElementById('btcChartPrice');
-        if (priceEl) priceEl.textContent = '$' + Number(last.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
+      var priceEl = document.getElementById('btcChartPrice');
+      if (priceEl) priceEl.textContent = '$' + Number(last.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
 
-        S.candleSeries.setData(candles);
-        _renderIndicators(candles);
+      S.candleSeries.setData(candles);
+      _renderIndicators(candles);
 
-        // VWAP — seulement sur init/user/timeframe (pas sur auto)
-        if (S.activeVwapPeriods.length > 0 && shouldResetWs) {
-          _calcAndDrawVwap().finally(function () {});
-        }
+      // VWAP — seulement sur init/user/timeframe (pas sur auto)
+      if (S.activeVwapPeriods.length > 0 && shouldResetWs) {
+        _calcAndDrawVwap().finally(function () {});
+      }
 
-        // WS : connecter APRES setData
-        if (shouldResetWs) {
-          setTimeout(function () {
-            if (token !== S.renderToken) return;
-            _connectWs('after-render:' + _source, { force: true });
-          }, 250);
-        }
+      // WS : connecter APRES setData
+      if (shouldResetWs) {
+        setTimeout(function () {
+          if (token !== S.renderToken) return;
+          _connectWs('after-render:' + _source, { force: true });
+        }, 250);
+      }
 
-        // Best view (range horizontal + vertical)
-        if (S.follow || !keepZoom) {
-          requestAnimationFrame(function () {
-            if (token !== S.renderToken) return;
-            _withProgrammaticRange(function () { applyBtcWidgetBestView(); });
-          });
-        }
+      // Best view (range horizontal + vertical)
+      if (S.follow || !keepZoom) {
+        requestAnimationFrame(function () {
+          if (token !== S.renderToken) return;
+          _withProgrammaticRange(function () { applyBtcWidgetBestView(); });
+        });
+      }
 
-        if (S.countdownPriceLine) { try { S.countdownPriceLine.applyOptions({ price: last.close }); } catch(e) {} }
-        _updateCountdownLabel();
-      })
-      .catch(function (err) {
-        console.error('[btc-widget] fetch:', err);
-        if (!S.chartReady) {
-          var container = document.getElementById('btcChartContainer');
-          if (container) container.innerHTML = '<div class="chart-error-state">'
-            + '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
-            + '<div>Marche indisponible</div><span>API Binance injoignable</span></div>';
-        }
-      });
+      if (S.countdownPriceLine) { try { S.countdownPriceLine.applyOptions({ price: last.close }); } catch(e) {} }
+      _updateCountdownLabel();
+
+      S.chartReady = true;
+    } catch (err) {
+      console.warn('[BTC-WIDGET] render failed:', err);
+
+      // Si on a deja des bougies, on les garde (ne pas casser le chart sur un 502)
+      if (S.candles && S.candles.length) {
+        S.chartReady = true;
+        _updateCountdownLabel('—');
+        return;
+      }
+
+      // Premier chargement sans cache : afficher etat erreur
+      if (!S.chartReady) {
+        var container = document.getElementById('btcChartContainer');
+        if (container) container.innerHTML = '<div class="chart-error-state">'
+          + '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
+          + '<div>Marche indisponible</div><span>API Binance injoignable</span></div>';
+      }
+    }
   }
 
   // ──────────────────────────────────────────────

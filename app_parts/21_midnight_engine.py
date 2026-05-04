@@ -104,12 +104,19 @@ def get_midnight_windows(date_ny=None):
 def _fetch_klines_range(symbol, interval, start_ms, end_ms, limit=500):
     """Fetch klines pour une plage temporelle via le cache klines existant."""
 
-    # Reutilise le cache de 23_routes_market (deja charge dans le namespace)
-    import app_parts
-    data, _status = app_parts.fetch_klines(
-        symbol, interval, limit, start_ms, end_ms
+    data, status = fetch_klines(
+        symbol=symbol,
+        interval=interval,
+        limit=limit,
+        start_time=start_ms,
+        end_time=end_ms,
+        force=False,
     )
-    return data.get("klines", []) if isinstance(data, dict) else []
+
+    if status != 200 or not isinstance(data, dict):
+        return []
+
+    return data.get("candles", [])
 
 
 # ---------- Feature extraction ----------
