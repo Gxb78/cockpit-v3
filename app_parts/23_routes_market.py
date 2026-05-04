@@ -28,8 +28,8 @@ _KLINES_CACHE_MAX_KEYS = 100
 _klines_cache = {}
 
 
-def _klines_cache_key(symbol, interval, limit, start_time):
-    return f"{symbol}:{interval}:{limit}:{start_time}"
+def _klines_cache_key(symbol, interval, limit, start_time, end_time):
+    return f"{symbol}:{interval}:{limit}:{start_time}:{end_time}"
 
 
 def _klines_purge():
@@ -98,7 +98,7 @@ def _dedupe_klines(candles):
     return result
 
 
-def fetch_klines(symbol, interval, limit, start_time=None):
+def fetch_klines(symbol, interval, limit, start_time=None, end_time=None):
     """Fetch klines avec cache, stale fallback, pagination dedupee.
 
     Retourne un dict avec le nouveau contrat :
@@ -117,7 +117,7 @@ def fetch_klines(symbol, interval, limit, start_time=None):
     limit = max(1, min(limit, _KLINES_MAX_LIMIT))
 
     # Cache lookup
-    cache_key = _klines_cache_key(symbol, interval, limit, start_time)
+    cache_key = _klines_cache_key(symbol, interval, limit, start_time, end_time)
     cached = _klines_cache.get(cache_key)
     if cached and (now - cached["ts"]) < _KLINES_CACHE_TTL:
         # Cache hit fresh — retourner directement
@@ -136,6 +136,8 @@ def fetch_klines(symbol, interval, limit, start_time=None):
         url = f"{BINANCE_API}/api/v3/klines?symbol={symbol}&interval={interval}&limit={fetch}"
         if current_start:
             url += f"&startTime={current_start}"
+        if end_time:
+            url += f"&endTime={end_time}"
 
         batch, err = _fetch_klines_page(url)
         if err:
@@ -168,6 +170,12 @@ def fetch_klines(symbol, interval, limit, start_time=None):
     # Normaliser et dédupliquer
     candles = [_normalize_candle(k) for k in all_raw]
     candles = _dedupe_klines(candles)
+
+    # Filtre strict par bornes temporelles (time en secondes, bornes en ms)
+    if start_time:
+        candles = [c for c in candles if c["time"] * 1000 >= start_time]
+    if end_time:
+        candles = [c for c in candles if c["time"] * 1000 <= end_time]
 
     source = "binance"
     age = int(now - cached["ts"]) if cached else 0
@@ -213,16 +221,18 @@ def market_klines():
       interval  (str) : 1m..1M (defaut 1h, whitelist)
       limit     (int) : nb bougies max (defaut 100, max 1000)
       startTime (int) : timestamp ms optionnel pour paginer
+      endTime   (int) : timestamp ms optionnel (borne stricte)
     """
     symbol = request.args.get("symbol", "BTCUSDT").upper().strip()
     interval = request.args.get("interval", "1h").strip()
     try:
         limit = _parse_int_param("limit", 100)
         start_time = _parse_int_param("startTime")
+        end_time = _parse_int_param("endTime")
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
-    data, status = fetch_klines(symbol, interval, limit, start_time)
+    data, status = fetch_klines(symbol, interval, limit, start_time, end_time)
     if status != 200 and isinstance(data, dict) and "error" in data:
         return jsonify(data), status
 

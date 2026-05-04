@@ -11,7 +11,7 @@
     barSpacing:  { '1m':6,'3m':8,'5m':8,'15m':10,'30m':10,'1h':12,'2h':14,'4h':14,'6h':16,'8h':16,'12h':18,'1d':10 },
   };
 
-  var VWAP_COLORS = { '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
+  var VWAP_COLORS = { 'D-NY': '#f59e0b', '24H': '#eab308', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
   var INTERVAL_MS = {
     '1m': 60000, '3m': 180000, '5m': 300000, '15m': 900000,
     '30m': 1800000, '1h': 3600000, '2h': 7200000, '4h': 14400000,
@@ -72,7 +72,7 @@
   };
 
   // VWAP periods from localStorage
-  try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) S.activeVwapPeriods = s; } catch(e) {}
+  try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) S.activeVwapPeriods = s.filter(function(p) { return window.BtcVwap && window.BtcVwap.VWAP_SOURCE_CONFIG && window.BtcVwap.VWAP_SOURCE_CONFIG[p]; }); } catch(e) {}
 
   // Indicator settings from localStorage
   var indSettings = {
@@ -231,7 +231,7 @@
   async function _calcAndDrawVwap() {
     var token = S.renderToken;
     var tf = S.timeframe;
-    try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) S.activeVwapPeriods = s; } catch(e) {}
+    try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) S.activeVwapPeriods = s.filter(function(p) { return window.BtcVwap && window.BtcVwap.VWAP_SOURCE_CONFIG && window.BtcVwap.VWAP_SOURCE_CONFIG[p]; }); } catch(e) {}
     Object.keys(S.vwapSeriesMap).forEach(function (k) { if (S.activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k); });
     if (!S.activeVwapPeriods.length) return;
     if (!window.BtcVwap) return;
@@ -246,7 +246,7 @@
         vwapSeriesMap: S.vwapSeriesMap,
       };
 
-      var vwapOrder = ['1D', '7D', '30D', '90D'];
+      var vwapOrder = ['D-NY', '24H', '7D', '30D', '90D'];
       for (var vi = 0; vi < vwapOrder.length; vi++) {
         var p = vwapOrder[vi];
         if (S.activeVwapPeriods.indexOf(p) < 0) continue;

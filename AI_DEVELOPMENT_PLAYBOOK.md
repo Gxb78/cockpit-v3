@@ -970,3 +970,21 @@ Le timer n'est JAMAIS clear a 0:00 (le prochain anchor le remet a jour).
 - `_updateCountdownAnchor()` appele depuis fetch/WS/REST fallback.
 - WS fournit `openTime: k.t, closeTime: k.T` pour un calcul precis.
 - Fichiers: `060_btc_chart_widget.js`, `062_chart_page.js`.
+
+### Bug VWAP 1D = rolling 24h au lieu de daily session (4 mai 2026)
+**Cause** : VWAP '1D' utilisait `startTime = endTime - 1 * 86400000` (rolling 24h glissantes),
+pas une session calendaire. Le backend `/api/market/klines` ignorait `endTime`, rendant
+les fenetres temporelles non-bornees.
+**Fix** :
+- **Backend `23_routes_market.py`** : `fetch_klines()` et `market_klines()` acceptent `endTime`.
+  Filtre strict post-normalisation : `c["time"] * 1000 >= startTime` et `<= endTime`.
+  Cache key inclut `endTime`.
+- **Frontend `055_indicator_vwap_core.js`** : `VWAP_SOURCE_CONFIG` renomme '1D' en deux periodes :
+  `'D-NY'` (session NY_DAY, depuis 00:00 America/New_York) et `'24H'` (rolling 24h).
+  Ajout de `_getSessionBounds()` qui distingue `mode: 'rolling'` vs `mode: 'session'`.
+  Logs debug `[VWAP BOUNDS]` et `[VWAP RAW]` temporaires pour verifier les fenetres.
+- **UI `060_btc_chart_widget.js` + `062_chart_page.js`** : `vwapOrder` passe de `['1D', ...]`
+  a `['D-NY', '24H', '7D', '30D', '90D']`. `VWAP_COLORS` mis a jour.
+  Filtrage des periodes inconnues au chargement depuis localStorage.
+- **Template `chart.html`** : boutons VWAP : 'Jour NY' + '24h' remplacent '1 jour'.
+- Ne pas toucher au mapping timeframe `'1D' → '1d'` (c'est Binance, pas VWAP).

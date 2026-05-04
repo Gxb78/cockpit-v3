@@ -9801,18 +9801,64 @@ function bindJournalStatsArrows() {
   // ── CONFIG CANONIQUE ──────────────────────────────────────
   // Indépendante du timeframe actif du chart.
   // Chaque période a une source stable, prévisible, rapide.
+  // Modes :
+  //   'rolling' → fenêtre glissante de durationMs depuis endTime
+  //   'session' → session calendaire (UTC_DAY, NY_DAY)
   var VWAP_SOURCE_CONFIG = {
-    '1D': { days: 1,  interval: '15m', limit: 106, refreshMs:  60000 },
-    '7D': { days: 7,  interval: '15m', limit: 682, refreshMs:  60000 },
-    '30D':{ days: 30, interval: '1h',  limit: 730, refreshMs: 300000 },
-    '90D':{ days: 90, interval: '4h',  limit: 550, refreshMs: 900000 },
+    'D-NY': { mode: 'session', session: 'NY_DAY', interval: '15m', limit: 110, refreshMs: 60000 },
+    '24H':  { mode: 'rolling', durationMs: 24 * 60 * 60 * 1000, interval: '15m', limit: 110, refreshMs: 60000 },
+    '7D':   { mode: 'rolling', durationMs: 7 * 24 * 60 * 60 * 1000, interval: '15m', limit: 682, refreshMs: 60000 },
+    '30D':  { mode: 'rolling', durationMs: 30 * 24 * 60 * 60 * 1000, interval: '1h',  limit: 730, refreshMs: 300000 },
+    '90D':  { mode: 'rolling', durationMs: 90 * 24 * 60 * 60 * 1000, interval: '4h',  limit: 550, refreshMs: 900000 },
   };
 
   var VWAP_COLORS = {
-    '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6',
+    'D-NY': '#f59e0b', '24H': '#eab308', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6',
   };
 
-  // ── HELPERS TEMPS ─────────────────────────────────────────
+  // ── BORNES TEMPORELLES ────────────────────────────────────
+  function _getUtcDayBounds(nowMs) {
+    var d = new Date(nowMs);
+    var start = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0);
+    return { startTime: start, endTime: nowMs };
+  }
+
+  function _getSessionBounds(config, nowMs) {
+    nowMs = nowMs || Date.now();
+    var endTime = _getLastClosedCandleEndTime(config.interval, nowMs);
+    if (config.mode === 'rolling') {
+      var startTime = endTime - config.durationMs;
+      return { startTime: startTime, endTime: endTime };
+    }
+    if (config.mode === 'session') {
+      if (config.session === 'UTC_DAY') {
+        var bounds = _getUtcDayBounds(nowMs);
+        return { startTime: bounds.startTime, endTime: endTime };
+      }
+      if (config.session === 'NY_DAY') {
+        // NY day: 00:00 America/New_York
+        // En UTC, NY = UTC-5 (EST) ou UTC-4 (EDT, mars à novembre)
+        // Approximation: on calcule via Date locale du navigateur… pas idéal
+        // Phase 1: on délègue le calcul au backend si possible, sinon frontend approximatif
+        var d = new Date(nowMs);
+        // EST/EDT simplifié: 2e dimanche de mars → 1er dimanche de novembre = EDT (-4)
+        var year = d.getUTCFullYear();
+        var marStart = Date.UTC(year, 2, 8); // 8 mars
+        var marDst = marStart - ((new Date(marStart)).getUTCDay() * 86400000);
+        var novStart = Date.UTC(year, 10, 1); // 1er novembre
+        var novDst = novStart - ((new Date(novStart)).getUTCDay() * 86400000);
+        var isDst = nowMs >= marDst && nowMs < novDst;
+        var nyOffset = isDst ? -4 : -5;
+        var nyNowMs = nowMs + nyOffset * 3600000;
+        var nyNow = new Date(nyNowMs);
+        var nyMidnight = Date.UTC(nyNow.getUTCFullYear(), nyNow.getUTCMonth(), nyNow.getUTCDate(), 0, 0, 0, 0);
+        var utcStart = nyMidnight - nyOffset * 3600000;
+        return { startTime: utcStart, endTime: endTime };
+      }
+    }
+    // Fallback: rolling 24h
+    return { startTime: Date.now() - 86400000, endTime: Date.now() };
+  }
   function _intervalToMs(interval) {
     var m = {
       '3m': 3*60000, '5m': 5*60000, '15m': 15*60000, '30m': 30*60000,
@@ -9895,10 +9941,25 @@ function bindJournalStatsArrows() {
     var config = VWAP_SOURCE_CONFIG[period];
     if (!config) throw new Error('Unknown VWAP period: ' + period);
 
-    var endTime = _getLastClosedCandleEndTime(config.interval);
-    var startTime = endTime - config.days * 86400000;
+    var bounds = _getSessionBounds(config);
+    var startTime = bounds.startTime;
+    var endTime = bounds.endTime;
+
+    console.log('[VWAP BOUNDS]', period, {
+      mode: config.mode,
+      interval: config.interval,
+      start: new Date(startTime).toISOString(),
+      end: new Date(endTime).toISOString(),
+      limit: config.limit,
+    });
 
     var raw = await _fetchKlines(symbol, config.interval, startTime, endTime, config.limit);
+
+    console.log('[VWAP RAW]', period, {
+      count: raw.length,
+      first: raw[0] && new Date((raw[0].time || raw[0].openTime || raw[0].t) * 1000).toISOString(),
+      last: raw[raw.length - 1] && new Date((raw[raw.length - 1].time || raw[raw.length - 1].openTime || raw[raw.length - 1].t) * 1000).toISOString(),
+    });
 
     var candles = normalizeCandlesForLwc(raw)
       .filter(function (c) {
@@ -11379,7 +11440,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     barSpacing:  { '1m':6,'3m':8,'5m':8,'15m':10,'30m':10,'1h':12,'2h':14,'4h':14,'6h':16,'8h':16,'12h':18,'1d':10 },
   };
 
-  var VWAP_COLORS = { '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
+  var VWAP_COLORS = { 'D-NY': '#f59e0b', '24H': '#eab308', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
   var INTERVAL_MS = {
     '1m': 60000, '3m': 180000, '5m': 300000, '15m': 900000,
     '30m': 1800000, '1h': 3600000, '2h': 7200000, '4h': 14400000,
@@ -11440,7 +11501,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   };
 
   // VWAP periods from localStorage
-  try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) S.activeVwapPeriods = s; } catch(e) {}
+  try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) S.activeVwapPeriods = s.filter(function(p) { return window.BtcVwap && window.BtcVwap.VWAP_SOURCE_CONFIG && window.BtcVwap.VWAP_SOURCE_CONFIG[p]; }); } catch(e) {}
 
   // Indicator settings from localStorage
   var indSettings = {
@@ -11599,7 +11660,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   async function _calcAndDrawVwap() {
     var token = S.renderToken;
     var tf = S.timeframe;
-    try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) S.activeVwapPeriods = s; } catch(e) {}
+    try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) S.activeVwapPeriods = s.filter(function(p) { return window.BtcVwap && window.BtcVwap.VWAP_SOURCE_CONFIG && window.BtcVwap.VWAP_SOURCE_CONFIG[p]; }); } catch(e) {}
     Object.keys(S.vwapSeriesMap).forEach(function (k) { if (S.activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k); });
     if (!S.activeVwapPeriods.length) return;
     if (!window.BtcVwap) return;
@@ -11614,7 +11675,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         vwapSeriesMap: S.vwapSeriesMap,
       };
 
-      var vwapOrder = ['1D', '7D', '30D', '90D'];
+      var vwapOrder = ['D-NY', '24H', '7D', '30D', '90D'];
       for (var vi = 0; vi < vwapOrder.length; vi++) {
         var p = vwapOrder[vi];
         if (S.activeVwapPeriods.indexOf(p) < 0) continue;
@@ -12380,9 +12441,9 @@ TradeEditorController.renderHtml = function (day, trade) {
   var activeVwapPeriods = [];
   try {
     var savedVwap = JSON.parse(localStorage.getItem('chartVwapPeriods'));
-    if (Array.isArray(savedVwap)) activeVwapPeriods = savedVwap;
+    if (Array.isArray(savedVwap)) activeVwapPeriods = savedVwap.filter(function(p) { return window.BtcVwap && window.BtcVwap.VWAP_SOURCE_CONFIG && window.BtcVwap.VWAP_SOURCE_CONFIG[p]; });
   } catch(e) {}
-  var VWAP_COLORS = { '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
+  var VWAP_COLORS = { 'D-NY': '#f59e0b', '24H': '#eab308', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
 
   // State
   var countdownPriceLine = null;
@@ -13196,7 +13257,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         vwapSeriesMap: vwapSeriesMap,
       };
 
-      var vwapOrder = ['1D', '7D', '30D', '90D'];
+      var vwapOrder = ['D-NY', '24H', '7D', '30D', '90D'];
       for (var vi = 0; vi < vwapOrder.length; vi++) {
         var p = vwapOrder[vi];
         if (activeVwapPeriods.indexOf(p) < 0) continue;
