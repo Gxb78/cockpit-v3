@@ -27,6 +27,28 @@ _KLINES_CACHE_TTL = 300  # 5min
 _KLINES_CACHE_MAX_KEYS = 100
 _klines_cache = {}
 
+# Cache d'horloge Binance — sync avec /api/v3/time (TTL 10s)
+_BINANCE_TIME_CACHE = {"serverTime": None, "ts": 0.0}
+
+def fetch_binance_server_time():
+    now = _time_mod.time()
+    if _BINANCE_TIME_CACHE["serverTime"] and now - _BINANCE_TIME_CACHE["ts"] < 10:
+        return _BINANCE_TIME_CACHE["serverTime"]
+
+    try:
+        req = urllib.request.Request(
+            f"{BINANCE_API}/api/v3/time",
+            headers={"User-Agent": "Journal/1.0"},
+        )
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            data = _json.loads(resp.read().decode("utf-8"))
+        server_time = int(data.get("serverTime"))
+        _BINANCE_TIME_CACHE["serverTime"] = server_time
+        _BINANCE_TIME_CACHE["ts"] = now
+        return server_time
+    except Exception:
+        return int(_time_mod.time() * 1000)
+
 
 def _klines_cache_key(symbol, interval, limit, start_time, end_time):
     return f"{symbol}:{interval}:{limit}:{start_time}:{end_time}"
@@ -184,6 +206,7 @@ def fetch_klines(symbol, interval, limit, start_time=None, end_time=None, force=
         "symbol": symbol,
         "interval": interval,
         "candles": candles,
+        "serverTime": fetch_binance_server_time(),
         "source": source,
         "cache": {
             "hit": bool(cached),

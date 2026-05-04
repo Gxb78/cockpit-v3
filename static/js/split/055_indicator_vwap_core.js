@@ -9,6 +9,29 @@
 //   alignIndicatorToCandles() → alignement vers les bougies du chart
 //   drawVwapForChart()  → helper haut niveau pour 060/062
 
+window.BtcMarketClock = window.BtcMarketClock || (function () {
+  var _offsetMs = 0;
+  var _synced = false;
+  var _source = 'local';
+
+  return {
+    sync: function (serverMs, src) {
+      serverMs = Number(serverMs);
+      if (!Number.isFinite(serverMs) || serverMs <= 0) return;
+      _offsetMs = serverMs - Date.now();
+      _synced = true;
+      _source = src || 'unknown';
+    },
+    now: function () {
+      return Date.now() + (_synced ? _offsetMs : 0);
+    },
+    isSynced: function () { return _synced; },
+    offsetMs: function () { return _synced ? _offsetMs : 0; },
+    source: function () { return _source; },
+    reset: function () { _offsetMs = 0; _synced = false; _source = 'local'; }
+  };
+})();
+
 (function () {
 
   // ── CONFIG CANONIQUE ──────────────────────────────────────

@@ -1200,6 +1200,11 @@
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
         if (data.error) { console.error('[chart]', data.error); toast(data.error, 'error'); return; }
+
+        if (window.BtcMarketClock && Number.isFinite(Number(data.serverTime))) {
+          window.BtcMarketClock.sync(Number(data.serverTime), 'klines-fetch-chart');
+        }
+
         var candles = data.candles || [];
         if (!candles.length) return;
 
@@ -1312,9 +1317,16 @@
     var openMs = _toMs(candle.time != null ? (candle.openTime != null ? candle.openTime : candle.time) : (candle.t != null ? candle.t : 0));
     var closeMs = _getCandleCloseMs(candle, intervalMs);
     if (!Number.isFinite(openMs) || !Number.isFinite(closeMs)) return;
-    var remaining = closeMs - Date.now();
+
+    var marketNow = window.BtcMarketClock ? window.BtcMarketClock.now() : Date.now();
+    var clockSynced = window.BtcMarketClock && window.BtcMarketClock.isSynced && window.BtcMarketClock.isSynced();
+
+    // Pas de reject si clock pas sync et source pas WS — on attend la sync
+    if (!clockSynced && source !== 'ws') return;
+
+    var remaining = closeMs - marketNow;
     if (remaining < -intervalMs) {
-      console.warn('[COUNTDOWN] stale candle anchor, forcing latest fetch', { source, tf: currentInterval, openMs, closeMs, remaining });
+      console.warn('[COUNTDOWN] stale candle anchor, forcing latest fetch', { source, tf: currentInterval, openMs, closeMs, marketNow, remaining });
       countdownAnchor = {
         candleOpenMs: openMs,
         candleCloseMs: closeMs,
@@ -1329,7 +1341,7 @@
       return;
     }
     if (remaining > intervalMs * 2) {
-      console.warn('[COUNTDOWN] future candle anchor rejected', { source, tf: currentInterval, openMs, closeMs, remaining });
+      console.warn('[COUNTDOWN] future candle anchor rejected', { source, tf: currentInterval, openMs, closeMs, marketNow, remaining });
       return;
     }
     remaining = Math.max(0, Math.min(remaining, intervalMs));
@@ -1359,9 +1371,11 @@
       if (!countdownPriceLine) { _updateCountdownLabel('—'); return; }
       if (!countdownAnchor) {
         var intervalMs = _getIntervalMs(currentInterval);
-        var estimated = intervalMs ? intervalMs - (Date.now() % intervalMs) : 0;
+        var clockSynced = window.BtcMarketClock && window.BtcMarketClock.isSynced && window.BtcMarketClock.isSynced();
+        var nowMs = window.BtcMarketClock ? window.BtcMarketClock.now() : Date.now();
+        var estimated = intervalMs ? intervalMs - (nowMs % intervalMs) : 0;
         _updateCountdownLabel(estimated > 0 ? _formatCountdown(estimated) : '—');
-        if (chartReady && Date.now() - (lastCountdownFetchAt || 0) > 5000) {
+        if (chartReady && clockSynced && !wsConnected && Date.now() - (lastCountdownFetchAt || 0) > 5000) {
           lastCountdownFetchAt = Date.now();
           _fetchLatestCandleOnly();
         }
@@ -1411,6 +1425,11 @@
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
         if (interval !== currentInterval || sym !== currentSymbol) return;
+
+        if (window.BtcMarketClock && Number.isFinite(Number(data.serverTime))) {
+          window.BtcMarketClock.sync(Number(data.serverTime), 'klines-latest-chart');
+        }
+
         var raw = data.candles || [];
         if (!raw.length) return;
         var candles = raw.map(function (c) { return { time: Number(c.time), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close), volume: Number(c.volume) }; });
