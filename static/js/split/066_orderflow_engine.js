@@ -570,7 +570,8 @@
 
     if (mode === 'v' || mode === 'both') {
       var ps = this.priceScale;
-      var dp = -dy / ps.pixelsPerUnit;
+      // Drag up => chart monte. Drag down => chart descend.
+      var dp = dy / ps.pixelsPerUnit;
       ps.minPrice = this.scrollStart.priceMin + dp;
       ps.maxPrice = this.scrollStart.priceMax + dp;
     }
@@ -1329,6 +1330,7 @@
     this.timeScale.endTime = savedEnd;
 
     // Ajuster le prix uniquement si les bougies sortent du range visible
+    var candles = this._candles || [];
     if (candles.length > 0) {
       var minP = candles[0].low, maxP = candles[0].high;
       for (var i = 0; i < candles.length; i++) {
@@ -1435,37 +1437,35 @@
     this.timeScale.endTime = endTime;
   };
 
+  /** Renvoyer les bougies visibles (ou toutes si aucune visible) */
+  OrderflowEngine.prototype._getVisibleCandles = function () {
+    var all = this._candles || [];
+    if (!all.length) return [];
+    var start = this.timeScale.startTime;
+    var end = this.timeScale.endTime;
+    var visible = all.filter(function (c) {
+      return c && c.time >= start && c.time <= end;
+    });
+    return visible.length ? visible : all;
+  };
+
   /** Fit price seulement — centrer le range prix sur les bougies visibles */
   OrderflowEngine.prototype._fitPrice = function (margin) {
-    margin = margin || 0.05;
-    var candles = this._candles;
-    if (!candles || candles.length === 0) return;
-    var ts = this.timeScale;
-    var visibleStart = ts.startTime;
-    var visibleEnd = ts.endTime;
+    var candles = this._getVisibleCandles();
+    if (!candles || !candles.length) return;
 
-    var minP = Infinity, maxP = -Infinity;
-    var found = false;
-    for (var i = 0; i < candles.length; i++) {
+    var minP = candles[0].low, maxP = candles[0].high;
+    for (var i = 1; i < candles.length; i++) {
       var c = candles[i];
-      if (c.time < visibleStart || c.time > visibleEnd) continue;
-      if (c.low < minP) minP = c.low;
-      if (c.high > maxP) maxP = c.high;
-      found = true;
-    }
-    if (!found) {
-      // Fallback: toutes les bougies
-      minP = candles[0].low;
-      maxP = candles[0].high;
-      for (var j = 0; j < candles.length; j++) {
-        if (candles[j].low < minP) minP = candles[j].low;
-        if (candles[j].high > maxP) maxP = candles[j].high;
-      }
+      if (!c) continue;
+      if (Number.isFinite(c.low) && c.low < minP) minP = c.low;
+      if (Number.isFinite(c.high) && c.high > maxP) maxP = c.high;
     }
     var range = maxP - minP;
-    var pad = range * margin || range * 0.05 || 200;
+    var pad = range * (margin || 0.05) || 50;
     this.priceScale.minPrice = minP - pad;
     this.priceScale.maxPrice = maxP + pad;
+    this._dirty = true;
   };
 
   /** Reset complet : range temporel au défaut + fit price */
