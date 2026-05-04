@@ -23,7 +23,7 @@ _KLINES_INTERVAL_WHITELIST = frozenset({
     "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"
 })
 _KLINES_MAX_LIMIT = 1000
-_KLINES_CACHE_TTL = 30  # 30s
+_KLINES_CACHE_TTL = 300  # 5min
 _KLINES_CACHE_MAX_KEYS = 100
 _klines_cache = {}
 
@@ -46,22 +46,31 @@ def _klines_purge():
 
 
 def _fetch_klines_page(url):
-    """Fetch une page de klines Binance. Retourne (batch_or_None, error_json_or_None)."""
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Journal/1.0"})
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            raw = resp.read().decode("utf-8")
-            batch = _json.loads(raw)
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode("utf-8", errors="replace")[:200]
-        return None, ({"error": f"Binance HTTP {e.code}: {detail}"}, e.code)
-    except urllib.error.URLError as e:
-        return None, ({"error": f"Erreur reseau: {e.reason}"}, 502)
-    except Exception as e:
-        return None, ({"error": str(e)}, 500)
-    if not isinstance(batch, list):
-        return None, ({"error": "Format inattendu Binance"}, 502)
-    return batch, None
+    """Fetch une page de klines Binance avec retry sur 429/502/503. Retourne (batch_or_None, error_json_or_None)."""
+    import time as _time
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Journal/1.0"})
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                raw = resp.read().decode("utf-8")
+                batch = _json.loads(raw)
+            return batch, None
+        except urllib.error.HTTPError as e:
+            code = e.code
+            if code in (429, 502, 503) and attempt < max_attempts - 1:
+                _time.sleep(1 + attempt)
+                continue
+            detail = e.read().decode("utf-8", errors="replace")[:200]
+            return None, ({"error": f"Binance HTTP {code}: {detail}"}, code)
+        except urllib.error.URLError as e:
+            return None, ({"error": f"Erreur reseau: {e.reason}"}, 502)
+        except Exception as e:
+            if attempt < max_attempts - 1:
+                _time.sleep(1 + attempt)
+                continue
+            return None, ({"error": str(e)}, 500)
+    return None, ({"error": "Max retries exceeded"}, 502)
 
 
 def _normalize_candle(k):

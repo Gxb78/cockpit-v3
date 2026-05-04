@@ -925,3 +925,23 @@ vers le bas et rendant les bougies courantes toutes petites.
 chaque serie VWAP. Les VWAP restent sur la price scale `'right'` (alignees avec
 les bougies) mais n'influencent pas le calcul du range vertical.
 - Applique dans `060_btc_chart_widget.js` et `062_chart_page.js`.
+
+### VWAP canonique — flood API Binance → 502
+Le module VWAP canonique (055) fetch 4 intervalles differents (15m, 15m, 1h, 4h)
+a chaque chargement, ce qui multiplie les appels API par 5 (1 widget + 4 VWAP).
+Binance rate-limite → 502 → chart disparait.
+**Fix** : 
+- `_KLINES_CACHE_TTL` passe de 30s a 300s (5min) dans `app_parts/23_routes_market.py`
+- Retry 3 fois sur 429/502/503 avec backoff 1-2s dans `_fetch_klines_page()`
+- VWAP utilise `getLastClosedCandleEndTime()` → fenetre stable → meilleur hit cache
+- Fichiers a surveiller: `app_parts/23_routes_market.py`
+
+### Horloge Windows decalee → countdown affiche '—'
+L'horloge Windows/locale peut etre decalee de plusieurs heures (veille WSL,
+mauvaise synchro NTP). Le guard anti-timestamp detectait lastCandleTime > Date.now()
+et affichait '—'.
+**Fix** : calculer `clockOffset = serverTime - Date.now()` au premier fetch,
+puis utiliser `adjustedNow = Date.now() + clockOffset` dans tous les calculs
+de countdown et auto-refresh. clockOffset n'est pas recalcule sur les messages WS
+(pour eviter le reset du countdown a 3:00 en boucle).
+- Applique dans `060_btc_chart_widget.js` et `062_chart_page.js`.
