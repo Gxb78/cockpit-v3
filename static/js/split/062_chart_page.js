@@ -44,6 +44,7 @@
   var activeWsKey = null;
 
   // Guards anti-boucle
+  var chartReady = false;
   var _isFetching = false;
   var _lastFetchTs = 0;
   var _FETCH_COOLDOWN_MS = 5000;
@@ -640,6 +641,8 @@
 
       // ── VOLUME PROFILE ──
       _initVolumeProfile();
+
+      chartReady = true;
 
     } catch (e) {
       console.error('[chart] createChart error:', e);

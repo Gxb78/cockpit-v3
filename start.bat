@@ -78,15 +78,11 @@ if not exist "%PY_CMD%" (
 )
 
 :: ---- Deps ----
-"%PY_CMD%" -c "import flask" >nul 2>&1
+"%PY_CMD%" -m pip install -q -r requirements.txt
 if errorlevel 1 (
-    echo Installing dependencies...
-    "%PY_CMD%" -m pip install -r requirements.txt >nul
-    if errorlevel 1 (
-        echo [ERR] Dependency install failed.
-        pause
-        exit /b 1
-    )
+    echo [ERR] Dependency install failed.
+    pause
+    exit /b 1
 )
 
 :: ---- Dev mode ----
