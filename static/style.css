@@ -16576,8 +16576,9 @@ body.light-mode .chart-ind-badge.rsi {
 /* ---- 063_favorites_carousel.css ---- */
 @layer widgets {
 /* ============================================================
-   063 — Favorites Carousel Widget
-   Carousel mechanics only. Card recto/verso styled by 056_journal_day_trade_cards.css
+   063 — Favorites Carousel Widget  (v2 — premium stage)
+   Carousel mechanics only.
+   Card recto/verso styled by 046_journal_day_trade_cards.css
    ============================================================ */
 
 /* ── Panel shell ── */
@@ -16585,7 +16586,8 @@ body.light-mode .chart-ind-badge.rsi {
   display: flex;
   flex-direction: column;
   gap: 0;
-  overflow: visible;            /* arrows must overflow the panel */
+  overflow: visible;            /* arrows must overflow */
+  /* pas de background custom : on hérite du panel global */
 }
 
 .fav-carousel-panel .panel-h {
@@ -16595,23 +16597,23 @@ body.light-mode .chart-ind-badge.rsi {
 
 .fav-carousel-count {
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-weight: 800;
+  letter-spacing: 0.06em;
   color: var(--text-dim);
   margin-left: auto;
   background: var(--surface-3);
   border: 1px solid var(--border);
-  padding: 2px 8px;
-  border-radius: 20px;
+  padding: 2px 10px;
+  border-radius: 999px;
 }
 
-/* ── Outer wrap: overflow visible so arrows aren't clipped ── */
+/* ── Outer wrap: overflow visible so arrows don't clip ── */
 .fav-carousel-wrap {
   position: relative;
   flex: 1;
   min-height: 0;
-  overflow: visible;            /* KEY — was overflow:hidden */
-  padding: 0 44px;              /* space for arrows left + right */
+  overflow: visible;
+  padding: 0 56px;              /* room for the 44px arrows */
 }
 
 /* ── Scrolling track ── */
@@ -16623,9 +16625,9 @@ body.light-mode .chart-ind-badge.rsi {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   gap: 12px;
-  padding: 6px 2px 24px;
+  padding: 2px 2px 24px;
   scroll-padding-inline: 2px;
-  align-items: flex-start;
+  align-items: center;
 }
 .fav-carousel-track::-webkit-scrollbar { display: none; }
 
@@ -16635,93 +16637,143 @@ body.light-mode .chart-ind-badge.rsi {
   scroll-snap-align: start;
   display: flex;
   justify-content: center;
-  align-items: flex-start;
+  align-items: center;
   min-height: 0;
 }
 
-/* ── Journal flip card constrained for carousel context ── */
+/* ── Flip card: format portrait, mêmes proportions que le journal ── */
 .fav-carousel-slide .journal-flip-card {
-  width: 100%;
-  max-width: 440px;
-  height: 340px;
+  width: min(460px, 100%);
+  height: clamp(460px, 58dvh, 510px);
   min-height: 0;
   cursor: pointer;
+  perspective: 1500px;
 }
-/* La capture est trop grande dans le carousel : on la reduit */
+
+/* ── Shot colle en haut de la card ── */
 .fav-carousel-slide .journal-trade-shot {
-  height: 160px;
+  height: clamp(200px, 28dvh, 250px);
   flex: 0 0 auto;
-  border-radius: 16px;
+  border-radius: 20px 20px 14px 14px;
 }
-/* Remonte les badges du haut (top:31px → 14px) */
+
+/* ── Supprimer le padding-top pour que le shot parte du bord haut ── */
+.fav-carousel-slide .journal-flip-front {
+  padding-top: 0;
+}
+
+/* ── Badges recto : alignés sur le bord haut du shot ── */
 .fav-carousel-slide .journal-flip-top {
-  top: 14px;
+  top: 12px;
   left: 14px;
   right: 14px;
 }
-/* Le content remplit l'espace restant, scroll si texte long */
+
+/* ── Content ── */
 .fav-carousel-slide .journal-trade-content {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
 }
 
-/* ── Arrows — outside the scrolling track ── */
+/* ── Face premium dans le contexte Favoris ── */
+.fav-carousel-slide .journal-flip-face {
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  box-shadow:
+    0 24px 60px rgba(15, 23, 42, 0.10),
+    0 6px 18px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  transition:
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
+}
+
+.fav-carousel-slide .journal-flip-card:hover .journal-flip-face {
+  border-color: rgba(14, 165, 233, 0.28);
+  box-shadow:
+    0 28px 70px rgba(15, 23, 42, 0.13),
+    0 8px 22px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+/* ── Arrows — frosted glass, proches de la card ── */
 .fav-carousel-arrow {
   position: absolute;
-  top: calc(50% - 20px);       /* vertically centered on card */
-  z-index: 10;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: 1px solid var(--border-strong);
-  background: var(--surface-2);
-  color: var(--text);
+  top: calc(50% - 34px);
+  z-index: 20;                  /* au-dessus de la card et de son contexte 3D */
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.09);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: #64748b;
   cursor: pointer;
   display: grid;
   place-items: center;
-  box-shadow: var(--shadow-xs);
-  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.15s, opacity 0.2s;
-  opacity: 0.6;
+  box-shadow:
+    0 10px 24px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.80);
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease,
+    opacity 0.2s;
+  opacity: 0.52;
 }
 .fav-carousel-wrap:hover .fav-carousel-arrow { opacity: 1; }
+
 .fav-carousel-arrow:hover:not([disabled]) {
-  background: var(--surface-3);
-  border-color: var(--cyan);
-  color: var(--cyan);
-  transform: scale(1.08);
+  color: #0f172a;
+  background: #ffffff;
+  border-color: rgba(14, 165, 233, 0.30);
+  transform: scale(1.07);
+  box-shadow:
+    0 14px 32px rgba(15, 23, 42, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.90);
 }
+
 .fav-carousel-arrow[disabled] {
-  opacity: 0.2;
+  opacity: 0.18;
   cursor: default;
   pointer-events: none;
 }
-.fav-carousel-arrow svg { width: 16px; height: 16px; }
-.fav-carousel-arrow--left  { left: 0; }
-.fav-carousel-arrow--right { right: 0; }
 
-/* ── Dots indicator ── */
+.fav-carousel-arrow svg { width: 17px; height: 17px; }
+
+.fav-carousel-arrow--left  { left: 4px; }
+.fav-carousel-arrow--right { right: 4px; }
+
+/* ── Dots ── */
 .fav-carousel-dots {
   display: flex;
   justify-content: center;
-  gap: 5px;
-  padding-top: 8px;
+  align-items: center;
+  gap: 6px;
+  padding-top: 10px;
 }
+
 .fav-carousel-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
   border: 0;
   padding: 0;
   background: var(--border-strong);
   cursor: pointer;
-  transition: background 0.2s, width 0.25s cubic-bezier(.34,1.56,.64,1), border-radius 0.25s;
+  transition:
+    width 0.25s cubic-bezier(.34, 1.56, .64, 1),
+    background 0.2s ease,
+    border-radius 0.25s;
 }
 .fav-carousel-dot:hover { background: var(--text-muted); }
 .fav-carousel-dot.is-active {
+  width: 22px;
+  border-radius: 4px;
   background: var(--cyan);
-  width: 16px;
-  border-radius: 3px;
 }
 
 /* ── Empty state ── */
@@ -16732,12 +16784,12 @@ body.light-mode .chart-ind-badge.rsi {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 48px 20px;
+  padding: 56px 20px;
   color: var(--text-muted);
   text-align: center;
 }
-.fav-carousel-empty svg { opacity: 0.3; margin-bottom: 4px; }
-.fav-carousel-empty p { font-size: 13px; font-weight: 600; color: var(--text); margin: 0; }
+.fav-carousel-empty svg { opacity: 0.28; margin-bottom: 4px; }
+.fav-carousel-empty p   { font-size: 13px; font-weight: 700; color: var(--text); margin: 0; }
 .fav-carousel-empty span { font-size: 11px; color: var(--text-dim); }
 
 /* ── Skeleton loader ── */
@@ -16746,16 +16798,54 @@ body.light-mode .chart-ind-badge.rsi {
   100% { background-position:  200% 0; }
 }
 .fav-skeleton {
-  width: 100%;
-  max-width: 440px;
-  height: 340px;
+  width: min(460px, 100%);
+  height: clamp(460px, 58dvh, 510px);
   border-radius: var(--r-lg);
-  background: linear-gradient(90deg,
+  background: linear-gradient(
+    90deg,
     var(--surface-2) 25%,
     var(--surface-3) 50%,
-    var(--surface-2) 75%);
+    var(--surface-2) 75%
+  );
   background-size: 200% 100%;
   animation: fav-shimmer 1.6s ease-in-out infinite;
+}
+
+/* ── Dark mode scoped ── */
+body:not(.light-mode) .fav-carousel-arrow {
+  background: rgba(17, 24, 39, 0.80);
+  border-color: rgba(255, 255, 255, 0.09);
+  color: #94a3b8;
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+body:not(.light-mode) .fav-carousel-arrow:hover:not([disabled]) {
+  background: #1e293b;
+  color: #e2e8f0;
+  border-color: rgba(14, 165, 233, 0.35);
+  box-shadow:
+    0 14px 32px rgba(0, 0, 0, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+body:not(.light-mode) .fav-carousel-slide .journal-flip-face {
+  background: linear-gradient(180deg, #1a1b23 0%, #151722 100%);
+  color: #e2e8f0;
+  border-color: rgba(255, 255, 255, 0.07);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.36),
+    0 6px 18px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+body:not(.light-mode) .fav-carousel-slide .journal-flip-card:hover .journal-flip-face {
+  border-color: rgba(14, 165, 233, 0.32);
+  box-shadow:
+    0 28px 70px rgba(0, 0, 0, 0.42),
+    0 8px 22px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 }
 

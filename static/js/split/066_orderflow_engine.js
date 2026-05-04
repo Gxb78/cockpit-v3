@@ -203,23 +203,24 @@
     // ===== WHEEL / TRACKPAD =====
     c.addEventListener('wheel', function (e) {
       e.preventDefault();
-      var inPriceAxis = e.offsetX > self.layout.chartRight;
 
-      // Ctrl+wheel = zoom prix (pinch simulation)
+      // Ctrl+wheel = zoom prix uniquement
       if (e.ctrlKey || e.metaKey) {
         self._zoomPrice(e.offsetY, e.deltaY < 0 ? 1.08 : 0.92);
         return;
       }
 
-      // Sur l'axe prix : wheel vertical = zoom prix
+      // Sur l'axe prix : wheel vertical = zoom prix uniquement
+      var inPriceAxis = e.offsetX > self.layout.chartRight;
       if (inPriceAxis && e.deltaY !== 0) {
         self._zoomPrice(e.offsetY, e.deltaY < 0 ? 1.08 : 0.92);
         return;
       }
 
-      // Dans la zone chart : wheel vertical = zoom prix (pavé = glisser haut/bas)
+      // Dans la zone chart : wheel vertical = zoom global (prix + temps)
+      // Glisser haut = dezoom, glisser bas = zoom
       if (e.deltaY !== 0) {
-        self._zoomPrice(e.offsetY, e.deltaY < 0 ? 1.08 : 0.92);
+        self._zoomGlobal(e.offsetY, e.deltaY < 0 ? 0.92 : 1.08);
         return;
       }
 
