@@ -271,10 +271,7 @@
       return result;
     }
 
-    // Helper: rAF en promesse (1 frame entre chaque setData)
-    function _waitFrame() {
-      return new Promise(function (resolve) { requestAnimationFrame(resolve); });
-    }
+    // Helper: rAF en promesse (module-level plus bas)
 
     // Verrouiller completement LWC pendant les setData
     try { chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
@@ -393,33 +390,48 @@
   // Timestamp du premier fetch (evite de sauvegarder un zoom pas encore stabilise)
   var _firstFetchMs = 0;
 
-  // ── rAF-retry pour setVisibleRange (timestamps, stables meme avec VWAP) ──
-  function _applyZoomWithRetry(targetRange, maxAttempts) {
-    if (!chart || !chart.timeScale()) return;
-    console.log('[ZOOM] _applyZoomWithRetry target=', JSON.stringify(targetRange), 'current=', JSON.stringify(chart.timeScale().getVisibleRange()));
+  // ── Helper rAF en promesse (module-level) ──
+  function _waitFrame() {
+    return new Promise(function (resolve) { requestAnimationFrame(resolve); });
+  }
+
+  // ── rAF-retry pour setVisibleRange avec inertie flush ──
+  async function _applyZoomWithRetry(target, maxAttempts) {
+    if (!target || !chart || !chart.timeScale()) return;
+    console.log('[ZOOM] _applyZoomWithRetry target=', JSON.stringify(target), 'current=', JSON.stringify(chart.timeScale().getVisibleRange()));
+
+    // 1. Couper le scroll pour vider le buffer LWC
+    chart.timeScale().applyOptions({ handleScroll: false, handleScale: false });
+
+    // 2. Attendre 2 frames pour que le RAF interne LWC consomme le flush
+    await _waitFrame();
+    await _waitFrame();
+
+    // 3. Snapshot + re-set de la range actuelle → interrompt l'inertie
+    var current = chart.timeScale().getVisibleRange();
+    if (current) chart.timeScale().setVisibleRange({ from: current.from, to: current.to });
+    await _waitFrame();
+
+    // 4. Appliquer le zoom cible
+    chart.timeScale().setVisibleRange({ from: target.from, to: target.to });
+
+    // 5. Retry loop avec tolérance < 60s (~0.33 barres 3m)
     maxAttempts = maxAttempts || 10;
-    // Tolérance = 2 barres de l'intervalle courant (pour 3m → 360s)
-    var barSec = Math.floor(_getIntervalMs(currentInterval) / 1000);
-    var tol = Math.max(60, barSec * 2);
-    var attempts = 0;
-    function tryApply() {
-      if (++attempts > maxAttempts) {
-        console.warn('[ZOOM] abandon après', attempts, 'tentatives. Range final:', JSON.stringify(chart.timeScale().getVisibleRange()));
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      await _waitFrame();
+      var actual = chart.timeScale().getVisibleRange();
+      if (!actual) continue;
+      var delta = Math.abs(actual.from - target.from) + Math.abs(actual.to - target.to);
+      if (delta < 60) {
+        console.log('[ZOOM] \u2705 stabilisé en', attempt + 1, 'tentatives');
+        chart.timeScale().applyOptions({ handleScroll: true, handleScale: true });
         return;
       }
-      try {
-        chart.timeScale().setVisibleRange({ from: targetRange.from, to: targetRange.to });
-        try { chart.timeScale().scrollToRealTime(); } catch(e) {}
-        var actual = chart.timeScale().getVisibleRange();
-        console.log('[ZOOM] tentative', attempts, '→ actual:', JSON.stringify(actual), 'target:', JSON.stringify(targetRange));
-        if (actual && Math.abs(actual.from - targetRange.from) <= tol && Math.abs(actual.to - targetRange.to) <= tol) {
-          console.log('[ZOOM] ✅ stabilisé en', attempts, 'tentatives');
-          return;
-        }
-      } catch(e) {}
-      requestAnimationFrame(tryApply);
+      // Re-forcer si LWC a encore bougé
+      chart.timeScale().setVisibleRange({ from: target.from, to: target.to });
     }
-    requestAnimationFrame(tryApply);
+    console.warn('[ZOOM] \u274c non stabilisé après', maxAttempts, 'tentatives');
+    chart.timeScale().applyOptions({ handleScroll: true, handleScale: true });
   }
 
   function _connectWs() {
@@ -572,7 +584,7 @@
           borderColor: isLight ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.08)',
           timeVisible: true,
           secondsVisible: false,
-          rightOffset: 20,
+          rightOffset: 5,
           shiftVisibleRangeOnNewBar: false,
           lockVisibleTimeRangeOnResize: true,
         },

@@ -46,32 +46,47 @@
   // Timestamp du premier fetch (evite de sauvegarder un zoom pas encore stabilise)
   var _firstFetchMs = 0;
 
-  function _applyZoomWithRetry(targetRange, maxAttempts) {
-    if (!chart || !chart.timeScale()) return;
-    console.log('[ZOOM] _applyZoomWithRetry target=', JSON.stringify(targetRange), 'current=', JSON.stringify(chart.timeScale().getVisibleRange()));
+  // ── Helper rAF ──
+  function _waitFrame() {
+    return new Promise(function (resolve) { requestAnimationFrame(resolve); });
+  }
+
+  // ── rAF-retry pour setVisibleRange avec inertie flush ──
+  async function _applyZoomWithRetry(target, maxAttempts) {
+    if (!target || !chart || !chart.timeScale()) return;
+    console.log('[ZOOM] 062 _applyZoomWithRetry target=', JSON.stringify(target), 'current=', JSON.stringify(chart.timeScale().getVisibleRange()));
+
+    // 1. Couper le scroll pour vider le buffer LWC
+    chart.timeScale().applyOptions({ handleScroll: false, handleScale: false });
+
+    // 2. Attendre 2 frames pour le flush RAF interne
+    await _waitFrame();
+    await _waitFrame();
+
+    // 3. Snapshot + re-set → interrompt l'inertie
+    var current = chart.timeScale().getVisibleRange();
+    if (current) chart.timeScale().setVisibleRange({ from: current.from, to: current.to });
+    await _waitFrame();
+
+    // 4. Appliquer le zoom cible
+    chart.timeScale().setVisibleRange({ from: target.from, to: target.to });
+
+    // 5. Retry loop avec tolérance < 60s
     maxAttempts = maxAttempts || 10;
-    // Tolérance = 2 barres de l'intervalle courant (pour 3m → 360s)
-    var barSec = Math.floor(_getIntervalMs(currentInterval) / 1000);
-    var tol = Math.max(60, barSec * 2);
-    var attempts = 0;
-    function tryApply() {
-      if (++attempts > maxAttempts) {
-        console.warn('[ZOOM] abandon après', attempts, 'tentatives. Range final:', JSON.stringify(chart.timeScale().getVisibleRange()));
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      await _waitFrame();
+      var actual = chart.timeScale().getVisibleRange();
+      if (!actual) continue;
+      var delta = Math.abs(actual.from - target.from) + Math.abs(actual.to - target.to);
+      if (delta < 60) {
+        console.log('[ZOOM] 062 \u2705 stabilisé en', attempt + 1, 'tentatives');
+        chart.timeScale().applyOptions({ handleScroll: true, handleScale: true });
         return;
       }
-      try {
-        chart.timeScale().setVisibleRange({ from: targetRange.from, to: targetRange.to });
-        try { chart.timeScale().scrollToRealTime(); } catch(e) {}
-        var actual = chart.timeScale().getVisibleRange();
-        console.log('[ZOOM] tentative', attempts, '→ actual:', JSON.stringify(actual), 'target:', JSON.stringify(targetRange));
-        if (actual && Math.abs(actual.from - targetRange.from) <= tol && Math.abs(actual.to - targetRange.to) <= tol) {
-          console.log('[ZOOM] ✅ stabilisé en', attempts, 'tentatives');
-          return;
-        }
-      } catch(e) {}
-      requestAnimationFrame(tryApply);
+      chart.timeScale().setVisibleRange({ from: target.from, to: target.to });
     }
-    requestAnimationFrame(tryApply);
+    console.warn('[ZOOM] 062 \u274c non stabilisé après', maxAttempts, 'tentatives');
+    chart.timeScale().applyOptions({ handleScroll: true, handleScale: true });
   }
 
   // Settings state
@@ -407,7 +422,7 @@
           timeVisible: true,
           secondsVisible: false,
           borderVisible: false,
-          rightOffset: 20,
+          rightOffset: 5,
           shiftVisibleRangeOnNewBar: false,
           lockVisibleTimeRangeOnResize: true,
         },
@@ -729,10 +744,8 @@
       return result;
     }
 
-    // Helper: rAF en promesse
-    function _waitFrame() {
-      return new Promise(function (resolve) { requestAnimationFrame(resolve); });
-    }
+    // Helper: rAF en promesse (module-level definit plus haut)
+    // Meme helper disponible a ce niveau — pas besoin de redefinir
 
     // Verrouiller LWC pendant les setData
     try { chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
