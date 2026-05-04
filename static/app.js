@@ -11026,34 +11026,20 @@ TradeEditorController.renderHtml = function (day, trade) {
 
 // ---- 060_btc_chart_widget.js ----
 // ---------- BTC Chart widget — TradingView Lightweight Charts ----------
-// v2.0 — Indicators: SMA, EMA, Bollinger, RSI (synced from chart settings)
+// v3.0 — Premium widget: custom viewport, free pan, follow mode, state isolation
 
 (function () {
-  var chart = null;
-  var series = null;
-  var countdownPriceLine = null;
-  var currentInterval = '3m';
-  var resizeObserver = null;
-  var chartReady = false;
-  var countdownTimer = null;
-  var lastCandleTime = 0;
+  // ──────────────────────────────────────────────
+  //  CONFIG
+  // ──────────────────────────────────────────────
+  var BTC_WIDGET_VIEW = {
+    visibleBars: { '1m':200,'3m':120,'5m':110,'15m':96,'30m':90,'1h':84,'2h':78,'4h':72,'6h':60,'8h':50,'12h':40,'1d':90 },
+    futureBars:  { '1m':24,'3m':18,'5m':18,'15m':16,'30m':14,'1h':12,'2h':12,'4h':10,'6h':10,'8h':8,'12h':8,'1d':8 },
+    barSpacing:  { '1m':6,'3m':8,'5m':8,'15m':10,'30m':10,'1h':12,'2h':14,'4h':14,'6h':16,'8h':16,'12h':18,'1d':10 },
+  };
 
-  // Indicator series
-  var indicatorSeries = {};
-  var rsiSeries = null;
-  var vwapSeriesMap = {};
-  var activeVwapPeriods = [];
-  try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) activeVwapPeriods = s; } catch(e) {}
-  var _lastVwapFetch = 0;
-  var _mainCandles = [];  // Bougies 3m principales (stockees pour VWAP inline)
   var VWAP_COLORS = { '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
-  // Duree en secondes pour chaque periode VWAP
   var VWAP_SECONDS = { '1D': 86400, '7D': 604800, '30D': 2592000, '90D': 7776000 };
-  var VWAP_INTERVALS = { '1D': '1h', '7D': '1h', '30D': '4h', '90D': '1d' };
-  var VWAP_DAYS = { '1D': 1, '7D': 7, '30D': 30, '90D': 90 };
-  var VWAP_LIMITS = { '1D': 24, '7D': 168, '30D': 190, '90D': 100 };
-  var INTERVAL_MINUTES = { '1m':1,'3m':3,'5m':5,'15m':15,'30m':30,'1h':60,'2h':120,'4h':240,'6h':360,'8h':480,'12h':720,'1d':1440,'3d':4320,'1w':10080,'1M':43200 };
-
   var INTERVAL_MS = {
     '1m': 60000, '3m': 180000, '5m': 300000, '15m': 900000,
     '30m': 1800000, '1h': 3600000, '2h': 7200000, '4h': 14400000,
@@ -11061,25 +11047,60 @@ TradeEditorController.renderHtml = function (day, trade) {
     '1d': 86400000, '3d': 259200000, '1w': 604800000, '1M': 2592000000,
   };
 
-  // Read settings from same localStorage as chart page
+  // ──────────────────────────────────────────────
+  //  STATE (isolé, ne partage rien avec 062)
+  // ──────────────────────────────────────────────
+  var S = {
+    chart: null,
+    container: null,
+    candleSeries: null,
+    countdownPriceLine: null,
+    vwapSeriesMap: {},
+    indicatorSeries: {},
+    rsiSeries: null,
+    candles: [],
+    timeframe: '3m',
+    follow: true,
+    userDragging: false,
+    renderToken: 0,
+    manualPriceRange: null,
+    // VWAP
+    activeVwapPeriods: [],
+    vwapInFlight: false,
+    lastVwapFetch: 0,
+    // Timers
+    countdownTimer: null,
+    refreshTimer: null,
+    lastCandleTime: 0,
+    // WS
+    ws: null,
+    wsReconnectTimer: null,
+    wsIntentionalClose: false,
+    // Flags
+    chartReady: false,
+    userIsInteracting: false,
+    lastFetchTs: 0,
+    FETCH_COOLDOWN_MS: 5000,
+    firstFetchMs: 0,
+    // Resize
+    resizeObserver: null,
+  };
+
+  // VWAP periods from localStorage
+  try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) S.activeVwapPeriods = s; } catch(e) {}
+
+  // Indicator settings from localStorage
   var indSettings = {
     sma: { active: false, period: 20, color: '#f59e0b' },
     ema: { active: false, period: 20, color: '#06b6d4' },
     boll: { active: false, period: 20, color: '#a78bfa' },
     rsi: { active: false, period: 14, color: '#f472b6' },
   };
+  try { var saved = JSON.parse(localStorage.getItem('chartIndSettings')); if (saved) { Object.keys(saved).forEach(function (k) { if (indSettings[k]) Object.assign(indSettings[k], saved[k]); }); } } catch(e) {}
 
-  try {
-    var saved = JSON.parse(localStorage.getItem('chartIndSettings'));
-    if (saved) {
-      Object.keys(saved).forEach(function (k) {
-        if (indSettings[k]) Object.assign(indSettings[k], saved[k]);
-      });
-    }
-  } catch(e) {}
-
-  // VWAP period read from chartVwapPeriods (array, multi-select)
-
+  // ──────────────────────────────────────────────
+  //  HELPERS
+  // ──────────────────────────────────────────────
   function _getIntervalMs(interval) {
     var m = INTERVAL_MS[interval];
     if (m) return m;
@@ -11091,8 +11112,20 @@ TradeEditorController.renderHtml = function (day, trade) {
     return num * (mult[unit] || 3600000);
   }
 
-  // ── INDICATOR CALCULATIONS (same as 062) ──
+  function _normalizeCandles(rows) {
+    return (rows || []).map(function (c) { return {
+      time: Number(c.time), open: Number(c.open), high: Number(c.high),
+      low: Number(c.low), close: Number(c.close), volume: Number(c.volume),
+    }; }).filter(function (c) { return Number.isFinite(c.time) && Number.isFinite(c.open) && Number.isFinite(c.close); });
+  }
 
+  function _waitFrame() {
+    return new Promise(function (resolve) { requestAnimationFrame(resolve); });
+  }
+
+  // ──────────────────────────────────────────────
+  //  INDICATORS (idem 062)
+  // ──────────────────────────────────────────────
   function _calcSMA(candles, period) {
     var result = [], sum = 0;
     for (var i = 0; i < candles.length; i++) {
@@ -11102,11 +11135,9 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
     return result;
   }
-
   function _calcEMA(candles, period) {
     var result = [];
     var k = 2 / (period + 1);
-    // Warmup : SMA des period premieres bougies
     var ema = 0;
     for (var w = 0; w < period; w++) ema += candles[w].close;
     ema /= period;
@@ -11116,43 +11147,24 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
     return result;
   }
-
   function _calcBollinger(candles, period) {
     var smaData = _calcSMA(candles, period);
     var result = [];
     for (var i = 0; i < smaData.length; i++) {
-      var idx = i + period - 1;
-      var sumSq = 0;
-      for (var j = 0; j < period; j++) {
-        var diff = candles[idx - j].close - smaData[i].value;
-        sumSq += diff * diff;
-      }
+      var idx = i + period - 1, sumSq = 0;
+      for (var j = 0; j < period; j++) { var diff = candles[idx - j].close - smaData[i].value; sumSq += diff * diff; }
       var std = Math.sqrt(sumSq / period);
-      result.push({
-        time: smaData[i].time,
-        middle: smaData[i].value,
-        upper: smaData[i].value + 2 * std,
-        lower: smaData[i].value - 2 * std,
-      });
+      result.push({ time: smaData[i].time, middle: smaData[i].value, upper: smaData[i].value + 2 * std, lower: smaData[i].value - 2 * std });
     }
     return result;
   }
-
   function _calcRSI(candles, period) {
     if (candles.length < period + 1) return [];
     var gains = [], losses = [];
-    for (var i = 1; i < candles.length; i++) {
-      var diff = candles[i].close - candles[i - 1].close;
-      gains.push(diff > 0 ? diff : 0);
-      losses.push(diff < 0 ? -diff : 0);
-    }
+    for (var i = 1; i < candles.length; i++) { var diff = candles[i].close - candles[i - 1].close; gains.push(diff > 0 ? diff : 0); losses.push(diff < 0 ? -diff : 0); }
     var avgGain = 0, avgLoss = 0;
-    for (var j = 0; j < period; j++) {
-      avgGain += gains[j];
-      avgLoss += losses[j];
-    }
-    avgGain /= period;
-    avgLoss /= period;
+    for (var j = 0; j < period; j++) { avgGain += gains[j]; avgLoss += losses[j]; }
+    avgGain /= period; avgLoss /= period;
     var result = [];
     var rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
     result.push({ time: candles[period].time, value: 100 - (100 / (1 + rs)) });
@@ -11164,429 +11176,581 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
     return result;
   }
-
   function _clearIndicators() {
-    if (!chart) return;
-    Object.keys(indicatorSeries).forEach(function (key) {
-      try { chart.removeSeries(indicatorSeries[key]); } catch(e) {}
-    });
-    indicatorSeries = {};
-    if (rsiSeries) {
-      try { chart.removeSeries(rsiSeries); } catch(e) {}
-      rsiSeries = null;
-    }
+    if (!S.chart) return;
+    Object.keys(S.indicatorSeries).forEach(function (key) { try { S.chart.removeSeries(S.indicatorSeries[key]); } catch(e) {} });
+    S.indicatorSeries = {};
+    if (S.rsiSeries) { try { S.chart.removeSeries(S.rsiSeries); } catch(e) {} S.rsiSeries = null; }
   }
-
   function _renderIndicators(candles) {
     _clearIndicators();
-    if (!chart || !candles || !candles.length) return;
-
+    if (!S.chart || !candles || !candles.length) return;
     var s = indSettings;
-
     if (s.sma.active && candles.length >= s.sma.period) {
       var smaData = _calcSMA(candles, s.sma.period);
-      indicatorSeries.sma = chart.addLineSeries({
-        color: s.sma.color, lineWidth: 1.5, priceLineVisible: false,
-        lastValueVisible: true, crosshairMarkerVisible: false,
-        title: 'SMA ' + s.sma.period,
-      });
-      indicatorSeries.sma.setData(smaData);
+      S.indicatorSeries.sma = S.chart.addLineSeries({ color: s.sma.color, lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false, title: 'SMA ' + s.sma.period });
+      S.indicatorSeries.sma.setData(smaData);
     }
-
     if (s.ema.active && candles.length >= s.ema.period) {
       var emaData = _calcEMA(candles, s.ema.period);
-      indicatorSeries.ema = chart.addLineSeries({
-        color: s.ema.color, lineWidth: 1.5, priceLineVisible: false,
-        lastValueVisible: true, crosshairMarkerVisible: false,
-        title: 'EMA ' + s.ema.period,
-      });
-      indicatorSeries.ema.setData(emaData);
+      S.indicatorSeries.ema = S.chart.addLineSeries({ color: s.ema.color, lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false, title: 'EMA ' + s.ema.period });
+      S.indicatorSeries.ema.setData(emaData);
     }
-
     if (s.boll.active && candles.length >= s.boll.period) {
       var bollData = _calcBollinger(candles, s.boll.period);
-      indicatorSeries.bollMid = chart.addLineSeries({
-        color: s.boll.color, lineWidth: 1, priceLineVisible: false,
-        lastValueVisible: true, crosshairMarkerVisible: false,
-        title: 'BB ' + s.boll.period,
-      });
-      indicatorSeries.bollUpper = chart.addLineSeries({
-        color: s.boll.color, lineWidth: 1, priceLineVisible: false,
-        lastValueVisible: false, crosshairMarkerVisible: false, lineStyle: 2,
-      });
-      indicatorSeries.bollLower = chart.addLineSeries({
-        color: s.boll.color, lineWidth: 1, priceLineVisible: false,
-        lastValueVisible: false, crosshairMarkerVisible: false, lineStyle: 2,
-      });
-      indicatorSeries.bollMid.setData(bollData.map(function (d) { return { time: d.time, value: d.middle }; }));
-      indicatorSeries.bollUpper.setData(bollData.map(function (d) { return { time: d.time, value: d.upper }; }));
-      indicatorSeries.bollLower.setData(bollData.map(function (d) { return { time: d.time, value: d.lower }; }));
+      S.indicatorSeries.bollMid = S.chart.addLineSeries({ color: s.boll.color, lineWidth: 1, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false, title: 'BB ' + s.boll.period });
+      S.indicatorSeries.bollUpper = S.chart.addLineSeries({ color: s.boll.color, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, lineStyle: 2 });
+      S.indicatorSeries.bollLower = S.chart.addLineSeries({ color: s.boll.color, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, lineStyle: 2 });
+      S.indicatorSeries.bollMid.setData(bollData.map(function (d) { return { time: d.time, value: d.middle }; }));
+      S.indicatorSeries.bollUpper.setData(bollData.map(function (d) { return { time: d.time, value: d.upper }; }));
+      S.indicatorSeries.bollLower.setData(bollData.map(function (d) { return { time: d.time, value: d.lower }; }));
     }
-
     if (s.rsi.active && candles.length >= s.rsi.period + 1) {
       try {
-        rsiSeries = chart.addLineSeries({
-          color: s.rsi.color, lineWidth: 1.5, priceLineVisible: false,
-          lastValueVisible: true, crosshairMarkerVisible: false,
-          priceScaleId: 'rsi_pane',
-          title: 'RSI ' + s.rsi.period,
-        });
-        chart.priceScale('rsi_pane').applyOptions({
-          scaleMargins: { top: 0.7, bottom: 0 },
-          visible: true,
-        });
-        var rsiData = _calcRSI(candles, s.rsi.period);
-        rsiSeries.setData(rsiData);
-      } catch(e) { console.error('[btc-chart] RSI:', e); }
+        S.rsiSeries = S.chart.addLineSeries({ color: s.rsi.color, lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false, priceScaleId: 'rsi_pane', title: 'RSI ' + s.rsi.period });
+        S.chart.priceScale('rsi_pane').applyOptions({ scaleMargins: { top: 0.7, bottom: 0 }, visible: true });
+        S.rsiSeries.setData(_calcRSI(candles, s.rsi.period));
+      } catch(e) { console.error('[btc-widget] RSI:', e); }
     }
   }
 
-  // ── VWAP (multi-periode) ──
-  var _vwapInFlight = false;
-
+  // ──────────────────────────────────────────────
+  //  VWAP
+  // ──────────────────────────────────────────────
   function _removeVwapSeries(key) {
-    var s = vwapSeriesMap[key];
+    var s = S.vwapSeriesMap[key];
     if (s) {
       try {
-        var ts = chart.timeScale();
         var saved;
-        try { saved = ts.getVisibleRange(); } catch(e2) {}
+        try { saved = S.chart.timeScale().getVisibleRange(); } catch(e2) {}
         s.applyOptions({ visible: false, lastValueVisible: false });
         s.setData([]);
-        if (saved) { try { ts.setVisibleRange({ from: saved.from, to: saved.to }); } catch(e2) {} }
+        if (saved) { try { S.chart.timeScale().setVisibleRange({ from: saved.from, to: saved.to }); } catch(e2) {} }
       } catch(e) {}
     }
   }
-  async function _calcAndDrawVwap(zoomTarget) {
-    var currentRenderToken = _renderToken;
-    // Relire les periodes depuis localStorage (peuvent avoir ete changees dans settings)
-    try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) activeVwapPeriods = s; } catch(e) {}
-    console.log('[VWAP] triggered by:', new Error().stack.split('\n')[2]);
-    console.log('[VWAP] _calcAndDrawVwap periods=', activeVwapPeriods, '_mainCandles=', _mainCandles.length);
-    // Nettoyer les periodes desactivees
-    Object.keys(vwapSeriesMap).forEach(function (k) {
-      if (activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
-    });
-    if (!activeVwapPeriods.length) return;
-    if (_vwapInFlight) return;
-    _vwapInFlight = true;
-
-    // Helper: interval → secondes
-    function _intvToSec(iv) {
-      var u = iv.slice(-1), n = parseInt(iv);
-      return n * ({'m':60,'h':3600,'d':86400,'w':604800}[u] || 60);
+  function _computeVwap(candles, periodSec) {
+    if (!candles || !candles.length) return [];
+    var lastTime = candles[candles.length - 1].time, cutoff = lastTime - periodSec;
+    var cumVP = 0, cumV = 0, result = [];
+    for (var i = 0; i < candles.length; i++) {
+      var c = candles[i];
+      if (c.time < cutoff) continue;
+      var tp = (c.high + c.low + c.close) / 3;
+      cumVP += tp * c.volume; cumV += c.volume;
+      if (cumV > 0) result.push({ time: c.time, value: cumVP / cumV });
     }
+    return result;
+  }
+  function _alignIndicatorToCandles(points, mainCandles) {
+    if (!points || !points.length || !mainCandles || !mainCandles.length) return [];
+    var sorted = points.slice().filter(function(p) { return p && Number.isFinite(p.time) && Number.isFinite(p.value); }).sort(function(a, b) { return a.time - b.time; });
+    var out = [], j = 0;
+    for (var ci = 0; ci < mainCandles.length; ci++) {
+      var t = mainCandles[ci].time;
+      while (j + 1 < sorted.length && sorted[j + 1].time <= t) j++;
+      if (sorted[j] && sorted[j].time <= t) out.push({ time: t, value: sorted[j].value });
+    }
+    return out;
+  }
+  async function _calcAndDrawVwap() {
+    var currentRenderToken = S.renderToken;
+    try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) S.activeVwapPeriods = s; } catch(e) {}
+    Object.keys(S.vwapSeriesMap).forEach(function (k) { if (S.activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k); });
+    if (!S.activeVwapPeriods.length) return;
+    if (S.vwapInFlight) return;
+    S.vwapInFlight = true;
 
-    // Helper: fetch klines (promise → awaitable)
     function _fetchKlines(interval, limit) {
       return fetch('/api/market/klines?symbol=BTCUSDT&interval=' + interval + '&limit=' + limit)
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function (data) { return data.candles || []; });
     }
 
-    // Helper: compute VWAP depuis un array de candles (retourne tableau)
-    function _computeVwap(candles, periodSec) {
-      if (!candles || !candles.length) return [];
-      var lastTime = candles[candles.length - 1].time;
-      var cutoff = lastTime - periodSec;
-      var cumVP = 0, cumV = 0, result = [];
-      for (var i = 0; i < candles.length; i++) {
-        var c = candles[i];
-        if (c.time < cutoff) continue;
-        var tp = (c.high + c.low + c.close) / 3;
-        cumVP += tp * c.volume;
-        cumV += c.volume;
-        if (cumV > 0) result.push({ time: c.time, value: cumVP / cumV });
-      }
-      return result;
-    }
+    try { S.chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
+    try { S.chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
 
-    // Helper: aligner des points indicateurs sur les timestamps des bougies principales
-    // Garantit que les timestamps de sortie sont exactement ceux de _mainCandles
-    function _alignIndicatorToCandles(indicatorPoints) {
-      if (!indicatorPoints || !indicatorPoints.length || !_mainCandles || !_mainCandles.length) return [];
-      var sorted = indicatorPoints.slice().filter(function(p) {
-        return p && Number.isFinite(p.time) && Number.isFinite(p.value);
-      }).sort(function(a, b) { return a.time - b.time; });
-      var out = [], j = 0;
-      for (var ci = 0; ci < _mainCandles.length; ci++) {
-        var t = _mainCandles[ci].time;
-        while (j + 1 < sorted.length && sorted[j + 1].time <= t) j++;
-        if (sorted[j] && sorted[j].time <= t) out.push({ time: t, value: sorted[j].value });
-      }
-      console.log('[VWAP] aligned', indicatorPoints.length, '->', out.length, 'points');
-      if (out.length > 0) {
-        console.log('[VWAP] aligned first=', new Date(out[0].time*1000).toISOString(),
-          'last=', new Date(out[out.length-1].time*1000).toISOString());
-      }
-      return out;
-    }
-
-    // Helper: rAF en promesse (module-level plus bas)
-
-    // Verrouiller completement LWC pendant les setData
-    try { chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
-    try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
-
-    // Resoudre les candles pour chaque periode (fallback resolution adaptative)
-    var lastTime = _mainCandles.length ? _mainCandles[_mainCandles.length - 1].time : 0;
-    var firstTime = _mainCandles.length ? _mainCandles[0].time : 0;
+    var candles = S.candles;
+    var lastTime = candles.length ? candles[candles.length - 1].time : 0;
+    var firstTime = candles.length ? candles[0].time : 0;
     var coveredSecs = lastTime - firstTime;
-
-    // SEQUENTIEL — chaque setData attend 1 frame avant le suivant
     var vwapOrder = ['1D', '7D', '30D', '90D'];
+
     for (var vi = 0; vi < vwapOrder.length; vi++) {
       var p = vwapOrder[vi];
-      if (activeVwapPeriods.indexOf(p) < 0) continue;
+      if (S.activeVwapPeriods.indexOf(p) < 0) continue;
       var periodSec = VWAP_SECONDS[p] || 86400;
-      var candles;
+      var src;
 
       if (coveredSecs >= periodSec) {
-        candles = _mainCandles;
+        src = candles;
       } else {
         var interval, limit;
         if (periodSec <= 604800) { interval = '15m'; limit = Math.min(Math.ceil(periodSec / 900) + 10, 1000); }
         else if (periodSec <= 2592000) { interval = '1h'; limit = Math.min(Math.ceil(periodSec / 3600) + 10, 1000); }
         else { interval = '4h'; limit = Math.min(Math.ceil(periodSec / 14400) + 10, 1000); }
-        console.log('[VWAP] pas assez de 3m pour', p, ', fallback fetch', interval, 'limit=', limit);
-        candles = await _fetchKlines(interval, limit);
-        // Si le renderToken a change pendant le fetch, ignorer ce VWAP stale
-        if (_renderToken !== currentRenderToken) {
-          console.warn('[VWAP] stale fallback ignored for', p, 'token=', currentRenderToken, 'current=', _renderToken);
-          _vwapInFlight = false;
+        src = await _fetchKlines(interval, limit);
+        if (S.renderToken !== currentRenderToken) {
+          S.vwapInFlight = false;
           return;
         }
       }
 
-      var vw = _computeVwap(candles, periodSec);
-      // Resample sur les timestamps des bougies principales si fallback
-      if (candles !== _mainCandles) vw = _alignIndicatorToCandles(vw);
+      var vw = _computeVwap(src, periodSec);
+      if (src !== candles) vw = _alignIndicatorToCandles(vw, candles);
       if (vw.length < 2) { _removeVwapSeries(p); continue; }
-      var s = vwapSeriesMap[p];
+      var s = S.vwapSeriesMap[p];
       if (s) {
         s.applyOptions({ visible: true, color: VWAP_COLORS[p] || '#f59e0b', title: 'VWAP ' + p, lastValueVisible: true });
         s.setData(vw);
       }
-      console.log('[VWAP] after setData period=', p, 'nbPts=', vw.length,
-        'first=', new Date(vw[0].time * 1000).toISOString(),
-        'last=', new Date(vw[vw.length - 1].time * 1000).toISOString());
-
-      // Donner 1 frame a LWC pour digerer avant le prochain setData
       await _waitFrame();
     }
-
-    // Tous les setData sont finis
-    _vwapInFlight = false;
-
-    // Vérifier qu'on n'est pas périmé
-    var currentToken = _renderToken;
-    if (chart) {
-      try { chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
-      try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: false }); } catch(e) {}
-      if (currentToken === _renderToken) {
-        try { chart.timeScale().applyOptions({ rightBarStaysOnScroll: true }); } catch(e) {}
+    S.vwapInFlight = false;
+    if (S.chart) {
+      try { S.chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
+      try { S.chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: false }); } catch(e) {}
+      if (S.renderToken === currentRenderToken) {
+        try { S.chart.timeScale().applyOptions({ rightBarStaysOnScroll: true }); } catch(e) {}
       }
     }
   }
 
-  // ── TIMER ──
-
-  function _startCountdown() {
-    if (countdownTimer) clearInterval(countdownTimer);
-    // Petit delai pour laisser LWC finir son rendu initial
-    setTimeout(function () {
-    function tick() {
-      if (!countdownPriceLine) { _updateCountdownLabel('—'); return; }
-      if (!lastCandleTime) { _updateCountdownLabel('—'); return; }
-      var now = Date.now();
-      var ms = _getIntervalMs(currentInterval);
-      var elapsed = now - lastCandleTime;
-      var remaining = ms - elapsed;
-      if (remaining <= 0) {
-        _updateCountdownLabel('0:00');
-        if (countdownTimer) clearInterval(countdownTimer);
-        countdownTimer = null;
-        // Laisser le WS reconnecter sans re-fetcher (preserve le zoom)
-        if (!ws || ws.readyState !== WebSocket.OPEN) {
-          // WS en cours de reconnexion — ne pas refetcher, le zoom serait ecrase
-        } else {
-          _fetchAndRender(true, 'auto');
-        }
-        return;
-      }
-      var totalSec = Math.ceil(remaining / 1000);
-      var m = Math.floor(totalSec / 60);
-      var s = totalSec % 60;
-      _updateCountdownLabel(m + ':' + (s < 10 ? '0' : '') + s);
+  // ──────────────────────────────────────────────
+  //  PRICE RANGE MANAGEMENT
+  // ──────────────────────────────────────────────
+  function computeBtcWidgetPriceRange(candles, tf) {
+    if (!candles || !candles.length) return null;
+    var visibleBars = BTC_WIDGET_VIEW.visibleBars[tf] || 100;
+    var slice = candles.slice(-visibleBars);
+    var high = -Infinity, low = Infinity;
+    for (var i = 0; i < slice.length; i++) {
+      var c = slice[i];
+      if (Number.isFinite(c.high)) high = Math.max(high, c.high);
+      if (Number.isFinite(c.low)) low = Math.min(low, c.low);
     }
-    tick();
-    countdownTimer = setInterval(tick, 500);
+    if (!Number.isFinite(high) || !Number.isFinite(low)) return null;
+    var rawRange = Math.max(high - low, high * 0.002);
+    return { from: low - rawRange * 0.22, to: high + rawRange * 0.18 };
+  }
+
+  function getBtcWidgetCurrentPriceRange() {
+    if (!S.candleSeries) return S.manualPriceRange;
+    var ps = S.candleSeries.priceScale();
+    if (typeof ps.getVisibleRange === 'function') {
+      try { var r = ps.getVisibleRange(); if (r) return r; } catch(e) {}
+    }
+    return S.manualPriceRange;
+  }
+
+  function setBtcWidgetPriceRange(range) {
+    if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to) || range.to <= range.from) return;
+    S.manualPriceRange = range;
+    var ps = S.candleSeries.priceScale();
+    // LWC 5.x: setVisibleRange direct
+    if (typeof ps.setVisibleRange === 'function' && typeof ps.setAutoScale === 'function') {
+      try { ps.setAutoScale(false); ps.setVisibleRange(range); } catch(e) {}
+      return;
+    }
+    // Fallback LWC 4.x: force via autoscaleInfoProvider + logical range reset
+    var lr;
+    try { lr = S.chart.timeScale().getVisibleLogicalRange(); } catch(e) {}
+    if (lr) {
+      try { S.chart.timeScale().setVisibleLogicalRange({ from: lr.from, to: lr.to }); } catch(e) {}
+    }
+  }
+
+  function applyBtcWidgetLiveXRange() {
+    var candles = S.candles;
+    if (!candles || !candles.length) return;
+    var tf = S.timeframe;
+    var visibleBars = BTC_WIDGET_VIEW.visibleBars[tf] || 100;
+    var futureBars = BTC_WIDGET_VIEW.futureBars[tf] || 14;
+    var lastIndex = candles.length - 1;
+    var to = lastIndex + futureBars;
+    var from = Math.max(0, to - visibleBars);
+    try { S.chart.timeScale().setVisibleLogicalRange({ from: from, to: to }); } catch(e) {}
+  }
+
+  function applyBtcWidgetBestView() {
+    if (!S.candles || !S.candles.length || !S.chart) return;
+    applyBtcWidgetLiveXRange();
+    var priceRange = computeBtcWidgetPriceRange(S.candles, S.timeframe);
+    setBtcWidgetPriceRange(priceRange);
+  }
+
+  // ──────────────────────────────────────────────
+  //  FOLLOW MODE
+  // ──────────────────────────────────────────────
+  function maybeFollowBtcWidgetPriceY() {
+    var candles = S.candles;
+    if (!candles || !candles.length) return;
+    var last = candles[candles.length - 1];
+    var price = last.close;
+    var currentRange = getBtcWidgetCurrentPriceRange();
+    if (!currentRange) {
+      setBtcWidgetPriceRange(computeBtcWidgetPriceRange(candles, S.timeframe));
+      return;
+    }
+    var height = currentRange.to - currentRange.from;
+    var topZone = currentRange.to - height * 0.18;
+    var bottomZone = currentRange.from + height * 0.18;
+    if (price >= topZone || price <= bottomZone) {
+      setBtcWidgetPriceRange(computeBtcWidgetPriceRange(candles, S.timeframe));
+    }
+  }
+
+  // ──────────────────────────────────────────────
+  //  CUSTOM POINTER DRAG (free pan X + Y)
+  // ──────────────────────────────────────────────
+  function bindBtcWidgetFreePan() {
+    var el = S.container;
+    if (!el) return;
+    var drag = null;
+
+    el.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0) return;
+      if (e.target.closest('button, .tf-btn, .widget-btn, .btc-chart-interval, #btcChartCustom')) return;
+      var logicalRange;
+      try { logicalRange = S.chart.timeScale().getVisibleLogicalRange(); } catch(e) {}
+      var priceRange = getBtcWidgetCurrentPriceRange();
+      if (!logicalRange || !priceRange) return;
+
+      S.follow = false;
+      S.userDragging = true;
+      drag = {
+        pointerId: e.pointerId, startX: e.clientX, startY: e.clientY,
+        logicalRange: { from: logicalRange.from, to: logicalRange.to },
+        priceRange: { from: priceRange.from, to: priceRange.to },
+      };
+      el.setPointerCapture(e.pointerId);
+    });
+
+    el.addEventListener('pointermove', function (e) {
+      if (!drag || e.pointerId !== drag.pointerId) return;
+      e.preventDefault();
+      var dx = e.clientX - drag.startX;
+      var dy = e.clientY - drag.startY;
+      var rect = el.getBoundingClientRect();
+      var priceScaleW = 60;
+      var plotW = Math.max(1, rect.width - priceScaleW);
+      var plotH = Math.max(1, rect.height - 28);
+      var barsPerPx = (drag.logicalRange.to - drag.logicalRange.from) / plotW;
+      var pricePerPx = (drag.priceRange.to - drag.priceRange.from) / plotH;
+      var logicalShift = -dx * barsPerPx;
+      var priceShift = dy * pricePerPx;
+      try {
+        S.chart.timeScale().setVisibleLogicalRange({
+          from: drag.logicalRange.from + logicalShift,
+          to: drag.logicalRange.to + logicalShift,
+        });
+      } catch(e) {}
+      setBtcWidgetPriceRange({
+        from: drag.priceRange.from + priceShift,
+        to: drag.priceRange.to + priceShift,
+      });
+    });
+
+    function endDrag(e) {
+      if (!drag || e.pointerId !== drag.pointerId) return;
+      drag = null;
+      S.userDragging = false;
+    }
+    el.addEventListener('pointerup', endDrag);
+    el.addEventListener('pointercancel', endDrag);
+
+    // Double-click = re-live + best view
+    el.addEventListener('dblclick', function () {
+      S.follow = true;
+      applyBtcWidgetBestView();
+    });
+  }
+
+  // ──────────────────────────────────────────────
+  //  TIMER & COUNTDOWN
+  // ──────────────────────────────────────────────
+  function _startCountdown() {
+    if (S.countdownTimer) clearInterval(S.countdownTimer);
+    setTimeout(function () {
+      function tick() {
+        if (!S.countdownPriceLine) { _updateCountdownLabel('—'); return; }
+        if (!S.lastCandleTime) { _updateCountdownLabel('—'); return; }
+        var now = Date.now();
+        var ms = _getIntervalMs(S.timeframe);
+        var elapsed = now - S.lastCandleTime;
+        var remaining = ms - elapsed;
+        if (remaining <= 0) {
+          _updateCountdownLabel('0:00');
+          if (S.countdownTimer) clearInterval(S.countdownTimer);
+          S.countdownTimer = null;
+          if (!S.ws || S.ws.readyState !== WebSocket.OPEN) { /* WS en reconnexion */ }
+          else { _fetchAndRender(true, 'auto'); }
+          return;
+        }
+        var totalSec = Math.ceil(remaining / 1000);
+        _updateCountdownLabel(Math.floor(totalSec / 60) + ':' + (totalSec % 60 < 10 ? '0' : '') + (totalSec % 60));
+      }
+      tick();
+      S.countdownTimer = setInterval(tick, 500);
     }, 300);
   }
-
-  function _updateCountdownLabel(timerTxt) {
-    if (!countdownPriceLine || !chart) return;
-    if (timerTxt === undefined) timerTxt = '—';
-    try { countdownPriceLine.applyOptions({ title: timerTxt }); } catch(e) {}
+  function _updateCountdownLabel(txt) {
+    if (!S.countdownPriceLine || !S.chart) return;
+    try { S.countdownPriceLine.applyOptions({ title: txt === undefined ? '—' : txt }); } catch(e) {}
   }
-
-  // ── NETWORK ──
-
-  var refreshTimer = null;
-  var currentSymbol = 'btcusdt';
-  var ws = null;
-  var wsReconnectTimer = null;
-  var _wsIntentionalClose = false;
-
-  // Guards anti-boucle
-  var _isFetching = false;
-  var _lastFetchTs = 0;
-  var _FETCH_COOLDOWN_MS = 5000;
-
-  // Flag interaction utilisateur (evite override WS pendant scroll)
-  var _userIsInteracting = false;
-  // Timestamp du premier fetch (evite de sauvegarder un zoom pas encore stabilise)
-  var _firstFetchMs = 0;
-
-  // ── Helper rAF en promesse (module-level) ──
-  function _waitFrame() {
-    return new Promise(function (resolve) { requestAnimationFrame(resolve); });
-  }
-
-  // ── rAF-retry pour setVisibleRange/setVisibleLogicalRange avec inertie flush ──
-  async function _applyZoomWithRetry(target, maxAttempts) {
-    if (!target || !chart || !chart.timeScale()) return;
-    var isLogical = target.to < 1e9;
-    console.log('[ZOOM] _applyZoomWithRetry target=', JSON.stringify(target),
-      'current logical=', JSON.stringify(chart.timeScale().getVisibleLogicalRange()),
-      'mode=', isLogical ? 'LOGICAL' : 'TIMESTAMP');
-
-    chart.timeScale().applyOptions({ handleScroll: false, handleScale: false });
-    await _waitFrame();
-    await _waitFrame();
-
-    // Inertie flush : toujours en indices logiques (le buffer LWC est logique)
-    var current = chart.timeScale().getVisibleLogicalRange();
-    if (current) chart.timeScale().setVisibleLogicalRange({ from: current.from, to: current.to });
-    await _waitFrame();
-
-    // Appliquer le zoom cible
-    function applyTarget() {
-      if (isLogical) chart.timeScale().setVisibleLogicalRange({ from: target.from, to: target.to });
-      else chart.timeScale().setVisibleRange({ from: target.from, to: target.to });
-    }
-    applyTarget();
-
-    // Retry loop
-    maxAttempts = maxAttempts || 10;
-    var tolerance = isLogical ? 1.0 : 60;
-    for (var attempt = 0; attempt < maxAttempts; attempt++) {
-      await _waitFrame();
-      var actual = chart.timeScale().getVisibleLogicalRange();
-      if (!actual) continue;
-      var delta = Math.abs(actual.from - target.from) + Math.abs(actual.to - target.to);
-      if (delta < tolerance) {
-        console.log('[ZOOM] \u2705 stabilisé en', attempt + 1, 'tentatives');
-        break;
-      }
-      applyTarget();
-    }
-    if (attempt >= maxAttempts) console.warn('[ZOOM] \u274c non stabilisé après', maxAttempts, 'tentatives');
-    chart.timeScale().applyOptions({ handleScroll: true, handleScale: true });
-  }
-
-  function _connectWs() {
-    if (ws && ws.readyState === WebSocket.CONNECTING) return;
-    if (ws) { _wsIntentionalClose = true; try { ws.close(); } catch(e) {} _wsIntentionalClose = false; }
-    var stream = currentSymbol + '@kline_' + currentInterval;
-    var url = 'wss://stream.binance.com:9443/ws/' + stream;
-    try {
-      ws = new WebSocket(url);
-      ws.onopen = function() { _hideWsError(); };
-      ws.onmessage = function (msg) {
-        try {
-          var d = JSON.parse(msg.data);
-          var k = d && d.k;
-          if (!k) return;
-          var candle = {
-            time: Math.floor(k.t / 1000),
-            open: parseFloat(k.o),
-            high: parseFloat(k.h),
-            low: parseFloat(k.l),
-            close: parseFloat(k.c),
-            volume: parseFloat(k.v),
-          };
-          var priceEl = document.getElementById('btcChartPrice');
-          if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
-          lastCandleTime = k.t;
-          if (series) {
-            try { series.update(candle); } catch(e) {}
-          }
-          if (countdownPriceLine) {
-            try { countdownPriceLine.applyOptions({ price: candle.close }); } catch(e) {}
-          }
-        } catch(e) {}
-      };
-      ws.onclose = function () {
-        if (_wsIntentionalClose) return;
-        if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
-        wsReconnectTimer = setTimeout(_connectWs, 3000);
-        _showWsError();
-      };
-      ws.onerror = function() { _showWsError(); };
-    } catch(e) { console.error('[btc-chart] ws:', e); }
-  }
-
-  function _showWsError() {
-    var el = document.getElementById("btcChartWsStatus");
-    if (el) { el.className = "btc-chart-ws-error visible"; }
-  }
-  function _hideWsError() {
-    var el = document.getElementById("btcChartWsStatus");
-    if (el) { el.className = "btc-chart-ws-error"; }
-  }
-  function _disconnectWs() {
-    if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
-    if (ws) {
-      if (ws.readyState === WebSocket.CONNECTING) { ws = null; return; }
-      _wsIntentionalClose = true; try { ws.close(); } catch(e) {} ws = null; _wsIntentionalClose = false;
-    }
-  }
-
   function _startAutoRefresh() {
-    if (refreshTimer) clearInterval(refreshTimer);
-    var ms = _getIntervalMs(currentInterval);
+    if (S.refreshTimer) clearInterval(S.refreshTimer);
+    var ms = _getIntervalMs(S.timeframe);
     var interval = ms < 3600000 ? 15000 : ms < 14400000 ? 30000 : 60000;
-    refreshTimer = setInterval(function () {
-      if (!lastCandleTime) return;
-      var now = Date.now();
-      var elapsed = now - lastCandleTime;
-      if (elapsed < _getIntervalMs(currentInterval) * 0.95) {
+    S.refreshTimer = setInterval(function () {
+      if (!S.lastCandleTime) return;
+      if (Date.now() - S.lastCandleTime < _getIntervalMs(S.timeframe) * 0.95) {
         _fetchAndRender(true, 'auto');
       }
     }, interval);
   }
 
-  // ── CHART ──
-
-  function initBtcChart() {
-    var container = document.getElementById('btcChartContainer');
-    if (!container) {
-      if (document.querySelector('.page[data-page="today"].active')) {
-        setTimeout(initBtcChart, 300);
-      }
-      return;
+  // ──────────────────────────────────────────────
+  //  NETWORK (WS)
+  // ──────────────────────────────────────────────
+  var currentSymbol = 'btcusdt';
+  function _connectWs() {
+    if (S.ws && S.ws.readyState === WebSocket.CONNECTING) return;
+    if (S.ws) { S.wsIntentionalClose = true; try { S.ws.close(); } catch(e) {} S.wsIntentionalClose = false; }
+    var url = 'wss://stream.binance.com:9443/ws/' + currentSymbol + '@kline_' + S.timeframe;
+    try {
+      S.ws = new WebSocket(url);
+      S.ws.onopen = function() { _hideWsError(); };
+      S.ws.onmessage = function (msg) {
+        try {
+          var d = JSON.parse(msg.data), k = d && d.k;
+          if (!k) return;
+          var candle = { time: Math.floor(k.t / 1000), open: parseFloat(k.o), high: parseFloat(k.h), low: parseFloat(k.l), close: parseFloat(k.c), volume: parseFloat(k.v) };
+          var priceEl = document.getElementById('btcChartPrice');
+          if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
+          S.lastCandleTime = k.t;
+          if (S.candleSeries) {
+            try { S.candleSeries.update(candle); } catch(e) {}
+          }
+          if (S.countdownPriceLine) {
+            try { S.countdownPriceLine.applyOptions({ price: candle.close }); } catch(e) {}
+          }
+          // Follow Y si actif
+          if (S.follow && !S.userDragging) {
+            maybeFollowBtcWidgetPriceY();
+          }
+        } catch(e) {}
+      };
+      S.ws.onclose = function () {
+        if (S.wsIntentionalClose) return;
+        if (S.wsReconnectTimer) clearTimeout(S.wsReconnectTimer);
+        S.wsReconnectTimer = setTimeout(_connectWs, 3000);
+        _showWsError();
+      };
+      S.ws.onerror = function() { _showWsError(); };
+    } catch(e) { console.error('[btc-widget] ws:', e); }
+  }
+  function _showWsError() { var el = document.getElementById('btcChartWsStatus'); if (el) el.className = 'btc-chart-ws-error visible'; }
+  function _hideWsError() { var el = document.getElementById('btcChartWsStatus'); if (el) el.className = 'btc-chart-ws-error'; }
+  function _disconnectWs() {
+    if (S.wsReconnectTimer) { clearTimeout(S.wsReconnectTimer); S.wsReconnectTimer = null; }
+    if (S.ws) {
+      if (S.ws.readyState === WebSocket.CONNECTING) { S.ws = null; return; }
+      S.wsIntentionalClose = true; try { S.ws.close(); } catch(e) {} S.ws = null; S.wsIntentionalClose = false;
     }
-    if (chartReady) return;
-    if (container.clientHeight < 50) {
-      container.style.minHeight = '320px';
-    }
-    loadLibrary(container);
   }
 
-  function loadLibrary(container) {
+  // ──────────────────────────────────────────────
+  //  CHART CREATION
+  // ──────────────────────────────────────────────
+  function createBtcWidgetChart(container) {
+    if (S.chartReady) return;
+    S.chartReady = true;
+    S.container = container;
+    if (!container || !container.parentElement) return;
+    var isLight = document.body.classList.contains('light-mode');
+    var tf = S.timeframe;
+    S.chart = window.LightweightCharts.createChart(container, {
+      autoSize: true,
+      layout: { background: { type: 'solid', color: 'transparent' }, textColor: isLight ? '#1e293b' : '#d1d5db' },
+      grid: { vertLines: { color: 'transparent' }, horzLines: { color: 'transparent' } },
+      crosshair: { mode: 0 },
+      rightPriceScale: { visible: true, autoScale: true, borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.14 } },
+      timeScale: {
+        rightOffset: BTC_WIDGET_VIEW.futureBars[tf] || 14,
+        barSpacing: BTC_WIDGET_VIEW.barSpacing[tf] || 9,
+        minBarSpacing: 3,
+        fixLeftEdge: false, fixRightEdge: false,
+        lockVisibleTimeRangeOnResize: true,
+        rightBarStaysOnScroll: false,
+        timeVisible: true, secondsVisible: false, borderVisible: false,
+      },
+      handleScroll: { mouseWheel: true, pressedMouseMove: false, horzTouchDrag: true, vertTouchDrag: true },
+      handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
+      kineticScroll: { mouse: false, touch: false },
+    });
+
+    // Candle series
+    S.candleSeries = S.chart.addCandlestickSeries({
+      priceScaleId: 'right',
+      upColor: '#22c55e', downColor: '#ef4444',
+      borderVisible: false, wickUpColor: '#22c55e', wickDownColor: '#ef4444',
+      lastValueVisible: false, priceLineVisible: false,
+      autoscaleInfoProvider: function (baseImpl) {
+        if (!S.manualPriceRange) return baseImpl();
+        return { priceRange: { minValue: S.manualPriceRange.from, maxValue: S.manualPriceRange.to }, margins: { above: 0.06, below: 0.10 } };
+      },
+    });
+
+    // Countdown price line
+    S.countdownPriceLine = S.candleSeries.createPriceLine({ price: 0, color: '#22c55e', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: '—' });
+
+    // VWAP series
+    Object.keys(VWAP_COLORS).forEach(function (p) {
+      S.vwapSeriesMap[p] = S.chart.addLineSeries({
+        color: VWAP_COLORS[p], lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false,
+        crosshairMarkerVisible: false, title: 'VWAP ' + p, visible: true,
+        autoscaleInfoProvider: function () { return null; },
+      });
+      S.vwapSeriesMap[p].setData([]);
+    });
+
+    // Resize observer
+    if (S.resizeObserver) S.resizeObserver.disconnect();
+    S.resizeObserver = new ResizeObserver(function () {
+      if (S.chart && container) {
+        var cw = container.clientWidth, ch = Math.max(240, container.clientHeight || 360);
+        if (cw > 0 && ch > 0) S.chart.applyOptions({ width: cw, height: ch });
+      }
+    });
+    S.resizeObserver.observe(container);
+
+    // Custom drag
+    bindBtcWidgetFreePan();
+
+    // Interval buttons
+    document.querySelectorAll('.btc-chart-interval').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        S.timeframe = btn.dataset.interval;
+        _disconnectWs();
+        var ci = document.getElementById('btcChartCustom');
+        if (ci) ci.value = '';
+        _fetchAndRender(false, 'user');
+      });
+    });
+
+    // Custom interval
+    var customInput = document.getElementById('btcChartCustom');
+    if (customInput) {
+      customInput.addEventListener('change', function () {
+        var val = this.value.trim().toLowerCase();
+        if (!/^\d+(m|h|d|w|M)$/.test(val)) { this.classList.add('jedit-field-error'); this.title = 'Format: chiffre + m/h/d/w/M'; return; }
+        this.classList.remove('jedit-field-error'); this.title = '';
+        document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
+        S.timeframe = val;
+        _disconnectWs();
+        _fetchAndRender(false, 'user');
+      });
+      customInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') this.blur(); });
+    }
+  }
+
+  // ──────────────────────────────────────────────
+  //  FETCH & RENDER
+  // ──────────────────────────────────────────────
+  function _clearAllSeries() {
+    if (S.candleSeries) S.candleSeries.setData([]);
+    Object.keys(S.vwapSeriesMap).forEach(function (k) { if (S.vwapSeriesMap[k]) S.vwapSeriesMap[k].setData([]); });
+  }
+
+  function _fetchAndRender(keepZoom, _source) {
+    if (!S.candleSeries) return;
+    var token = ++S.renderToken;
+    console.log('[BTC-WIDGET] render start token=', token, 'tf=', S.timeframe, 'source=', _source);
+
+    // Debounce auto-refresh
+    if (_source !== 'user') {
+      var now = Date.now();
+      if (S.lastFetchTs && (now - S.lastFetchTs) < S.FETCH_COOLDOWN_MS) return;
+      S.lastFetchTs = now;
+    }
+    if (!S.firstFetchMs) S.firstFetchMs = Date.now();
+
+    _clearAllSeries();
+
+    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + S.timeframe + '&limit=300';
+    fetch(url)
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (data) {
+        if (data.error) { console.error('[btc-widget]', data.error); toast(data.error, 'error'); return; }
+        var raw = data.candles || [];
+        if (!raw.length) { toast('Aucune donnee pour ' + S.timeframe, 'error'); return; }
+
+        if (token !== S.renderToken) { console.warn('[BTC-WIDGET] stale candles ignored'); return; }
+
+        var candles = _normalizeCandles(raw);
+        var last = candles[candles.length - 1];
+        S.lastCandleTime = last.time * 1000;
+        S.candles = candles;
+
+        _startCountdown();
+        _startAutoRefresh();
+        if (_source !== 'ws') { _disconnectWs(); _connectWs(); }
+
+        var priceEl = document.getElementById('btcChartPrice');
+        if (priceEl) priceEl.textContent = '$' + Number(last.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
+
+        S.candleSeries.setData(candles);
+        _renderIndicators(candles);
+
+        // VWAP
+        if (S.activeVwapPeriods.length > 0 && (!S.lastVwapFetch || Date.now() - S.lastVwapFetch > 300000)) {
+          S.lastVwapFetch = Date.now();
+          _calcAndDrawVwap().finally(function () {});
+        } else if (!S.activeVwapPeriods.length) {
+          S.lastVwapFetch = 0;
+        }
+
+        // Best view (range horizontal + vertical)
+        if (S.follow || !keepZoom) {
+          requestAnimationFrame(function () {
+            if (token !== S.renderToken) return;
+            applyBtcWidgetBestView();
+          });
+        }
+
+        if (S.countdownPriceLine) { try { S.countdownPriceLine.applyOptions({ price: last.close }); } catch(e) {} }
+        _updateCountdownLabel();
+      })
+      .catch(function (err) {
+        console.error('[btc-widget] fetch:', err);
+        if (!S.chartReady) {
+          var container = document.getElementById('btcChartContainer');
+          if (container) container.innerHTML = '<div class="chart-error-state">'
+            + '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
+            + '<div>Marche indisponible</div><span>API Binance injoignable</span></div>';
+        }
+      });
+  }
+
+  // ──────────────────────────────────────────────
+  //  INIT
+  // ──────────────────────────────────────────────
+  document.addEventListener('mousedown', function() { S.userIsInteracting = true; }, { passive: true });
+  document.addEventListener('mouseup', function() { S.userIsInteracting = false; }, { passive: true });
+  document.addEventListener('touchstart', function() { S.userIsInteracting = true; }, { passive: true });
+  document.addEventListener('touchend', function() { S.userIsInteracting = false; }, { passive: true });
+
+  function loadLibrary() {
+    var container = document.getElementById('btcChartContainer');
+    if (!container) { setTimeout(loadLibrary, 100); return; }
+    if (S.chartReady) return;
+    if (container.clientHeight < 50) container.style.minHeight = '320px';
+
     if (typeof window.LightweightCharts !== 'undefined') {
-      _createChart(container);
+      createBtcWidgetChart(container);
       _fetchAndRender(false, 'user');
       return;
     }
@@ -11596,332 +11760,27 @@ TradeEditorController.renderHtml = function (day, trade) {
       'https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.1.3/lightweight-charts.standalone.production.js',
     ];
     function tryCdn(idx) {
-      if (idx >= urls.length) {
-        console.error('[btc-chart] aucun CDN disponible');
-        container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">Impossible de charger le graphique (CDN bloque)</div>';
-        return;
-      }
+      if (idx >= urls.length) { container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">Impossible de charger le graphique (CDN bloque)</div>'; return; }
       var script = document.createElement('script');
       script.src = urls[idx];
-      script.onload = function () {
-        _createChart(container);
-        _fetchAndRender(false, 'user');
-      };
+      script.onload = function () { createBtcWidgetChart(container); _fetchAndRender(false, 'user'); };
       script.onerror = function () { tryCdn(idx + 1); };
       document.head.appendChild(script);
     }
     tryCdn(0);
   }
 
-  function _createChart(container) {
-    if (chartReady) return;
-    chartReady = true;
-    if (!container || !container.parentElement) return;
-
-    var isLight = document.body.classList.contains('light-mode');
-    var w = container.clientWidth || 600;
-    var h = container.clientHeight || 360;
-
-    try {
-      chart = window.LightweightCharts.createChart(container, {
-        width: w,
-        height: Math.max(240, h),
-        layout: {
-          background: { type: 'solid', color: 'transparent' },
-          textColor: isLight ? '#1e293b' : '#d1d5db',
-        },
-        grid: {
-          vertLines: { color: 'transparent' },
-          horzLines: { color: 'transparent' },
-        },
-        crosshair: { mode: 0 },
-        rightPriceScale: {
-          borderColor: isLight ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.08)',
-          borderVisible: false,
-          scaleMargins: { top: 0.05, bottom: 0.25 },
-          autoScale: true,
-        },
-        timeScale: {
-          borderColor: isLight ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.08)',
-          timeVisible: true,
-          secondsVisible: false,
-          rightOffset: 20,
-          shiftVisibleRangeOnNewBar: false,
-          lockVisibleTimeRangeOnResize: true,
-        },
-        handleScroll: { vertTouchDrag: true, horzTouchDrag: true, pressedMouseMove: true },
-        kineticScroll: { mouse: false, touch: false },
-      });
-
-      series = chart.addCandlestickSeries({
-        upColor: '#22c55e',
-        downColor: '#ef4444',
-        borderDownColor: '#ef4444',
-        borderUpColor: '#22c55e',
-        wickDownColor: '#ef4444',
-        wickUpColor: '#22c55e',
-        lastValueVisible: false,
-        priceLineVisible: false,
-      });
-
-      countdownPriceLine = series.createPriceLine({
-        price: 0,
-        color: '#22c55e',
-        lineWidth: 1,
-        lineStyle: 2,
-        axisLabelVisible: true,
-        title: '—',
-      });
-
-      // Pré-créer les 4 séries VWAP — visibles dès le départ avec données vides
-      Object.keys(VWAP_COLORS).forEach(function (p) {
-        vwapSeriesMap[p] = chart.addLineSeries({
-          color: VWAP_COLORS[p], lineWidth: 1.5,
-          priceLineVisible: false, lastValueVisible: false,
-          crosshairMarkerVisible: false,
-          title: 'VWAP ' + p,
-          visible: true,
-          autoscaleInfoProvider: function () { return null; },
-        });
-        vwapSeriesMap[p].setData([]); // données vides = pas de rendu, mais LWC sait que la série existe
-      });
-
-      if (resizeObserver) resizeObserver.disconnect();
-      resizeObserver = new ResizeObserver(function () {
-        if (chart && container) {
-          var cw = container.clientWidth;
-          var ch = Math.max(240, container.clientHeight || 360);
-          if (cw > 0 && ch > 0) chart.applyOptions({ width: cw, height: ch });
-        }
-      });
-      resizeObserver.observe(container);
-
-      // Interval buttons
-      document.querySelectorAll('.btc-chart-interval').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
-          btn.classList.add('active');
-          currentInterval = btn.dataset.interval;
-          _disconnectWs();
-          var ci = document.getElementById('btcChartCustom');
-          if (ci) ci.value = '';
-          _fetchAndRender(false, 'user');
-        });
-      });
-
-      // Custom interval input
-      var customInput = document.getElementById('btcChartCustom');
-      if (customInput) {
-        customInput.addEventListener('change', function () {
-          var val = this.value.trim().toLowerCase();
-          if (!/^\d+(m|h|d|w|M)$/.test(val)) {
-            this.classList.add("jedit-field-error");
-            this.title = "Format attendu: chiffre + m/h/d/w/M (ex: 45m, 4h, 7d)";
-            return;
-          }
-          this.classList.remove("jedit-field-error");
-          this.title = "";
-          document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
-          currentInterval = val;
-          _disconnectWs();
-          _fetchAndRender(false, 'user');
-        });
-        customInput.addEventListener('keydown', function (e) {
-          if (e.key === 'Enter') { this.blur(); }
-        });
-      }
-
-    } catch (e) {
-      console.error('[btc-chart] createChart error:', e);
-      container.innerHTML = '<div class="chart-error-state">'
-        + '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
-        + '<div>Erreur graphique</div>'
-        + '<span>Impossible de creer le graphique</span></div>';
-    }
-  }
-
-  // Render token pour invalider les requêtes async périmées
-  var _renderToken = 0;
-
-  // Normaliser une série de bougies pour LWC
-  function _normalizeCandles(rows) {
-    return (rows || [])
-      .map(function (c) { return {
-        time: Number(c.time),
-        open: Number(c.open),
-        high: Number(c.high),
-        low: Number(c.low),
-        close: Number(c.close),
-        volume: Number(c.volume),
-      }; })
-      .filter(function (c) { return Number.isFinite(c.time) && Number.isFinite(c.open) && Number.isFinite(c.close); });
-  }
-
-  function _clearAllSeries() {
-    if (series) series.setData([]);
-    Object.keys(vwapSeriesMap).forEach(function (k) {
-      if (vwapSeriesMap[k]) vwapSeriesMap[k].setData([]);
-    });
-  }
-
-  function _fetchAndRender(keepZoom, _source) {
-    if (!series) return;
-    var token = ++_renderToken;
-    console.log('[B6] render start token=', token, 'tf=', currentInterval, 'source=', _source);
-
-    // Debounce 5s sur les appels automatiques (WS, countdown, auto-refresh)
-    if (_source !== 'user') {
-      var now = Date.now();
-      if (_lastFetchTs && (now - _lastFetchTs) < _FETCH_COOLDOWN_MS) return;
-      _lastFetchTs = now;
-    }
-    if (!_firstFetchMs) _firstFetchMs = Date.now();
-
-    // Clear toutes les séries AVANT de charger (pas de résidu de l'ancien timeframe)
-    _clearAllSeries();
-
-    // Sauvegarder le zoom (timestamps, jamais de logical range)
-    var savedTarget = null;
-    if (keepZoom && !_userIsInteracting && chart && chart.timeScale()) {
-      try {
-        var vr = chart.timeScale().getVisibleRange();
-        if (vr && vr.from && vr.to) savedTarget = { from: vr.from, to: vr.to };
-      } catch(e) {}
-    }
-
-    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + currentInterval + '&limit=300';
-    fetch(url)
-      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(function (data) {
-        if (data.error) { console.error('[btc-chart]', data.error); toast(data.error, 'error'); return; }
-        var rawCandles = data.candles || [];
-        if (!rawCandles.length) {
-          console.warn('[btc-chart] fetch OK mais 0 candles pour ' + currentInterval);
-          toast('Aucune donnee disponible pour ' + currentInterval, 'error'); return;
-        }
-
-        // Vérifier que ce render est toujours valide
-        if (token !== _renderToken) {
-          console.warn('[B6] stale candles ignored for token=', token, 'current=', _renderToken, 'tf=', currentInterval);
-          return;
-        }
-
-        var candles = _normalizeCandles(rawCandles);
-        var last = candles[candles.length - 1];
-        lastCandleTime = last.time * 1000;
-        _startCountdown();
-        _startAutoRefresh();
-        if (_source !== 'ws') {
-          _disconnectWs();
-          _connectWs();
-        }
-        var priceEl = document.getElementById('btcChartPrice');
-        if (priceEl) priceEl.textContent = '$' + Number(last.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
-        series.setData(candles);
-        _mainCandles = candles;  // stocker pour VWAP inline
-
-        // Point fantôme pour étendre le range autorisé par LWC (marge droite)
-        var intervalSec = Math.floor(_getIntervalMs(currentInterval) / 1000);
-        var phantomTime = last.time + intervalSec * 5;
-        try { series.update({ time: phantomTime, open: last.close, high: last.close, low: last.close, close: last.close }); } catch(e) {}
-
-        // Indicators
-        _renderIndicators(candles);
-
-        // VWAP — avec TTL 5min pour éviter les re-fetchs inutiles
-        var shouldFetchVwap = !_lastVwapFetch || Date.now() - _lastVwapFetch > 300000;
-        var useVwap = activeVwapPeriods.length > 0;
-        if (shouldFetchVwap && useVwap) {
-          _lastVwapFetch = Date.now();
-          _calcAndDrawVwap().finally(function () {});
-        } else if (!useVwap) {
-          _lastVwapFetch = 0;
-        }
-
-        // Appliquer le range final en timestamps (jamais de logical range)
-        if (chart && chart.timeScale()) {
-          if (savedTarget && keepZoom) {
-            try { chart.timeScale().setVisibleRange({ from: savedTarget.from, to: savedTarget.to }); } catch(e) {}
-          } else if (!keepZoom) {
-            var bars = { '1m':200,'3m':100,'5m':100,'15m':96,'30m':96,'1h':72,'2h':72,'4h':60,'1d':90 }[currentInterval] || 100;
-            var fromIdx = Math.max(0, candles.length - bars);
-            try {
-              chart.timeScale().setVisibleRange({ from: candles[fromIdx].time, to: last.time });
-            } catch(e) {}
-          }
-        }
-
-        if (countdownPriceLine) {
-          try { countdownPriceLine.applyOptions({ price: last.close }); } catch(e) {}
-        }
-        _updateCountdownLabel();
-
-        // Re-resize après render (le widget peut avoir changé de taille)
-        var container = document.getElementById('btcChartContainer');
-        if (container && chart) {
-          var r = container.getBoundingClientRect();
-          if (r.width > 0 && r.height > 0) {
-            chart.resize(Math.floor(r.width), Math.floor(r.height));
-          }
-        }
-      })
-      .catch(function (err) {
-        console.error('[btc-chart] fetch:', err);
-        var container = document.getElementById('btcChartContainer');
-        if (container && !chartReady) {
-          container.innerHTML = '<div class="chart-error-state">'
-            + '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
-            + '<div>Marche indisponible</div>'
-            + '<span>API Binance injoignable</span></div>';
-        }
-      });
-  }
-
-  // ── INIT ──
-
-  // Interaction listeners pour _userIsInteracting
-  document.addEventListener('mousedown', function() { _userIsInteracting = true; }, { passive: true });
-  document.addEventListener('mouseup', function() { _userIsInteracting = false; }, { passive: true });
-  document.addEventListener('touchstart', function() { _userIsInteracting = true; }, { passive: true });
-  document.addEventListener('touchend', function() { _userIsInteracting = false; }, { passive: true });
-
-  function _waitForContainer(callback, maxRetries, interval) {
-    maxRetries = maxRetries || 20;
-    interval = interval || 50;
-    var retries = 0;
-    function poll() {
-      if (document.getElementById('btcChartContainer')) {
-        callback();
-        return;
-      }
-      retries++;
-      if (retries >= maxRetries) {
-        console.warn('[btc-chart] #btcChartContainer introuvable apres ' + (maxRetries * interval) + 'ms');
-        return;
-      }
-      setTimeout(poll, interval);
-    }
-    poll();
-  }
-
-  function _tryInit() {
-    if (chartReady) return;
-    _waitForContainer(initBtcChart);
-  }
-
-  document.addEventListener('DOMContentLoaded', function () {
-    setTimeout(_tryInit, 50);
-  });
+  document.addEventListener('DOMContentLoaded', function () { setTimeout(loadLibrary, 50); });
 
   var _origGoPage = window.goPage;
   if (_origGoPage) {
     window.goPage = function (pageName) {
       _origGoPage(pageName);
-      if (pageName === 'today') _waitForContainer(initBtcChart);
+      if (pageName === 'today') setTimeout(loadLibrary, 50);
     };
   }
 
-  window.initBtcChart = initBtcChart;
+  window.initBtcChart = loadLibrary;
 })();
 
 // ---- 062_chart_page.js ----
