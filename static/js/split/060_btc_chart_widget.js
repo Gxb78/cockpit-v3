@@ -235,47 +235,39 @@
     if (!S.activeVwapPeriods.length) return;
     if (!window.BtcVwap) return;
 
-    try { S.chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
-    try { S.chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
+    try {
+      try { S.chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
+      try { S.chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
 
-    var state = {
-      symbol: 'BTCUSDT',
-      candles: S.candles,
-      vwapSeriesMap: S.vwapSeriesMap,
-    };
+      var state = {
+        symbol: 'BTCUSDT',
+        candles: S.candles,
+        vwapSeriesMap: S.vwapSeriesMap,
+      };
 
-    var vwapOrder = ['1D', '7D', '30D', '90D'];
-    for (var vi = 0; vi < vwapOrder.length; vi++) {
-      var p = vwapOrder[vi];
-      if (S.activeVwapPeriods.indexOf(p) < 0) continue;
-      if (token !== S.renderToken || tf !== S.timeframe) return;
-      await window.BtcVwap.drawVwapForChart(state, p);
-      await _waitFrame();
-    }
-
-    try { S.chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
-    try { S.chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: false }); } catch(e) {}
-    if (S.chart) {
-      try { S.chart.timeScale().applyOptions({ rightBarStaysOnScroll: true }); } catch(e) {}
+      var vwapOrder = ['1D', '7D', '30D', '90D'];
+      for (var vi = 0; vi < vwapOrder.length; vi++) {
+        var p = vwapOrder[vi];
+        if (S.activeVwapPeriods.indexOf(p) < 0) continue;
+        if (token !== S.renderToken || tf !== S.timeframe) return;
+        await window.BtcVwap.drawVwapForChart(state, p, function () {
+          return token !== S.renderToken || tf !== S.timeframe;
+        });
+        if (token !== S.renderToken || tf !== S.timeframe) return;
+        await _waitFrame();
+      }
+    } finally {
+      try { S.chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
+      try { S.chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: true }); } catch(e) {}
     }
   }
-
   // ──────────────────────────────────────────────
   //  PRICE RANGE MANAGEMENT
   // ──────────────────────────────────────────────
   function computeBtcWidgetPriceRange(candles, tf) {
-    if (!candles || !candles.length) return null;
-    var visibleBars = BTC_WIDGET_VIEW.visibleBars[tf] || 100;
-    var slice = candles.slice(-visibleBars);
-    var high = -Infinity, low = Infinity;
-    for (var i = 0; i < slice.length; i++) {
-      var c = slice[i];
-      if (Number.isFinite(c.high)) high = Math.max(high, c.high);
-      if (Number.isFinite(c.low)) low = Math.min(low, c.low);
-    }
-    if (!Number.isFinite(high) || !Number.isFinite(low)) return null;
-    var rawRange = Math.max(high - low, high * 0.002);
-    return { from: low - rawRange * 0.22, to: high + rawRange * 0.18 };
+    if (!window.ChartViewCore) return null;
+    var vb = BTC_WIDGET_VIEW.visibleBars[tf || S.timeframe] || 100;
+    return window.ChartViewCore.computePriceRange(candles, vb, { top: 0.22, bottom: 0.18, minRangeRatio: 0.002 });
   }
 
   function getBtcWidgetCurrentPriceRange() {
@@ -291,7 +283,6 @@
     if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to) || range.to <= range.from) return;
     S.manualPriceRange = range;
     var ps = S.candleSeries.priceScale();
-    // LWC 5.x: setVisibleRange direct
     if (typeof ps.setVisibleRange === 'function' && typeof ps.setAutoScale === 'function') {
       try { ps.setAutoScale(false); ps.setVisibleRange(range); } catch(e) {}
       return;
@@ -767,10 +758,9 @@
       upColor: '#22c55e', downColor: '#ef4444',
       borderVisible: false, wickUpColor: '#22c55e', wickDownColor: '#ef4444',
       lastValueVisible: false, priceLineVisible: false,
-      autoscaleInfoProvider: function (baseImpl) {
-        if (!S.manualPriceRange) return baseImpl();
-        return { priceRange: { minValue: S.manualPriceRange.from, maxValue: S.manualPriceRange.to }, margins: { above: 0.06, below: 0.10 } };
-      },
+      autoscaleInfoProvider: window.ChartViewCore
+        ? window.ChartViewCore.makeAutoscaleInfoProvider({ get value() { return S.manualPriceRange; }, set value(v) { S.manualPriceRange = v; } })
+        : undefined,
     });
 
     // Countdown price line

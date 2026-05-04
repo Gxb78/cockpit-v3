@@ -187,16 +187,19 @@
 
   // ── DRAW HIGH-LEVEL ───────────────────────────────────────
   // Helper pour 060 et 062 — fetch le VWAP canonique, aligne, setData
-  async function drawVwapForChart(state, period) {
+  async function drawVwapForChart(state, period, shouldAbort) {
     // state doit avoir: symbol, candles, vwapSeriesMap
     var canonicalVwap = await getCanonicalVwap(state.symbol || 'BTCUSDT', period);
+    if (shouldAbort && shouldAbort()) return;
     if (!state.candles || !state.candles.length) return;
 
     var aligned = alignIndicatorToCandles(canonicalVwap, state.candles);
+    if (shouldAbort && shouldAbort()) return;
     if (aligned.length < 2) return;
 
     var s = state.vwapSeriesMap[period];
     if (!s) return;
+    if (shouldAbort && shouldAbort()) return;
 
     s.applyOptions({
       visible: true,

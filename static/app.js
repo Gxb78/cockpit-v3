@@ -9453,6 +9453,121 @@ document.addEventListener("DOMContentLoaded", function() {
   bindUnifiedDatePickers(document);
 });
 
+// ---- 054_chart_view_core.js ----
+// ---------- Chart View Core — cadrage X+Y canonique ----------
+// Module partagé entre 060 (widget BTC) et 062 (chart page).
+// Garantit un comportement identique : même calcul de range prix,
+// même verrouillage Y, même guards programmatic range.
+//
+// Configs :
+//   WIDGET_VIEW — widget dashboard, follow agressif, compact
+//   CHART_VIEW  — page chart classique, plus libre, plus large
+//
+// Usage :
+//   window.ChartViewCore.computePriceRange(candles, visibleBars)
+//   window.ChartViewCore.setPriceRange(ps, range, manualPriceRangeRef)
+//   window.ChartViewCore.applyBestView(chart, series, candles, config, withProgRangeFn)
+
+(function () {
+
+  // ── CONFIGS ────────────────────────────────────────────
+  var WIDGET_VIEW = {
+    visibleBars: { '1m':200,'3m':120,'5m':110,'15m':96,'30m':90,'1h':84,'2h':78,'4h':72,'6h':60,'8h':50,'12h':40,'1d':90 },
+    futureBars:  { '1m':24,'3m':18,'5m':18,'15m':16,'30m':14,'1h':12,'2h':12,'4h':10,'6h':10,'8h':8,'12h':8,'1d':8 },
+    padding: { top: 0.22, bottom: 0.18, minRangeRatio: 0.002 },
+  };
+
+  var CHART_VIEW = {
+    visibleBars: { '1m':160,'3m':130,'5m':120,'15m':110,'30m':100,'1h':96,'2h':90,'4h':84,'6h':78,'8h':72,'12h':60,'1d':90 },
+    futureBars:  { '1m':22,'3m':20,'5m':18,'15m':16,'30m':14,'1h':12,'2h':12,'4h':10,'6h':10,'8h':8,'12h':8,'1d':8 },
+    padding: { top: 0.22, bottom: 0.18, minRangeRatio: 0.0025 },
+  };
+
+  // ── COMPUTE PRICE RANGE ───────────────────────────────
+  // Calcule un range Y sur les N dernières bougies visibles
+  function computePriceRange(candles, visibleBars, padding) {
+    if (!candles || !candles.length) return null;
+    padding = padding || { top: 0.22, bottom: 0.18, minRangeRatio: 0.002 };
+
+    var slice = candles.slice(-visibleBars);
+    var high = -Infinity, low = Infinity;
+
+    for (var i = 0; i < slice.length; i++) {
+      var c = slice[i];
+      if (Number.isFinite(c.high)) high = Math.max(high, c.high);
+      if (Number.isFinite(c.low)) low = Math.min(low, c.low);
+    }
+    if (!Number.isFinite(high) || !Number.isFinite(low)) return null;
+
+    var rawRange = Math.max(high - low, high * padding.minRangeRatio);
+    return { from: low - rawRange * padding.top, to: high + rawRange * padding.bottom };
+  }
+
+  // ── SET PRICE RANGE ────────────────────────────────────
+  // Verrouille l'axe Y via l'API LWC v5 ou fallback v4
+  function setPriceRange(priceScale, range, manualPriceRangeRef) {
+    if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to) || range.to <= range.from) return;
+
+    if (manualPriceRangeRef && typeof manualPriceRangeRef === 'object') {
+      manualPriceRangeRef.value = range;
+    }
+
+    if (typeof priceScale.setAutoScale === 'function' && typeof priceScale.setVisibleRange === 'function') {
+      try { priceScale.setAutoScale(false); priceScale.setVisibleRange(range); } catch(e) {}
+      return;
+    }
+    // Fallback v4 : refresh autoscaleInfoProvider
+    // (le provider utilise manualPriceRangeRef, donc setVisibleLogicalRange le force à réévaluer)
+  }
+
+  // ── APPLY BEST VIEW (X + Y) ────────────────────────────
+  // Applique le cadrage X (visibleLogicalRange) ET Y (priceRange)
+  // en une seule opération protégée par withProgrammaticRange
+  function applyBestView(chart, series, candles, config, withProgRangeFn, manualPriceRangeRef) {
+    if (!chart || !series || !candles || !candles.length) return;
+
+    var tf = config.timeframe || '3m';
+    var visibleBars = (config.visibleBars || {})[tf] || 120;
+    var futureBars = (config.futureBars || {})[tf] || 14;
+    var padding = config.padding || { top: 0.22, bottom: 0.18, minRangeRatio: 0.002 };
+
+    var lastIndex = candles.length - 1;
+
+    withProgRangeFn(function () {
+      try { chart.timeScale().setVisibleLogicalRange({ from: lastIndex + futureBars - visibleBars, to: lastIndex + futureBars }); } catch(e) {}
+
+      var priceRange = computePriceRange(candles, visibleBars, padding);
+      var ps;
+      try { ps = series.priceScale(); } catch(e) {}
+      if (ps) setPriceRange(ps, priceRange, manualPriceRangeRef);
+    });
+  }
+
+  // ── AUTOSCALE INFO PROVIDER FACTORY ────────────────────
+  // À passer à addCandlestickSeries / addLineSeries
+  function makeAutoscaleInfoProvider(manualPriceRangeRef) {
+    return function (baseImpl) {
+      if (!manualPriceRangeRef || !manualPriceRangeRef.value) return baseImpl ? baseImpl() : null;
+      var r = manualPriceRangeRef.value;
+      return {
+        priceRange: { minValue: r.from, maxValue: r.to },
+        margins: { above: 0.06, below: 0.10 },
+      };
+    };
+  }
+
+  // ── EXPOSE ─────────────────────────────────────────────
+  window.ChartViewCore = {
+    WIDGET_VIEW: WIDGET_VIEW,
+    CHART_VIEW: CHART_VIEW,
+    computePriceRange: computePriceRange,
+    setPriceRange: setPriceRange,
+    applyBestView: applyBestView,
+    makeAutoscaleInfoProvider: makeAutoscaleInfoProvider,
+  };
+
+})();
+
 // ---- 054_journal_filter_picker_override.js ----
 // ---------- Journal filters override: single range picker + lean controls ----------
 
@@ -9859,16 +9974,19 @@ function bindJournalStatsArrows() {
 
   // ── DRAW HIGH-LEVEL ───────────────────────────────────────
   // Helper pour 060 et 062 — fetch le VWAP canonique, aligne, setData
-  async function drawVwapForChart(state, period) {
+  async function drawVwapForChart(state, period, shouldAbort) {
     // state doit avoir: symbol, candles, vwapSeriesMap
     var canonicalVwap = await getCanonicalVwap(state.symbol || 'BTCUSDT', period);
+    if (shouldAbort && shouldAbort()) return;
     if (!state.candles || !state.candles.length) return;
 
     var aligned = alignIndicatorToCandles(canonicalVwap, state.candles);
+    if (shouldAbort && shouldAbort()) return;
     if (aligned.length < 2) return;
 
     var s = state.vwapSeriesMap[period];
     if (!s) return;
+    if (shouldAbort && shouldAbort()) return;
 
     s.applyOptions({
       visible: true,
@@ -11485,47 +11603,39 @@ TradeEditorController.renderHtml = function (day, trade) {
     if (!S.activeVwapPeriods.length) return;
     if (!window.BtcVwap) return;
 
-    try { S.chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
-    try { S.chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
+    try {
+      try { S.chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
+      try { S.chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
 
-    var state = {
-      symbol: 'BTCUSDT',
-      candles: S.candles,
-      vwapSeriesMap: S.vwapSeriesMap,
-    };
+      var state = {
+        symbol: 'BTCUSDT',
+        candles: S.candles,
+        vwapSeriesMap: S.vwapSeriesMap,
+      };
 
-    var vwapOrder = ['1D', '7D', '30D', '90D'];
-    for (var vi = 0; vi < vwapOrder.length; vi++) {
-      var p = vwapOrder[vi];
-      if (S.activeVwapPeriods.indexOf(p) < 0) continue;
-      if (token !== S.renderToken || tf !== S.timeframe) return;
-      await window.BtcVwap.drawVwapForChart(state, p);
-      await _waitFrame();
-    }
-
-    try { S.chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
-    try { S.chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: false }); } catch(e) {}
-    if (S.chart) {
-      try { S.chart.timeScale().applyOptions({ rightBarStaysOnScroll: true }); } catch(e) {}
+      var vwapOrder = ['1D', '7D', '30D', '90D'];
+      for (var vi = 0; vi < vwapOrder.length; vi++) {
+        var p = vwapOrder[vi];
+        if (S.activeVwapPeriods.indexOf(p) < 0) continue;
+        if (token !== S.renderToken || tf !== S.timeframe) return;
+        await window.BtcVwap.drawVwapForChart(state, p, function () {
+          return token !== S.renderToken || tf !== S.timeframe;
+        });
+        if (token !== S.renderToken || tf !== S.timeframe) return;
+        await _waitFrame();
+      }
+    } finally {
+      try { S.chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
+      try { S.chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: true }); } catch(e) {}
     }
   }
-
   // ──────────────────────────────────────────────
   //  PRICE RANGE MANAGEMENT
   // ──────────────────────────────────────────────
   function computeBtcWidgetPriceRange(candles, tf) {
-    if (!candles || !candles.length) return null;
-    var visibleBars = BTC_WIDGET_VIEW.visibleBars[tf] || 100;
-    var slice = candles.slice(-visibleBars);
-    var high = -Infinity, low = Infinity;
-    for (var i = 0; i < slice.length; i++) {
-      var c = slice[i];
-      if (Number.isFinite(c.high)) high = Math.max(high, c.high);
-      if (Number.isFinite(c.low)) low = Math.min(low, c.low);
-    }
-    if (!Number.isFinite(high) || !Number.isFinite(low)) return null;
-    var rawRange = Math.max(high - low, high * 0.002);
-    return { from: low - rawRange * 0.22, to: high + rawRange * 0.18 };
+    if (!window.ChartViewCore) return null;
+    var vb = BTC_WIDGET_VIEW.visibleBars[tf || S.timeframe] || 100;
+    return window.ChartViewCore.computePriceRange(candles, vb, { top: 0.22, bottom: 0.18, minRangeRatio: 0.002 });
   }
 
   function getBtcWidgetCurrentPriceRange() {
@@ -11541,7 +11651,6 @@ TradeEditorController.renderHtml = function (day, trade) {
     if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to) || range.to <= range.from) return;
     S.manualPriceRange = range;
     var ps = S.candleSeries.priceScale();
-    // LWC 5.x: setVisibleRange direct
     if (typeof ps.setVisibleRange === 'function' && typeof ps.setAutoScale === 'function') {
       try { ps.setAutoScale(false); ps.setVisibleRange(range); } catch(e) {}
       return;
@@ -12017,10 +12126,9 @@ TradeEditorController.renderHtml = function (day, trade) {
       upColor: '#22c55e', downColor: '#ef4444',
       borderVisible: false, wickUpColor: '#22c55e', wickDownColor: '#ef4444',
       lastValueVisible: false, priceLineVisible: false,
-      autoscaleInfoProvider: function (baseImpl) {
-        if (!S.manualPriceRange) return baseImpl();
-        return { priceRange: { minValue: S.manualPriceRange.from, maxValue: S.manualPriceRange.to }, margins: { above: 0.06, below: 0.10 } };
-      },
+      autoscaleInfoProvider: window.ChartViewCore
+        ? window.ChartViewCore.makeAutoscaleInfoProvider({ get value() { return S.manualPriceRange; }, set value(v) { S.manualPriceRange = v; } })
+        : undefined,
     });
 
     // Countdown price line
@@ -12247,6 +12355,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   var lastCandleTime = 0;
   var lastCountdownFetchAt = 0;
   var lastPrice = 0;
+  var manualPriceRange = null;
   var resizeObserver = null;
   var refreshTimer = null;
   var ws = null;
@@ -12311,18 +12420,39 @@ TradeEditorController.renderHtml = function (day, trade) {
   // ── INDICATOR CALCULATIONS ──
   function _applyChartBestView(savedTarget, keepZoom, candles) {
     if (!chart || !chart.timeScale()) return;
+    if (!candles || !candles.length) return;
+
     _withProgrammaticRange(function () {
+      // Calculer le range logique
       var logicalAfter;
       try { logicalAfter = chart.timeScale().getVisibleLogicalRange(); } catch(e) {}
       if (!logicalAfter) return;
       var totalLogical = Math.round(logicalAfter.to);
+
       if (savedTarget && totalLogical > 100) {
-        // Zoom préservé du rendu précédent — centrer sur les 100 dernières barres
-        chart.timeScale().setVisibleLogicalRange({ from: totalLogical - 100, to: totalLogical });
+        // Zoom préservé du rendu précédent
+        var nb = Math.min(100, totalLogical);
+        chart.timeScale().setVisibleLogicalRange({ from: totalLogical - nb, to: totalLogical });
       } else if (!keepZoom && candles && candles.length) {
-        // Premier chargement ou changement de timeframe — 100 dernières barres
+        // Premier chargement ou changement de timeframe
         var nb = Math.min(100, candles.length);
         chart.timeScale().setVisibleLogicalRange({ from: totalLogical - nb, to: totalLogical });
+      }
+
+      // Y — price range via ChartViewCore (si disponible)
+      if (window.ChartViewCore && candles && candles.length) {
+        var tf = currentInterval || '3m';
+        var vb = (window.ChartViewCore.CHART_VIEW.visibleBars || {})[tf] || 120;
+        var padding = window.ChartViewCore.CHART_VIEW.padding || { top: 0.22, bottom: 0.18, minRangeRatio: 0.0025 };
+        var priceRange = window.ChartViewCore.computePriceRange(candles, vb, padding);
+        if (candlestickSeries) {
+          var ps;
+          try { ps = candlestickSeries.priceScale(); } catch(e) {}
+          if (ps) window.ChartViewCore.setPriceRange(ps, priceRange, {
+            get value() { return manualPriceRange; },
+            set value(v) { manualPriceRange = v; },
+          });
+        }
       }
     });
   }
@@ -12740,6 +12870,9 @@ TradeEditorController.renderHtml = function (day, trade) {
         wickUpColor: '#22c55e',
         lastValueVisible: false,
         priceLineVisible: false,
+        autoscaleInfoProvider: window.ChartViewCore
+          ? window.ChartViewCore.makeAutoscaleInfoProvider({ get value() { return manualPriceRange; }, set value(v) { manualPriceRange = v; } })
+          : undefined,
       };
 
       // Handle chart style
@@ -13011,26 +13144,31 @@ TradeEditorController.renderHtml = function (day, trade) {
     if (!activeVwapPeriods.length) return;
     if (!window.BtcVwap) return;
 
-    try { chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
-    try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
+    try {
+      try { chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
+      try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
 
-    var state = {
-      symbol: currentSymbol,
-      candles: _mainCandles,
-      vwapSeriesMap: vwapSeriesMap,
-    };
+      var state = {
+        symbol: currentSymbol,
+        candles: _mainCandles,
+        vwapSeriesMap: vwapSeriesMap,
+      };
 
-    var vwapOrder = ['1D', '7D', '30D', '90D'];
-    for (var vi = 0; vi < vwapOrder.length; vi++) {
-      var p = vwapOrder[vi];
-      if (activeVwapPeriods.indexOf(p) < 0) continue;
-      if (interval !== currentInterval || sym !== currentSymbol) return;
-      await window.BtcVwap.drawVwapForChart(state, p);
-      await _waitFrame();
+      var vwapOrder = ['1D', '7D', '30D', '90D'];
+      for (var vi = 0; vi < vwapOrder.length; vi++) {
+        var p = vwapOrder[vi];
+        if (activeVwapPeriods.indexOf(p) < 0) continue;
+        if (interval !== currentInterval || sym !== currentSymbol) return;
+        await window.BtcVwap.drawVwapForChart(state, p, function () {
+          return interval !== currentInterval || sym !== currentSymbol;
+        });
+        if (interval !== currentInterval || sym !== currentSymbol) return;
+        await _waitFrame();
+      }
+    } finally {
+      try { chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
+      try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: true }); } catch(e) {}
     }
-
-    try { chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
-    try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: true }); } catch(e) {}
   }
 
   // ── TIMEFRAMES ──

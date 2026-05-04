@@ -29,6 +29,7 @@
   var lastCandleTime = 0;
   var lastCountdownFetchAt = 0;
   var lastPrice = 0;
+  var manualPriceRange = null;
   var resizeObserver = null;
   var refreshTimer = null;
   var ws = null;
@@ -93,18 +94,39 @@
   // ── INDICATOR CALCULATIONS ──
   function _applyChartBestView(savedTarget, keepZoom, candles) {
     if (!chart || !chart.timeScale()) return;
+    if (!candles || !candles.length) return;
+
     _withProgrammaticRange(function () {
+      // Calculer le range logique
       var logicalAfter;
       try { logicalAfter = chart.timeScale().getVisibleLogicalRange(); } catch(e) {}
       if (!logicalAfter) return;
       var totalLogical = Math.round(logicalAfter.to);
+
       if (savedTarget && totalLogical > 100) {
-        // Zoom préservé du rendu précédent — centrer sur les 100 dernières barres
-        chart.timeScale().setVisibleLogicalRange({ from: totalLogical - 100, to: totalLogical });
+        // Zoom préservé du rendu précédent
+        var nb = Math.min(100, totalLogical);
+        chart.timeScale().setVisibleLogicalRange({ from: totalLogical - nb, to: totalLogical });
       } else if (!keepZoom && candles && candles.length) {
-        // Premier chargement ou changement de timeframe — 100 dernières barres
+        // Premier chargement ou changement de timeframe
         var nb = Math.min(100, candles.length);
         chart.timeScale().setVisibleLogicalRange({ from: totalLogical - nb, to: totalLogical });
+      }
+
+      // Y — price range via ChartViewCore (si disponible)
+      if (window.ChartViewCore && candles && candles.length) {
+        var tf = currentInterval || '3m';
+        var vb = (window.ChartViewCore.CHART_VIEW.visibleBars || {})[tf] || 120;
+        var padding = window.ChartViewCore.CHART_VIEW.padding || { top: 0.22, bottom: 0.18, minRangeRatio: 0.0025 };
+        var priceRange = window.ChartViewCore.computePriceRange(candles, vb, padding);
+        if (candlestickSeries) {
+          var ps;
+          try { ps = candlestickSeries.priceScale(); } catch(e) {}
+          if (ps) window.ChartViewCore.setPriceRange(ps, priceRange, {
+            get value() { return manualPriceRange; },
+            set value(v) { manualPriceRange = v; },
+          });
+        }
       }
     });
   }
@@ -522,6 +544,9 @@
         wickUpColor: '#22c55e',
         lastValueVisible: false,
         priceLineVisible: false,
+        autoscaleInfoProvider: window.ChartViewCore
+          ? window.ChartViewCore.makeAutoscaleInfoProvider({ get value() { return manualPriceRange; }, set value(v) { manualPriceRange = v; } })
+          : undefined,
       };
 
       // Handle chart style
@@ -793,26 +818,31 @@
     if (!activeVwapPeriods.length) return;
     if (!window.BtcVwap) return;
 
-    try { chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
-    try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
+    try {
+      try { chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
+      try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
 
-    var state = {
-      symbol: currentSymbol,
-      candles: _mainCandles,
-      vwapSeriesMap: vwapSeriesMap,
-    };
+      var state = {
+        symbol: currentSymbol,
+        candles: _mainCandles,
+        vwapSeriesMap: vwapSeriesMap,
+      };
 
-    var vwapOrder = ['1D', '7D', '30D', '90D'];
-    for (var vi = 0; vi < vwapOrder.length; vi++) {
-      var p = vwapOrder[vi];
-      if (activeVwapPeriods.indexOf(p) < 0) continue;
-      if (interval !== currentInterval || sym !== currentSymbol) return;
-      await window.BtcVwap.drawVwapForChart(state, p);
-      await _waitFrame();
+      var vwapOrder = ['1D', '7D', '30D', '90D'];
+      for (var vi = 0; vi < vwapOrder.length; vi++) {
+        var p = vwapOrder[vi];
+        if (activeVwapPeriods.indexOf(p) < 0) continue;
+        if (interval !== currentInterval || sym !== currentSymbol) return;
+        await window.BtcVwap.drawVwapForChart(state, p, function () {
+          return interval !== currentInterval || sym !== currentSymbol;
+        });
+        if (interval !== currentInterval || sym !== currentSymbol) return;
+        await _waitFrame();
+      }
+    } finally {
+      try { chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
+      try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: true }); } catch(e) {}
     }
-
-    try { chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
-    try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: true }); } catch(e) {}
   }
 
   // ── TIMEFRAMES ──
