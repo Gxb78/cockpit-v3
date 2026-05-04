@@ -822,7 +822,7 @@
       layout: { background: { type: 'solid', color: 'transparent' }, textColor: isLight ? '#1e293b' : '#d1d5db' },
       grid: { vertLines: { color: 'transparent' }, horzLines: { color: 'transparent' } },
       crosshair: { mode: 0 },
-      rightPriceScale: { visible: true, autoScale: true, borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.14 } },
+      rightPriceScale: { visible: true, autoScale: true, borderVisible: false, scaleMargins: { top: 0.04, bottom: 0.05 } },
       timeScale: {
         rightOffset: BTC_WIDGET_VIEW.futureBars[tf] || 14,
         barSpacing: BTC_WIDGET_VIEW.barSpacing[tf] || 9,

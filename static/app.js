@@ -12287,7 +12287,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       layout: { background: { type: 'solid', color: 'transparent' }, textColor: isLight ? '#1e293b' : '#d1d5db' },
       grid: { vertLines: { color: 'transparent' }, horzLines: { color: 'transparent' } },
       crosshair: { mode: 0 },
-      rightPriceScale: { visible: true, autoScale: true, borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.14 } },
+      rightPriceScale: { visible: true, autoScale: true, borderVisible: false, scaleMargins: { top: 0.04, bottom: 0.05 } },
       timeScale: {
         rightOffset: BTC_WIDGET_VIEW.futureBars[tf] || 14,
         barSpacing: BTC_WIDGET_VIEW.barSpacing[tf] || 9,
@@ -12638,9 +12638,13 @@ TradeEditorController.renderHtml = function (day, trade) {
         var nb = Math.min(100, totalLogical);
         chart.timeScale().setVisibleLogicalRange({ from: totalLogical - nb, to: totalLogical });
       } else if (!keepZoom && candles && candles.length) {
-        // Premier chargement ou changement de timeframe
-        var nb = Math.min(100, candles.length);
-        chart.timeScale().setVisibleLogicalRange({ from: totalLogical - nb, to: totalLogical });
+        // Premier chargement ou changement de timeframe — basé sur les nouvelles données, pas le range courant
+        var tf = currentInterval || '3m';
+        var focusBars = (window.ChartViewCore.CHART_VIEW.visibleBars || {})[tf] || 120;
+        var nb = Math.min(focusBars, candles.length);
+        var lastIdx = candles.length - 1;
+        var rightPad = Math.max(6, Math.min(18, Math.round(nb * 0.08)));
+        chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, lastIdx - nb + 1), to: lastIdx + rightPad });
       }
 
       // Y — price range via ChartViewCore (si disponible)
@@ -13171,6 +13175,8 @@ TradeEditorController.renderHtml = function (day, trade) {
       _initVolumeProfile();
 
       chartReady = true;
+      _startCountdown();
+      _startAutoRefresh();
 
     } catch (e) {
       console.error('[chart] createChart error:', e);
