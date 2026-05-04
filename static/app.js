@@ -11258,6 +11258,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
   }
   async function _calcAndDrawVwap(zoomTarget) {
+    var currentRenderToken = _renderToken;
     // Relire les periodes depuis localStorage (peuvent avoir ete changees dans settings)
     try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) activeVwapPeriods = s; } catch(e) {}
     console.log('[VWAP] triggered by:', new Error().stack.split('\n')[2]);
@@ -11349,6 +11350,12 @@ TradeEditorController.renderHtml = function (day, trade) {
         else { interval = '4h'; limit = Math.min(Math.ceil(periodSec / 14400) + 10, 1000); }
         console.log('[VWAP] pas assez de 3m pour', p, ', fallback fetch', interval, 'limit=', limit);
         candles = await _fetchKlines(interval, limit);
+        // Si le renderToken a change pendant le fetch, ignorer ce VWAP stale
+        if (_renderToken !== currentRenderToken) {
+          console.warn('[VWAP] stale fallback ignored for', p, 'token=', currentRenderToken, 'current=', _renderToken);
+          _vwapInFlight = false;
+          return;
+        }
       }
 
       var vw = _computeVwap(candles, periodSec);
@@ -11368,32 +11375,18 @@ TradeEditorController.renderHtml = function (day, trade) {
       await _waitFrame();
     }
 
-    // Tous les setData sont finis → ajuster target.to sur la range reelle
+    // Tous les setData sont finis
     _vwapInFlight = false;
-    try { chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
-    try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: false }); } catch(e) {}
 
-    // Lire l'indice logique APRES tous les setData (inclut les series VWAP)
-    var logicalAfter = chart.timeScale().getVisibleLogicalRange();
-    var totalLogical = logicalAfter ? Math.round(logicalAfter.to) : _mainCandles.length;
-    var adjustedTarget = null;
-    if (zoomTarget && totalLogical > 100) {
-      adjustedTarget = {
-        from: totalLogical - 100,
-        to: totalLogical,
-      };
-      console.log('[VWAP] adjusted target (logical):', JSON.stringify(adjustedTarget),
-        '| totalLogical:', totalLogical, '| _mainCandles:', _mainCandles.length);
-      try { chart.timeScale().setVisibleLogicalRange({ from: adjustedTarget.from, to: adjustedTarget.to }); } catch(e) {}
-    } else if (zoomTarget) {
-      try { chart.timeScale().setVisibleRange({ from: zoomTarget.from, to: zoomTarget.to }); } catch(e) {}
+    // Vérifier qu'on n'est pas périmé
+    var currentToken = _renderToken;
+    if (chart) {
+      try { chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
+      try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: false }); } catch(e) {}
+      if (currentToken === _renderToken) {
+        try { chart.timeScale().applyOptions({ rightBarStaysOnScroll: true }); } catch(e) {}
+      }
     }
-    console.log('[VWAP] range APRÈS setData:', JSON.stringify(chart.timeScale().getVisibleRange()));
-
-    // rAF-retry avec le target ajuste
-    if (adjustedTarget) _applyZoomWithRetry(adjustedTarget);
-    else if (zoomTarget) _applyZoomWithRetry(zoomTarget);
-    try { chart.timeScale().applyOptions({ rightBarStaysOnScroll: true }); } catch(e) {}
   }
 
   // ── TIMER ──
@@ -11747,35 +11740,53 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
   }
 
+  // Render token pour invalider les requêtes async périmées
+  var _renderToken = 0;
+
+  // Normaliser une série de bougies pour LWC
+  function _normalizeCandles(rows) {
+    return (rows || [])
+      .map(function (c) { return {
+        time: Number(c.time),
+        open: Number(c.open),
+        high: Number(c.high),
+        low: Number(c.low),
+        close: Number(c.close),
+        volume: Number(c.volume),
+      }; })
+      .filter(function (c) { return Number.isFinite(c.time) && Number.isFinite(c.open) && Number.isFinite(c.close); });
+  }
+
+  function _clearAllSeries() {
+    if (series) series.setData([]);
+    Object.keys(vwapSeriesMap).forEach(function (k) {
+      if (vwapSeriesMap[k]) vwapSeriesMap[k].setData([]);
+    });
+  }
+
   function _fetchAndRender(keepZoom, _source) {
     if (!series) return;
-    // Guard anti-appels simultanés
-    if (_isFetching) return;
+    var token = ++_renderToken;
+    console.log('[B6] render start token=', token, 'tf=', currentInterval, 'source=', _source);
+
     // Debounce 5s sur les appels automatiques (WS, countdown, auto-refresh)
     if (_source !== 'user') {
       var now = Date.now();
       if (_lastFetchTs && (now - _lastFetchTs) < _FETCH_COOLDOWN_MS) return;
       _lastFetchTs = now;
     }
-    _isFetching = true;
     if (!_firstFetchMs) _firstFetchMs = Date.now();
 
-    // Sauvegarder le zoom en INDICES LOGIQUES (compatibles avec le nouveau zoom)
+    // Clear toutes les séries AVANT de charger (pas de résidu de l'ancien timeframe)
+    _clearAllSeries();
+
+    // Sauvegarder le zoom (timestamps, jamais de logical range)
     var savedTarget = null;
     if (keepZoom && !_userIsInteracting && chart && chart.timeScale()) {
-      if (_source === 'user' || Date.now() - _firstFetchMs > 2000) {
-        try {
-          var logicalRange = chart.timeScale().getVisibleLogicalRange();
-          if (logicalRange) {
-            var rangeWidth = logicalRange.to - logicalRange.from;
-            // Ne sauvegarder que si le range est raisonnable (> 50 barres)
-            if (rangeWidth >= 80) {
-              savedTarget = { from: logicalRange.from, to: logicalRange.to };
-            }
-          }
-        } catch(e) {}
-      }
-      try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
+      try {
+        var vr = chart.timeScale().getVisibleRange();
+        if (vr && vr.from && vr.to) savedTarget = { from: vr.from, to: vr.to };
+      } catch(e) {}
     }
 
     var url = '/api/market/klines?symbol=BTCUSDT&interval=' + currentInterval + '&limit=300';
@@ -11783,13 +11794,19 @@ TradeEditorController.renderHtml = function (day, trade) {
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
         if (data.error) { console.error('[btc-chart]', data.error); toast(data.error, 'error'); return; }
-        var candles = data.candles || [];
-        if (!candles.length) {
-          console.warn('[btc-chart] fetch OK mais 0 candles pour ' + currentInterval
-            + ' | chartReady=' + chartReady + ' | series=' + (series ? 'ok' : 'null')
-            + ' | container=' + (document.getElementById('btcChartContainer') ? 'ok' : 'null'));
+        var rawCandles = data.candles || [];
+        if (!rawCandles.length) {
+          console.warn('[btc-chart] fetch OK mais 0 candles pour ' + currentInterval);
           toast('Aucune donnee disponible pour ' + currentInterval, 'error'); return;
         }
+
+        // Vérifier que ce render est toujours valide
+        if (token !== _renderToken) {
+          console.warn('[B6] stale candles ignored for token=', token, 'current=', _renderToken, 'tf=', currentInterval);
+          return;
+        }
+
+        var candles = _normalizeCandles(rawCandles);
         var last = candles[candles.length - 1];
         lastCandleTime = last.time * 1000;
         _startCountdown();
@@ -11812,31 +11829,25 @@ TradeEditorController.renderHtml = function (day, trade) {
         _renderIndicators(candles);
 
         // VWAP — avec TTL 5min pour éviter les re-fetchs inutiles
-        var zoomTarget = null;
-        if (savedTarget) {
-          zoomTarget = { from: savedTarget.from, to: savedTarget.to, hasSavedTarget: true };
-        } else if (!keepZoom) {
-          // Premier chargement : calculer en timestamps (invariant VWAP)
-          var firstIdx = Math.max(0, candles.length - 100);
-          var fromTime = candles[firstIdx].time;
-          zoomTarget = { from: fromTime, to: candles[candles.length - 1].time, hasSavedTarget: false };
-        }
-        if (!_lastVwapFetch || Date.now() - _lastVwapFetch > 300000) {
+        var shouldFetchVwap = !_lastVwapFetch || Date.now() - _lastVwapFetch > 300000;
+        var useVwap = activeVwapPeriods.length > 0;
+        if (shouldFetchVwap && useVwap) {
           _lastVwapFetch = Date.now();
-          _calcAndDrawVwap(zoomTarget).finally(function () {
-            _isFetching = false;
-          });
-        } else {
-          _isFetching = false;
-          // Auto-refresh sans VWAP : recalculer depuis la range logique reelle
-          if (zoomTarget && chart && chart.timeScale()) {
-            var logicalNow = chart.timeScale().getVisibleLogicalRange();
-            var total = logicalNow ? Math.round(logicalNow.to) : _mainCandles.length;
-            if (total > 100) {
-              _applyZoomWithRetry({ from: total - 100, to: total });
-            } else {
-              _applyZoomWithRetry(zoomTarget);
-            }
+          _calcAndDrawVwap().finally(function () {});
+        } else if (!useVwap) {
+          _lastVwapFetch = 0;
+        }
+
+        // Appliquer le range final en timestamps (jamais de logical range)
+        if (chart && chart.timeScale()) {
+          if (savedTarget && keepZoom) {
+            try { chart.timeScale().setVisibleRange({ from: savedTarget.from, to: savedTarget.to }); } catch(e) {}
+          } else if (!keepZoom) {
+            var bars = { '1m':200,'3m':100,'5m':100,'15m':96,'30m':96,'1h':72,'2h':72,'4h':60,'1d':90 }[currentInterval] || 100;
+            var fromIdx = Math.max(0, candles.length - bars);
+            try {
+              chart.timeScale().setVisibleRange({ from: candles[fromIdx].time, to: last.time });
+            } catch(e) {}
           }
         }
 
@@ -11844,19 +11855,18 @@ TradeEditorController.renderHtml = function (day, trade) {
           try { countdownPriceLine.applyOptions({ price: last.close }); } catch(e) {}
         }
         _updateCountdownLabel();
-        setTimeout(function() {
-          try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
-        }, 50);
-        // Subscribe aux changements de range pour debug
-        try {
-          chart.timeScale().subscribeVisibleLogicalRangeChange(function(range) {
-            if (range) console.log('[RANGE CHANGE]', JSON.stringify(range), (new Error()).stack.split('\n').slice(1,4).join(' | '));
-          });
-        } catch(e) {}
+
+        // Re-resize après render (le widget peut avoir changé de taille)
+        var container = document.getElementById('btcChartContainer');
+        if (container && chart) {
+          var r = container.getBoundingClientRect();
+          if (r.width > 0 && r.height > 0) {
+            chart.resize(Math.floor(r.width), Math.floor(r.height));
+          }
+        }
       })
       .catch(function (err) {
         console.error('[btc-chart] fetch:', err);
-        _isFetching = false;
         var container = document.getElementById('btcChartContainer');
         if (container && !chartReady) {
           container.innerHTML = '<div class="chart-error-state">'
