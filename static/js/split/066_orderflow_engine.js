@@ -568,12 +568,27 @@
       ts.endTime = ts.startTime + (this.timeScale.width - ts.leftMargin - ts.rightMargin) / ts.pixelsPerMs;
     }
 
-    if (mode === 'v' || mode === 'both') {
+    if (mode === 'v') {
+      // Vertical drag = zoom prix continu
+      // Glisser vers le haut (dy < 0) = zoom in. Vers le bas (dy > 0) = zoom out.
       var ps = this.priceScale;
-      // Drag up => chart monte. Drag down => chart descend.
-      var dp = dy / ps.pixelsPerUnit;
-      ps.minPrice = this.scrollStart.priceMin + dp;
-      ps.maxPrice = this.scrollStart.priceMax + dp;
+      var startMin = this.scrollStart.priceMin;
+      var startMax = this.scrollStart.priceMax;
+      var startRange = startMax - startMin;
+      var centerPrice = this.yToPrice(this.dragStart.y);
+      if (!Number.isFinite(centerPrice)) centerPrice = (startMin + startMax) / 2;
+      var zoomFactor = Math.exp(-dy * 0.004);
+      var newRange = startRange / zoomFactor;
+      if (newRange < 10) newRange = 10;
+      if (newRange > 100000) newRange = 100000;
+      var centerRatio = (centerPrice - startMin) / startRange;
+      ps.minPrice = centerPrice - newRange * centerRatio;
+      ps.maxPrice = ps.minPrice + newRange;
+    } else if (mode === 'both') {
+      // Fallback drag diagonal (rare) : pan temps seulement
+      var dt = -dx / ts.pixelsPerMs;
+      ts.startTime = this.scrollStart.time + dt;
+      ts.endTime = ts.startTime + (this.timeScale.width - ts.leftMargin - ts.rightMargin) / ts.pixelsPerMs;
     }
 
     this._dirty = true;
