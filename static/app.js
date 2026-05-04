@@ -11417,6 +11417,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     countdownTimer: null,
     refreshTimer: null,
     lastCandleTime: 0,
+    clockOffset: 0,
     lastCountdownFetchAt: 0,
     // WS
     ws: null,
@@ -11878,14 +11879,15 @@ TradeEditorController.renderHtml = function (day, trade) {
       function tick() {
         if (!S.countdownPriceLine) { _updateCountdownLabel('—'); return; }
         if (!S.lastCandleTime) { _updateCountdownLabel('—'); return; }
-        var now = Date.now();
+        // adjustedNow = Date.now() corrigé de l'offset serveur (horloge locale decalee)
+        var now = Date.now() + S.clockOffset;
         var ms = _getIntervalMs(S.timeframe);
-        // Guard anti timestamp corrompu
-        if (S.lastCandleTime < now - ms * 500 || S.lastCandleTime > now + ms * 2) {
+        var elapsed = now - S.lastCandleTime;
+        // Guard anti timestamp aberrant (clockOffset pas encore calcule ou decale)
+        if (elapsed < -ms * 2 || elapsed > ms * 500) {
           _updateCountdownLabel('—');
           return;
         }
-        var elapsed = now - S.lastCandleTime;
         var remaining = ms - elapsed;
         if (remaining <= 0) {
           _updateCountdownLabel('0:00');
@@ -11918,7 +11920,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       if (S.wsConnected && !S.wsError) return;
       // Fallback REST seulement proche de la cloture
       var nextCloseMs = S.lastCandleTime + ms;
-      var now = Date.now();
+      var now = Date.now() + S.clockOffset;
       if (now < nextCloseMs + 1500) return;
       // REST fallback — update la derniere bougie seulement
       _fetchLatestCandleOnly();
@@ -11949,6 +11951,7 @@ TradeEditorController.renderHtml = function (day, trade) {
           if (S.candles.length > 300) S.candles = S.candles.slice(-300);
         }
         S.lastCandleTime = latest.time * 1000;
+        S.clockOffset = (latest.time * 1000) - Date.now();
         S.candleSeries.update(latest);
         if (S.follow && !S.userDragging) {
           applyBtcWidgetBestView();
@@ -12082,6 +12085,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     var priceEl = document.getElementById('btcChartPrice');
     if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
     S.lastCandleTime = k.t;
+    S.clockOffset = k.t - Date.now();
     if (S.candleSeries) { try { S.candleSeries.update(candle); } catch(e) {} }
     if (S.countdownPriceLine) { try { S.countdownPriceLine.applyOptions({ price: candle.close }); } catch(e) {} }
     if (S.follow && !S.userDragging) { _withProgrammaticRange(function () { maybeFollowBtcWidgetPriceY(); }); }
@@ -12228,7 +12232,10 @@ TradeEditorController.renderHtml = function (day, trade) {
 
         var candles = _normalizeCandles(raw);
         var last = candles[candles.length - 1];
-        S.lastCandleTime = last.time * 1000;
+        var candleTimeMs = last.time * 1000;
+        S.lastCandleTime = candleTimeMs;
+        // Calcul de l'offset serveur (paliatif si horloge locale decalee)
+        S.clockOffset = candleTimeMs - Date.now();
         S.candles = candles;
 
         _startCountdown();
@@ -12353,6 +12360,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   var chartStyle = localStorage.getItem('chartDefStyle') || 'candlestick';
   var countdownTimer = null;
   var lastCandleTime = 0;
+  var clockOffset = 0;
   var lastCountdownFetchAt = 0;
   var lastPrice = 0;
   var manualPriceRange = null;
@@ -12747,6 +12755,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     var priceEl = document.getElementById('chartPrice');
     if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
     lastCandleTime = k.t;
+    clockOffset = k.t - Date.now();
     if (candlestickSeries) {
       try {
         if (chartStyle === 'candlestick') {
@@ -13494,6 +13503,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 
         var last = candles[candles.length - 1];
         lastCandleTime = last.time * 1000;
+        clockOffset = (last.time * 1000) - Date.now();
         lastPrice = last.close;
         _startCountdown();
         _startAutoRefresh();
@@ -13584,14 +13594,14 @@ TradeEditorController.renderHtml = function (day, trade) {
     setTimeout(function () {
     function tick() {
       if (!lastCandleTime) { _updateCountdownLabel('—'); return; }
-      var now = Date.now();
+      var now = Date.now() + clockOffset;
       var ms = _getIntervalMs(currentInterval);
-      // Guard anti timestamp corrompu
-      if (lastCandleTime < now - ms * 500 || lastCandleTime > now + ms * 2) {
+      var elapsed = now - lastCandleTime;
+      // Guard anti timestamp aberrant (clockOffset pas encore calcule)
+      if (elapsed < -ms * 2 || elapsed > ms * 500) {
         _updateCountdownLabel('—');
         return;
       }
-      var elapsed = now - lastCandleTime;
       var remaining = ms - elapsed;
       if (remaining <= 0) {
         _updateCountdownLabel('0:00');
@@ -13629,7 +13639,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       if (!lastCandleTime) return;
       if (wsConnected && !wsError) return;
       var nextCloseMs = lastCandleTime + ms;
-      var now = Date.now();
+      var now = Date.now() + clockOffset;
       if (now < nextCloseMs + 1500) return;
       _fetchLatestCandleOnly();
     }, interval);
@@ -13659,6 +13669,7 @@ TradeEditorController.renderHtml = function (day, trade) {
           }
         }
         lastCandleTime = latest.time * 1000;
+        clockOffset = (latest.time * 1000) - Date.now();
         candlestickSeries.update(chartStyle === 'candlestick' ? latest : { time: latest.time, value: latest.close });
         if (volumeSeries) {
           volumeSeries.update({ time: latest.time, value: latest.volume, color: latest.close >= latest.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' });
