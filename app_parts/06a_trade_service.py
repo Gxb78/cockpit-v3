@@ -92,7 +92,14 @@ def service_update_trade(trade_id, data_json, db):
     if semantic_errors:
         return {"error": "; ".join(semantic_errors)}, 400
     
-    # Recalculer PnL et plan
+    # Invalider PnL si un champ de calcul a change et que l'utilisateur
+    # n'a pas fourni pnl explicitement
+    _recalc_fields = {"entry_price", "exit_price", "take_profit", "stop_loss",
+                      "position_size", "leverage", "direction"}
+    if any(f in payload for f in _recalc_fields) and "pnl" not in payload:
+        semantic_payload["pnl"] = None
+        semantic_payload["is_win"] = None
+
     _auto_calc_pnl(semantic_payload, existing_row["day_id"], db)
     for field in ("pnl", "is_win"):
         if field in semantic_payload and semantic_payload[field] is not None:

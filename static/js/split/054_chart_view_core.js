@@ -18,13 +18,13 @@
   var WIDGET_VIEW = {
     visibleBars: { '1m':200,'3m':120,'5m':110,'15m':96,'30m':90,'1h':84,'2h':78,'4h':72,'6h':60,'8h':50,'12h':40,'1d':90 },
     futureBars:  { '1m':24,'3m':18,'5m':18,'15m':16,'30m':14,'1h':12,'2h':12,'4h':10,'6h':10,'8h':8,'12h':8,'1d':8 },
-    padding: { top: 0.22, bottom: 0.18, minRangeRatio: 0.002 },
+    padding: { top: 0.08, bottom: 0.08, minRangeRatio: 0.002 },
   };
 
   var CHART_VIEW = {
     visibleBars: { '1m':160,'3m':130,'5m':120,'15m':110,'30m':100,'1h':96,'2h':90,'4h':84,'6h':78,'8h':72,'12h':60,'1d':90 },
     futureBars:  { '1m':22,'3m':20,'5m':18,'15m':16,'30m':14,'1h':12,'2h':12,'4h':10,'6h':10,'8h':8,'12h':8,'1d':8 },
-    padding: { top: 0.22, bottom: 0.18, minRangeRatio: 0.0025 },
+    padding: { top: 0.10, bottom: 0.08, minRangeRatio: 0.0025 },
   };
 
   // ── COMPUTE PRICE RANGE ───────────────────────────────
@@ -44,7 +44,7 @@
     if (!Number.isFinite(high) || !Number.isFinite(low)) return null;
 
     var rawRange = Math.max(high - low, high * padding.minRangeRatio);
-    return { from: low - rawRange * padding.top, to: high + rawRange * padding.bottom };
+    return { from: low - rawRange * padding.bottom, to: high + rawRange * padding.top };
   }
 
   // ── SET PRICE RANGE ────────────────────────────────────

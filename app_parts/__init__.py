@@ -61,7 +61,7 @@ for _part in _PART_FILES:
     _NS["__file__"] = str(_path)
     _NS["__name__"] = "app_parts." + _part.replace(".py", "")
 
-    _before = set(_NS.keys())
+    _before_values = {k: _NS[k] for k in _NS if not k.startswith("_")}
 
     _src = _path.read_text(encoding="utf-8").lstrip("\ufeff")
     try:
@@ -78,12 +78,15 @@ for _part in _PART_FILES:
             f"Erreur au chargement de app_parts/{_part}: {_e}"
         ) from _e
 
-    # Detect public name collisions between parts
-    _after = set(_NS.keys())
-    _new = _after - _before
-    _collisions = {n for n in _new if n in _before and not n.startswith("_")}
-    if _collisions:
-        log.warning("Chevauchement de noms dans %s : %s", _part, _collisions)
+    _overwritten = []
+    for name, old_value in _before_values.items():
+        try:
+            if name in _NS and _NS[name] is not old_value:
+                _overwritten.append(name)
+        except Exception:
+            _overwritten.append(name)
+    if _overwritten:
+        log.warning("Noms publics ecrases dans %s : %s", _part, sorted(_overwritten))
 
 # ---------------------------------------------------------------------------
 # Expose all public names at the app_parts level so that:

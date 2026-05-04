@@ -5,6 +5,16 @@
 
 /* Markdown rendering helpers (lightweight — no external lib needed) */
 
+function _aiSafeHref(url) {
+  try {
+    var u = new URL(url, window.location.origin);
+    if (u.protocol === 'http:' || u.protocol === 'https:' || u.protocol === 'mailto:') {
+      return u.href;
+    }
+  } catch (_) {}
+  return '#';
+}
+
 function _aiRenderInline(text) {
   var s = escapeHtml(text);
   // Bold
@@ -13,8 +23,10 @@ function _aiRenderInline(text) {
   s = s.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
   // Inline code
   s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
-  // Links
-  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  // Links — sanitize href to prevent javascript: / data: injection
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function (_, label, href) {
+    return '<a href="' + escapeHtml(_aiSafeHref(href)) + '" target="_blank" rel="noopener noreferrer">' + label + '</a>';
+  });
   return s;
 }
 
@@ -141,6 +153,9 @@ function _aiStripActions(text) {
 
 /* Render action buttons */
 
+var _aiActionStore = {};
+var _aiActionId = 0;
+
 function _aiRenderActions(actions) {
   if (!actions || actions.length === 0) return '';
   var html = '<div class="ai-chat-actions">';
@@ -158,7 +173,9 @@ function _aiRenderActions(actions) {
         icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
         break;
     }
-    html += '<button type="button" class="ai-chat-action-btn" data-ai-action="' + a.type + '" data-ai-action-data=\'' + JSON.stringify(a.data) + '\'>' + icon + label + '</button>';
+    _aiActionId++;
+    _aiActionStore[_aiActionId] = { type: a.type, data: a.data };
+    html += '<button type="button" class="ai-chat-action-btn" data-ai-action-id="' + _aiActionId + '">' + icon + label + '</button>';
   }
   html += '</div>';
   return html;
@@ -168,10 +185,11 @@ function _aiRenderActions(actions) {
 
 function _aiHandleActionClick(e) {
   var btn = e.currentTarget;
-  var type = btn.getAttribute('data-ai-action');
-  var raw = btn.getAttribute('data-ai-action-data');
-  var data;
-  try { data = JSON.parse(raw); } catch (_) { return; }
+  var id = parseInt(btn.getAttribute('data-ai-action-id'));
+  var stored = _aiActionStore[id];
+  if (!stored) return;
+  var type = stored.type;
+  var data = stored.data;
 
   switch (type) {
     case 'wizOpen':

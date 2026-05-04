@@ -90,6 +90,12 @@ def update_trade(trade_id):
     semantic_errors = _validate_trade_semantics(semantic_payload)
     if semantic_errors:
         return jsonify({"error": "; ".join(semantic_errors)}), 400
+    _recalc_fields = {"entry_price", "exit_price", "take_profit", "stop_loss",
+                      "position_size", "leverage", "direction"}
+    if any(f in payload for f in _recalc_fields) and "pnl" not in payload:
+        semantic_payload["pnl"] = None
+        semantic_payload["is_win"] = None
+
     _auto_calc_pnl(semantic_payload, existing_row["day_id"], db)
     for field in ("pnl", "is_win"):
         if field in semantic_payload and semantic_payload[field] is not None:

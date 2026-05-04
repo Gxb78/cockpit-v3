@@ -77,12 +77,20 @@ if not exist "%PY_CMD%" (
     exit /b 1
 )
 
-:: ---- Deps ----
-"%PY_CMD%" -m pip install -q -r requirements.txt
-if errorlevel 1 (
-    echo [ERR] Dependency install failed.
-    pause
-    exit /b 1
+:: ---- Deps (only if requirements.txt changed) ----
+if exist data\.reqhash (
+    set /p _SAVED_HASH=<data\.reqhash
+)
+for /f "delims=" %%H in ('certutil -hashfile requirements.txt MD5 ^| findstr /v "hash" ^| findstr /v "CertUtil"') do set _CUR_HASH=%%H
+set "_CUR_HASH=%_CUR_HASH: =%"
+if not "%_CUR_HASH%"=="%_SAVED_HASH%" (
+    "%PY_CMD%" -m pip install -q -r requirements.txt
+    if errorlevel 1 (
+        echo [ERR] Dependency install failed.
+        pause
+        exit /b 1
+    )
+    echo %_CUR_HASH%>data\.reqhash
 )
 
 :: ---- Dev mode ----

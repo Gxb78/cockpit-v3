@@ -34,17 +34,26 @@ def _cleanup_stale_pending():
         del _PENDING_IMAGES[k]
 
 def _save_pending_image(file_storage):
-    """Sauvegarde un fichier uploade dans un dossier temp et retourne un token."""
-    if not allowed_file(file_storage.filename or ".png"):
-        sniffed = _sniff_image_extension(file_storage)
-        if not sniffed:
-            raise ValueError("Format d'image non supporte")
-    ext = file_storage.filename.rsplit(".", 1)[1].lower() if "." in (file_storage.filename or "") else "png"
-    ext = "jpg" if ext == "jpeg" else ext
+    """Sauvegarde un fichier uploade dans un dossier temp et retourne un token.
+
+    L'extension est determinee par sniffing du contenu reel, pas par le nom
+    de fichier declare (evite image.exe contenant un vrai PNG).
+    """
+    sniffed = _sniff_image_extension(file_storage)
+    if not sniffed:
+        raise ValueError("Format d'image non supporte")
+
+    file_storage.stream.seek(0, 2)
+    file_size = file_storage.stream.tell()
+    file_storage.stream.seek(0)
+
+    if file_size > MAX_SCREENSHOT_SIZE:
+        raise ValueError("Image trop volumineuse")
+
     token = _uuid.uuid4().hex
     pending_dir = DATA_DIR / "_pending"
     pending_dir.mkdir(exist_ok=True)
-    dest = pending_dir / f"{token}.{ext}"
+    dest = pending_dir / f"{token}.{sniffed}"
     file_storage.save(str(dest))
     _PENDING_IMAGES[token] = {"path": dest, "ts": _time_mod.time()}
     _cleanup_stale_pending()
@@ -1011,8 +1020,13 @@ def _tool_update_trade(db, args):
     if semantic_errors:
         return {"error": "; ".join(semantic_errors)}
 
-    # Auto-calcul du PnL si non fourni mais que les donnees sont la
-    _auto_calc_pnl(payload, existing["day_id"], db)
+    _recalc_fields = {"entry_price", "exit_price", "take_profit", "stop_loss",
+                      "position_size", "leverage", "direction"}
+    if any(f in payload for f in _recalc_fields) and "pnl" not in payload:
+        semantic_payload["pnl"] = None
+        semantic_payload["is_win"] = None
+
+    _auto_calc_pnl(semantic_payload, existing["day_id"], db)
     semantic_payload.update(evaluate_trade_plan(semantic_payload))
 
     if not payload:
