@@ -47,7 +47,6 @@
     // VWAP
     activeVwapPeriods: [],
     vwapInFlight: false,
-    lastVwapFetch: 0,
     // Timers
     countdownTimer: null,
     refreshTimer: null,
@@ -245,6 +244,9 @@
     }
     return out;
   }
+  // Cache des résultats VWAP calculés (évite re-fetch + re-calcul au changement de timeframe)
+  var _vwapResultCache = {};
+
   async function _calcAndDrawVwap() {
     var currentRenderToken = S.renderToken;
     try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) S.activeVwapPeriods = s; } catch(e) {}
@@ -262,34 +264,47 @@
     try { S.chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
     try { S.chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
 
-    var candles = S.candles;
-    var lastTime = candles.length ? candles[candles.length - 1].time : 0;
-    var firstTime = candles.length ? candles[0].time : 0;
-    var coveredSecs = lastTime - firstTime;
+    // Toujours utiliser les données les plus granulaires pour VWAP (pas S.candles)
+    // sinon les valeurs changent selon le timeframe
     var vwapOrder = ['1D', '7D', '30D', '90D'];
 
     for (var vi = 0; vi < vwapOrder.length; vi++) {
       var p = vwapOrder[vi];
       if (S.activeVwapPeriods.indexOf(p) < 0) continue;
       var periodSec = VWAP_SECONDS[p] || 86400;
-      var src;
 
-      if (coveredSecs >= periodSec) {
-        src = candles;
-      } else {
-        var interval, limit;
-        if (periodSec <= 604800) { interval = '15m'; limit = Math.min(Math.ceil(periodSec / 900) + 10, 1000); }
-        else if (periodSec <= 2592000) { interval = '1h'; limit = Math.min(Math.ceil(periodSec / 3600) + 10, 1000); }
-        else { interval = '4h'; limit = Math.min(Math.ceil(periodSec / 14400) + 10, 1000); }
-        src = await _fetchKlines(interval, limit);
-        if (S.renderToken !== currentRenderToken) {
-          S.vwapInFlight = false;
-          return;
+      // Vérifier le cache du résultat VWAP
+      var cached = _vwapResultCache[p];
+      if (cached && (Date.now() - cached.ts < 300000)) {
+        // Résultat encore valide → juste re-afficher
+        var vw = cached.data;
+        if (vw.length < 2) { _removeVwapSeries(p); continue; }
+        var s = S.vwapSeriesMap[p];
+        if (s) {
+          s.applyOptions({ visible: true, color: VWAP_COLORS[p] || '#f59e0b', title: 'VWAP ' + p, lastValueVisible: true });
+          s.setData(vw);
         }
+        await _waitFrame();
+        continue;
+      }
+
+      // Pas de cache → fetch les klines les plus granulaires
+      var interval, limit;
+      if (periodSec <= 604800) { interval = '15m'; limit = Math.min(Math.ceil(periodSec / 900) + 10, 1000); }
+      else if (periodSec <= 2592000) { interval = '1h'; limit = Math.min(Math.ceil(periodSec / 3600) + 10, 1000); }
+      else { interval = '4h'; limit = Math.min(Math.ceil(periodSec / 14400) + 10, 1000); }
+      var src = await _fetchKlines(interval, limit);
+      if (S.renderToken !== currentRenderToken) {
+        S.vwapInFlight = false;
+        return;
       }
 
       var vw = _computeVwap(src, periodSec);
-      if (src !== candles) vw = _alignIndicatorToCandles(vw, candles);
+      // Aligner sur les timestamps des bougies principales (pour un rendu cohérent)
+      vw = _alignIndicatorToCandles(vw, S.candles);
+      // Mettre en cache
+      _vwapResultCache[p] = { data: vw, ts: Date.now() };
+
       if (vw.length < 2) { _removeVwapSeries(p); continue; }
       var s = S.vwapSeriesMap[p];
       if (s) {
@@ -799,12 +814,9 @@
         S.candleSeries.setData(candles);
         _renderIndicators(candles);
 
-        // VWAP
-        if (S.activeVwapPeriods.length > 0 && (!S.lastVwapFetch || Date.now() - S.lastVwapFetch > 300000)) {
-          S.lastVwapFetch = Date.now();
+        // VWAP — toujours recalculer (le cache évite le flood réseau)
+        if (S.activeVwapPeriods.length > 0) {
           _calcAndDrawVwap().finally(function () {});
-        } else if (!S.activeVwapPeriods.length) {
-          S.lastVwapFetch = 0;
         }
 
         // Best view (range horizontal + vertical)

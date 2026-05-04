@@ -11074,7 +11074,6 @@ TradeEditorController.renderHtml = function (day, trade) {
     // VWAP
     activeVwapPeriods: [],
     vwapInFlight: false,
-    lastVwapFetch: 0,
     // Timers
     countdownTimer: null,
     refreshTimer: null,
@@ -11272,6 +11271,9 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
     return out;
   }
+  // Cache des résultats VWAP calculés (évite re-fetch + re-calcul au changement de timeframe)
+  var _vwapResultCache = {};
+
   async function _calcAndDrawVwap() {
     var currentRenderToken = S.renderToken;
     try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) S.activeVwapPeriods = s; } catch(e) {}
@@ -11289,34 +11291,47 @@ TradeEditorController.renderHtml = function (day, trade) {
     try { S.chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
     try { S.chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
 
-    var candles = S.candles;
-    var lastTime = candles.length ? candles[candles.length - 1].time : 0;
-    var firstTime = candles.length ? candles[0].time : 0;
-    var coveredSecs = lastTime - firstTime;
+    // Toujours utiliser les données les plus granulaires pour VWAP (pas S.candles)
+    // sinon les valeurs changent selon le timeframe
     var vwapOrder = ['1D', '7D', '30D', '90D'];
 
     for (var vi = 0; vi < vwapOrder.length; vi++) {
       var p = vwapOrder[vi];
       if (S.activeVwapPeriods.indexOf(p) < 0) continue;
       var periodSec = VWAP_SECONDS[p] || 86400;
-      var src;
 
-      if (coveredSecs >= periodSec) {
-        src = candles;
-      } else {
-        var interval, limit;
-        if (periodSec <= 604800) { interval = '15m'; limit = Math.min(Math.ceil(periodSec / 900) + 10, 1000); }
-        else if (periodSec <= 2592000) { interval = '1h'; limit = Math.min(Math.ceil(periodSec / 3600) + 10, 1000); }
-        else { interval = '4h'; limit = Math.min(Math.ceil(periodSec / 14400) + 10, 1000); }
-        src = await _fetchKlines(interval, limit);
-        if (S.renderToken !== currentRenderToken) {
-          S.vwapInFlight = false;
-          return;
+      // Vérifier le cache du résultat VWAP
+      var cached = _vwapResultCache[p];
+      if (cached && (Date.now() - cached.ts < 300000)) {
+        // Résultat encore valide → juste re-afficher
+        var vw = cached.data;
+        if (vw.length < 2) { _removeVwapSeries(p); continue; }
+        var s = S.vwapSeriesMap[p];
+        if (s) {
+          s.applyOptions({ visible: true, color: VWAP_COLORS[p] || '#f59e0b', title: 'VWAP ' + p, lastValueVisible: true });
+          s.setData(vw);
         }
+        await _waitFrame();
+        continue;
+      }
+
+      // Pas de cache → fetch les klines les plus granulaires
+      var interval, limit;
+      if (periodSec <= 604800) { interval = '15m'; limit = Math.min(Math.ceil(periodSec / 900) + 10, 1000); }
+      else if (periodSec <= 2592000) { interval = '1h'; limit = Math.min(Math.ceil(periodSec / 3600) + 10, 1000); }
+      else { interval = '4h'; limit = Math.min(Math.ceil(periodSec / 14400) + 10, 1000); }
+      var src = await _fetchKlines(interval, limit);
+      if (S.renderToken !== currentRenderToken) {
+        S.vwapInFlight = false;
+        return;
       }
 
       var vw = _computeVwap(src, periodSec);
-      if (src !== candles) vw = _alignIndicatorToCandles(vw, candles);
+      // Aligner sur les timestamps des bougies principales (pour un rendu cohérent)
+      vw = _alignIndicatorToCandles(vw, S.candles);
+      // Mettre en cache
+      _vwapResultCache[p] = { data: vw, ts: Date.now() };
+
       if (vw.length < 2) { _removeVwapSeries(p); continue; }
       var s = S.vwapSeriesMap[p];
       if (s) {
@@ -11826,12 +11841,9 @@ TradeEditorController.renderHtml = function (day, trade) {
         S.candleSeries.setData(candles);
         _renderIndicators(candles);
 
-        // VWAP
-        if (S.activeVwapPeriods.length > 0 && (!S.lastVwapFetch || Date.now() - S.lastVwapFetch > 300000)) {
-          S.lastVwapFetch = Date.now();
+        // VWAP — toujours recalculer (le cache évite le flood réseau)
+        if (S.activeVwapPeriods.length > 0) {
           _calcAndDrawVwap().finally(function () {});
-        } else if (!S.activeVwapPeriods.length) {
-          S.lastVwapFetch = 0;
         }
 
         // Best view (range horizontal + vertical)
@@ -11958,6 +11970,22 @@ TradeEditorController.renderHtml = function (day, trade) {
     return new Promise(function (resolve) { requestAnimationFrame(resolve); });
   }
 
+  // ── Programmatic range guard (emprunté à 060) ──
+  var _programmaticRangeDepth = 0;
+  var _suppressRangeEventsUntil = 0;
+  function _withProgrammaticRange(fn) {
+    _programmaticRangeDepth++;
+    _suppressRangeEventsUntil = performance.now() + 250;
+    try { fn(); } finally {
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          _programmaticRangeDepth = Math.max(0, _programmaticRangeDepth - 1);
+          _suppressRangeEventsUntil = performance.now() + 100;
+        });
+      });
+    }
+  }
+
   // ── Compat LWC v4/v5 ──
   function _addCandleSeries(api, opts) {
     if (typeof api.addSeries === 'function') return api.addSeries(window.LightweightCharts.CandlestickSeries, opts);
@@ -11977,42 +12005,22 @@ TradeEditorController.renderHtml = function (day, trade) {
   }
 
   // ── INDICATOR CALCULATIONS ──
-  async function _applyZoomWithRetry(target, maxAttempts) {
-    if (!target || !chart || !chart.timeScale()) return;
-    var isLogical = target.to < 1e9;
-    console.log('[ZOOM] 062 _applyZoomWithRetry target=', JSON.stringify(target),
-      'current logical=', JSON.stringify(chart.timeScale().getVisibleLogicalRange()),
-      'mode=', isLogical ? 'LOGICAL' : 'TIMESTAMP');
-
-    chart.timeScale().applyOptions({ handleScroll: false, handleScale: false });
-    await _waitFrame();
-    await _waitFrame();
-
-    var current = chart.timeScale().getVisibleLogicalRange();
-    if (current) chart.timeScale().setVisibleLogicalRange({ from: current.from, to: current.to });
-    await _waitFrame();
-
-    function applyTarget() {
-      if (isLogical) chart.timeScale().setVisibleLogicalRange({ from: target.from, to: target.to });
-      else chart.timeScale().setVisibleRange({ from: target.from, to: target.to });
-    }
-    applyTarget();
-
-    maxAttempts = maxAttempts || 10;
-    var tolerance = isLogical ? 1.0 : 60;
-    for (var attempt = 0; attempt < maxAttempts; attempt++) {
-      await _waitFrame();
-      var actual = chart.timeScale().getVisibleLogicalRange();
-      if (!actual) continue;
-      var delta = Math.abs(actual.from - target.from) + Math.abs(actual.to - target.to);
-      if (delta < tolerance) {
-        console.log('[ZOOM] 062 \u2705 stabilisé en', attempt + 1, 'tentatives');
-        break;
+  function _applyChartBestView(savedTarget, keepZoom, candles) {
+    if (!chart || !chart.timeScale()) return;
+    _withProgrammaticRange(function () {
+      var logicalAfter;
+      try { logicalAfter = chart.timeScale().getVisibleLogicalRange(); } catch(e) {}
+      if (!logicalAfter) return;
+      var totalLogical = Math.round(logicalAfter.to);
+      if (savedTarget && totalLogical > 100) {
+        // Zoom préservé du rendu précédent — centrer sur les 100 dernières barres
+        chart.timeScale().setVisibleLogicalRange({ from: totalLogical - 100, to: totalLogical });
+      } else if (!keepZoom && candles && candles.length) {
+        // Premier chargement ou changement de timeframe — 100 dernières barres
+        var nb = Math.min(100, candles.length);
+        chart.timeScale().setVisibleLogicalRange({ from: totalLogical - nb, to: totalLogical });
       }
-      applyTarget();
-    }
-    if (attempt >= maxAttempts) console.warn('[ZOOM] 062 \u274c non stabilisé après', maxAttempts, 'tentatives');
-    chart.timeScale().applyOptions({ handleScroll: true, handleScale: true });
+    });
   }
 
   // Settings state
@@ -12348,9 +12356,12 @@ TradeEditorController.renderHtml = function (day, trade) {
           borderVisible: false,
           rightOffset: 20,
           shiftVisibleRangeOnNewBar: false,
+          rightBarStaysOnScroll: false,
           lockVisibleTimeRangeOnResize: true,
         },
-        handleScroll: { vertTouchDrag: true, horzTouchDrag: true, pressedMouseMove: true },
+        handleScroll: { vertTouchDrag: true, horzTouchDrag: true, pressedMouseMove: true, mouseWheel: true },
+        handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
+        kineticScroll: { mouse: false, touch: false },
       });
 
       window.__lwcChart = chart;
@@ -12618,7 +12629,6 @@ TradeEditorController.renderHtml = function (day, trade) {
   var INTERVAL_MINUTES = { '1m':1,'3m':3,'5m':5,'15m':15,'30m':30,'1h':60,'2h':120,'4h':240,'6h':360,'8h':480,'12h':720,'1d':1440,'3d':4320,'1w':10080,'1M':43200 };
   // ── VWAP (multi-periode) ──
   var _vwapInFlight = false;
-  var _lastVwapFetch = 0;
   var _mainCandles = [];  // Bougies principales (stockees pour VWAP inline)
 
   function _removeVwapSeries(key) {
@@ -12635,7 +12645,10 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
   }
 
-  async function _calcAndDrawVwap(zoomTarget) {
+  // Cache des résultats VWAP calculés (évite re-fetch + re-calcul au changement de timeframe)
+  var _vwapResultCache = {};
+
+  async function _calcAndDrawVwap() {
     console.log('[VWAP] 062 triggered by:', new Error().stack.split('\n')[2]);
     console.log('[VWAP] 062 _calcAndDrawVwap periods=', activeVwapPeriods, '_mainCandles=', _mainCandles.length);
     Object.keys(vwapSeriesMap).forEach(function (k) {
@@ -12679,79 +12692,56 @@ TradeEditorController.renderHtml = function (day, trade) {
         while (j + 1 < sorted.length && sorted[j + 1].time <= t) j++;
         if (sorted[j] && sorted[j].time <= t) out.push({ time: t, value: sorted[j].value });
       }
-      console.log('[VWAP] 062 aligned', indicatorPoints.length, '->', out.length, 'points');
-      if (out.length > 0) {
-        console.log('[VWAP] 062 aligned first=', new Date(out[0].time*1000).toISOString(),
-          'last=', new Date(out[out.length-1].time*1000).toISOString());
-      }
       return out;
     }
-
-    // Helper: rAF en promesse (module-level definit plus haut)
-    // Meme helper disponible a ce niveau — pas besoin de redefinir
 
     // Verrouiller LWC pendant les setData
     try { chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
     try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
 
-    var lastTime = _mainCandles.length ? _mainCandles[_mainCandles.length - 1].time : 0;
-    var firstTime = _mainCandles.length ? _mainCandles[0].time : 0;
-    var coveredSecs = lastTime - firstTime;
-
-    // SEQUENTIEL — chaque setData attend 1 frame
+    // Toujours utiliser les données les plus granulaires pour VWAP (pas _mainCandles)
     var vwapOrder = ['1D', '7D', '30D', '90D'];
     for (var vi = 0; vi < vwapOrder.length; vi++) {
       var p = vwapOrder[vi];
       if (activeVwapPeriods.indexOf(p) < 0) continue;
       var periodSec = VWAP_SECONDS[p] || 86400;
-      var candles;
 
-      if (coveredSecs >= periodSec) {
-        candles = _mainCandles;
-      } else {
-        var interval, limit;
-        if (periodSec <= 604800) { interval = '15m'; limit = Math.min(Math.ceil(periodSec / 900) + 10, 1000); }
-        else if (periodSec <= 2592000) { interval = '1h'; limit = Math.min(Math.ceil(periodSec / 3600) + 10, 1000); }
-        else { interval = '4h'; limit = Math.min(Math.ceil(periodSec / 14400) + 10, 1000); }
-        console.log('[VWAP] 062 pas assez de 3m pour', p, ', fallback fetch', interval, 'limit=', limit);
-        candles = await _fetchKlines(interval, limit);
+      // Vérifier le cache du résultat VWAP
+      var cached = _vwapResultCache[p];
+      if (cached && (Date.now() - cached.ts < 300000)) {
+        // Résultat encore valide → juste re-afficher
+        var vw = cached.data;
+        if (vw.length < 2) { _removeVwapSeries(p); continue; }
+        var s = vwapSeriesMap[p];
+        if (s) { s.applyOptions({ visible: true, color: VWAP_COLORS[p], title: 'VWAP ' + p, lastValueVisible: true }); s.setData(vw); }
+        await _waitFrame();
+        continue;
       }
 
-      var vw = _computeVwap(candles, periodSec);
-      // Aligner sur les timestamps des bougies principales si fallback
-      if (candles !== _mainCandles) vw = _alignIndicatorToCandles(vw);
+      // Pas de cache → fetch les klines les plus granulaires
+      var interval, limit;
+      if (periodSec <= 604800) { interval = '15m'; limit = Math.min(Math.ceil(periodSec / 900) + 10, 1000); }
+      else if (periodSec <= 2592000) { interval = '1h'; limit = Math.min(Math.ceil(periodSec / 3600) + 10, 1000); }
+      else { interval = '4h'; limit = Math.min(Math.ceil(periodSec / 14400) + 10, 1000); }
+      var src = await _fetchKlines(interval, limit);
+
+      var vw = _computeVwap(src, periodSec);
+      // Aligner sur les timestamps des bougies principales
+      vw = _alignIndicatorToCandles(vw);
+      // Mettre en cache
+      _vwapResultCache[p] = { data: vw, ts: Date.now() };
+
       if (vw.length < 2) { _removeVwapSeries(p); continue; }
       var s = vwapSeriesMap[p];
       if (s) { s.applyOptions({ visible: true, color: VWAP_COLORS[p], title: 'VWAP ' + p, lastValueVisible: true }); s.setData(vw); }
-      console.log('[VWAP] 062 after setData period=', p, 'nbPts=', vw.length,
-        'first=', new Date(vw[0].time * 1000).toISOString(),
-        'last=', new Date(vw[vw.length - 1].time * 1000).toISOString());
 
       await _waitFrame();
     }
 
-    // Tous les setData finis → ajuster target.to sur la range reelle
+    // Tous les setData finis → cleanup
     _vwapInFlight = false;
     try { chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
-    try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: false }); } catch(e) {}
-
-    var logicalAfter = chart.timeScale().getVisibleLogicalRange();
-    var totalLogical = logicalAfter ? Math.round(logicalAfter.to) : _mainCandles.length;
-    var adjustedTarget = null;
-    if (zoomTarget && totalLogical > 100) {
-      adjustedTarget = {
-        from: totalLogical - 100,
-        to: totalLogical,
-      };
-      console.log('[VWAP] 062 adjusted target (logical):', JSON.stringify(adjustedTarget),
-        '| totalLogical:', totalLogical, '| _mainCandles:', _mainCandles.length);
-      try { chart.timeScale().setVisibleLogicalRange({ from: adjustedTarget.from, to: adjustedTarget.to }); } catch(e) {}
-    } else if (zoomTarget) {
-      try { chart.timeScale().setVisibleRange({ from: zoomTarget.from, to: zoomTarget.to }); } catch(e) {}
-    }
-    if (adjustedTarget) _applyZoomWithRetry(adjustedTarget);
-    else if (zoomTarget) _applyZoomWithRetry(zoomTarget);
-    try { chart.timeScale().applyOptions({ rightBarStaysOnScroll: true }); } catch(e) {}
+    try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: true }); } catch(e) {}
   }
 
   // ── TIMEFRAMES ──
@@ -13092,35 +13082,15 @@ TradeEditorController.renderHtml = function (day, trade) {
         var phantomTime = last.time + intervalSec * 5;
         try { candlestickSeries.update({ time: phantomTime, open: last.close, high: last.close, low: last.close, close: last.close }); } catch(e) {}
 
-        // VWAP — avec TTL 5min pour éviter les re-fetchs inutiles
-        var zoomTarget = null;
-        if (savedTarget) {
-          zoomTarget = { from: savedTarget.from, to: savedTarget.to, hasSavedTarget: true };
-        } else if (!keepZoom) {
-          // Premier chargement : calculer en timestamps (invariant VWAP)
-          // rightOffset dans les options chart ne s'applique pas avec
-          // Premier chargement : calculer en timestamps (invariant VWAP)
-          var firstIdx = Math.max(0, candles.length - 100);
-          var fromTime = candles[firstIdx].time;
-          zoomTarget = { from: fromTime, to: candles[candles.length - 1].time, hasSavedTarget: false };
-        }
-        var _firstTotal = zoomTarget ? zoomTarget.to - 15 : 0;
-        if (!_lastVwapFetch || Date.now() - _lastVwapFetch > 300000) {
-          _lastVwapFetch = Date.now();
-          _calcAndDrawVwap(zoomTarget).finally(function () {
+        // VWAP — toujours recalculer (le cache fallback évite le flood réseau)
+        if (activeVwapPeriods.length > 0) {
+          _calcAndDrawVwap().finally(function () {
             _isFetching = false;
+            _applyChartBestView(savedTarget, keepZoom, candles);
           });
         } else {
           _isFetching = false;
-          if (zoomTarget && chart && chart.timeScale()) {
-            var logicalNow = chart.timeScale().getVisibleLogicalRange();
-            var total = logicalNow ? Math.round(logicalNow.to) : _mainCandles.length;
-            if (total > 100) {
-              _applyZoomWithRetry({ from: total - 100, to: total });
-            } else {
-              _applyZoomWithRetry(zoomTarget);
-            }
-          }
+          _applyChartBestView(savedTarget, keepZoom, candles);
         }
 
         // Volume Profile (passe les bougies pour recalcul)
@@ -13140,11 +13110,6 @@ TradeEditorController.renderHtml = function (day, trade) {
         volumeSeries.setData(candles.map(function (c) {
           return { time: c.time, value: c.volume, color: c.close >= c.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' };
         }));
-
-        // Unlock vertical scroll by disabling autoScale AFTER data is visible
-        setTimeout(function() {
-          try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
-        }, 50);
       })
       .catch(function (err) {
         console.error('[chart] fetch error:', err);
