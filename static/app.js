@@ -12233,12 +12233,19 @@ TradeEditorController.renderHtml = function (day, trade) {
   var chartStyle = localStorage.getItem('chartDefStyle') || 'candlestick';
   var countdownTimer = null;
   var lastCandleTime = 0;
+  var lastCountdownFetchAt = 0;
   var lastPrice = 0;
   var resizeObserver = null;
   var refreshTimer = null;
   var ws = null;
+  var wsGeneration = 0;
+  var wsClosing = false;
   var wsReconnectTimer = null;
-  var _wsIntentionalClose = false;
+  var wsReconnectAttempts = 0;
+  var wsConnected = false;
+  var wsError = false;
+  var lastWsConnectAt = 0;
+  var activeWsKey = null;
 
   // Guards anti-boucle
   var _isFetching = false;
@@ -12495,63 +12502,121 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
   }
 
-  // ── WEBSOCKET ──
+  // ── WEBSOCKET — Architecture générationnelle ──
 
-  function _connectWs() {
-    if (ws && ws.readyState === WebSocket.CONNECTING) return;
-    if (ws) { _wsIntentionalClose = true; try { ws.close(); } catch(e) {} _wsIntentionalClose = false; }
-    var stream = currentSymbol.toLowerCase() + '@kline_' + currentInterval;
-    var url = 'wss://stream.binance.com:9443/ws/' + stream;
-    try {
-      ws = new WebSocket(url);
-      ws.onmessage = function (msg) {
-        try {
-          var d = JSON.parse(msg.data);
-          var k = d && d.k;
-          if (!k) return;
-          var candle = {
-            time: Math.floor(k.t / 1000),
-            open: parseFloat(k.o),
-            high: parseFloat(k.h),
-            low: parseFloat(k.l),
-            close: parseFloat(k.c),
-            volume: parseFloat(k.v),
-          };
-          lastPrice = candle.close;
-          var priceEl = document.getElementById('chartPrice');
-          if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
-          lastCandleTime = k.t;
-          if (candlestickSeries) {
-            try {
-              if (chartStyle === 'candlestick') {
-                candlestickSeries.update(candle);
-              } else {
-                candlestickSeries.update({ time: candle.time, value: candle.close });
-              }
-            } catch(e) {}
-            if (volumeSeries) {
-              try { volumeSeries.update({ time: candle.time, value: candle.volume, color: candle.close >= candle.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' }); } catch(e) {}
-            }
-          }
-          if (countdownPriceLine) {
-            try { countdownPriceLine.applyOptions({ price: candle.close }); } catch(e) {}
-          }
-        } catch(e) {}
-      };
-      ws.onclose = function () {
-        if (_wsIntentionalClose) return;
-        if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
-        wsReconnectTimer = setTimeout(_connectWs, 3000);
-      };
-      ws.onerror = function() {};
-    } catch(e) { console.error('[chart] ws:', e); }
+  function _getWsKey() {
+    return (currentSymbol || 'BTCUSDT') + ':' + (currentInterval || '3m');
   }
 
-  function _disconnectWs() {
+  function _disconnectWs(reason) {
+    wsGeneration++;
     if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
-    if (ws) {
-      if (ws.readyState === WebSocket.CONNECTING) { ws = null; return; }
-      _wsIntentionalClose = true; try { ws.close(); } catch(e) {} ws = null; _wsIntentionalClose = false;
+    wsConnected = false;
+    wsClosing = true;
+    var old = ws;
+    ws = null;
+    activeWsKey = null;
+    if (old) {
+      try {
+        old.onopen = null;
+        old.onmessage = null;
+        old.onerror = null;
+        old.onclose = null;
+        if (old.readyState === WebSocket.OPEN || old.readyState === WebSocket.CONNECTING) {
+          old.close(1000, reason || 'intentional');
+        }
+      } catch(e) { console.warn('[chart][WS] close error', e); }
+    }
+    setTimeout(function () { wsClosing = false; }, 500);
+  }
+
+  function _connectWs(reason) {
+    var wsKey = _getWsKey();
+    var now = Date.now();
+
+    if (ws && activeWsKey === wsKey) {
+      var alive = ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING;
+      if (alive) return;
+    }
+
+    if (now - lastWsConnectAt < 10000) return;
+    lastWsConnectAt = now;
+
+    wsGeneration++;
+    var generation = wsGeneration;
+
+    if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+
+    var stream = currentSymbol.toLowerCase() + '@kline_' + currentInterval;
+    var url = 'wss://stream.binance.com:9443/ws/' + stream;
+
+    wsClosing = false;
+    wsError = false;
+    wsConnected = false;
+    activeWsKey = wsKey;
+
+    var newWs = new WebSocket(url);
+    ws = newWs;
+
+    newWs.onmessage = function (event) {
+      if (generation !== wsGeneration || newWs !== ws) return;
+      try { _handleWsMessage(event.data); } catch(e) { console.warn('[chart][WS] msg', e); }
+    };
+
+    newWs.onclose = function (event) {
+      if (generation !== wsGeneration || newWs !== ws) return;
+      wsConnected = false;
+      if (wsClosing || event.code === 1000 || event.code === 1001) return;
+      wsError = true;
+      _scheduleWsReconnect('unexpected-close');
+    };
+
+    newWs.onerror = function () {
+      if (generation !== wsGeneration || newWs !== ws) return;
+      wsError = true;
+    };
+  }
+
+  function _scheduleWsReconnect(reason) {
+    if (wsReconnectTimer) return;
+    wsReconnectAttempts = Math.min((wsReconnectAttempts || 0) + 1, 6);
+    var delay = Math.min(60000, 2000 * Math.pow(2, wsReconnectAttempts - 1));
+    wsReconnectTimer = setTimeout(function () {
+      wsReconnectTimer = null;
+      _connectWs('reconnect:' + reason);
+    }, delay);
+  }
+
+  function _handleWsMessage(raw) {
+    var d = JSON.parse(raw);
+    var k = d && d.k;
+    if (!k) return;
+    var candle = {
+      time: Math.floor(k.t / 1000),
+      open: parseFloat(k.o),
+      high: parseFloat(k.h),
+      low: parseFloat(k.l),
+      close: parseFloat(k.c),
+      volume: parseFloat(k.v),
+    };
+    lastPrice = candle.close;
+    var priceEl = document.getElementById('chartPrice');
+    if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
+    lastCandleTime = k.t;
+    if (candlestickSeries) {
+      try {
+        if (chartStyle === 'candlestick') {
+          candlestickSeries.update(candle);
+        } else {
+          candlestickSeries.update({ time: candle.time, value: candle.close });
+        }
+      } catch(e) {}
+      if (volumeSeries) {
+        try { volumeSeries.update({ time: candle.time, value: candle.volume, color: candle.close >= candle.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' }); } catch(e) {}
+      }
+    }
+    if (countdownPriceLine) {
+      try { countdownPriceLine.applyOptions({ price: candle.close }); } catch(e) {}
     }
   }
 
@@ -12960,7 +13025,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         btns.forEach(function (b) { b.classList.remove('active'); });
         btn.classList.add('active');
         currentInterval = btn.dataset.interval;
-        _disconnectWs();
+        _disconnectWs('timeframe');
         _fetchAndRender(false, 'user');
       });
     });
@@ -12978,7 +13043,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         document.querySelectorAll('.chart-pair-btn').forEach(function (b) { b.classList.remove('active'); });
         btn.classList.add('active');
         currentSymbol = btn.dataset.symbol;
-        _disconnectWs();
+        _disconnectWs('pair');
         _fetchAndRender(false, 'user');
       });
     });
@@ -13234,9 +13299,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   function _fetchAndRender(keepZoom, _source) {
     if (!candlestickSeries) return;
-    // Guard anti-appels simultanés
     if (_isFetching) return;
-    // Debounce 5s sur les appels automatiques (WS, countdown, auto-refresh)
     if (_source !== 'user') {
       var now = Date.now();
       if (_lastFetchTs && (now - _lastFetchTs) < _FETCH_COOLDOWN_MS) return;
@@ -13244,6 +13307,10 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
     _isFetching = true;
     if (!_firstFetchMs) _firstFetchMs = Date.now();
+
+    // WS reset : UNIQUEMENT sur init/user/timeframe/pair
+    var shouldResetWs = _source === 'init' || _source === 'user' || _source === 'timeframe' || _source === 'pair' || _source === 'settings';
+    if (shouldResetWs) _disconnectWs('render:' + _source);
 
     // Sauvegarder le zoom si on doit le restaurer apres setData
     var savedTarget = null;
@@ -13275,22 +13342,25 @@ TradeEditorController.renderHtml = function (day, trade) {
         lastPrice = last.close;
         _startCountdown();
         _startAutoRefresh();
-        if (_source !== 'ws') {
-          _disconnectWs();
-          _connectWs();
-        }
         _updateStats(candles);
 
         candlestickSeries.setData(chartStyle === 'candlestick' ? candles : candles.map(function (c) { return { time: c.time, value: c.close }; }));
         _mainCandles = candles;
 
-        // Point fantôme pour étendre le range autorisé par LWC (marge droite)
+        // Point fantôme pour étendre le range autorisé par LWC
         var intervalSec = Math.floor(_getIntervalMs(currentInterval) / 1000);
         var phantomTime = last.time + intervalSec * 5;
         try { candlestickSeries.update({ time: phantomTime, open: last.close, high: last.close, low: last.close, close: last.close }); } catch(e) {}
 
-        // VWAP — toujours recalculer (le cache fallback évite le flood réseau)
-        if (activeVwapPeriods.length > 0) {
+        // WS : connecter APRES setData
+        if (shouldResetWs) {
+          setTimeout(function () {
+            _connectWs('after-render:' + _source);
+          }, 250);
+        }
+
+        // VWAP — seulement sur init/user/timeframe (pas sur auto)
+        if (activeVwapPeriods.length > 0 && shouldResetWs) {
           _calcAndDrawVwap().finally(function () {
             _isFetching = false;
             _applyChartBestView(savedTarget, keepZoom, candles);
@@ -13300,7 +13370,7 @@ TradeEditorController.renderHtml = function (day, trade) {
           _applyChartBestView(savedTarget, keepZoom, candles);
         }
 
-        // Volume Profile (passe les bougies pour recalcul)
+        // Volume Profile
         if (window.VolumeProfile) {
           window.VolumeProfile.setCandles(candles);
         }
@@ -13355,22 +13425,27 @@ TradeEditorController.renderHtml = function (day, trade) {
   // ── COUNTDOWN ──
   function _startCountdown() {
     if (countdownTimer) clearInterval(countdownTimer);
+    lastCountdownFetchAt = 0;
     setTimeout(function () {
     function tick() {
       if (!lastCandleTime) { _updateCountdownLabel('—'); return; }
       var now = Date.now();
       var ms = _getIntervalMs(currentInterval);
+      // Guard anti timestamp corrompu
+      if (lastCandleTime < now - ms * 500 || lastCandleTime > now + ms * 2) {
+        _updateCountdownLabel('—');
+        return;
+      }
       var elapsed = now - lastCandleTime;
       var remaining = ms - elapsed;
       if (remaining <= 0) {
         _updateCountdownLabel('0:00');
         if (countdownTimer) clearInterval(countdownTimer);
         countdownTimer = null;
-        // Laisser le WS reconnecter sans re-fetcher (preserve le zoom)
-        if (!ws || ws.readyState !== WebSocket.OPEN) {
-          // WS en cours de reconnexion — ne pas refetcher
-        } else {
-          _fetchAndRender(true, 'auto');
+        // Fallback REST léger si WS down (max 1x/10s)
+        if (!wsConnected && now - (lastCountdownFetchAt || 0) > 10000) {
+          lastCountdownFetchAt = now;
+          _fetchLatestCandleOnly();
         }
         return;
       }
@@ -13392,19 +13467,53 @@ TradeEditorController.renderHtml = function (day, trade) {
   }
 
   // ── AUTO REFRESH ──
-
   function _startAutoRefresh() {
     if (refreshTimer) clearInterval(refreshTimer);
     var ms = _getIntervalMs(currentInterval);
-    var interval = ms < 3600000 ? 15000 : ms < 14400000 ? 30000 : 60000;
+    var interval = Math.min(60000, Math.max(15000, Math.floor(ms / 4)));
     refreshTimer = setInterval(function () {
+      if (!chart || !candlestickSeries) return;
       if (!lastCandleTime) return;
+      if (wsConnected && !wsError) return;
+      var nextCloseMs = lastCandleTime + ms;
       var now = Date.now();
-      var elapsed = now - lastCandleTime;
-      if (elapsed < _getIntervalMs(currentInterval) * 0.95) {
-        _fetchAndRender(true, 'auto');
-      }
+      if (now < nextCloseMs + 1500) return;
+      _fetchLatestCandleOnly();
     }, interval);
+  }
+
+  // ── REST FALLBACK LÉGER ──
+  function _fetchLatestCandleOnly() {
+    var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=3';
+    return fetch(url)
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (data) {
+        var raw = data.candles || [];
+        if (!raw.length) return;
+        var candles = raw.map(function (c) { return { time: Number(c.time), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close), volume: Number(c.volume) }; });
+        var latest = candles[candles.length - 1];
+        if (!latest || !latest.time) return;
+        if (_mainCandles && _mainCandles.length > 0) {
+          var last = _mainCandles[_mainCandles.length - 1];
+          if (last && latest.time === last.time) {
+            _mainCandles[_mainCandles.length - 1] = latest;
+          } else if (latest.time > (last ? last.time : 0)) {
+            _mainCandles.push(latest);
+            if (_mainCandles.length > 500) _mainCandles = _mainCandles.slice(-500);
+          }
+        }
+        lastCandleTime = latest.time * 1000;
+        candlestickSeries.update(chartStyle === 'candlestick' ? latest : { time: latest.time, value: latest.close });
+        if (volumeSeries) {
+          volumeSeries.update({ time: latest.time, value: latest.volume, color: latest.close >= latest.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' });
+        }
+        if (countdownPriceLine) {
+          try { countdownPriceLine.applyOptions({ price: latest.close }); } catch(e) {}
+        }
+        var priceEl = document.getElementById('chartPrice');
+        if (priceEl) priceEl.textContent = '$' + Number(latest.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
+      })
+      .catch(function (e) { console.warn('[chart] REST fallback failed', e); });
   }
 
   // ── INIT ──
