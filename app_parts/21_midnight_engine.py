@@ -9,11 +9,17 @@
 
 
 from datetime import datetime, time, timezone
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from flask import jsonify, request
 
-NY = ZoneInfo("America/New_York")
+try:
+    NY = ZoneInfo("America/New_York")
+except ZoneInfoNotFoundError:
+    raise RuntimeError(
+        "Timezone America/New_York introuvable. "
+        "Sur Windows, installe la dependance avec: py -m pip install tzdata"
+    )
 
 # ---------- Time helpers ----------
 
