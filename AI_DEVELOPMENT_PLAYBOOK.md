@@ -945,3 +945,28 @@ puis utiliser `adjustedNow = Date.now() + clockOffset` dans tous les calculs
 de countdown et auto-refresh. clockOffset n'est pas recalcule sur les messages WS
 (pour eviter le reset du countdown a 3:00 en boucle).
 - Applique dans `060_btc_chart_widget.js` et `062_chart_page.js`.
+
+### Countdown — anchor base sur candleCloseMs + performance.now()
+Le clockOffset (= serveurTime - Date.now()) etait recalcule sur chaque evenement,
+causant des sauts de countdown (Bug A: depart toujours a 3:00 meme si bougie de 2min;
+Bug B: saut a 8 min lors d'un drag/pan chart).
+**Fix** : remplacer clockOffset par `countdownAnchor` :
+```js
+countdownAnchor = {
+  candleCloseMs,         // closeTime Binance (k.T) ou openTime + interval
+  remainingAtAnchorMs,   // closeMs - Date.now() au moment du calcul
+  perfAtAnchor,          // performance.now() pour descente monotone
+  source,                // 'fetch', 'ws', 'rest-fallback'
+};
+```
+Le tick countdown ne fait plus que :
+```js
+elapsed = performance.now() - anchor.perfAtAnchor;
+remaining = anchor.remainingAtAnchorMs - elapsed;
+```
+Aucun evenement chart (drag, wheel, range) ne peut corrompre le compteur.
+Le timer n'est JAMAIS clear a 0:00 (le prochain anchor le remet a jour).
+- `clockOffset` supprime des deux fichiers.
+- `_updateCountdownAnchor()` appele depuis fetch/WS/REST fallback.
+- WS fournit `openTime: k.t, closeTime: k.T` pour un calcul precis.
+- Fichiers: `060_btc_chart_widget.js`, `062_chart_page.js`.
