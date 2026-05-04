@@ -26,8 +26,8 @@
   var currentSymbol = localStorage.getItem('chartDefSymbol') || 'BTCUSDT';
   var chartStyle = localStorage.getItem('chartDefStyle') || 'candlestick';
   var countdownTimer = null;
+  var countdownAnchor = null;
   var lastCandleTime = 0;
-  var clockOffset = 0;
   var lastCountdownFetchAt = 0;
   var lastPrice = 0;
   var manualPriceRange = null;
@@ -412,6 +412,8 @@
     if (!k) return;
     var candle = {
       time: Math.floor(k.t / 1000),
+      openTime: k.t,
+      closeTime: k.T,
       open: parseFloat(k.o),
       high: parseFloat(k.h),
       low: parseFloat(k.l),
@@ -422,7 +424,7 @@
     var priceEl = document.getElementById('chartPrice');
     if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
     lastCandleTime = k.t;
-    // clockOffset non mis a jour ici (l'offset serveur est fixe)
+    _updateCountdownAnchor(candle, 'ws');
     if (candlestickSeries) {
       try {
         if (chartStyle === 'candlestick') {
@@ -1170,7 +1172,7 @@
 
         var last = candles[candles.length - 1];
         lastCandleTime = last.time * 1000;
-        clockOffset = (last.time * 1000) - Date.now();
+        _updateCountdownAnchor(last, 'fetch');
         lastPrice = last.close;
         _startCountdown();
         _startAutoRefresh();
@@ -1254,40 +1256,67 @@
     setStat('chartVol', last.volume);
   }
 
-  // ── COUNTDOWN ──
+  // ── COUNTDOWN ANCHOR (basé sur candleCloseMs + performance.now()) ──
+
+  function _toMs(t) {
+    if (t == null) return NaN;
+    var n = Number(t);
+    if (!Number.isFinite(n)) return NaN;
+    return n > 1e12 ? n : n * 1000;
+  }
+
+  function _getCandleCloseMs(candle, intervalMs) {
+    if (candle.closeTime != null) return _toMs(candle.closeTime);
+    if (candle.T != null) return _toMs(candle.T);
+    if (candle.time != null) return _toMs(candle.time) + intervalMs;
+    return NaN;
+  }
+
+  function _updateCountdownAnchor(candle, source) {
+    if (!candle) return;
+    var intervalMs = _getIntervalMs(currentInterval);
+    if (!intervalMs) return;
+    var openMs = _toMs(candle.time != null ? (candle.openTime != null ? candle.openTime : candle.time) : (candle.t != null ? candle.t : 0));
+    var closeMs = _getCandleCloseMs(candle, intervalMs);
+    if (!Number.isFinite(openMs) || !Number.isFinite(closeMs)) return;
+    var remaining = closeMs - Date.now();
+    if (remaining < -intervalMs || remaining > intervalMs * 2) {
+      console.warn('[COUNTDOWN] anchor rejected', { source, tf: currentInterval, openMs, closeMs, remaining });
+      return;
+    }
+    remaining = Math.max(0, Math.min(remaining, intervalMs));
+    countdownAnchor = {
+      candleOpenMs: openMs,
+      candleCloseMs: closeMs,
+      remainingAtAnchorMs: remaining,
+      perfAtAnchor: performance.now(),
+      source: source || 'unknown',
+    };
+  }
+
+  function _formatCountdown(ms) {
+    if (!Number.isFinite(ms) || ms <= 0) return '0:00';
+    var totalSec = Math.ceil(ms / 1000);
+    return Math.floor(totalSec / 60) + ':' + (totalSec % 60 < 10 ? '0' : '') + (totalSec % 60);
+  }
+
   function _startCountdown() {
     if (countdownTimer) clearInterval(countdownTimer);
-    lastCountdownFetchAt = 0;
-    setTimeout(function () {
-    function tick() {
-      if (!lastCandleTime) { _updateCountdownLabel('—'); return; }
-      var now = Date.now() + clockOffset;
-      var ms = _getIntervalMs(currentInterval);
-      var elapsed = now - lastCandleTime;
-      // Guard anti timestamp aberrant (clockOffset pas encore calcule)
-      if (elapsed < -ms * 2 || elapsed > ms * 500) {
-        _updateCountdownLabel('—');
-        return;
-      }
-      var remaining = ms - elapsed;
+    countdownTimer = setInterval(function () {
+      if (!countdownPriceLine) { _updateCountdownLabel('—'); return; }
+      if (!countdownAnchor) { _updateCountdownLabel('—'); return; }
+      var elapsed = performance.now() - countdownAnchor.perfAtAnchor;
+      var remaining = countdownAnchor.remainingAtAnchorMs - elapsed;
       if (remaining <= 0) {
         _updateCountdownLabel('0:00');
-        // Ne PAS clear le timer — le WS ou REST fallback mettra lastCandleTime à jour
-        if (!wsConnected && now - (lastCountdownFetchAt || 0) > 10000) {
-          lastCountdownFetchAt = now;
+        if (!wsConnected && Date.now() - (lastCountdownFetchAt || 0) > 10000) {
+          lastCountdownFetchAt = Date.now();
           _fetchLatestCandleOnly();
         }
         return;
       }
-      var totalSec = Math.ceil(remaining / 1000);
-      var m = Math.floor(totalSec / 60);
-      var s = totalSec % 60;
-      var txt = m + ':' + (s < 10 ? '0' : '') + s;
-      _updateCountdownLabel(txt);
-    }
-    tick();
-    countdownTimer = setInterval(tick, 500);
-    }, 300);
+      _updateCountdownLabel(_formatCountdown(remaining));
+    }, 250);
   }
 
   function _updateCountdownLabel(timerTxt) {
@@ -1303,11 +1332,10 @@
     var interval = Math.min(60000, Math.max(15000, Math.floor(ms / 4)));
     refreshTimer = setInterval(function () {
       if (!chart || !candlestickSeries) return;
-      if (!lastCandleTime) return;
+      if (!countdownAnchor) return;
       if (wsConnected && !wsError) return;
-      var nextCloseMs = lastCandleTime + ms;
-      var now = Date.now() + clockOffset;
-      if (now < nextCloseMs + 1500) return;
+      var elapsed = performance.now() - countdownAnchor.perfAtAnchor;
+      if (elapsed < countdownAnchor.remainingAtAnchorMs + 1500) return;
       _fetchLatestCandleOnly();
     }, interval);
   }
@@ -1336,7 +1364,7 @@
           }
         }
         lastCandleTime = latest.time * 1000;
-        clockOffset = (latest.time * 1000) - Date.now();
+        _updateCountdownAnchor(latest, 'rest-fallback');
         candlestickSeries.update(chartStyle === 'candlestick' ? latest : { time: latest.time, value: latest.close });
         if (volumeSeries) {
           volumeSeries.update({ time: latest.time, value: latest.volume, color: latest.close >= latest.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' });

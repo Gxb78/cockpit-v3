@@ -47,9 +47,9 @@
     activeVwapPeriods: [],
     // Timers
     countdownTimer: null,
+    countdownAnchor: null,
     refreshTimer: null,
     lastCandleTime: 0,
-    clockOffset: 0,
     lastCountdownFetchAt: 0,
     // WS
     ws: null,
@@ -504,57 +504,89 @@
     _withProgrammaticRange(function () { setBtcWidgetPriceRange(computeBtcWidgetPriceRange(candles, S.timeframe)); });
   }
 
+  // ── COUNTDOWN ANCHOR (basé sur candleCloseMs + performance.now()) ──
+
+  function _toMs(t) {
+    if (t == null) return NaN;
+    var n = Number(t);
+    if (!Number.isFinite(n)) return NaN;
+    return n > 1e12 ? n : n * 1000;
+  }
+
+  function _getCandleCloseMs(candle, intervalMs) {
+    if (candle.closeTime != null) return _toMs(candle.closeTime);
+    if (candle.T != null) return _toMs(candle.T);
+    if (candle.time != null) return _toMs(candle.time) + intervalMs;
+    return NaN;
+  }
+
+  function _updateCountdownAnchor(candle, source) {
+    if (!candle) return;
+    var intervalMs = _getIntervalMs(S.timeframe);
+    if (!intervalMs) return;
+    var openMs = _toMs(candle.time != null ? (candle.openTime != null ? candle.openTime : candle.time) : (candle.t != null ? candle.t : 0));
+    var closeMs = _getCandleCloseMs(candle, intervalMs);
+    if (!Number.isFinite(openMs) || !Number.isFinite(closeMs)) return;
+    // Utiliser Date.now() — la diff locale est fiable meme si l'absolu est decale
+    var remaining = closeMs - Date.now();
+    // Guard anti valeur aberrante
+    if (remaining < -intervalMs || remaining > intervalMs * 2) {
+      console.warn('[COUNTDOWN] anchor rejected', { source, tf: S.timeframe, openMs, closeMs, remaining });
+      return;
+    }
+    remaining = Math.max(0, Math.min(remaining, intervalMs));
+    S.countdownAnchor = {
+      candleOpenMs: openMs,
+      candleCloseMs: closeMs,
+      remainingAtAnchorMs: remaining,
+      perfAtAnchor: performance.now(),
+      source: source || 'unknown',
+    };
+  }
+
+  function _formatCountdown(ms) {
+    if (!Number.isFinite(ms) || ms <= 0) return '0:00';
+    var totalSec = Math.ceil(ms / 1000);
+    return Math.floor(totalSec / 60) + ':' + (totalSec % 60 < 10 ? '0' : '') + (totalSec % 60);
+  }
+
   function _startCountdown() {
     if (S.countdownTimer) clearInterval(S.countdownTimer);
-    S.lastCountdownFetchAt = 0;
-    setTimeout(function () {
-      function tick() {
-        if (!S.countdownPriceLine) { _updateCountdownLabel('—'); return; }
-        if (!S.lastCandleTime) { _updateCountdownLabel('—'); return; }
-        // adjustedNow = Date.now() corrigé de l'offset serveur (horloge locale decalee)
-        var now = Date.now() + S.clockOffset;
-        var ms = _getIntervalMs(S.timeframe);
-        var elapsed = now - S.lastCandleTime;
-        // Guard anti timestamp aberrant (clockOffset pas encore calcule ou decale)
-        if (elapsed < -ms * 2 || elapsed > ms * 500) {
-          _updateCountdownLabel('—');
-          return;
+    S.countdownTimer = setInterval(function () {
+      if (!S.countdownPriceLine) { _updateCountdownLabel('—'); return; }
+      var anchor = S.countdownAnchor;
+      if (!anchor) { _updateCountdownLabel('—'); return; }
+      var elapsed = performance.now() - anchor.perfAtAnchor;
+      var remaining = anchor.remainingAtAnchorMs - elapsed;
+      if (remaining <= 0) {
+        _updateCountdownLabel('0:00');
+        if (!S.wsConnected && Date.now() - (S.lastCountdownFetchAt || 0) > 10000) {
+          S.lastCountdownFetchAt = Date.now();
+          _fetchLatestCandleOnly();
         }
-        var remaining = ms - elapsed;
-        if (remaining <= 0) {
-          _updateCountdownLabel('0:00');
-          // Ne PAS clear le timer — le WS ou REST fallback mettra lastCandleTime à jour
-          if (!S.wsConnected && now - (S.lastCountdownFetchAt || 0) > 10000) {
-            S.lastCountdownFetchAt = now;
-            _fetchLatestCandleOnly();
-          }
-          return;
-        }
-        var totalSec = Math.ceil(remaining / 1000);
-        _updateCountdownLabel(Math.floor(totalSec / 60) + ':' + (totalSec % 60 < 10 ? '0' : '') + (totalSec % 60));
+        return;
       }
-      tick();
-      S.countdownTimer = setInterval(tick, 500);
-    }, 300);
+      _updateCountdownLabel(_formatCountdown(remaining));
+    }, 250);
   }
+
   function _updateCountdownLabel(txt) {
     if (!S.countdownPriceLine || !S.chart) return;
     try { S.countdownPriceLine.applyOptions({ title: txt === undefined ? '—' : txt }); } catch(e) {}
   }
+
   function _startAutoRefresh() {
     if (S.refreshTimer) clearInterval(S.refreshTimer);
     var ms = _getIntervalMs(S.timeframe);
     var interval = Math.min(60000, Math.max(15000, Math.floor(ms / 4)));
     S.refreshTimer = setInterval(function () {
       if (!S.chartReady) return;
-      if (!S.lastCandleTime) return;
+      if (!S.countdownAnchor) return;
       // Si WS fonctionne, pas besoin de REST refresh
       if (S.wsConnected && !S.wsError) return;
       // Fallback REST seulement proche de la cloture
-      var nextCloseMs = S.lastCandleTime + ms;
-      var now = Date.now() + S.clockOffset;
-      if (now < nextCloseMs + 1500) return;
-      // REST fallback — update la derniere bougie seulement
+      var elapsed = performance.now() - S.countdownAnchor.perfAtAnchor;
+      if (elapsed < S.countdownAnchor.remainingAtAnchorMs + 1500) return;
       _fetchLatestCandleOnly();
     }, interval);
   }
@@ -583,7 +615,7 @@
           if (S.candles.length > 300) S.candles = S.candles.slice(-300);
         }
         S.lastCandleTime = latest.time * 1000;
-        S.clockOffset = (latest.time * 1000) - Date.now();
+        _updateCountdownAnchor(latest, 'rest-fallback');
         S.candleSeries.update(latest);
         if (S.follow && !S.userDragging) {
           applyBtcWidgetBestView();
@@ -713,12 +745,11 @@
   function _handleWsMessage(raw) {
     var d = JSON.parse(raw), k = d && d.k;
     if (!k) return;
-    var candle = { time: Math.floor(k.t / 1000), open: parseFloat(k.o), high: parseFloat(k.h), low: parseFloat(k.l), close: parseFloat(k.c), volume: parseFloat(k.v) };
+    var candle = { time: Math.floor(k.t / 1000), openTime: k.t, closeTime: k.T, open: parseFloat(k.o), high: parseFloat(k.h), low: parseFloat(k.l), close: parseFloat(k.c), volume: parseFloat(k.v) };
     var priceEl = document.getElementById('btcChartPrice');
     if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
     S.lastCandleTime = k.t;
-    // clockOffset NON mis à jour ici — l'offset serveur est fixe,
-    // le recalculer sur chaque WS remettrait le countdown à 3:00
+    _updateCountdownAnchor(candle, 'ws');
     if (S.candleSeries) { try { S.candleSeries.update(candle); } catch(e) {} }
     if (S.countdownPriceLine) { try { S.countdownPriceLine.applyOptions({ price: candle.close }); } catch(e) {} }
     if (S.follow && !S.userDragging) { _withProgrammaticRange(function () { maybeFollowBtcWidgetPriceY(); }); }
@@ -867,8 +898,7 @@
         var last = candles[candles.length - 1];
         var candleTimeMs = last.time * 1000;
         S.lastCandleTime = candleTimeMs;
-        // Calcul de l'offset serveur (paliatif si horloge locale decalee)
-        S.clockOffset = candleTimeMs - Date.now();
+        _updateCountdownAnchor(last, 'fetch');
         S.candles = candles;
 
         _startCountdown();
