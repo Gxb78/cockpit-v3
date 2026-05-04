@@ -11762,7 +11762,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   function computeBtcWidgetPriceRange(candles, tf) {
     if (!window.ChartViewCore) return null;
     var vb = BTC_WIDGET_VIEW.visibleBars[tf || S.timeframe] || 100;
-    return window.ChartViewCore.computePriceRange(candles, vb, { top: 0.22, bottom: 0.18, minRangeRatio: 0.002 });
+    return window.ChartViewCore.computePriceRange(candles, vb, { top: 0.08, bottom: 0.08, minRangeRatio: 0.002 });
   }
 
   function getBtcWidgetCurrentPriceRange() {
@@ -12054,7 +12054,12 @@ TradeEditorController.renderHtml = function (day, trade) {
   function _formatCountdown(ms) {
     if (!Number.isFinite(ms) || ms <= 0) return '0:00';
     var totalSec = Math.ceil(ms / 1000);
-    return Math.floor(totalSec / 60) + ':' + (totalSec % 60 < 10 ? '0' : '') + (totalSec % 60);
+    var h = Math.floor(totalSec / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+    if (h > 0) return h + ':' + pad(m) + ':' + pad(s);
+    return m + ':' + pad(s);
   }
 
   function _startCountdown() {
@@ -12063,7 +12068,9 @@ TradeEditorController.renderHtml = function (day, trade) {
       if (!S.countdownPriceLine) { _updateCountdownLabel('—'); return; }
       var anchor = S.countdownAnchor;
       if (!anchor) {
-        _updateCountdownLabel('—');
+        var intervalMs = _getIntervalMs(S.timeframe);
+        var estimated = intervalMs ? intervalMs - (Date.now() % intervalMs) : 0;
+        _updateCountdownLabel(estimated > 0 ? _formatCountdown(estimated) : '—');
         if (S.chartReady && Date.now() - (S.lastCountdownFetchAt || 0) > 5000) {
           S.lastCountdownFetchAt = Date.now();
           _fetchLatestCandleOnly();
@@ -12345,6 +12352,9 @@ TradeEditorController.renderHtml = function (day, trade) {
         document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
         btn.classList.add('active');
         S.timeframe = btn.dataset.interval;
+        S.countdownAnchor = null;
+        _updateCountdownLabel('—');
+        _startCountdown();
         _disconnectWs('timeframe');
         var ci = document.getElementById('btcChartCustom');
         if (ci) ci.value = '';
@@ -12361,6 +12371,9 @@ TradeEditorController.renderHtml = function (day, trade) {
         this.classList.remove('jedit-field-error'); this.title = '';
         document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
         S.timeframe = val;
+        S.countdownAnchor = null;
+        _updateCountdownLabel('—');
+        _startCountdown();
         _disconnectWs('timeframe');
         _fetchAndRender(false, 'user');
       });
@@ -13409,6 +13422,9 @@ TradeEditorController.renderHtml = function (day, trade) {
         btns.forEach(function (b) { b.classList.remove('active'); });
         btn.classList.add('active');
         currentInterval = btn.dataset.interval;
+        countdownAnchor = null;
+        _updateCountdownLabel('—');
+        if (countdownTimer) _startCountdown();
         _disconnectWs('timeframe');
         _fetchAndRender(false, 'user');
       });
@@ -13870,7 +13886,12 @@ TradeEditorController.renderHtml = function (day, trade) {
   function _formatCountdown(ms) {
     if (!Number.isFinite(ms) || ms <= 0) return '0:00';
     var totalSec = Math.ceil(ms / 1000);
-    return Math.floor(totalSec / 60) + ':' + (totalSec % 60 < 10 ? '0' : '') + (totalSec % 60);
+    var h = Math.floor(totalSec / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+    if (h > 0) return h + ':' + pad(m) + ':' + pad(s);
+    return m + ':' + pad(s);
   }
 
   function _startCountdown() {
@@ -13878,7 +13899,9 @@ TradeEditorController.renderHtml = function (day, trade) {
     countdownTimer = setInterval(function () {
       if (!countdownPriceLine) { _updateCountdownLabel('—'); return; }
       if (!countdownAnchor) {
-        _updateCountdownLabel('—');
+        var intervalMs = _getIntervalMs(currentInterval);
+        var estimated = intervalMs ? intervalMs - (Date.now() % intervalMs) : 0;
+        _updateCountdownLabel(estimated > 0 ? _formatCountdown(estimated) : '—');
         if (chartReady && Date.now() - (lastCountdownFetchAt || 0) > 5000) {
           lastCountdownFetchAt = Date.now();
           _fetchLatestCandleOnly();

@@ -881,6 +881,9 @@
         btns.forEach(function (b) { b.classList.remove('active'); });
         btn.classList.add('active');
         currentInterval = btn.dataset.interval;
+        countdownAnchor = null;
+        _updateCountdownLabel('—');
+        if (countdownTimer) _startCountdown();
         _disconnectWs('timeframe');
         _fetchAndRender(false, 'user');
       });
@@ -1342,7 +1345,12 @@
   function _formatCountdown(ms) {
     if (!Number.isFinite(ms) || ms <= 0) return '0:00';
     var totalSec = Math.ceil(ms / 1000);
-    return Math.floor(totalSec / 60) + ':' + (totalSec % 60 < 10 ? '0' : '') + (totalSec % 60);
+    var h = Math.floor(totalSec / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+    if (h > 0) return h + ':' + pad(m) + ':' + pad(s);
+    return m + ':' + pad(s);
   }
 
   function _startCountdown() {
@@ -1350,7 +1358,9 @@
     countdownTimer = setInterval(function () {
       if (!countdownPriceLine) { _updateCountdownLabel('—'); return; }
       if (!countdownAnchor) {
-        _updateCountdownLabel('—');
+        var intervalMs = _getIntervalMs(currentInterval);
+        var estimated = intervalMs ? intervalMs - (Date.now() % intervalMs) : 0;
+        _updateCountdownLabel(estimated > 0 ? _formatCountdown(estimated) : '—');
         if (chartReady && Date.now() - (lastCountdownFetchAt || 0) > 5000) {
           lastCountdownFetchAt = Date.now();
           _fetchLatestCandleOnly();
