@@ -34,8 +34,14 @@
     candles: [],
     timeframe: '3m',
     follow: true,
+    userDetached: false,
+    hovered: false,
     userDragging: false,
-    programmaticRangeChange: false,
+    userGestureActive: false,
+    programmaticRangeDepth: 0,
+    suppressRangeEventsUntil: 0,
+    listenersBound: false,
+    _gestureTimer: null,
     renderToken: 0,
     manualPriceRange: null,
     // VWAP
@@ -346,64 +352,122 @@
     }
   }
 
-  function applyBtcWidgetLiveXRange() {
+  function _applyLiveXRangeNoWrap() {
     var candles = S.candles;
     if (!candles || !candles.length) return;
     var tf = S.timeframe;
     var visibleBars = BTC_WIDGET_VIEW.visibleBars[tf] || 100;
     var futureBars = BTC_WIDGET_VIEW.futureBars[tf] || 14;
     var lastIndex = candles.length - 1;
-    var to = lastIndex + futureBars;
-    var from = Math.max(0, to - visibleBars);
-    try { S.chart.timeScale().setVisibleLogicalRange({ from: from, to: to }); } catch(e) {}
+    try { S.chart.timeScale().setVisibleLogicalRange({ from: lastIndex + futureBars - visibleBars, to: lastIndex + futureBars }); } catch(e) {}
+  }
+
+  function _withProgrammaticRange(fn) {
+    S.programmaticRangeDepth++;
+    S.suppressRangeEventsUntil = performance.now() + 250;
+    try { fn(); } finally {
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          S.programmaticRangeDepth = Math.max(0, S.programmaticRangeDepth - 1);
+          S.suppressRangeEventsUntil = performance.now() + 100;
+        });
+      });
+    }
   }
 
   function applyBtcWidgetBestView() {
     if (!S.candles || !S.candles.length || !S.chart) return;
-    S.programmaticRangeChange = true;
-    applyBtcWidgetLiveXRange();
-    var priceRange = computeBtcWidgetPriceRange(S.candles, S.timeframe);
-    setBtcWidgetPriceRange(priceRange);
-    requestAnimationFrame(function () { S.programmaticRangeChange = false; });
+    _withProgrammaticRange(function () {
+      _applyLiveXRangeNoWrap();
+      var priceRange = computeBtcWidgetPriceRange(S.candles, S.timeframe);
+      setBtcWidgetPriceRange(priceRange);
+    });
+    _updateBtcWidgetLiveButton();
   }
 
   // ──────────────────────────────────────────────
-  //  FOLLOW MODE
+  //  LIVE STATE MANAGEMENT
   // ──────────────────────────────────────────────
-  function maybeFollowBtcWidgetPriceY() {
-    var candles = S.candles;
-    if (!candles || !candles.length) return;
-    var last = candles[candles.length - 1];
-    var price = last.close;
-    var currentRange = getBtcWidgetCurrentPriceRange();
-    if (!currentRange) {
-      setBtcWidgetPriceRange(computeBtcWidgetPriceRange(candles, S.timeframe));
-      return;
-    }
-    var height = currentRange.to - currentRange.from;
-    var topZone = currentRange.to - height * 0.18;
-    var bottomZone = currentRange.from + height * 0.18;
-    if (price >= topZone || price <= bottomZone) {
-      setBtcWidgetPriceRange(computeBtcWidgetPriceRange(candles, S.timeframe));
-    }
+  function _detachFromLive(reason) {
+    if (!S.follow && S.userDetached) return;
+    S.follow = false;
+    S.userDetached = true;
+    console.log('[BTC WIDGET] detached:', reason);
+    _updateBtcWidgetLiveButton();
+  }
+
+  function _returnToLive(reason) {
+    S.follow = true;
+    S.userDetached = false;
+    S.userDragging = false;
+    S.userGestureActive = false;
+    console.log('[BTC WIDGET] return to live:', reason);
+    _withProgrammaticRange(function () { applyBtcWidgetBestView(); });
+    _updateBtcWidgetLiveButton();
+  }
+
+  function _resetLiveState() {
+    S.follow = true;
+    S.userDetached = false;
+    S.hovered = false;
+    S.userDragging = false;
+    S.userGestureActive = false;
+    S.programmaticRangeDepth = 0;
+    S.suppressRangeEventsUntil = performance.now() + 500;
+    _updateBtcWidgetLiveButton();
+  }
+
+  function _updateBtcWidgetLiveButton() {
+    var btn = document.getElementById('btc-widget-live-btn');
+    if (!btn) return;
+    var show = S.hovered && S.userDetached && !S.follow;
+    btn.classList.toggle('hidden', !show);
   }
 
   // ──────────────────────────────────────────────
-  //  CUSTOM POINTER DRAG (free pan X + Y)
+  //  EVENT BINDINGS (one-shot)
   // ──────────────────────────────────────────────
+  function _bindHover() {
+    var el = S.container;
+    el.addEventListener('mouseenter', function () { S.hovered = true; _updateBtcWidgetLiveButton(); });
+    el.addEventListener('mouseleave', function () { S.hovered = false; _updateBtcWidgetLiveButton(); });
+  }
+
+  function _bindUserIntent() {
+    var el = S.container;
+    el.addEventListener('wheel', function () {
+      S.userGestureActive = true;
+      _detachFromLive('wheel');
+      if (S._gestureTimer) clearTimeout(S._gestureTimer);
+      S._gestureTimer = setTimeout(function () { S.userGestureActive = false; }, 200);
+    }, { passive: true });
+  }
+
+  function _bindRangeWatcher() {
+    try {
+      S.chart.timeScale().subscribeVisibleLogicalRangeChange(function () {
+        if (S.programmaticRangeDepth > 0) return;
+        if (performance.now() < S.suppressRangeEventsUntil) return;
+        if (!S.userGestureActive && !S.userDragging) return;
+        _detachFromLive('range-user-change');
+      });
+    } catch(e) {}
+  }
+
   function bindBtcWidgetFreePan() {
     var el = S.container;
     if (!el) return;
     var gesture = null;
-    var DRAG_THRESHOLD_PX = 5;
+    var DRAG_THRESHOLD = 5;
 
     function resetGesture() {
-      if (!gesture) return;
-      try { if (gesture.pointerId != null && el.hasPointerCapture && el.hasPointerCapture(gesture.pointerId)) el.releasePointerCapture(gesture.pointerId); } catch(e) {}
+      if (gesture && gesture.pointerId != null) {
+        try { if (el.hasPointerCapture && el.hasPointerCapture(gesture.pointerId)) el.releasePointerCapture(gesture.pointerId); } catch(e) {}
+      }
       gesture = null;
       S.userDragging = false;
+      S.userGestureActive = false;
       el.classList.remove('btc-widget-dragging');
-      document.body.classList.remove('btc-widget-dragging-body');
       _updateBtcWidgetLiveButton();
     }
 
@@ -420,35 +484,34 @@
         priceRange: { from: priceRange.from, to: priceRange.to },
         dragging: false,
       };
-      // Ne PAS set userDragging ici — attendre un vrai mouvement
     });
 
     window.addEventListener('pointermove', function (e) {
       if (!gesture || e.pointerId !== gesture.pointerId) return;
       var dx = e.clientX - gesture.startX;
       var dy = e.clientY - gesture.startY;
+      var dist = Math.hypot(dx, dy);
       if (!gesture.dragging) {
-        if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD_PX) return;
+        if (dist < DRAG_THRESHOLD) return;
         gesture.dragging = true;
-        S.follow = false;
         S.userDragging = true;
+        S.userGestureActive = true;
+        _detachFromLive('drag');
         try { el.setPointerCapture(gesture.pointerId); } catch(e) {}
         el.classList.add('btc-widget-dragging');
-        document.body.classList.add('btc-widget-dragging-body');
-        _updateBtcWidgetLiveButton();
       }
       e.preventDefault();
       var rect = el.getBoundingClientRect();
       var plotW = Math.max(1, rect.width - 70);
       var plotH = Math.max(1, rect.height - 30);
-      var logicalWidth = gesture.logicalRange.to - gesture.logicalRange.from;
-      var priceHeight = gesture.priceRange.to - gesture.priceRange.from;
-      var barsPerPx = logicalWidth / plotW;
-      var pricePerPx = priceHeight / plotH;
-      var logicalShift = -dx * barsPerPx;
-      var priceShift = dy * pricePerPx;
-      try { S.chart.timeScale().setVisibleLogicalRange({ from: gesture.logicalRange.from + logicalShift, to: gesture.logicalRange.to + logicalShift }); } catch(e) {}
-      setBtcWidgetPriceRange({ from: gesture.priceRange.from + priceShift, to: gesture.priceRange.to + priceShift });
+      var logicalW = gesture.logicalRange.to - gesture.logicalRange.from;
+      var priceH = gesture.priceRange.to - gesture.priceRange.from;
+      var barsPerPx = logicalW / plotW;
+      var pricePerPx = priceH / plotH;
+      _withProgrammaticRange(function () {
+        try { S.chart.timeScale().setVisibleLogicalRange({ from: gesture.logicalRange.from + (-dx * barsPerPx), to: gesture.logicalRange.to + (-dx * barsPerPx) }); } catch(e) {}
+        setBtcWidgetPriceRange({ from: gesture.priceRange.from + (dy * pricePerPx), to: gesture.priceRange.to + (dy * pricePerPx) });
+      });
     }, { passive: false });
 
     window.addEventListener('pointerup', resetGesture);
@@ -457,32 +520,46 @@
     el.addEventListener('lostpointercapture', resetGesture);
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') resetGesture(); });
 
-    // Double-click = re-live + best view
     el.addEventListener('dblclick', function () {
       resetGesture();
-      S.follow = true;
-      applyBtcWidgetBestView();
-      _updateBtcWidgetLiveButton();
+      _returnToLive('dblclick');
     });
-
-    // Desactiver follow si l'utilisateur scroll/zoom via la lib
-    try { S.chart.timeScale().subscribeVisibleLogicalRangeChange(function () {
-      if (S.userDragging) return;
-      if (S.programmaticRangeChange) return;
-      S.follow = false;
-      _updateBtcWidgetLiveButton();
-    }); } catch(e) {}
   }
 
-  function _updateBtcWidgetLiveButton() {
+  function _bindListenersOnce() {
+    if (S.listenersBound) return;
+    S.listenersBound = true;
+    _bindHover();
+    _bindUserIntent();
+    bindBtcWidgetFreePan();
+    _bindRangeWatcher();
     var btn = document.getElementById('btc-widget-live-btn');
-    if (!btn) return;
-    btn.classList.toggle('hidden', S.follow);
+    if (btn) {
+      btn.addEventListener('click', function (e) { e.stopPropagation(); _returnToLive('button'); });
+    }
   }
 
   // ──────────────────────────────────────────────
   //  TIMER & COUNTDOWN
   // ──────────────────────────────────────────────
+  function maybeFollowBtcWidgetPriceY() {
+    if (!S.follow || S.userDragging) return;
+    var candles = S.candles;
+    if (!candles || !candles.length) return;
+    var last = candles[candles.length - 1];
+    var price = last.close;
+    var currentRange = getBtcWidgetCurrentPriceRange();
+    if (!currentRange) {
+      _withProgrammaticRange(function () { setBtcWidgetPriceRange(computeBtcWidgetPriceRange(candles, S.timeframe)); });
+      return;
+    }
+    var height = currentRange.to - currentRange.from;
+    var topZone = currentRange.to - height * 0.16;
+    var bottomZone = currentRange.from + height * 0.16;
+    if (price < topZone && price > bottomZone) return;
+    _withProgrammaticRange(function () { setBtcWidgetPriceRange(computeBtcWidgetPriceRange(candles, S.timeframe)); });
+  }
+
   function _startCountdown() {
     if (S.countdownTimer) clearInterval(S.countdownTimer);
     setTimeout(function () {
@@ -551,7 +628,7 @@
           }
           // Follow Y si actif
           if (S.follow && !S.userDragging) {
-            maybeFollowBtcWidgetPriceY();
+            _withProgrammaticRange(function () { maybeFollowBtcWidgetPriceY(); });
           }
         } catch(e) {}
       };
@@ -639,18 +716,8 @@
     });
     S.resizeObserver.observe(container);
 
-    // Live button
-    var liveBtn = document.getElementById('btc-widget-live-btn');
-    if (liveBtn) {
-      liveBtn.addEventListener('click', function () {
-        S.follow = true;
-        applyBtcWidgetBestView();
-        _updateBtcWidgetLiveButton();
-      });
-    }
-
-    // Custom drag
-    bindBtcWidgetFreePan();
+    // Event bindings (one-shot)
+    _bindListenersOnce();
 
     // Interval buttons
     document.querySelectorAll('.btc-chart-interval').forEach(function (btn) {
@@ -693,6 +760,9 @@
     if (!S.candleSeries) return;
     var token = ++S.renderToken;
     console.log('[BTC-WIDGET] render start token=', token, 'tf=', S.timeframe, 'source=', _source);
+
+    // Reset live state au chargement (follow ON)
+    if (!keepZoom) _resetLiveState();
 
     // Debounce auto-refresh
     if (_source !== 'user') {
@@ -741,7 +811,7 @@
         if (S.follow || !keepZoom) {
           requestAnimationFrame(function () {
             if (token !== S.renderToken) return;
-            applyBtcWidgetBestView();
+            _withProgrammaticRange(function () { applyBtcWidgetBestView(); });
           });
         }
 

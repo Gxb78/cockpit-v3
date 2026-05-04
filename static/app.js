@@ -11061,8 +11061,14 @@ TradeEditorController.renderHtml = function (day, trade) {
     candles: [],
     timeframe: '3m',
     follow: true,
+    userDetached: false,
+    hovered: false,
     userDragging: false,
-    programmaticRangeChange: false,
+    userGestureActive: false,
+    programmaticRangeDepth: 0,
+    suppressRangeEventsUntil: 0,
+    listenersBound: false,
+    _gestureTimer: null,
     renderToken: 0,
     manualPriceRange: null,
     // VWAP
@@ -11373,64 +11379,122 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
   }
 
-  function applyBtcWidgetLiveXRange() {
+  function _applyLiveXRangeNoWrap() {
     var candles = S.candles;
     if (!candles || !candles.length) return;
     var tf = S.timeframe;
     var visibleBars = BTC_WIDGET_VIEW.visibleBars[tf] || 100;
     var futureBars = BTC_WIDGET_VIEW.futureBars[tf] || 14;
     var lastIndex = candles.length - 1;
-    var to = lastIndex + futureBars;
-    var from = Math.max(0, to - visibleBars);
-    try { S.chart.timeScale().setVisibleLogicalRange({ from: from, to: to }); } catch(e) {}
+    try { S.chart.timeScale().setVisibleLogicalRange({ from: lastIndex + futureBars - visibleBars, to: lastIndex + futureBars }); } catch(e) {}
+  }
+
+  function _withProgrammaticRange(fn) {
+    S.programmaticRangeDepth++;
+    S.suppressRangeEventsUntil = performance.now() + 250;
+    try { fn(); } finally {
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          S.programmaticRangeDepth = Math.max(0, S.programmaticRangeDepth - 1);
+          S.suppressRangeEventsUntil = performance.now() + 100;
+        });
+      });
+    }
   }
 
   function applyBtcWidgetBestView() {
     if (!S.candles || !S.candles.length || !S.chart) return;
-    S.programmaticRangeChange = true;
-    applyBtcWidgetLiveXRange();
-    var priceRange = computeBtcWidgetPriceRange(S.candles, S.timeframe);
-    setBtcWidgetPriceRange(priceRange);
-    requestAnimationFrame(function () { S.programmaticRangeChange = false; });
+    _withProgrammaticRange(function () {
+      _applyLiveXRangeNoWrap();
+      var priceRange = computeBtcWidgetPriceRange(S.candles, S.timeframe);
+      setBtcWidgetPriceRange(priceRange);
+    });
+    _updateBtcWidgetLiveButton();
   }
 
   // ──────────────────────────────────────────────
-  //  FOLLOW MODE
+  //  LIVE STATE MANAGEMENT
   // ──────────────────────────────────────────────
-  function maybeFollowBtcWidgetPriceY() {
-    var candles = S.candles;
-    if (!candles || !candles.length) return;
-    var last = candles[candles.length - 1];
-    var price = last.close;
-    var currentRange = getBtcWidgetCurrentPriceRange();
-    if (!currentRange) {
-      setBtcWidgetPriceRange(computeBtcWidgetPriceRange(candles, S.timeframe));
-      return;
-    }
-    var height = currentRange.to - currentRange.from;
-    var topZone = currentRange.to - height * 0.18;
-    var bottomZone = currentRange.from + height * 0.18;
-    if (price >= topZone || price <= bottomZone) {
-      setBtcWidgetPriceRange(computeBtcWidgetPriceRange(candles, S.timeframe));
-    }
+  function _detachFromLive(reason) {
+    if (!S.follow && S.userDetached) return;
+    S.follow = false;
+    S.userDetached = true;
+    console.log('[BTC WIDGET] detached:', reason);
+    _updateBtcWidgetLiveButton();
+  }
+
+  function _returnToLive(reason) {
+    S.follow = true;
+    S.userDetached = false;
+    S.userDragging = false;
+    S.userGestureActive = false;
+    console.log('[BTC WIDGET] return to live:', reason);
+    _withProgrammaticRange(function () { applyBtcWidgetBestView(); });
+    _updateBtcWidgetLiveButton();
+  }
+
+  function _resetLiveState() {
+    S.follow = true;
+    S.userDetached = false;
+    S.hovered = false;
+    S.userDragging = false;
+    S.userGestureActive = false;
+    S.programmaticRangeDepth = 0;
+    S.suppressRangeEventsUntil = performance.now() + 500;
+    _updateBtcWidgetLiveButton();
+  }
+
+  function _updateBtcWidgetLiveButton() {
+    var btn = document.getElementById('btc-widget-live-btn');
+    if (!btn) return;
+    var show = S.hovered && S.userDetached && !S.follow;
+    btn.classList.toggle('hidden', !show);
   }
 
   // ──────────────────────────────────────────────
-  //  CUSTOM POINTER DRAG (free pan X + Y)
+  //  EVENT BINDINGS (one-shot)
   // ──────────────────────────────────────────────
+  function _bindHover() {
+    var el = S.container;
+    el.addEventListener('mouseenter', function () { S.hovered = true; _updateBtcWidgetLiveButton(); });
+    el.addEventListener('mouseleave', function () { S.hovered = false; _updateBtcWidgetLiveButton(); });
+  }
+
+  function _bindUserIntent() {
+    var el = S.container;
+    el.addEventListener('wheel', function () {
+      S.userGestureActive = true;
+      _detachFromLive('wheel');
+      if (S._gestureTimer) clearTimeout(S._gestureTimer);
+      S._gestureTimer = setTimeout(function () { S.userGestureActive = false; }, 200);
+    }, { passive: true });
+  }
+
+  function _bindRangeWatcher() {
+    try {
+      S.chart.timeScale().subscribeVisibleLogicalRangeChange(function () {
+        if (S.programmaticRangeDepth > 0) return;
+        if (performance.now() < S.suppressRangeEventsUntil) return;
+        if (!S.userGestureActive && !S.userDragging) return;
+        _detachFromLive('range-user-change');
+      });
+    } catch(e) {}
+  }
+
   function bindBtcWidgetFreePan() {
     var el = S.container;
     if (!el) return;
     var gesture = null;
-    var DRAG_THRESHOLD_PX = 5;
+    var DRAG_THRESHOLD = 5;
 
     function resetGesture() {
-      if (!gesture) return;
-      try { if (gesture.pointerId != null && el.hasPointerCapture && el.hasPointerCapture(gesture.pointerId)) el.releasePointerCapture(gesture.pointerId); } catch(e) {}
+      if (gesture && gesture.pointerId != null) {
+        try { if (el.hasPointerCapture && el.hasPointerCapture(gesture.pointerId)) el.releasePointerCapture(gesture.pointerId); } catch(e) {}
+      }
       gesture = null;
       S.userDragging = false;
+      S.userGestureActive = false;
       el.classList.remove('btc-widget-dragging');
-      document.body.classList.remove('btc-widget-dragging-body');
       _updateBtcWidgetLiveButton();
     }
 
@@ -11447,35 +11511,34 @@ TradeEditorController.renderHtml = function (day, trade) {
         priceRange: { from: priceRange.from, to: priceRange.to },
         dragging: false,
       };
-      // Ne PAS set userDragging ici — attendre un vrai mouvement
     });
 
     window.addEventListener('pointermove', function (e) {
       if (!gesture || e.pointerId !== gesture.pointerId) return;
       var dx = e.clientX - gesture.startX;
       var dy = e.clientY - gesture.startY;
+      var dist = Math.hypot(dx, dy);
       if (!gesture.dragging) {
-        if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD_PX) return;
+        if (dist < DRAG_THRESHOLD) return;
         gesture.dragging = true;
-        S.follow = false;
         S.userDragging = true;
+        S.userGestureActive = true;
+        _detachFromLive('drag');
         try { el.setPointerCapture(gesture.pointerId); } catch(e) {}
         el.classList.add('btc-widget-dragging');
-        document.body.classList.add('btc-widget-dragging-body');
-        _updateBtcWidgetLiveButton();
       }
       e.preventDefault();
       var rect = el.getBoundingClientRect();
       var plotW = Math.max(1, rect.width - 70);
       var plotH = Math.max(1, rect.height - 30);
-      var logicalWidth = gesture.logicalRange.to - gesture.logicalRange.from;
-      var priceHeight = gesture.priceRange.to - gesture.priceRange.from;
-      var barsPerPx = logicalWidth / plotW;
-      var pricePerPx = priceHeight / plotH;
-      var logicalShift = -dx * barsPerPx;
-      var priceShift = dy * pricePerPx;
-      try { S.chart.timeScale().setVisibleLogicalRange({ from: gesture.logicalRange.from + logicalShift, to: gesture.logicalRange.to + logicalShift }); } catch(e) {}
-      setBtcWidgetPriceRange({ from: gesture.priceRange.from + priceShift, to: gesture.priceRange.to + priceShift });
+      var logicalW = gesture.logicalRange.to - gesture.logicalRange.from;
+      var priceH = gesture.priceRange.to - gesture.priceRange.from;
+      var barsPerPx = logicalW / plotW;
+      var pricePerPx = priceH / plotH;
+      _withProgrammaticRange(function () {
+        try { S.chart.timeScale().setVisibleLogicalRange({ from: gesture.logicalRange.from + (-dx * barsPerPx), to: gesture.logicalRange.to + (-dx * barsPerPx) }); } catch(e) {}
+        setBtcWidgetPriceRange({ from: gesture.priceRange.from + (dy * pricePerPx), to: gesture.priceRange.to + (dy * pricePerPx) });
+      });
     }, { passive: false });
 
     window.addEventListener('pointerup', resetGesture);
@@ -11484,32 +11547,46 @@ TradeEditorController.renderHtml = function (day, trade) {
     el.addEventListener('lostpointercapture', resetGesture);
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') resetGesture(); });
 
-    // Double-click = re-live + best view
     el.addEventListener('dblclick', function () {
       resetGesture();
-      S.follow = true;
-      applyBtcWidgetBestView();
-      _updateBtcWidgetLiveButton();
+      _returnToLive('dblclick');
     });
-
-    // Desactiver follow si l'utilisateur scroll/zoom via la lib
-    try { S.chart.timeScale().subscribeVisibleLogicalRangeChange(function () {
-      if (S.userDragging) return;
-      if (S.programmaticRangeChange) return;
-      S.follow = false;
-      _updateBtcWidgetLiveButton();
-    }); } catch(e) {}
   }
 
-  function _updateBtcWidgetLiveButton() {
+  function _bindListenersOnce() {
+    if (S.listenersBound) return;
+    S.listenersBound = true;
+    _bindHover();
+    _bindUserIntent();
+    bindBtcWidgetFreePan();
+    _bindRangeWatcher();
     var btn = document.getElementById('btc-widget-live-btn');
-    if (!btn) return;
-    btn.classList.toggle('hidden', S.follow);
+    if (btn) {
+      btn.addEventListener('click', function (e) { e.stopPropagation(); _returnToLive('button'); });
+    }
   }
 
   // ──────────────────────────────────────────────
   //  TIMER & COUNTDOWN
   // ──────────────────────────────────────────────
+  function maybeFollowBtcWidgetPriceY() {
+    if (!S.follow || S.userDragging) return;
+    var candles = S.candles;
+    if (!candles || !candles.length) return;
+    var last = candles[candles.length - 1];
+    var price = last.close;
+    var currentRange = getBtcWidgetCurrentPriceRange();
+    if (!currentRange) {
+      _withProgrammaticRange(function () { setBtcWidgetPriceRange(computeBtcWidgetPriceRange(candles, S.timeframe)); });
+      return;
+    }
+    var height = currentRange.to - currentRange.from;
+    var topZone = currentRange.to - height * 0.16;
+    var bottomZone = currentRange.from + height * 0.16;
+    if (price < topZone && price > bottomZone) return;
+    _withProgrammaticRange(function () { setBtcWidgetPriceRange(computeBtcWidgetPriceRange(candles, S.timeframe)); });
+  }
+
   function _startCountdown() {
     if (S.countdownTimer) clearInterval(S.countdownTimer);
     setTimeout(function () {
@@ -11578,7 +11655,7 @@ TradeEditorController.renderHtml = function (day, trade) {
           }
           // Follow Y si actif
           if (S.follow && !S.userDragging) {
-            maybeFollowBtcWidgetPriceY();
+            _withProgrammaticRange(function () { maybeFollowBtcWidgetPriceY(); });
           }
         } catch(e) {}
       };
@@ -11666,18 +11743,8 @@ TradeEditorController.renderHtml = function (day, trade) {
     });
     S.resizeObserver.observe(container);
 
-    // Live button
-    var liveBtn = document.getElementById('btc-widget-live-btn');
-    if (liveBtn) {
-      liveBtn.addEventListener('click', function () {
-        S.follow = true;
-        applyBtcWidgetBestView();
-        _updateBtcWidgetLiveButton();
-      });
-    }
-
-    // Custom drag
-    bindBtcWidgetFreePan();
+    // Event bindings (one-shot)
+    _bindListenersOnce();
 
     // Interval buttons
     document.querySelectorAll('.btc-chart-interval').forEach(function (btn) {
@@ -11720,6 +11787,9 @@ TradeEditorController.renderHtml = function (day, trade) {
     if (!S.candleSeries) return;
     var token = ++S.renderToken;
     console.log('[BTC-WIDGET] render start token=', token, 'tf=', S.timeframe, 'source=', _source);
+
+    // Reset live state au chargement (follow ON)
+    if (!keepZoom) _resetLiveState();
 
     // Debounce auto-refresh
     if (_source !== 'user') {
@@ -11768,7 +11838,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         if (S.follow || !keepZoom) {
           requestAnimationFrame(function () {
             if (token !== S.renderToken) return;
-            applyBtcWidgetBestView();
+            _withProgrammaticRange(function () { applyBtcWidgetBestView(); });
           });
         }
 
@@ -15771,60 +15841,45 @@ TradeEditorController.renderHtml = function (day, trade) {
     var self = this;
     var c = this.canvas;
 
-    // ===== WHEEL / TRACKPAD EVENTS =====
-    // Support pour: molette standard, trackpad 2-finger scroll, pinch zoom
+    // ===== WHEEL / TRACKPAD =====
     c.addEventListener('wheel', function (e) {
       e.preventDefault();
+      var inPriceAxis = e.offsetX > self.layout.chartRight;
 
-      // Ctrl+Wheel OR Meta+Wheel = pinch zoom simulation (global)
+      // Ctrl+wheel = zoom prix (pinch simulation)
       if (e.ctrlKey || e.metaKey) {
-        // Ctrl/Cmd + Wheel/Pinch = zoom global (temps + prix ensemble)
-        var zoomIn = e.deltaY < 0;
-        var factor = zoomIn ? 1.12 : 0.89;
-        self._zoomGlobal(e.offsetY, factor);
+        self._zoomPrice(e.offsetY, e.deltaY < 0 ? 1.08 : 0.92);
         return;
       }
 
-      // Shift+Wheel = scroll horizontal (temps) — pour trackpad vertical avec modifier
-      if (e.shiftKey && e.deltaY !== 0) {
-        var pxScroll = Math.abs(e.deltaY) * 0.75; // sensibilité modérée
-        self._scrollTime(e.deltaY > 0 ? 1 : -1, pxScroll);
+      // Sur l'axe prix : wheel vertical = zoom prix
+      if (inPriceAxis && e.deltaY !== 0) {
+        self._zoomPrice(e.offsetY, e.deltaY < 0 ? 1.08 : 0.92);
         return;
       }
 
-      // Trackpad 2-finger horizontal (deltaX) = scroll temps naturel
-      if (e.deltaX !== 0) {
-        var pxHorizontal = Math.abs(e.deltaX) * 0.75;
-        self._scrollTime(e.deltaX > 0 ? 1 : -1, pxHorizontal);
-        return;
-      }
-
-      // Molette verticale standard OU trackpad vertical = ZOOM TEMPS (rétrécir/agrandir axe X)
-      // Scroll up (deltaY < 0) = rétrécir temps = zoom in
-      // Scroll down (deltaY > 0) = agrandir temps = zoom out
+      // Dans la zone chart : wheel vertical = zoom prix (pavé = glisser haut/bas)
       if (e.deltaY !== 0) {
-        var zoomIn = e.deltaY < 0;
-        var factor = zoomIn ? 1.10 : 0.91; // 10% / 9% zoom temps
-        self._zoomTime(factor);
+        self._zoomPrice(e.offsetY, e.deltaY < 0 ? 1.08 : 0.92);
+        return;
+      }
+
+      // Wheel horizontal / trackpad lateral = scroll temps
+      if (e.deltaX !== 0) {
+        self._scrollTime(e.deltaX > 0 ? 1 : -1, Math.abs(e.deltaX) * 0.8);
       }
     }, { passive: false });
 
-    // ===== POINTER EVENTS (souris, trackpad, touch) =====
-    self._dragThreshold = 5; // px — légèrement plus généreux
+    // ===== POINTER EVENTS =====
+    self._dragThreshold = 4; // px
     self._isPointerDown = false;
     self._hasMoved = false;
-    self._dragMode = null; // 'h' (horizontal/time) ou 'v' (vertical/price)
-    self._lastPinchDistance = null; // pour détection pinch on touch
 
     c.addEventListener('pointerdown', function (e) {
-      // Ignorer drag sur l'axe prix (c'est pour le scroll prix uniquement)
-      self._inPriceAxis = e.offsetX > self.layout.chartRight;
-      if (self._inPriceAxis && e.pointerType === 'mouse') return;
-
+      if (e.button !== 0) return;
       c.setPointerCapture(e.pointerId);
       self._isPointerDown = true;
       self._hasMoved = false;
-      self._dragMode = null;
       self.dragStart.x = e.offsetX;
       self.dragStart.y = e.offsetY;
       self.scrollStart.time = self.timeScale.startTime;
@@ -15841,42 +15896,14 @@ TradeEditorController.renderHtml = function (day, trade) {
       if (self._isPointerDown) {
         var dx = e.offsetX - self.dragStart.x;
         var dy = e.offsetY - self.dragStart.y;
-        var dist = Math.sqrt(dx * dx + dy * dy);
-
-        if (dist < self._dragThreshold) return; // Pas encore du drag — seuil de 5px
+        if (Math.sqrt(dx * dx + dy * dy) < self._dragThreshold) return;
 
         self._hasMoved = true;
-
-        // === MODE VERROUILLAGE (premier mouvement décisif) ===
-        if (!self._dragMode) {
-          var absDx = Math.abs(dx);
-          var absDy = Math.abs(dy);
-
-          // Sur l'axe prix → forcer vertical (prix scroll)
-          if (self._inPriceAxis) {
-            self._dragMode = 'v';
-          }
-          // Shift+drag dans la zone chart → forcer prix (zoom en glissant)
-          else if (e.shiftKey) {
-            self._dragMode = 'v';
-          }
-          // Par défaut: drag LIBRE (mode 'free') = pan temps ET prix ensemble
-          // Aucun verrouillage directionnel — suivre le mouvement de la souris
-          else {
-            self._dragMode = 'free';
-          }
-        }
-
-        // Passer le flag shift courant (vérifié dynamiquement, pas mémorisé)
-        self._pan(dx, dy, e.shiftKey);
+        // Drag libre : pan temps + prix simultanément
+        self._pan(dx, dy);
       } else {
-        // Hover feedback
         self._dirty = true;
-        if (e.offsetX > self.layout.chartRight) {
-          c.style.cursor = 'ns-resize'; // Sur axe prix → redimensionner
-        } else {
-          c.style.cursor = 'grab'; // Zone chart → draggable
-        }
+        c.style.cursor = e.offsetX > self.layout.chartRight ? 'ns-resize' : 'grab';
       }
     });
 
@@ -15884,7 +15911,6 @@ TradeEditorController.renderHtml = function (day, trade) {
       c.releasePointerCapture(e.pointerId);
       self._isPointerDown = false;
       self._hasMoved = false;
-      self._dragMode = null;
       c.style.cursor = 'grab';
       self._dirty = true;
     });
@@ -15893,12 +15919,11 @@ TradeEditorController.renderHtml = function (day, trade) {
       self.inCanvas = false;
       self._isPointerDown = false;
       self._hasMoved = false;
-      self._dragMode = null;
       c.style.cursor = 'default';
       self._dirty = true;
     });
 
-    // Double-click — reset zoom + vue complète
+    // Double-click — reset zoom
     c.addEventListener('dblclick', function () {
       self._resetView();
     });
@@ -16245,62 +16270,21 @@ TradeEditorController.renderHtml = function (day, trade) {
   };
 
   /**
-   * Pan horizontal + vertical, avec mode verrouille
-   * - Mode 'free': drag libre = pan temps + prix ensemble (proportion souris)
-   * - Mode 'h': glisser horizontal = scroll temps seulement
-   * - Mode 'v': glisser vertical = scroll prix seulement OU zoom si shift+drag
-   * @param {number} dx - déplacement horizontal en pixels
-   * @param {number} dy - déplacement vertical en pixels
-   * @param {boolean} shiftDown - true si Shift est appuyé en ce moment
+   * Pan libre : déplacement temps (X) + prix (Y) simultanément
    */
-  OrderflowEngine.prototype._pan = function (dx, dy, shiftDown) {
+  OrderflowEngine.prototype._pan = function (dx, dy) {
     var ts = this.timeScale;
     var ps = this.priceScale;
-    var mode = this._dragMode || 'free';
 
-    // === MODE LIBRE: DRAG LIBRE (pan temps + prix ensemble) ===
-    if (mode === 'free') {
-      // Pan horizontal = scroll temps
-      var dt = -dx / ts.pixelsPerMs;
-      ts.startTime = this.scrollStart.time + dt;
-      ts.endTime = ts.startTime + (this.timeScale.width - ts.leftMargin - ts.rightMargin) / ts.pixelsPerMs;
+    // Horizontal = déplacement temps
+    var dt = -dx / ts.pixelsPerMs;
+    ts.startTime = this.scrollStart.time + dt;
+    ts.endTime = ts.startTime + (ts.width - ts.leftMargin - ts.rightMargin) / ts.pixelsPerMs;
 
-      // Pan vertical = scroll prix
-      var dp = -dy / ps.pixelsPerUnit;
-      ps.minPrice = this.scrollStart.priceMin + dp;
-      ps.maxPrice = this.scrollStart.priceMax + dp;
-    }
-    // === PAN HORIZONTAL = SCROLL TEMPS (mode 'h' forcé) ===
-    else if (mode === 'h') {
-      var dt = -dx / ts.pixelsPerMs;
-      ts.startTime = this.scrollStart.time + dt;
-      ts.endTime = ts.startTime + (this.timeScale.width - ts.leftMargin - ts.rightMargin) / ts.pixelsPerMs;
-    }
-    // === PAN VERTICAL (mode 'v' forcé) ===
-    else if (mode === 'v') {
-      // Vérifier si shift est appuyé EN CE MOMENT (pas mémorisé)
-      if (shiftDown) {
-        // Shift+drag vertical = zoom prix continu (exponential)
-        // Glisser vers le haut (dy < 0) = zoom in. Vers le bas (dy > 0) = zoom out.
-        var startMin = this.scrollStart.priceMin;
-        var startMax = this.scrollStart.priceMax;
-        var startRange = startMax - startMin;
-        var centerPrice = this.yToPrice(this.dragStart.y);
-        if (!Number.isFinite(centerPrice)) centerPrice = (startMin + startMax) / 2;
-        var zoomFactor = Math.exp(-dy * 0.005); // 0.5% per pixel
-        var newRange = startRange / zoomFactor;
-        if (newRange < 10) newRange = 10;
-        if (newRange > 100000) newRange = 100000;
-        var centerRatio = (centerPrice - startMin) / startRange;
-        ps.minPrice = centerPrice - newRange * centerRatio;
-        ps.maxPrice = ps.minPrice + newRange;
-      } else {
-        // Drag vertical NORMAL (sans shift) = simple pan prix — linéaire et prévisible
-        var dp = -dy / ps.pixelsPerUnit;
-        ps.minPrice = this.scrollStart.priceMin + dp;
-        ps.maxPrice = this.scrollStart.priceMax + dp;
-      }
-    }
+    // Vertical = déplacement prix
+    var dp = dy / ps.pixelsPerUnit;
+    ps.minPrice = this.scrollStart.priceMin + dp;
+    ps.maxPrice = this.scrollStart.priceMax + dp;
 
     this._dirty = true;
   };
