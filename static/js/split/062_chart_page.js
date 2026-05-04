@@ -695,17 +695,24 @@
     }
   }
 
-  function _calcAndDrawVwap(zoomTarget) {
+  async function _calcAndDrawVwap(zoomTarget) {
     console.log('[VWAP] 062 triggered by:', new Error().stack.split('\n')[2]);
     console.log('[VWAP] 062 _calcAndDrawVwap periods=', activeVwapPeriods, '_mainCandles=', _mainCandles.length);
     Object.keys(vwapSeriesMap).forEach(function (k) {
       if (activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
     });
-    if (!activeVwapPeriods.length) return Promise.resolve();
-    if (_vwapInFlight) return Promise.resolve();
+    if (!activeVwapPeriods.length) return;
+    if (_vwapInFlight) return;
     _vwapInFlight = true;
 
-    // Helper: compute VWAP depuis un array de candles (retourne tableau)
+    // Helper: fetch klines
+    function _fetchKlines(interval, limit) {
+      return fetch('/api/market/klines?symbol=' + currentSymbol + '&interval=' + interval + '&limit=' + limit)
+        .then(function (r) { return r.json(); })
+        .then(function (data) { return data.candles || []; });
+    }
+
+    // Helper: compute VWAP
     function _computeVwap(candles, periodSec) {
       if (!candles || !candles.length) return [];
       var lastTime = candles[candles.length - 1].time;
@@ -722,56 +729,59 @@
       return result;
     }
 
-    // Resoudre les candles pour chaque periode (fallback resolution adaptative)
+    // Helper: rAF en promesse
+    function _waitFrame() {
+      return new Promise(function (resolve) { requestAnimationFrame(resolve); });
+    }
+
+    // Verrouiller LWC pendant les setData
+    try { chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
+    try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
+
     var lastTime = _mainCandles.length ? _mainCandles[_mainCandles.length - 1].time : 0;
     var firstTime = _mainCandles.length ? _mainCandles[0].time : 0;
     var coveredSecs = lastTime - firstTime;
 
-    function _fetchAndSetVWAP(period, interval, limit) {
-      var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + interval + '&limit=' + limit;
-      return fetch(url)
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          if (data.error || !data.candles || !data.candles.length) { _removeVwapSeries(period); return; }
-          var vw = _computeVwap(data.candles, VWAP_SECONDS[period] || 86400);
-          if (vw.length < 2) { _removeVwapSeries(period); return; }
-          var s = vwapSeriesMap[period];
-          if (s) { s.applyOptions({ visible: true, color: VWAP_COLORS[period], title: 'VWAP ' + period, lastValueVisible: true }); s.setData(vw); }
-          console.log('[VWAP] 062 after setData period=', period, 'nbPts=', vw.length,
-            'first=', new Date(vw[0].time * 1000).toISOString(),
-            'last=', new Date(vw[vw.length - 1].time * 1000).toISOString());
-        })
-        .catch(function () { _removeVwapSeries(period); });
-    }
-
-    var fetchPromises = [];
-    activeVwapPeriods.forEach(function (p) {
+    // SEQUENTIEL — chaque setData attend 1 frame
+    var vwapOrder = ['1D', '7D', '30D', '90D'];
+    for (var vi = 0; vi < vwapOrder.length; vi++) {
+      var p = vwapOrder[vi];
+      if (activeVwapPeriods.indexOf(p) < 0) continue;
       var periodSec = VWAP_SECONDS[p] || 86400;
+      var candles;
+
       if (coveredSecs >= periodSec) {
-        var vw = _computeVwap(_mainCandles, periodSec);
-        if (vw.length < 2) { _removeVwapSeries(p); return; }
-        var s = vwapSeriesMap[p];
-        if (s) { s.applyOptions({ visible: true, color: VWAP_COLORS[p], title: 'VWAP ' + p, lastValueVisible: true }); s.setData(vw); }
-        console.log('[VWAP] 062 after setData period=', p, 'nbPts=', vw.length,
-          'first=', new Date(vw[0].time * 1000).toISOString(),
-          'last=', new Date(vw[vw.length - 1].time * 1000).toISOString());
+        candles = _mainCandles;
       } else {
         var interval, limit;
         if (periodSec <= 604800) { interval = '15m'; limit = Math.min(Math.ceil(periodSec / 900) + 10, 1000); }
         else if (periodSec <= 2592000) { interval = '1h'; limit = Math.min(Math.ceil(periodSec / 3600) + 10, 1000); }
         else { interval = '4h'; limit = Math.min(Math.ceil(periodSec / 14400) + 10, 1000); }
         console.log('[VWAP] 062 pas assez de 3m pour', p, ', fallback fetch', interval, 'limit=', limit);
-        fetchPromises.push(_fetchAndSetVWAP(p, interval, limit));
+        candles = await _fetchKlines(interval, limit);
       }
-    });
 
-    return Promise.resolve().then(function () {
-      _vwapInFlight = false;
-      if (zoomTarget && chart && chart.timeScale()) {
-        try { chart.timeScale().setVisibleRange({ from: zoomTarget.from, to: zoomTarget.to }); } catch(e) {}
-      }
-      if (zoomTarget) _applyZoomWithRetry(zoomTarget);
-    });
+      var vw = _computeVwap(candles, periodSec);
+      if (vw.length < 2) { _removeVwapSeries(p); continue; }
+      var s = vwapSeriesMap[p];
+      if (s) { s.applyOptions({ visible: true, color: VWAP_COLORS[p], title: 'VWAP ' + p, lastValueVisible: true }); s.setData(vw); }
+      console.log('[VWAP] 062 after setData period=', p, 'nbPts=', vw.length,
+        'first=', new Date(vw[0].time * 1000).toISOString(),
+        'last=', new Date(vw[vw.length - 1].time * 1000).toISOString());
+
+      await _waitFrame();
+    }
+
+    // Tous les setData finis → zoom unique
+    _vwapInFlight = false;
+    try { chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
+    try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: false }); } catch(e) {}
+
+    if (zoomTarget && chart && chart.timeScale()) {
+      try { chart.timeScale().setVisibleRange({ from: zoomTarget.from, to: zoomTarget.to }); } catch(e) {}
+    }
+    if (zoomTarget) _applyZoomWithRetry(zoomTarget);
+    try { chart.timeScale().applyOptions({ rightBarStaysOnScroll: true }); } catch(e) {}
   }
 
   // ── TIMEFRAMES ──

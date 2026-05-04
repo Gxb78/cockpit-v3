@@ -230,21 +230,28 @@
       } catch(e) {}
     }
   }
-  function _calcAndDrawVwap(zoomTarget) {
+  async function _calcAndDrawVwap(zoomTarget) {
     console.log('[VWAP] triggered by:', new Error().stack.split('\n')[2]);
     console.log('[VWAP] _calcAndDrawVwap periods=', activeVwapPeriods, '_mainCandles=', _mainCandles.length);
     // Nettoyer les periodes desactivees
     Object.keys(vwapSeriesMap).forEach(function (k) {
       if (activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
     });
-    if (!activeVwapPeriods.length) return Promise.resolve();
-    if (_vwapInFlight) return Promise.resolve();
+    if (!activeVwapPeriods.length) return;
+    if (_vwapInFlight) return;
     _vwapInFlight = true;
 
     // Helper: interval → secondes
     function _intvToSec(iv) {
       var u = iv.slice(-1), n = parseInt(iv);
       return n * ({'m':60,'h':3600,'d':86400,'w':604800}[u] || 60);
+    }
+
+    // Helper: fetch klines (promise → awaitable)
+    function _fetchKlines(interval, limit) {
+      return fetch('/api/market/klines?symbol=BTCUSDT&interval=' + interval + '&limit=' + limit)
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (data) { return data.candles || []; });
     }
 
     // Helper: compute VWAP depuis un array de candles (retourne tableau)
@@ -264,73 +271,67 @@
       return result;
     }
 
+    // Helper: rAF en promesse (1 frame entre chaque setData)
+    function _waitFrame() {
+      return new Promise(function (resolve) { requestAnimationFrame(resolve); });
+    }
+
+    // Verrouiller completement LWC pendant les setData
+    try { chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
+    try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
+
     // Resoudre les candles pour chaque periode (fallback resolution adaptative)
     var lastTime = _mainCandles.length ? _mainCandles[_mainCandles.length - 1].time : 0;
     var firstTime = _mainCandles.length ? _mainCandles[0].time : 0;
     var coveredSecs = lastTime - firstTime;
 
-    // Helper: fetch une resolution, compute VWAP, setData sur la serie
-    function _fetchAndSetVWAP(period, interval, limit) {
-      var url = '/api/market/klines?symbol=BTCUSDT&interval=' + interval + '&limit=' + limit;
-      return fetch(url)
-        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-        .then(function (data) {
-          if (data.error || !data.candles || !data.candles.length) { _removeVwapSeries(period); return; }
-          var periodSec = VWAP_SECONDS[period] || 86400;
-          var vw = _computeVwap(data.candles, periodSec);
-          if (vw.length < 2) { _removeVwapSeries(period); return; }
-          var s = vwapSeriesMap[period];
-          if (s) {
-            s.applyOptions({ visible: true, color: VWAP_COLORS[period] || '#f59e0b', title: 'VWAP ' + period, lastValueVisible: true });
-            s.setData(vw);
-          }
-          console.log('[VWAP] after setData period=', period, 'nbPts=', vw.length,
-            'first=', new Date(vw[0].time * 1000).toISOString(),
-            'last=', new Date(vw[vw.length - 1].time * 1000).toISOString());
-        })
-        .catch(function (err) { console.warn('[VWAP] fallback', period, 'erreur:', err && err.message); _removeVwapSeries(period); });
-    }
-
-    var fetchPromises = [];
-    activeVwapPeriods.forEach(function (p) {
+    // SEQUENTIEL — chaque setData attend 1 frame avant le suivant
+    var vwapOrder = ['1D', '7D', '30D', '90D'];
+    for (var vi = 0; vi < vwapOrder.length; vi++) {
+      var p = vwapOrder[vi];
+      if (activeVwapPeriods.indexOf(p) < 0) continue;
       var periodSec = VWAP_SECONDS[p] || 86400;
+      var candles;
+
       if (coveredSecs >= periodSec) {
-        // Assez de donnees 3m → calcul direct
-        var vw = _computeVwap(_mainCandles, periodSec);
-        if (vw.length < 2) { _removeVwapSeries(p); return; }
-        var s = vwapSeriesMap[p];
-        if (s) {
-          s.applyOptions({ visible: true, color: VWAP_COLORS[p] || '#f59e0b', title: 'VWAP ' + p, lastValueVisible: true });
-          s.setData(vw);
-        }
-        console.log('[VWAP] after setData period=', p, 'nbPts=', vw.length,
-          'first=', new Date(vw[0].time * 1000).toISOString(),
-          'last=', new Date(vw[vw.length - 1].time * 1000).toISOString());
+        candles = _mainCandles;
       } else {
-        // Pas assez → fetch en resolution adaptee (1 seul appel)
         var interval, limit;
         if (periodSec <= 604800) { interval = '15m'; limit = Math.min(Math.ceil(periodSec / 900) + 10, 1000); }
         else if (periodSec <= 2592000) { interval = '1h'; limit = Math.min(Math.ceil(periodSec / 3600) + 10, 1000); }
         else { interval = '4h'; limit = Math.min(Math.ceil(periodSec / 14400) + 10, 1000); }
         console.log('[VWAP] pas assez de 3m pour', p, ', fallback fetch', interval, 'limit=', limit);
-        fetchPromises.push(_fetchAndSetVWAP(p, interval, limit));
-      }
-    });
-
-    // Fin du VWAP — appliquer le zoom
-    return Promise.resolve().then(function () {
-      _vwapInFlight = false;
-
-      // Appliquer le zoom synchrone (timestamps invariants)
-      if (zoomTarget && chart && chart.timeScale()) {
-        try { chart.timeScale().setVisibleRange({ from: zoomTarget.from, to: zoomTarget.to }); } catch(e) {}
+        candles = await _fetchKlines(interval, limit);
       }
 
-      console.log('[VWAP] range APRÈS finally:', JSON.stringify(chart.timeScale().getVisibleRange()));
+      var vw = _computeVwap(candles, periodSec);
+      if (vw.length < 2) { _removeVwapSeries(p); continue; }
+      var s = vwapSeriesMap[p];
+      if (s) {
+        s.applyOptions({ visible: true, color: VWAP_COLORS[p] || '#f59e0b', title: 'VWAP ' + p, lastValueVisible: true });
+        s.setData(vw);
+      }
+      console.log('[VWAP] after setData period=', p, 'nbPts=', vw.length,
+        'first=', new Date(vw[0].time * 1000).toISOString(),
+        'last=', new Date(vw[vw.length - 1].time * 1000).toISOString());
 
-      // rAF-retry pour les micro-shifts residuels
-      if (zoomTarget) _applyZoomWithRetry(zoomTarget);
-    });
+      // Donner 1 frame a LWC pour digerer avant le prochain setData
+      await _waitFrame();
+    }
+
+    // Tous les setData sont finis → zoom unique et definitif
+    _vwapInFlight = false;
+    try { chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
+    try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: false }); } catch(e) {}
+
+    if (zoomTarget && chart && chart.timeScale()) {
+      try { chart.timeScale().setVisibleRange({ from: zoomTarget.from, to: zoomTarget.to }); } catch(e) {}
+    }
+    console.log('[VWAP] range APRÈS setData:', JSON.stringify(chart.timeScale().getVisibleRange()));
+
+    // rAF-retry (rightBarStaysOnScroll:true apres stabilisation)
+    if (zoomTarget) _applyZoomWithRetry(zoomTarget);
+    try { chart.timeScale().applyOptions({ rightBarStaysOnScroll: true }); } catch(e) {}
   }
 
   // ── TIMER ──
