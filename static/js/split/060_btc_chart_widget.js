@@ -6,9 +6,9 @@
   //  CONFIG
   // ──────────────────────────────────────────────
   var BTC_WIDGET_VIEW = {
-    visibleBars: { '1m':200,'3m':120,'5m':110,'15m':96,'30m':90,'1h':84,'2h':78,'4h':72,'6h':60,'8h':50,'12h':40,'1d':90 },
-    futureBars:  { '1m':24,'3m':18,'5m':18,'15m':16,'30m':14,'1h':12,'2h':12,'4h':10,'6h':10,'8h':8,'12h':8,'1d':8 },
-    barSpacing:  { '1m':6,'3m':8,'5m':8,'15m':10,'30m':10,'1h':12,'2h':14,'4h':14,'6h':16,'8h':16,'12h':18,'1d':10 },
+    visibleBars: { '1m':180,'3m':120,'5m':84,'15m':56,'30m':40,'1h':32,'2h':26,'4h':22,'6h':18,'8h':16,'12h':14,'1d':70 },
+    futureBars:  { '1m':24,'3m':15,'5m':10,'15m':5,'30m':3,'1h':2,'2h':2,'4h':1,'6h':1,'8h':1,'12h':1,'1d':3 },
+    barSpacing:  { '1m':6,'3m':8,'5m':8,'15m':9,'30m':10,'1h':11,'2h':12,'4h':13,'6h':14,'8h':14,'12h':15,'1d':10 },
   };
 
   var VWAP_COLORS = { 'D-NY': '#f59e0b', '24H': '#eab308', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
@@ -51,6 +51,7 @@
     refreshTimer: null,
     lastCandleTime: 0,
     lastCountdownFetchAt: 0,
+    lastLiveYAdjustAt: 0,
     // WS
     ws: null,
     wsGeneration: 0,
@@ -67,6 +68,7 @@
     lastFetchTs: 0,
     FETCH_COOLDOWN_MS: 5000,
     firstFetchMs: 0,
+    liveYSuppressUntil: 0,
     // Resize
     resizeObserver: null,
   };
@@ -261,6 +263,19 @@
       try { S.chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
       try { S.chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: true }); } catch(e) {}
     }
+
+    if (S.follow && !S.userDetached && !S.userDragging && token === S.renderToken && tf === S.timeframe) {
+      [0, 50, 150, 400, 1000].forEach(function (delay) {
+        setTimeout(function () {
+          if (token !== S.renderToken || tf !== S.timeframe) return;
+          if (!S.follow || S.userDetached || S.userDragging) return;
+          _withProgrammaticRange(function () {
+            var priceRange = computeBtcWidgetPriceRange(S.candles, S.timeframe);
+            setBtcWidgetPriceRange(priceRange);
+          });
+        }, delay);
+      });
+    }
   }
 
   function _refreshWidgetVwapFromPrefs() {
@@ -301,6 +316,7 @@
   }
 
   function getBtcWidgetCurrentPriceRange() {
+    if (S.follow && S.manualPriceRange) return S.manualPriceRange;
     if (!S.candleSeries) return S.manualPriceRange;
     var ps = S.candleSeries.priceScale();
     if (typeof ps.getVisibleRange === 'function') {
@@ -355,6 +371,7 @@
       var priceRange = computeBtcWidgetPriceRange(S.candles, S.timeframe);
       setBtcWidgetPriceRange(priceRange);
     });
+    S.liveYSuppressUntil = performance.now() + 2500;
     _updateBtcWidgetLiveButton();
   }
 
@@ -515,22 +532,53 @@
   // ──────────────────────────────────────────────
   //  TIMER & COUNTDOWN
   // ──────────────────────────────────────────────
-  function maybeFollowBtcWidgetPriceY() {
-    if (!S.follow || S.userDragging) return;
+  function _getLiveYZone(tf) {
+    if (tf === '1m') return { low: 0.18, high: 0.82 };
+    if (tf === '3m') return { low: 0.18, high: 0.82 };
+    if (tf === '5m') return { low: 0.20, high: 0.80 };
+    return { low: 0.24, high: 0.76 };
+  }
+
+  function maybeFollowBtcWidgetPriceY(force) {
+    if (S.userGestureActive) return;
+    if (!force && !S.follow) return;
+    if (!force && S.userDragging) return;
+    if (!force && performance.now() < (S.liveYSuppressUntil || 0)) return;
     var candles = S.candles;
     if (!candles || !candles.length) return;
     var last = candles[candles.length - 1];
     var price = last.close;
+    if (!Number.isFinite(price)) return;
+
+    var now = performance.now();
+    if (!force && now - (S.lastLiveYAdjustAt || 0) < 250) return;
+
     var currentRange = getBtcWidgetCurrentPriceRange();
     if (!currentRange) {
+      S.lastLiveYAdjustAt = now;
       _withProgrammaticRange(function () { setBtcWidgetPriceRange(computeBtcWidgetPriceRange(candles, S.timeframe)); });
       return;
     }
+
     var height = currentRange.to - currentRange.from;
-    var topZone = currentRange.to - height * 0.16;
-    var bottomZone = currentRange.from + height * 0.16;
-    if (price < topZone && price > bottomZone) return;
-    _withProgrammaticRange(function () { setBtcWidgetPriceRange(computeBtcWidgetPriceRange(candles, S.timeframe)); });
+    if (!Number.isFinite(height) || height <= 0) return;
+
+    var pos = (price - currentRange.from) / height;
+    var zone = _getLiveYZone(S.timeframe);
+    var shouldMove = force || pos < zone.low || pos > zone.high;
+    if (Number.isFinite(last.high) && last.high > currentRange.to) shouldMove = true;
+    if (Number.isFinite(last.low) && last.low < currentRange.from) shouldMove = true;
+
+    if (!shouldMove) return;
+
+    S.lastLiveYAdjustAt = now;
+    var anchor = 0.52;
+    var nextRange = { from: price - height * anchor, to: price + height * (1 - anchor) };
+    var pad = height * 0.06;
+    if (Number.isFinite(last.high) && last.high > nextRange.to) nextRange.to = last.high + pad;
+    if (Number.isFinite(last.low) && last.low < nextRange.from) nextRange.from = last.low - pad;
+
+    _withProgrammaticRange(function () { setBtcWidgetPriceRange(nextRange); });
   }
 
   // ── COUNTDOWN ANCHOR (basé sur candleCloseMs + performance.now()) ──
@@ -674,7 +722,7 @@
         _updateCountdownAnchor(latest, 'rest-fallback');
         S.candleSeries.update(latest);
         if (S.follow && !S.userDragging) {
-          applyBtcWidgetBestView();
+          _withProgrammaticRange(function () { maybeFollowBtcWidgetPriceY(); });
         }
       })
       .catch(function (e) {
@@ -798,17 +846,30 @@
     }, delay);
   }
 
+  function _upsertLiveCandle(candle) {
+    if (!candle || !Number.isFinite(candle.time)) return;
+    if (!Array.isArray(S.candles)) S.candles = [];
+    var last = S.candles[S.candles.length - 1];
+    if (last && last.time === candle.time) {
+      Object.assign(last, candle);
+    } else {
+      S.candles.push(candle);
+      if (S.candles.length > 300) S.candles = S.candles.slice(-300);
+    }
+  }
+
   function _handleWsMessage(raw) {
     var d = JSON.parse(raw), k = d && d.k;
     if (!k) return;
     var candle = { time: Math.floor(k.t / 1000), openTime: k.t, closeTime: k.T, open: parseFloat(k.o), high: parseFloat(k.h), low: parseFloat(k.l), close: parseFloat(k.c), volume: parseFloat(k.v) };
+    _upsertLiveCandle(candle);
     var priceEl = document.getElementById('btcChartPrice');
     if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
     S.lastCandleTime = k.t;
     _updateCountdownAnchor(candle, 'ws');
     if (S.candleSeries) { try { S.candleSeries.update(candle); } catch(e) {} }
     if (S.countdownPriceLine) { try { S.countdownPriceLine.applyOptions({ price: candle.close }); } catch(e) {} }
-    if (S.follow && !S.userDragging) { _withProgrammaticRange(function () { maybeFollowBtcWidgetPriceY(); }); }
+    _withProgrammaticRange(function () { maybeFollowBtcWidgetPriceY(); });
   }
 
   function _showWsError() { var el = document.getElementById('btcChartWsStatus'); if (el) el.className = 'btc-chart-ws-error visible'; }

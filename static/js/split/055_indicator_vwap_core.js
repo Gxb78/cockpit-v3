@@ -267,6 +267,7 @@
       color: VWAP_COLORS[period] || '#f59e0b',
       title: 'VWAP ' + period,
       lastValueVisible: true,
+      autoscaleInfoProvider: function () { return null; },
     });
     s.setData(aligned);
   }

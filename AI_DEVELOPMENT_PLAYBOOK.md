@@ -1032,3 +1032,40 @@ Flask mono-thread → `app.js` (657 KB) reste en Pending → page noire sans dat
 - Module `21_midnight_engine.py`: calcul des 3 fenetres (pre-midnight 22h-00h NY, midnight 00h-00h30 NY, post-open 00h30-2h NY), extraction de features, classification de scenarios, outcome journalier
 - Route `GET /api/models/midnight/day?symbol=BTCUSDT&date=YYYY-MM-DD`
 
+
+### Leçon T-0005: Corriger les bugs sans les patchs qui créent d'autres bugs (4-5 mai 2026)
+
+**Date:** 2026-05-04/05
+
+**Probleme:** Une série de bugs corrigés en rafale, mais chaque fix méritait une approche mesurée plutôt qu'un patch agressif.
+
+**Bugs corrigés:**
+
+1. **Loader collisions (`app_parts/__init__.py`)** : Le calcul de collisions (`_after - _before`) ne pouvait jamais rien détecter car les nouveaux noms ne sont pas dans les anciens. **Fix**: comparer les VALEURS avant/après, pas les noms.
+
+2. **PnL non recalculé sur update** : Si l'ancien trade a un pnl non-null, `_auto_calc_pnl` retourne sans recalculer même si entry/exit/size changent. **Fix**: Invalider `pnl` avant `_auto_calc_pnl` si un champ de calcul a changé, dans `service_update_trade`, `update_trade` route, et chat IA.
+
+3. **Upload image extension incohérente** : `_save_pending_image` pouvait sauvegarder `image.exe` (le nom) contenant un PNG valide. **Fix**: Toujours utiliser l'extension sniffée du contenu binaire.
+
+4. **Markdown IA liens non filtrés** : Les liens markdown `[texte](url)` étaient injectés directement en `<a href="$2">`, permettant `javascript:`. Les données JSON des actions étaient injectées en attribut HTML `data-ai-action-data='${JSON.stringify(...)}'`, cassant si les données contiennent `'`. **Fix**: `_aiSafeHref()` valide les protocoles (http/https/mailto), `_aiActionStore` stocke les données en mémoire plutôt que dans le DOM.
+
+5. **ChartViewCore padding top/bottom inversé** : `computePriceRange` appliquait `padding.top` au bas (from=low) et `padding.bottom` au haut (to=high). **Fix**: Inverser le mapping.
+
+6. **Config WIDGET_VIEW/CHART_VIEW pas alignée** : Le core `054` avait `0.22/0.18` pendant que le widget `060` utilisait `0.08/0.08`. **Fix**: Aligner le core à `0.08/0.08` (widget) et `0.10/0.08` (chart).
+
+7. **start.bat pip install à chaque lancement** : `pip install -r requirements.txt` ralentit chaque démarrage. **Fix**: Hasher `requirements.txt`, ne réinstaller que si le hash change.
+
+8. **Widget BTC live Y trop figé** : `maybeFollowBtcWidgetPriceY()` ne recadrait qu'à 16%/84%, throttle absent, `S.candles` pas updaté en live → widget immobile. **Fix**: Upsert WS candles, zone 28%/72%, throttle 250ms, grace period 2.5s post-focus, zones adaptatives par TF, restauration candle-only post-VWAP.
+
+9. **VWAP pollue l'autoscale Y** : Les séries VWAP faisaient autoscaleinfoProvider implicite → range Y s'étend vers VWAP loin → jump visuel. **Fix**: `autoscaleInfoProvider: () => null` dans `055` (applyOptions) ET `060` (création). `getBtcWidgetCurrentPriceRange()` préfère `manualPriceRange` en mode follow. Restauration étagée (0/50/150/400/1000ms) post-VWAP.
+
+10. **visibleBars non calibrés en durée** : 3m=120 bougies (6h) mais 5m=110 bougies (9h10) → même "nombre" mais pas la même durée → rendu incohérent. **Fix**: Calibrer en durée (~6h pour TF courts) plutôt qu'en nombre fixe.
+
+**Règles de prévention retenues:**
+- Après un redesign de widget avec follow live, tester sur 3-4 timeframes successifs
+- Un fix "simple" (ex: countdownAnchor=null) est mieux qu'un système complexe
+- Toujours vérifier que les configs canoniques du core sont alignées avec les overrides des widgets
+- Les séries d'indicateurs (VWAP) ne doivent JAMAIS influencer l'autoscale — toujours `autoscaleInfoProvider: () => null`
+- Pour les liens et données dynamiques dans le HTML, toujours valider/sanitiser côté JS plutôt que d'injecter en brut
+- Avant tout fix de race condition async, vérifier si le problème vient d'un ordre de chargement ou d'un scope JS
+
