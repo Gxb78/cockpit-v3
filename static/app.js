@@ -15883,8 +15883,11 @@ TradeEditorController.renderHtml = function (day, trade) {
       self.dragStart.x = e.offsetX;
       self.dragStart.y = e.offsetY;
       self.scrollStart.time = self.timeScale.startTime;
+      self.scrollStart.timeEnd = self.timeScale.endTime;
+      self.scrollStart.pixelsPerMs = self.timeScale.pixelsPerMs;
       self.scrollStart.priceMin = self.priceScale.minPrice;
       self.scrollStart.priceMax = self.priceScale.maxPrice;
+      self.scrollStart.pixelsPerPrice = self.priceScale.pixelsPerUnit;
       c.style.cursor = 'grabbing';
     });
 
@@ -16273,18 +16276,15 @@ TradeEditorController.renderHtml = function (day, trade) {
    * Pan libre : déplacement temps (X) + prix (Y) simultanément
    */
   OrderflowEngine.prototype._pan = function (dx, dy) {
-    var ts = this.timeScale;
-    var ps = this.priceScale;
+    // Horizontal = déplacement temps (range constant, utilise snapshot)
+    var dt = -dx / this.scrollStart.pixelsPerMs;
+    this.timeScale.startTime = this.scrollStart.time + dt;
+    this.timeScale.endTime = this.scrollStart.timeEnd + dt;
 
-    // Horizontal = déplacement temps
-    var dt = -dx / ts.pixelsPerMs;
-    ts.startTime = this.scrollStart.time + dt;
-    ts.endTime = ts.startTime + (ts.width - ts.leftMargin - ts.rightMargin) / ts.pixelsPerMs;
-
-    // Vertical = déplacement prix
-    var dp = dy / ps.pixelsPerUnit;
-    ps.minPrice = this.scrollStart.priceMin + dp;
-    ps.maxPrice = this.scrollStart.priceMax + dp;
+    // Vertical = déplacement prix (range constant, utilise snapshot)
+    var dp = dy / this.scrollStart.pixelsPerPrice;
+    this.priceScale.minPrice = this.scrollStart.priceMin + dp;
+    this.priceScale.maxPrice = this.scrollStart.priceMax + dp;
 
     this._dirty = true;
   };
