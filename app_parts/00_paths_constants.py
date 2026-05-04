@@ -50,7 +50,7 @@ STRATEGY_LABELS    = _CONFIG_DATA.get("strategy_labels", {
     "london_model": "London Model",
     "ny_model": "NY Model",
 })
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 MAX_BACKUPS    = 50
 
 # Limites de taille pour les champs textes

@@ -46,6 +46,7 @@ _PART_FILES = [
     "21_routes_ml.py",              # 21 — Routes API ML / insights
     "22_routes_settings.py",        # 22 — Routes API user settings
     "23_routes_market.py",          # 23 — Routes API market data (Binance)
+    "21_midnight_engine.py",        # 24 — Midnight Engine (+ route API)
 ]
 
 # Canonical shared namespace — ALL functions from ALL parts reference this dict

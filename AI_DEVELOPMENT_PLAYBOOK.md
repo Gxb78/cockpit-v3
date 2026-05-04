@@ -1018,3 +1018,17 @@ pour les fetchs live sans `endTime`. `_updateCountdownAnchor()` rejetait l'ancho
 Flask mono-thread → `app.js` (657 KB) reste en Pending → page noire sans data.
 **Fix** : timeout Binance 3s max, `threaded=True` sur `app.run()` en dev.
 - Fichiers: `app_parts/23_routes_market.py`, `app_parts/18_launcher.py`
+
+
+### Leçon T-0004: Midnight Engine - bornes strictes et fenetres NY
+
+**Date:** 2026-05-04
+
+**Probleme:** Toute feature temporelle (Midnight Engine, Volume Profile, daily high/low) depend de la definition precise des fenetres. Le backend doit gerer les timezones (America/New_York) avec zoneinfo + tzdata, et les bornes de fenetres doivent etre calculees cote backend, pas cote frontend.
+
+**Actions:**
+- Ajouter `tzdata` comme dependance Python
+- Migration v9: tables `market_day_contexts`, `market_events`, `trade_market_contexts` avec indexes
+- Module `21_midnight_engine.py`: calcul des 3 fenetres (pre-midnight 22h-00h NY, midnight 00h-00h30 NY, post-open 00h30-2h NY), extraction de features, classification de scenarios, outcome journalier
+- Route `GET /api/models/midnight/day?symbol=BTCUSDT&date=YYYY-MM-DD`
+

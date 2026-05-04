@@ -170,6 +170,7 @@ def _run_migrations(con):
         6: _migrate_v5_to_v6,
         7: _migrate_v6_to_v7,
         8: _migrate_v7_to_v8,
+        9: _migrate_v8_to_v9,
     }
 
     for target in sorted(_MIGRATIONS):
@@ -185,7 +186,7 @@ def _run_migrations(con):
 
 
 # Whitelist des noms de tables et colonnes autorisées (Sécurité SQL)
-_VALID_TABLES = {"days", "trades", "screenshots", "settings", "knowledge_cards"}
+_VALID_TABLES = {"days", "trades", "screenshots", "settings", "knowledge_cards", "market_day_contexts", "market_events", "trade_market_contexts"}
 _VALID_DDL_TYPES = {"TEXT", "INTEGER", "REAL", "BLOB"}
 
 def _table_columns(con, table_name):
@@ -361,3 +362,69 @@ def _migrate_v7_to_v8(con):
     log.info("Migration v8 OK - session ajoutee dans trades.")
 
 
+
+def _migrate_v8_to_v9(con):
+    """Migration v9: cree les tables Midnight Engine.
+
+    - market_day_contexts : contexte journalier Midnight pour un symbole
+    - market_events        : evenements de prix associes a un contexte
+    - trade_market_contexts: snapshot du contexte au moment du trade
+    """
+    tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+
+    if "market_day_contexts" not in tables:
+        con.executescript("""
+            CREATE TABLE market_day_contexts (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                date_ny             TEXT NOT NULL,
+                symbol              TEXT NOT NULL,
+                model_name          TEXT NOT NULL DEFAULT 'midnight_engine',
+                features_json       TEXT,
+                levels_json         TEXT,
+                labels_json         TEXT,
+                outcome_json        TEXT,
+                scenario_signature  TEXT,
+                confidence_score    REAL,
+                pre_midnight_start  INTEGER,
+                midnight_start      INTEGER,
+                midnight_end        INTEGER,
+                post_open_end       INTEGER,
+                version             INTEGER DEFAULT 1,
+                created_at          TEXT NOT NULL,
+                updated_at          TEXT NOT NULL,
+                UNIQUE(date_ny, symbol, model_name)
+            );
+
+            CREATE TABLE market_events (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                context_id      INTEGER NOT NULL,
+                event_type      TEXT NOT NULL,
+                event_time      INTEGER NOT NULL,
+                price           REAL NOT NULL,
+                metadata_json   TEXT,
+                created_at      TEXT NOT NULL,
+                FOREIGN KEY (context_id) REFERENCES market_day_contexts(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE trade_market_contexts (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                trade_id        INTEGER NOT NULL,
+                context_id      INTEGER NOT NULL,
+                snapshot_json   TEXT,
+                created_at      TEXT NOT NULL,
+                FOREIGN KEY (trade_id)   REFERENCES trades(id) ON DELETE CASCADE,
+                FOREIGN KEY (context_id) REFERENCES market_day_contexts(id) ON DELETE CASCADE,
+                UNIQUE(trade_id)
+            );
+        """)
+
+    con.execute("CREATE INDEX IF NOT EXISTS idx_mdc_date_ny   ON market_day_contexts(date_ny)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_mdc_symbol     ON market_day_contexts(symbol)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_mdc_model      ON market_day_contexts(model_name)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_mdc_signature  ON market_day_contexts(scenario_signature)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_me_context     ON market_events(context_id)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_me_type        ON market_events(event_type)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_tmc_trade      ON trade_market_contexts(trade_id)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_tmc_context    ON trade_market_contexts(context_id)")
+
+    log.info("Migration v9 OK - tables Midnight Engine creees.")
