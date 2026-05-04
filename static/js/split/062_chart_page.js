@@ -51,41 +51,42 @@
     return new Promise(function (resolve) { requestAnimationFrame(resolve); });
   }
 
-  // ── rAF-retry pour setVisibleRange avec inertie flush ──
+  // ── rAF-retry pour setVisibleRange/setVisibleLogicalRange avec inertie flush ──
   async function _applyZoomWithRetry(target, maxAttempts) {
     if (!target || !chart || !chart.timeScale()) return;
-    console.log('[ZOOM] 062 _applyZoomWithRetry target=', JSON.stringify(target), 'current=', JSON.stringify(chart.timeScale().getVisibleRange()));
+    var isLogical = target.to < 1e9;
+    console.log('[ZOOM] 062 _applyZoomWithRetry target=', JSON.stringify(target),
+      'current logical=', JSON.stringify(chart.timeScale().getVisibleLogicalRange()),
+      'mode=', isLogical ? 'LOGICAL' : 'TIMESTAMP');
 
-    // 1. Couper le scroll pour vider le buffer LWC
     chart.timeScale().applyOptions({ handleScroll: false, handleScale: false });
-
-    // 2. Attendre 2 frames pour le flush RAF interne
     await _waitFrame();
     await _waitFrame();
 
-    // 3. Snapshot + re-set → interrompt l'inertie
-    var current = chart.timeScale().getVisibleRange();
-    if (current) chart.timeScale().setVisibleRange({ from: current.from, to: current.to });
+    var current = chart.timeScale().getVisibleLogicalRange();
+    if (current) chart.timeScale().setVisibleLogicalRange({ from: current.from, to: current.to });
     await _waitFrame();
 
-    // 4. Appliquer le zoom cible
-    chart.timeScale().setVisibleRange({ from: target.from, to: target.to });
+    function applyTarget() {
+      if (isLogical) chart.timeScale().setVisibleLogicalRange({ from: target.from, to: target.to });
+      else chart.timeScale().setVisibleRange({ from: target.from, to: target.to });
+    }
+    applyTarget();
 
-    // 5. Retry loop avec tolérance < 60s
     maxAttempts = maxAttempts || 10;
+    var tolerance = isLogical ? 1.0 : 60;
     for (var attempt = 0; attempt < maxAttempts; attempt++) {
       await _waitFrame();
-      var actual = chart.timeScale().getVisibleRange();
+      var actual = chart.timeScale().getVisibleLogicalRange();
       if (!actual) continue;
       var delta = Math.abs(actual.from - target.from) + Math.abs(actual.to - target.to);
-      if (delta < 60) {
+      if (delta < tolerance) {
         console.log('[ZOOM] 062 \u2705 stabilisé en', attempt + 1, 'tentatives');
-        chart.timeScale().applyOptions({ handleScroll: true, handleScale: true });
-        return;
+        break;
       }
-      chart.timeScale().setVisibleRange({ from: target.from, to: target.to });
+      applyTarget();
     }
-    console.warn('[ZOOM] 062 \u274c non stabilisé après', maxAttempts, 'tentatives');
+    if (attempt >= maxAttempts) console.warn('[ZOOM] 062 \u274c non stabilisé après', maxAttempts, 'tentatives');
     chart.timeScale().applyOptions({ handleScroll: true, handleScale: true });
   }
 
@@ -422,7 +423,7 @@
           timeVisible: true,
           secondsVisible: false,
           borderVisible: false,
-          rightOffset: 5,
+          rightOffset: 20,
           shiftVisibleRangeOnNewBar: false,
           lockVisibleTimeRangeOnResize: true,
         },
@@ -785,15 +786,27 @@
       await _waitFrame();
     }
 
-    // Tous les setData finis → zoom unique
+    // Tous les setData finis → ajuster target.to sur la range reelle
     _vwapInFlight = false;
     try { chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
     try { chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: false }); } catch(e) {}
 
-    if (zoomTarget && chart && chart.timeScale()) {
+    var logicalAfter = chart.timeScale().getVisibleLogicalRange();
+    var totalLogical = logicalAfter ? Math.round(logicalAfter.to) : _mainCandles.length;
+    var adjustedTarget = null;
+    if (zoomTarget && totalLogical > 100) {
+      adjustedTarget = {
+        from: totalLogical - 100,
+        to: totalLogical,
+      };
+      console.log('[VWAP] 062 adjusted target (logical):', JSON.stringify(adjustedTarget),
+        '| totalLogical:', totalLogical, '| _mainCandles:', _mainCandles.length);
+      try { chart.timeScale().setVisibleLogicalRange({ from: adjustedTarget.from, to: adjustedTarget.to }); } catch(e) {}
+    } else if (zoomTarget) {
       try { chart.timeScale().setVisibleRange({ from: zoomTarget.from, to: zoomTarget.to }); } catch(e) {}
     }
-    if (zoomTarget) _applyZoomWithRetry(zoomTarget);
+    if (adjustedTarget) _applyZoomWithRetry(adjustedTarget);
+    else if (zoomTarget) _applyZoomWithRetry(zoomTarget);
     try { chart.timeScale().applyOptions({ rightBarStaysOnScroll: true }); } catch(e) {}
   }
 
@@ -1094,15 +1107,13 @@
     // Sauvegarder le zoom si on doit le restaurer apres setData
     var savedTarget = null;
     if (keepZoom && !_userIsInteracting && chart && chart.timeScale()) {
-      // Ne pas sauvegarder le zoom pendant les 2 premieres secondes (rAF-retry pas converge)
       if (_source === 'user' || Date.now() - _firstFetchMs > 2000) {
         try {
-          var timeRange = chart.timeScale().getVisibleRange();
-          if (timeRange) {
-            var rangeWidth = timeRange.to - timeRange.from;
-            var barSec = Math.floor(_getIntervalMs(currentInterval) / 1000);
-            if (rangeWidth >= barSec * 80) {
-              savedTarget = { from: timeRange.from, to: timeRange.to };
+          var logicalRange = chart.timeScale().getVisibleLogicalRange();
+          if (logicalRange) {
+            var rangeWidth = logicalRange.to - logicalRange.from;
+            if (rangeWidth >= 80) {
+              savedTarget = { from: logicalRange.from, to: logicalRange.to };
             }
           }
         } catch(e) {}
@@ -1134,7 +1145,7 @@
 
         // Point fantôme pour étendre le range autorisé par LWC (marge droite)
         var intervalSec = Math.floor(_getIntervalMs(currentInterval) / 1000);
-        var phantomTime = last.time + intervalSec * 25;
+        var phantomTime = last.time + intervalSec * 5;
         try { candlestickSeries.update({ time: phantomTime, open: last.close, high: last.close, low: last.close, close: last.close }); } catch(e) {}
 
         // VWAP — avec TTL 5min pour éviter les re-fetchs inutiles
@@ -1145,11 +1156,9 @@
           // Premier chargement : calculer en timestamps (invariant VWAP)
           // rightOffset dans les options chart ne s'applique pas avec
           // Premier chargement : calculer en timestamps (invariant VWAP)
-          var intervalSec = Math.floor(_getIntervalMs(currentInterval) / 1000);
           var firstIdx = Math.max(0, candles.length - 100);
           var fromTime = candles[firstIdx].time;
-          var phantomTime = candles[candles.length - 1].time + intervalSec * 25;
-          zoomTarget = { from: fromTime, to: phantomTime, hasSavedTarget: false };
+          zoomTarget = { from: fromTime, to: candles[candles.length - 1].time, hasSavedTarget: false };
         }
         var _firstTotal = zoomTarget ? zoomTarget.to - 15 : 0;
         if (!_lastVwapFetch || Date.now() - _lastVwapFetch > 300000) {
@@ -1159,7 +1168,15 @@
           });
         } else {
           _isFetching = false;
-          if (zoomTarget) _applyZoomWithRetry(zoomTarget);
+          if (zoomTarget && chart && chart.timeScale()) {
+            var logicalNow = chart.timeScale().getVisibleLogicalRange();
+            var total = logicalNow ? Math.round(logicalNow.to) : _mainCandles.length;
+            if (total > 100) {
+              _applyZoomWithRetry({ from: total - 100, to: total });
+            } else {
+              _applyZoomWithRetry(zoomTarget);
+            }
+          }
         }
 
         // Volume Profile (passe les bougies pour recalcul)
