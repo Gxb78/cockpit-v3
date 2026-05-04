@@ -18,7 +18,10 @@
   var activeVwapPeriods = [];
   try { var s = JSON.parse(localStorage.getItem('chartVwapPeriods')); if (Array.isArray(s)) activeVwapPeriods = s; } catch(e) {}
   var _lastVwapFetch = 0;
+  var _mainCandles = [];  // Bougies 3m principales (stockees pour VWAP inline)
   var VWAP_COLORS = { '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
+  // Duree en secondes pour chaque periode VWAP
+  var VWAP_SECONDS = { '1D': 86400, '7D': 604800, '30D': 2592000, '90D': 7776000 };
   var VWAP_INTERVALS = { '1D': '1h', '7D': '1h', '30D': '4h', '90D': '1d' };
   var VWAP_DAYS = { '1D': 1, '7D': 7, '30D': 30, '90D': 90 };
   var VWAP_LIMITS = { '1D': 24, '7D': 168, '30D': 190, '90D': 100 };
@@ -229,79 +232,93 @@
   }
   function _calcAndDrawVwap(zoomTarget) {
     console.log('[VWAP] triggered by:', new Error().stack.split('\n')[2]);
-    console.log('[VWAP] _calcAndDrawVwap periods=', activeVwapPeriods, 'range before=', chart && chart.timeScale() ? JSON.stringify(chart.timeScale().getVisibleLogicalRange()) : 'no chart');
-    console.log('[VWAP] full stack:', new Error().stack);
+    console.log('[VWAP] _calcAndDrawVwap periods=', activeVwapPeriods, '_mainCandles=', _mainCandles.length);
     // Nettoyer les periodes desactivees
     Object.keys(vwapSeriesMap).forEach(function (k) {
       if (activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
     });
     if (!activeVwapPeriods.length) return Promise.resolve();
-    // Skip si un appel est deja en vol (evite la cascade auto-refresh)
     if (_vwapInFlight) return Promise.resolve();
     _vwapInFlight = true;
 
-    // Helper: compute VWAP from candleArray pour une periode donnee
-    function _computeVwap(period, candleArray) {
-      var days = VWAP_DAYS[period] || 1;
-      var color = VWAP_COLORS[period] || '#f59e0b';
-      var fetchInterval = VWAP_INTERVALS[period] || '1h';
-      var label = 'VWAP ' + period + ' (' + fetchInterval + ')';
-      var now = Math.floor(Date.now() / 1000);
-      var todayStart = Math.floor(now / 86400) * 86400;
-      var cutoff = todayStart - (days - 1) * 86400;
-      var cumTpv = 0, cumVol = 0;
-      var vwapData = [];
-      for (var i = 0; i < candleArray.length; i++) {
-        var c = candleArray[i];
-        if (c.time < cutoff) continue;
-        var tp = (c.high + c.low + c.close) / 3;
-        cumTpv += tp * c.volume;
-        cumVol += c.volume;
-        if (cumVol > 0) vwapData.push({ time: c.time, value: cumTpv / cumVol });
-      }
-      if (!vwapData.length) { _removeVwapSeries(period); return; }
-      var s = vwapSeriesMap[period];
-      if (s) {
-        s.applyOptions({ visible: true, color: color, title: label, lastValueVisible: true });
-        s.setData(vwapData);
-      }
-      console.log('[VWAP] after setData period=', period, 'range=', JSON.stringify(chart.timeScale().getVisibleLogicalRange()));
+    // Helper: interval → secondes
+    function _intvToSec(iv) {
+      var u = iv.slice(-1), n = parseInt(iv);
+      return n * ({'m':60,'h':3600,'d':86400,'w':604800}[u] || 60);
     }
 
-    // Regrouper les periodes par fetchInterval pour dedoublonner les fetchs
-    // p.ex. 1D+7D utilisent 1h → 1 seul fetch avec limit=max(24,168)=168
-    var groups = {};
-    activeVwapPeriods.forEach(function (p) {
-      var fi = VWAP_INTERVALS[p] || '1h';
-      if (!groups[fi]) groups[fi] = { periods: [], maxLimit: 0 };
-      groups[fi].periods.push(p);
-      var needed = VWAP_LIMITS[p] || Math.max(Math.ceil((VWAP_DAYS[p]||1) * 1440 / (INTERVAL_MINUTES[fi] || 60)) + 10, 100);
-      if (needed > groups[fi].maxLimit) groups[fi].maxLimit = needed;
-    });
+    // Helper: compute VWAP depuis un array de candles (retourne tableau)
+    function _computeVwap(candles, periodSec) {
+      if (!candles || !candles.length) return [];
+      var lastTime = candles[candles.length - 1].time;
+      var cutoff = lastTime - periodSec;
+      var cumVP = 0, cumV = 0, result = [];
+      for (var i = 0; i < candles.length; i++) {
+        var c = candles[i];
+        if (c.time < cutoff) continue;
+        var tp = (c.high + c.low + c.close) / 3;
+        cumVP += tp * c.volume;
+        cumV += c.volume;
+        if (cumV > 0) result.push({ time: c.time, value: cumVP / cumV });
+      }
+      return result;
+    }
 
-    // Lancer tous les fetchs groupes en parallele (2-3 max, bien sous la limite Chrome)
-    var fetches = Object.keys(groups).map(function (fi) {
-      var grp = groups[fi];
-      var limit = grp.maxLimit;
-      var url = '/api/market/klines?symbol=BTCUSDT&interval=' + fi + '&limit=' + limit;
+    // Resoudre les candles pour chaque periode (fallback resolution adaptative)
+    var lastTime = _mainCandles.length ? _mainCandles[_mainCandles.length - 1].time : 0;
+    var firstTime = _mainCandles.length ? _mainCandles[0].time : 0;
+    var coveredSecs = lastTime - firstTime;
+
+    // Helper: fetch une resolution, compute VWAP, setData sur la serie
+    function _fetchAndSetVWAP(period, interval, limit) {
+      var url = '/api/market/klines?symbol=BTCUSDT&interval=' + interval + '&limit=' + limit;
       return fetch(url)
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function (data) {
-          if (data.error || !data.candles || !data.candles.length) {
-            console.warn('[btc-chart] VWAP (' + fi + ') pas de donnees');
-            grp.periods.forEach(function (p) { _removeVwapSeries(p); });
-            return;
+          if (data.error || !data.candles || !data.candles.length) { _removeVwapSeries(period); return; }
+          var periodSec = VWAP_SECONDS[period] || 86400;
+          var vw = _computeVwap(data.candles, periodSec);
+          if (vw.length < 2) { _removeVwapSeries(period); return; }
+          var s = vwapSeriesMap[period];
+          if (s) {
+            s.applyOptions({ visible: true, color: VWAP_COLORS[period] || '#f59e0b', title: 'VWAP ' + period, lastValueVisible: true });
+            s.setData(vw);
           }
-          grp.periods.forEach(function (p) { _computeVwap(p, data.candles); });
+          console.log('[VWAP] after setData period=', period, 'nbPts=', vw.length,
+            'first=', new Date(vw[0].time * 1000).toISOString(),
+            'last=', new Date(vw[vw.length - 1].time * 1000).toISOString());
         })
-        .catch(function (err) {
-          console.warn('[btc-chart] VWAP (' + fi + ') erreur:', err && err.message);
-          grp.periods.forEach(function (p) { _removeVwapSeries(p); });
-        });
+        .catch(function (err) { console.warn('[VWAP] fallback', period, 'erreur:', err && err.message); _removeVwapSeries(period); });
+    }
+
+    var fetchPromises = [];
+    activeVwapPeriods.forEach(function (p) {
+      var periodSec = VWAP_SECONDS[p] || 86400;
+      if (coveredSecs >= periodSec) {
+        // Assez de donnees 3m → calcul direct
+        var vw = _computeVwap(_mainCandles, periodSec);
+        if (vw.length < 2) { _removeVwapSeries(p); return; }
+        var s = vwapSeriesMap[p];
+        if (s) {
+          s.applyOptions({ visible: true, color: VWAP_COLORS[p] || '#f59e0b', title: 'VWAP ' + p, lastValueVisible: true });
+          s.setData(vw);
+        }
+        console.log('[VWAP] after setData period=', p, 'nbPts=', vw.length,
+          'first=', new Date(vw[0].time * 1000).toISOString(),
+          'last=', new Date(vw[vw.length - 1].time * 1000).toISOString());
+      } else {
+        // Pas assez → fetch en resolution adaptee (1 seul appel)
+        var interval, limit;
+        if (periodSec <= 604800) { interval = '15m'; limit = Math.min(Math.ceil(periodSec / 900) + 10, 1000); }
+        else if (periodSec <= 2592000) { interval = '1h'; limit = Math.min(Math.ceil(periodSec / 3600) + 10, 1000); }
+        else { interval = '4h'; limit = Math.min(Math.ceil(periodSec / 14400) + 10, 1000); }
+        console.log('[VWAP] pas assez de 3m pour', p, ', fallback fetch', interval, 'limit=', limit);
+        fetchPromises.push(_fetchAndSetVWAP(p, interval, limit));
+      }
     });
 
     // Fin du VWAP — appliquer le zoom
-    return Promise.all(fetches).finally(function () {
+    return Promise.resolve().then(function () {
       _vwapInFlight = false;
 
       // Appliquer le zoom synchrone (timestamps invariants)
@@ -559,6 +576,7 @@
           lockVisibleTimeRangeOnResize: true,
         },
         handleScroll: { vertTouchDrag: true, horzTouchDrag: true, pressedMouseMove: true },
+        kineticScroll: { mouse: false, touch: false },
       });
 
       series = chart.addCandlestickSeries({
@@ -702,6 +720,7 @@
         var priceEl = document.getElementById('btcChartPrice');
         if (priceEl) priceEl.textContent = '$' + Number(last.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
         series.setData(candles);
+        _mainCandles = candles;  // stocker pour VWAP inline
 
         // Point fantôme pour étendre le range autorisé par LWC (marge droite)
         var intervalSec = Math.floor(_getIntervalMs(currentInterval) / 1000);
