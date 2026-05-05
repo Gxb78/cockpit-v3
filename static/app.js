@@ -16333,13 +16333,14 @@ TradeEditorController.renderHtml = function (day, trade) {
     colorLvn: 'rgba(255,255,255,0.15)',
   };
 
-  // ── VP SOURCE CONFIG : interval + limit par période ──
+  // ── VP SOURCE CONFIG : interval + jours d'historique ──
+  // Chaque période fetch via /api/market/klines/history (cache SQLite backend)
   var VP_SOURCE_CONFIG = {
-    '5d':   { label: '5D',   interval: '15m', limit: 500 },
-    '7d':   { label: '7D',   interval: '15m', limit: 700 },
-    '30d':  { label: '30D',  interval: '1h',  limit: 750 },
-    '90d':  { label: '90D',  interval: '4h',  limit: 560 },
-    '366d': { label: '366D', interval: '12h', limit: 750 },
+    '5d':   { label: '5D',   interval: '15m', days: 5 },
+    '7d':   { label: '7D',   interval: '15m', days: 7 },
+    '30d':  { label: '30D',  interval: '30m', days: 30 },
+    '90d':  { label: '90D',  interval: '1h',  days: 90 },
+    '366d': { label: '366D', interval: '4h',  days: 366 },
   };
 
   // ── LEGACY MIGRATION ──
@@ -16709,8 +16710,9 @@ TradeEditorController.renderHtml = function (day, trade) {
 
     state.vpFetchPending[period] = true;
 
-    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + encodeURIComponent(cfg.interval) 
-            + '&limit=' + cfg.limit + '&soft=1';
+    var url = '/api/market/klines/history?symbol=BTCUSDT'
+            + '&interval=' + encodeURIComponent(cfg.interval)
+            + '&days=' + encodeURIComponent(cfg.days);
 
     fetch(url)
       .then(function (r) { return r.ok ? r.json() : null; })
@@ -16891,8 +16893,10 @@ TradeEditorController.renderHtml = function (day, trade) {
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.globalAlpha = 0.5;
-    var periodLabel = (VP_SOURCE_CONFIG[s.period] && VP_SOURCE_CONFIG[s.period].label) || s.period;
-    var infoTxt = 'VP ' + periodLabel + ' | ' + vp.bucketSize + '$ | ' + vp.candleCount + ' candles';
+    var cfg = VP_SOURCE_CONFIG[s.period];
+    var periodLabel = (cfg && cfg.label) || s.period;
+    var sourceLabel = cfg ? cfg.interval : 'chart';
+    var infoTxt = 'VP ' + periodLabel + ' | ' + sourceLabel + ' | ' + vp.bucketSize + '$ | ' + vp.candleCount + ' candles';
     ctx.fillText(infoTxt, 6, 6);
     ctx.restore();
   }
