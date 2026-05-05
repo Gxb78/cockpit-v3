@@ -990,10 +990,6 @@
         document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
         btn.classList.add('active');
         S.timeframe = btn.dataset.interval;
-        S.countdownAnchor = null;
-        _updateCountdownLabel('—');
-        _startCountdown();
-        _disconnectWs('timeframe');
         var ci = document.getElementById('btcChartCustom');
         if (ci) ci.value = '';
         _scheduleFetchAndRender(btn.dataset.interval, 'user');
@@ -1009,10 +1005,6 @@
         this.classList.remove('jedit-field-error'); this.title = '';
         document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
         S.timeframe = val;
-        S.countdownAnchor = null;
-        _updateCountdownLabel('—');
-        _startCountdown();
-        _disconnectWs('timeframe');
         _scheduleFetchAndRender(S.timeframe, 'user');
       });
       customInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') this.blur(); });
