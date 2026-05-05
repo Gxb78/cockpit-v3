@@ -60,7 +60,6 @@
     wsReconnectAttempts: 0,
     wsConnected: false,
     wsError: false,
-    lastWsConnectAt: 0,
     activeWsKey: null,
     // Flags
     chartReady: false,
@@ -70,6 +69,8 @@
     firstFetchMs: 0,
     liveYSuppressUntil: 0,
     renderInFlight: false,
+    fetchAbort: null,
+    pendingRenderTimer: null,
     // Resize
     resizeObserver: null,
   };
@@ -263,13 +264,7 @@
   function _removeVwapSeries(key) {
     var s = S.vwapSeriesMap[key];
     if (s) {
-      try {
-        var saved;
-        try { saved = S.chart.timeScale().getVisibleRange(); } catch(e2) {}
-        s.applyOptions({ visible: false, lastValueVisible: false });
-        s.setData([]);
-        if (saved) { try { S.chart.timeScale().setVisibleRange({ from: saved.from, to: saved.to }); } catch(e2) {} }
-      } catch(e) {}
+      try { s.setData([]); } catch(e) {}
     }
   }
 
@@ -321,10 +316,6 @@
       if (token !== S.renderToken || tf !== S.timeframe) return;
       await _waitFrame();
     }
-
-    // Note : la VWAP ne touche plus au viewport.
-    // applyOptions et setBtcWidgetPriceRange ne sont plus appeles ici.
-    // Le viewport reste sous controle exclusif de applyBtcWidgetBestView / maybeFollowBtcWidgetPriceY.
   }
 
   function _refreshWidgetVwapFromPrefs() {
@@ -805,24 +796,7 @@
 
   // ──────────────────────────────────────────────
   //  WS — Architecture générationnelle
-  //  Un seul propriétaire du cycle data.
-  //  Seul init/user/timeframe reset le WS.
   // ──────────────────────────────────────────────
-
-  function _getWsKey() {
-    return 'BTCUSDT:' + (S.timeframe || '3m');
-  }
-
-  function _normalizeTfForBinance(tf) {
-    var map = {
-      '1m': '1m', '3m': '3m', '5m': '5m', '15m': '15m', '30m': '30m',
-      '1h': '1h', '2h': '2h', '4h': '4h', '6h': '6h', '8h': '8h', '12h': '12h',
-      '1d': '1d', '3d': '3d', '1w': '1w', '1M': '1M',
-      '1H': '1h', '2H': '2h', '4H': '4h', '6H': '6h', '8H': '8h', '12H': '12h',
-      '1D': '1d', '3D': '3d', '1W': '1w',
-    };
-    return map[tf] || String(tf || '3m').toLowerCase();
-  }
 
   function _disconnectWs(reason) {
     S.wsGeneration++;
@@ -848,64 +822,52 @@
 
   function _connectWs(reason, opts) {
     opts = opts || {};
-    var force = !!opts.force;
-    var wsKey = _getWsKey();
-    var now = Date.now();
 
-    // Déjà connecté au bon flux ?
+    if (opts.token && opts.token !== S.renderToken) return;
+    if (opts.tf && opts.tf !== S.timeframe) return;
+
+    var tf = S.timeframe;
+    var wsKey = 'BTCUSDT:' + tf;
+
     if (S.ws && S.activeWsKey === wsKey) {
       var alive = S.ws.readyState === WebSocket.OPEN || S.ws.readyState === WebSocket.CONNECTING;
       if (alive) return;
     }
 
-    // Throttle 10s — sauf si force (timeframe/user)
-    if (!force && now - S.lastWsConnectAt < 10000) { return; }
-    S.lastWsConnectAt = now;
+    _disconnectWs('before-connect:' + reason);
 
-    S.wsGeneration++;
-    var generation = S.wsGeneration;
-
-    if (S.wsReconnectTimer) { clearTimeout(S.wsReconnectTimer); S.wsReconnectTimer = null; }
-
-    var symbol = 'btcusdt';
-    var interval = _normalizeTfForBinance(S.timeframe || '3m');
-    var url = 'wss://stream.binance.com:9443/ws/' + symbol + '@kline_' + interval;
-
-    S.wsClosing = false;
-    S.wsError = false;
-    S.wsConnected = false;
+    var generation = ++S.wsGeneration;
     S.activeWsKey = wsKey;
 
-    var ws = new WebSocket(url);
-    S.ws = ws;
+    var stream = 'btcusdt@kline_' + tf;
+    var url = 'wss://stream.binance.com:9443/ws/' + stream;
 
-    ws.onopen = function () {
-      if (generation !== S.wsGeneration || ws !== S.ws) return;
+    var newWs = new WebSocket(url);
+    S.ws = newWs;
+
+    newWs.onopen = function () {
+      if (generation !== S.wsGeneration || newWs !== S.ws) return;
+      if (opts.token && opts.token !== S.renderToken) {
+        _disconnectWs('stale-open');
+        return;
+      }
       S.wsConnected = true;
-      S.wsError = false;
-      S.wsReconnectAttempts = 0;
-      _hideWsError();
     };
 
-    ws.onmessage = function (event) {
-      if (generation !== S.wsGeneration || ws !== S.ws) return;
+    newWs.onmessage = function (event) {
+      if (generation !== S.wsGeneration || newWs !== S.ws) return;
+      if (opts.token && opts.token !== S.renderToken) return;
       try { _handleWsMessage(event.data); } catch(e) { console.warn('[BTC-WIDGET][WS] msg', e); }
     };
 
-    ws.onerror = function () {
-      if (generation !== S.wsGeneration || ws !== S.ws) return;
-      S.wsError = true;
-      _showWsError();
+    newWs.onclose = function () {
+      if (generation !== S.wsGeneration || newWs !== S.ws) return;
+      S.wsConnected = false;
     };
 
-    ws.onclose = function (event) {
-      if (generation !== S.wsGeneration || ws !== S.ws) return;
-      S.wsConnected = false;
-      var intentional = S.wsClosing || event.code === 1000 || event.code === 1001;
-      if (intentional) return;
+    newWs.onerror = function () {
+      if (generation !== S.wsGeneration || newWs !== S.ws) return;
       S.wsError = true;
-      _scheduleWsReconnect('unexpected-close');
-      _showWsError();
     };
   }
 
@@ -957,9 +919,6 @@
     if (S.countdownPriceLine) { try { S.countdownPriceLine.applyOptions({ price: safeCandle.close }); } catch(e) {} }
     _withProgrammaticRange(function () { maybeFollowBtcWidgetPriceY(); });
   }
-
-  function _showWsError() { var el = document.getElementById('btcChartWsStatus'); if (el) el.className = 'btc-chart-ws-error visible'; }
-  function _hideWsError() { var el = document.getElementById('btcChartWsStatus'); if (el) el.className = 'btc-chart-ws-error'; }
 
   // ──────────────────────────────────────────────
   //  CHART CREATION
@@ -1040,7 +999,7 @@
         _disconnectWs('timeframe');
         var ci = document.getElementById('btcChartCustom');
         if (ci) ci.value = '';
-        _fetchAndRender(false, 'user');
+        _scheduleFetchAndRender(btn.dataset.interval, 'user');
       });
     });
 
@@ -1057,7 +1016,7 @@
         _updateCountdownLabel('—');
         _startCountdown();
         _disconnectWs('timeframe');
-        _fetchAndRender(false, 'user');
+        _scheduleFetchAndRender(S.timeframe, 'user');
       });
       customInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') this.blur(); });
     }
@@ -1066,142 +1025,87 @@
   // ──────────────────────────────────────────────
   //  FETCH & RENDER
   // ──────────────────────────────────────────────
-  function _clearAllSeries() {
-    if (S.candleSeries) S.candleSeries.setData([]);
-    Object.keys(S.vwapSeriesMap).forEach(function (k) { if (S.vwapSeriesMap[k]) S.vwapSeriesMap[k].setData([]); });
-  }
 
-  async function _fetchWidgetCandles(tf) {
-    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=300';
-    var r = await fetch(url);
-
+  async function _fetchWidgetCandles(tf, signal) {
+    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=300&soft=1';
+    var r = await fetch(url, { signal: signal });
     if (!r.ok) throw new Error('HTTP ' + r.status);
-
     var data = await r.json();
-    var candles = _normalizeCandles(data.candles || []);
-
-    if (!candles.length) throw new Error('empty candles');
-
-    if (data.serverTime != null && window.BtcMarketClock && Number.isFinite(Number(data.serverTime))) {
-      window.BtcMarketClock.sync(Number(data.serverTime), 'klines-fetch');
-    }
-
-    return candles;
+    return data.candles || [];
   }
 
-  async function _fetchAndRender(keepZoom, _source) {
-    if (!S.candleSeries) return;
+  function _scheduleFetchAndRender(tf, source) {
+    if (S.pendingRenderTimer) clearTimeout(S.pendingRenderTimer);
+
+    S.pendingRenderTimer = setTimeout(function () {
+      S.pendingRenderTimer = null;
+      _fetchAndRender(source || 'user');
+    }, 120);
+  }
+
+  async function _fetchAndRender(source) {
     var token = ++S.renderToken;
-    S.renderInFlight = true;
-    console.log('[BTC-WIDGET] render start token=', token, 'tf=', S.timeframe, 'source=', _source);
+    var tf = S.timeframe;
 
-    // Reset live state au chargement (follow ON)
-    if (!keepZoom) _resetLiveState();
+    console.log('[BTC-WIDGET] render start token=', token, 'tf=', tf, 'source=', source);
 
-    // Debounce auto-refresh
-    if (_source !== 'user') {
-      var now = Date.now();
-      if (S.lastFetchTs && (now - S.lastFetchTs) < S.FETCH_COOLDOWN_MS) { S.renderInFlight = (token === S.renderToken) ? false : S.renderInFlight; return; }
-      S.lastFetchTs = now;
+    // Annule le fetch precedent
+    if (S.fetchAbort) {
+      try { S.fetchAbort.abort(); } catch(e) {}
     }
-    if (!S.firstFetchMs) S.firstFetchMs = Date.now();
+    S.fetchAbort = new AbortController();
 
-    // WS reset : UNIQUEMENT sur init/user/timeframe
-    var shouldResetWs = _source === 'init' || _source === 'user' || _source === 'timeframe';
-    if (shouldResetWs) _disconnectWs('render:' + _source);
+    // Ferme le WS precedent AVANT de lancer le nouveau render
+    _disconnectWs('render-start:' + tf);
 
-    // Cache sessionStorage : affiche les dernieres bougies immediatement
-    if (keepZoom === false) {
-      try {
-        var cachedRaw = sessionStorage.getItem('btcWidgetCandles:' + S.timeframe);
-        if (cachedRaw) {
-          var cachedCandles = _normalizeCandles(JSON.parse(cachedRaw));
-          if (cachedCandles && cachedCandles.length >= 2) {
-            S.candleSeries.setData(cachedCandles);
-            S.candles = cachedCandles;
-            requestAnimationFrame(function () {
-              if (token !== S.renderToken) return;
-              _withProgrammaticRange(function () { applyBtcWidgetBestView(); });
-            });
-          }
-        }
-      } catch(e) {}
-    }
+    // Reset defensif LWC
+    try { if (S.candleSeries) S.candleSeries.setData([]); } catch(e) {}
+    try { _clearIndicators(); } catch(e) {}
+    Object.keys(S.vwapSeriesMap || {}).forEach(function (k) {
+      try { S.vwapSeriesMap[k].setData([]); } catch(e) {}
+    });
+
+    S.candles = [];
+    S.manualPriceRange = null;
 
     try {
-      var candles = await _fetchWidgetCandles(S.timeframe);
+      var candles = await _fetchWidgetCandles(tf, S.fetchAbort.signal);
 
-      if (token !== S.renderToken) { console.warn('[BTC-WIDGET] stale candles ignored'); return; }
+      if (token !== S.renderToken || tf !== S.timeframe) {
+        console.warn('[BTC-WIDGET] stale render ignored after fetch', { token: token, tf: tf });
+        return;
+      }
 
-      var last = candles[candles.length - 1];
-      var candleTimeMs = last.time * 1000;
-      S.lastCandleTime = candleTimeMs;
-      _updateCountdownAnchor(last, 'fetch');
+      candles = _normalizeCandles(candles);
+      if (candles.length < 2) return;
+
       S.candles = candles;
 
-      // Cache en sessionStorage pour prochain reload
-      try { if (candles && candles.length >= 2) { sessionStorage.setItem('btcWidgetCandles:' + S.timeframe, JSON.stringify(candles)); } } catch(e) {}
+      if (S.candleSeries) S.candleSeries.setData(candles);
 
-      _startCountdown();
-      _startAutoRefresh();
+      if (token !== S.renderToken || tf !== S.timeframe) return;
 
-      var priceEl = document.getElementById('btcChartPrice');
-      if (priceEl) priceEl.textContent = '$' + Number(last.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
+      applyBtcWidgetBestView();
 
-      // DEBUG 060: attraper Value is null
-      try { S.candleSeries.setData(candles); } catch (e) { console.error('[DEBUG 060 setData] Value is null!', e.message, 'len:', candles.length, 'first3:', JSON.stringify(candles.slice(0,3))); var ok = candles.filter(function(c) { return c && c.time && c.open != null && c.high != null && c.low != null && c.close != null; }); if (ok.length) S.candleSeries.setData(ok); candles = ok; }
-      _renderIndicators(candles);
+      if (token !== S.renderToken || tf !== S.timeframe) return;
 
-      // VWAP — lance en differe, ne bloque pas le premier affichage
-      if (S.activeVwapPeriods.length > 0 && shouldResetWs) {
-        var renderToken = S.renderToken;
-        var renderTf = S.timeframe;
+      if (S.activeVwapPeriods.length > 0) {
         setTimeout(function () {
-          if (renderToken !== S.renderToken || renderTf !== S.timeframe) return;
+          if (token !== S.renderToken || tf !== S.timeframe) return;
           _calcAndDrawVwap().catch(function (e) {
             console.warn('[BTC-WIDGET] VWAP async render failed', e);
           });
         }, 0);
       }
 
-      // WS : connecter APRES setData
-      if (shouldResetWs) {
-        setTimeout(function () {
-          if (token !== S.renderToken) return;
-          _connectWs('after-render:' + _source, { force: true });
-        }, 250);
-      }
+      if (token !== S.renderToken || tf !== S.timeframe) return;
 
-      // Best view (range horizontal + vertical)
-      if (S.follow || !keepZoom) {
-        requestAnimationFrame(function () {
-          if (token !== S.renderToken) return;
-          _withProgrammaticRange(function () { applyBtcWidgetBestView(); });
-        });
-      }
+      _connectWs('render-complete', { force: true, token: token, tf: tf });
 
-      if (S.countdownPriceLine) { try { S.countdownPriceLine.applyOptions({ price: last.close }); } catch(e) {} }
-      _updateCountdownLabel();
-
-      S.chartReady = true;
-    } catch (err) {
-      console.warn('[BTC-WIDGET] render failed:', err);
-
-      // Si on a deja des bougies, on les garde (ne pas casser le chart sur un 502)
-      if (S.candles && S.candles.length) {
-        S.chartReady = true;
-        _updateCountdownLabel('—');
-      } else if (!S.chartReady) {
-        // Premier chargement sans cache : afficher etat erreur
-        var container = document.getElementById('btcChartContainer');
-        if (container) container.innerHTML = '<div class="chart-error-state">'
-          + '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
-          + '<div>Marche indisponible</div><span>API Binance injoignable</span></div>';
-      }
-    } finally {
-      if (token === S.renderToken) {
-        S.renderInFlight = false;
-      }
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+      if (token !== S.renderToken || tf !== S.timeframe) return;
+      console.warn('[BTC-WIDGET] render failed:', e);
     }
   }
 
@@ -1221,7 +1125,7 @@
 
     if (typeof window.LightweightCharts !== 'undefined') {
       createBtcWidgetChart(container);
-      _fetchAndRender(false, 'user');
+      _fetchAndRender('user');
       return;
     }
     var urls = [
@@ -1234,7 +1138,7 @@
       if (idx >= urls.length) { container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">Impossible de charger le graphique (CDN bloque)</div>'; return; }
       var script = document.createElement('script');
       script.src = urls[idx];
-      script.onload = function () { createBtcWidgetChart(container); _fetchAndRender(false, 'user'); };
+      script.onload = function () { createBtcWidgetChart(container); _fetchAndRender('user'); };
       script.onerror = function () { tryCdn(idx + 1); };
       document.head.appendChild(script);
     }
