@@ -1,4 +1,4 @@
-# AI Development Playbook - Journal Cockpit v3
+﻿# AI Development Playbook - Journal Cockpit v3
 
 Ce fichier est la source de verite pour toute IA qui modifie ce repo.
 But: avancer vite sans casser l'UX metier, sans casser le flow Midnight, sans reintroduire de bugs d'encodage.
@@ -31,20 +31,20 @@ But: avancer vite sans casser l'UX metier, sans casser le flow Midnight, sans re
 - `app.py` charge les modules `app_parts/*.py`.
 - Tables metier: `days`, `trades`, `trade_screenshots`.
 - Parser narration: `app_parts/10_parse_trade.py`.
-- **Documentation complète des 49 routes API :** `docs/API_ROUTES.md` (méthode, path, params, body, retour, codes HTTP).
+- **Documentation complÃ¨te des 49 routes API :** `docs/API_ROUTES.md` (mÃ©thode, path, params, body, retour, codes HTTP).
 
 ### 2.2 Frontend
 - Etat global: `static/js/split/000_state.js`.
-- **Architecture CSS (52 splits → `static/style.css`) :**
-  - Ordre alphabétique du build + **CSS Cascade Layers** pour les overrides explicites
-  - Hiérarchie : `reset < design < layout < components < widgets < utilities`
+- **Architecture CSS (52 splits â†’ `static/style.css`) :**
+  - Ordre alphabÃ©tique du build + **CSS Cascade Layers** pour les overrides explicites
+  - HiÃ©rarchie : `reset < design < layout < components < widgets < utilities`
   - Unlayered CSS bat tous les layers (migration progressive)
-  - Voir `000_theme_tokens_base.css` pour la définition des layers
+  - Voir `000_theme_tokens_base.css` pour la dÃ©finition des layers
 - **Creation trade (wizard)** : `040_wizard_core.js`, `041_wizskip.js`, `042_wizsetdate.js`, `043_wizsetdir.js`, `044_wizreadfileasdataurl.js`, `045_bindwizard.js`.
   - Mode compact (clic calendrier): wizard centre 420x520
   - Mode rail (clic "Nouveau Trade"): wizard rectangle 660x360 ancre au bouton, classe `.wiz-rail-mode`
 - **Edition trade (flip card XXL)**: `056_journal_day_trade_cards.js` (rendu flip cards), `059_trade_editor_controller.js` (editeur inline XXL).
-- **Post-mortem wizard**: `pmWizOpen()` dans wizard core — etape quality/lessons/tags apres cloture.
+- **Post-mortem wizard**: `pmWizOpen()` dans wizard core â€” etape quality/lessons/tags apres cloture.
 - Narration auto-fill: `static/js/split/038_custom_blocks.js`.
 - Journal rendering/data: `004_loadjournaltablesort.js`, `005_setjournalcustomrange.js`, `011_calendar_nav.js`, `012_data_loading.js`, `015_calendar.js`.
 - Templates trade: `templates/partials/overlays/wizard.html` (wizard 11 etapes), `templates/partials/overlays/post_mortem.html` (post-mortem).
@@ -62,7 +62,7 @@ But: avancer vite sans casser l'UX metier, sans casser le flow Midnight, sans re
 - Favoriser ASCII dans code/commentaires/messages quand possible.
 
 ### 3.2 Marqueurs de corruption a detecter
-- Tokens typiques: `Ã`, `Â`, `â`, `\uFFFD`.
+- Tokens typiques: `Ãƒ`, `Ã‚`, `Ã¢`, `\uFFFD`.
 - Si present dans runtime (hors tests de guardrail): corriger immediatement.
 
 ### 3.3 Ecriture de fichiers en PowerShell
@@ -82,7 +82,7 @@ Add-Content -LiteralPath <file> -Value <text> -Encoding utf8
 
 ### 3.4 Scan rapide
 ```powershell
-rg -n --hidden -g '!.venv/**' -g '!data/**' -g '!__pycache__/**' 'Ã|Â|â|�' app_parts static templates docs
+rg -n --hidden -g '!.venv/**' -g '!data/**' -g '!__pycache__/**' 'Ãƒ|Ã‚|Ã¢|ï¿½' app_parts static templates docs
 ```
 
 ### 3.5 Test guardrail encodage
@@ -173,7 +173,7 @@ Regle: ne pas tenir un changelog "ce qui a change". Ne stocker ici que des lesso
 
 Format obligatoire d'une lesson:
 
-### BUG-YYYYMMDD-XX - [RÉSOLU] Titre court
+### BUG-YYYYMMDD-XX - [RÃ‰SOLU] Titre court
 - Symptome:
 - Cause racine:
 - Regle de prevention:
@@ -181,15 +181,15 @@ Format obligatoire d'une lesson:
 - Fichiers a surveiller:
 
 
-### BUG-20260428-01 - [RÉSOLU] Mojibake introduit par ecriture PowerShell implicite
-- Symptome: textes UI affiches avec caracteres casses (`Ã`, `Â`, `â`).
+### BUG-20260428-01 - [RÃ‰SOLU] Mojibake introduit par ecriture PowerShell implicite
+- Symptome: textes UI affiches avec caracteres casses (`Ãƒ`, `Ã‚`, `Ã¢`).
 - Cause racine: ecriture de fichiers texte sans forcer UTF-8.
 - Regle de prevention: toute ecriture shell doit utiliser `Set-Content/Add-Content -Encoding utf8`.
 - Test de non-regression: `tests/test_encoding_guardrails.py` + scan `rg` section 3.4.
 - Fichiers a surveiller: `app_parts/*.py`, `static/js/split/*.js`, `templates/partials/**/*.html`, `AI_DEVELOPMENT_PLAYBOOK.md`.
 
 
-### BUG-20260428-02 - [RÉSOLU] Trade sauve mais calendrier non rafraichi
+### BUG-20260428-02 - [RÃ‰SOLU] Trade sauve mais calendrier non rafraichi
 - Symptome: nouveau trade absent du calendrier tant que la page n'est pas rechargee.
 - Cause racine: absence de refresh global post-save.
 - Regle de prevention: apres create/update/delete trade, relancer pipeline data central (`loadAll()` + rerender).
@@ -197,7 +197,7 @@ Format obligatoire d'une lesson:
 - Fichiers a surveiller: `static/js/split/012_data_loading.js`, `static/js/split/015_calendar.js`, `static/js/split/020_trade_form.js`.
 
 
-### BUG-20260428-03 - [RÉSOLU] Questions Midnight posees hors contexte
+### BUG-20260428-03 - [RÃ‰SOLU] Questions Midnight posees hors contexte
 - Symptome: champ/questions `Open Midnight` visibles meme hors `midnight_model`.
 - Cause racine: logique conditionnelle strategie absente/incomplete dans wizard ou modale.
 - Regle de prevention: tout bloc Midnight doit etre strictement conditionne a `strategie == midnight_model`.
@@ -205,7 +205,7 @@ Format obligatoire d'une lesson:
 - Fichiers a surveiller: `static/js/split/020_trade_form.js`, `static/js/split/040_wizard_core.js`, `app_parts/10_parse_trade.py`.
 
 
-### BUG-20260429-01 - [RÉSOLU] Tests ecrivent dans la DB de production (scope Python)
+### BUG-20260429-01 - [RÃ‰SOLU] Tests ecrivent dans la DB de production (scope Python)
 - Symptome: tests fail avec 200 != 201, stats incorrectes (avg_rr 4.595 au lieu de 2.0), routes /api/entries introuvables (404).
 - Cause racine: `mod.DB_PATH = temp_path` ne change que `app.DB_PATH`. `get_db()` lit `app_parts.DB_PATH` (le namespace du module parent). Les deux divergent apres reassignment.
 - Regle de prevention: Toujours faire `import app_parts; app_parts.DB_PATH = ...` dans les tests, jamais `mod.DB_PATH = ...`.
@@ -213,7 +213,7 @@ Format obligatoire d'une lesson:
 - Fichiers a surveiller: `tests/*.py`.
 
 
-### BUG-20260429-02 - [RÉSOLU] data["date"] au lieu de date_val dans IntegrityError
+### BUG-20260429-02 - [RÃ‰SOLU] data["date"] au lieu de date_val dans IntegrityError
 - Symptome: Dans le handler IntegrityError de `09_routes_days.py`, la recherche de l'enregistrement existant utilise `data["date"]` (valeur brute non validee) au lieu de `date_val` (validee via `_validate_date_key`).
 - Cause racine: La variable a ete renommee mais pas mise a jour partout.
 - Regle de prevention: Apres validation, utiliser systematiquement la variable validee dans tout le handler.
@@ -228,7 +228,7 @@ Format obligatoire d'une lesson:
 - Fichiers a surveiller: `app_parts/__init__.py`, `app_parts/*.py`.
 
 
-### BUG-20260429-04 - [RÉSOLU] build.py: bundle CSS vide quand tous les <link> sont supprimes
+### BUG-20260429-04 - [RÃ‰SOLU] build.py: bundle CSS vide quand tous les <link> sont supprimes
 - Symptome: Apres `python build.py`, `head_assets_css.html` est vide. Le bundle CSS n'est pas reference.
 - Cause racine: `switch_to_bundles()` supprime tous les `<link>` split puis cherche a inserer le bundle avant le premier `<link>` restant. S'il n'en reste pas (fichier vide), le bundle n'est pas ajoute.
 - Regle de prevention: Toujours verifier que `head_assets_css.html` contient le bundle apres build. Le fix utilise `if re.search(r'<link[^>]+rel="stylesheet"', text): ... else: text += bundle_tag`.
@@ -236,7 +236,7 @@ Format obligatoire d'une lesson:
 - Fichiers a surveiller: `build.py`
 
 
-### BUG-20260429-05 - [RÉSOLU] build.py: restore_splits() contamine les templates avec le mauvais type
+### BUG-20260429-05 - [RÃ‰SOLU] build.py: restore_splits() contamine les templates avec le mauvais type
 - Symptome: Apres `python build.py --restore`, `head_assets_css.html` contient des `<script>` JS et `scripts.html` contient des `<link>` CSS. Les deux fichiers sont corrompus.
 - Cause racine: `restore_splits()` restaure les deux types (JS + CSS) dans les deux templates sans distinction.
 - Regle de prevention: Toujours specifier `js=True/False` et `css=True/False` dans les appels a `restore_splits()`.
@@ -244,7 +244,7 @@ Format obligatoire d'une lesson:
 - Fichiers a surveiller: `build.py`, `templates/partials/layout/head_assets_css.html`, `templates/partials/overlays/scripts.html`
 
 
-### BUG-20260429-06 - [RÉSOLU] DATA CORRUMPUE - La base de donnees a ete videe pendant les tests/build
+### BUG-20260429-06 - [RÃ‰SOLU] DATA CORRUMPUE - La base de donnees a ete videe pendant les tests/build
 - Symptome: data/journal.db existe mais toutes les tables sont vides (0 lignes). Les backups automatiques dans data/backups/ aussi.
 - Cause racine: Les tests unitaires et le build ont ete lances sans isolement de la DB. Le module `app_parts.DB_PATH` pointait vers la DB de production pendant les tests car `mod.DB_PATH = X` ne propage pas a `app_parts` (BUG-20260429-01). Un `init_db()` a ete appele sur la vraie DB, effacant les donnees.
 - Regle de prevention: NE JAMAIS lancer de tests sans verifier que `app_parts.DB_PATH` pointe vers une DB temporaire. Backup OBLIGATOIRE avant toute operation a risque sur le projet.
@@ -254,15 +254,15 @@ Format obligatoire d'une lesson:
 - Fichiers a surveiller: `data/journal.db`, `app_parts/00_paths_constants.py`, `app_parts/02_database.py`
 
 
-### BUG-20260429-07 - [RÉSOLU] NAS remplace par NQ comme instrument canonique
+### BUG-20260429-07 - [RÃ‰SOLU] NAS remplace par NQ comme instrument canonique
 - Symptome: L'instrument etait stocke comme "NAS" en base mais affiche "NQ" dans l'UI via alias. Changement de nom canonique de "NAS" vers "NQ".
 - Cause racine: L'utilisateur prefere le ticker NQ (Nasdaq Futures). NAS etait le canonique avec NQ comme alias d'affichage.
 - Regle de prevention: Le canonique est maintenant "NQ". L'alias inverse {"NAS": "NQ"} assure la retrocompatibilite pour les donnees existantes en base. Toute reference a "NAS" comme instrument doit etre remplacee par "NQ". Les fonctions `_to_canonical()` et `_display()` sont inversees.
-- Test de non-regression: `tests/test_wizard_aliases.py` — envoi de "NQ" en entree doit retourner "NQ" (anciennement normalise en "NAS").
+- Test de non-regression: `tests/test_wizard_aliases.py` â€” envoi de "NQ" en entree doit retourner "NQ" (anciennement normalise en "NAS").
 - Fichiers a surveiller: `config.json`, `app_parts/00_paths_constants.py`, `app_parts/19_ai_chat.py`, `static/js/split/001_utilities.js`, `static/js/split/029_command_palette.js`, `static/js/split/032_breakdowns.js`, `static/js/split/039_helpers.js`, `static/js/split/040_wizard_core.js`, `static/js/split/042_wizsetdate.js`, `templates/partials/layout/rail.html`, `templates/partials/overlays/modal/day_form.html`, `static/app.js`
 
 
-### BUG-20260429-08 - [RÉSOLU] Chatbot IA invente des jours feries car pas d'outil delete
+### BUG-20260429-08 - [RÃ‰SOLU] Chatbot IA invente des jours feries car pas d'outil delete
 - Symptome: L'IA refuse de supprimer un trade le lundi 6 avril 2026 en pretendant que c'est un dimanche et jour ferie. En realite le 6 avril 2026 est bien un lundi.
 - Cause racine: Aucun outil `delete_trade` ou `delete_day` n'etait defini dans les tools du module `19_ai_chat.py`. L'IA ne pouvait pas executer la suppression, donc elle a hallucine une reponse au lieu d'avouer son incapacite.
 - Regle de prevention: TOUJOURS definir les outils delete quand on ajoute un chatbot CRUD. Les outils doivent etre: `delete_trade` (trade_id), `delete_day` (day_id). Le system prompt doit explicitement interdire de deviner les jours de la semaine et ordonner d'utiliser les outils de verification (`get_day`/`get_days`) avant de refuser une operation. Le prompt doit aussi exiger confirmation utilisateur avant toute suppression.
@@ -270,23 +270,23 @@ Format obligatoire d'une lesson:
 - Fichiers a surveiller: `app_parts/19_ai_chat.py` (tools definitions + handlers + system prompt)
 
 
-### BUG-20260429-09 - [RÉSOLU] Chatbot IA : champs manquants dans update_day et stats limitees
+### BUG-20260429-09 - [RÃ‰SOLU] Chatbot IA : champs manquants dans update_day et stats limitees
 - Symptome: L'IA ne pouvait pas modifier l'instrument ou la date d'un jour de trading via update_day. Les stats renvoyees par get_stats etaient basiques (pas de breakdowns, drawdown, period compare, heatmap, etc.).
 - Cause racine: Les tools `update_day` n'exposaient pas les champs `instrument` et `date` dans leur parametrage. La fonction `_tool_get_stats()` etait une reimplementation simplifiee qui n'utilisait pas le pipeline complet de `14_routes_stats.py` (_bucket, _derive_trade_metrics, _compute_drawdown_series, _build_period_comparison, _streak_stats, _build_insights, _build_pnl_histogram).
-- Regle de prevention: Les tools IA doivent exposer TOUS les champs que les routes backend supportent. Ne pas reimplementer des fonctions stats simplifiees — utiliser le meme pipeline que la route API. Le fichier `14_routes_stats.py` est la reference du pipeline stats complet.
+- Regle de prevention: Les tools IA doivent exposer TOUS les champs que les routes backend supportent. Ne pas reimplementer des fonctions stats simplifiees â€” utiliser le meme pipeline que la route API. Le fichier `14_routes_stats.py` est la reference du pipeline stats complet.
 - Test de non-regression: Verifier que `_tool_get_stats()` appelle `_derive_trade_metrics`, `_bucket`, `_bucket_multi`, `_compute_drawdown_series`, `_build_pnl_histogram`, `_build_period_comparison`, `_streak_stats`, `_build_insights`.
 - Fichiers a surveiller: `app_parts/19_ai_chat.py` (definitions tools + handlers + _tool_get_stats)
 
 
-### BUG-20260429-10 - [RÉSOLU] Suppression du champ emotional_state de toutes les couches
+### BUG-20260429-10 - [RÃ‰SOLU] Suppression du champ emotional_state de toutes les couches
 - Symptome: L'etat emotionnel (calm/focused/anxious/fomo/revenge/overconfident) etait encore present dans le code apres refactoring. L'utilisateur a demande sa suppression complete.
 - Cause racine: Le champ etait distribue dans ~20 fichiers (backend whitelists, normalizers, stats pipeline, parseur, tools IA, JS split wizard + formulaire, templates HTML, tests). La colonne SQL a ete preservee.
-- Regle de prevention: Suivre la checklist Phase 5 du playbook pour toute suppression multi-couche : backend whitelist → model columns → normalizer aliases → routes stats → parseur keywords → IA system prompt → IA tool schemas → IA handlers → JS split (wizard init, formulaire payload, custom blocks, stats render) → templates HTML → tests → rebuild.
+- Regle de prevention: Suivre la checklist Phase 5 du playbook pour toute suppression multi-couche : backend whitelist â†’ model columns â†’ normalizer aliases â†’ routes stats â†’ parseur keywords â†’ IA system prompt â†’ IA tool schemas â†’ IA handlers â†’ JS split (wizard init, formulaire payload, custom blocks, stats render) â†’ templates HTML â†’ tests â†’ rebuild.
 - Test de non-regression: `grep -rn 'emotional_state\|exit_emotion\|by_emo'` hors DB et bundle doit retourner 0. Tests unitaires doivent passer.
 - Fichiers a surveiller: Tous les fichiers listes dans la checklist Phase 5.
 
 
-### BUG-20260429-11 - [RÉSOLU] Backups lances pendant les tests Windows
+### BUG-20260429-11 - [RÃ‰SOLU] Backups lances pendant les tests Windows
 - Symptome: la suite de tests echoue au nettoyage de `TemporaryDirectory()` avec `PermissionError: [WinError 32]` sur `journal.db` ou `backups/journal-*.db`.
 - Cause racine: le garde-fou de `_auto_backup_after_write()` detectait `/tmp/` mais pas les chemins Windows `AppData/Local/Temp`, donc des threads de backup ouvraient encore les DB temporaires.
 - Regle de prevention: normaliser les chemins en minuscules avec slashs avant de tester les repertoires temporaires.
@@ -294,7 +294,7 @@ Format obligatoire d'une lesson:
 - Fichiers a surveiller: `app_parts/17_backups.py`, `tests/*.py`.
 
 
-### BUG-20260429-12 - [RÉSOLU] Controles Journal cables en JS mais absents du template
+### BUG-20260429-12 - [RÃ‰SOLU] Controles Journal cables en JS mais absents du template
 - Symptome: les modes mois/semaine, calendrier/table, periode custom et filtres trade existaient cote JS mais restaient invisibles dans le Journal.
 - Cause racine: `templates/partials/pages/journal/filters.html` etait vide alors que les handlers attendaient des IDs comme `calendarViewToggle`, `calendarLayoutToggle` et `journalFilterStrategy`.
 - Regle de prevention: quand un handler UI est ajoute, verifier que le template expose l'element cible et que `rg "id"` trouve une source HTML avant build.
@@ -302,7 +302,7 @@ Format obligatoire d'une lesson:
 - Fichiers a surveiller: `templates/partials/pages/journal/filters.html`, `static/js/split/004_loadjournaltablesort.js`, `static/js/split/005_setjournalcustomrange.js`, `static/js/split/006_comparetext.js`.
 
 
-### BUG-20260430-01 - [RÉSOLU] Design trade modifie dans les splits sans bundle regenere
+### BUG-20260430-01 - [RÃ‰SOLU] Design trade modifie dans les splits sans bundle regenere
 - Symptome: la modale trades peut rester sur l'ancien rendu si `static/js/split/*` ou `static/css/split/*` sont modifies mais que `static/app.js` et `static/style.css` ne sont pas reconstruits.
 - Cause racine: le template charge les bundles en mode normal, donc les changements de source split ne sont visibles qu'apres `build.py`.
 - Regle de prevention: apres toute retouche UI trade dans les splits, executer `python build.py` et verifier que `templates/partials/layout/head_assets_css.html` et `templates/partials/overlays/scripts.html` pointent vers le nouveau token.
@@ -310,15 +310,15 @@ Format obligatoire d'une lesson:
 - Fichiers a surveiller: `static/js/split/019_trades_list_dans_la_modal.js`, `static/css/split/040_trade_cockpit_cards.css`, `static/app.js`, `static/style.css`, `templates/partials/layout/head_assets_css.html`, `static/templates/partials/overlays/scripts.html`.
 
 
-### BUG-20260430-02 - [RÉSOLU] Sparkline Net P&L coupe (viewBox SVG != hauteur JS)
-- Symptome: la sparkline du widget Net P&L est coupee/tronquee — les pics de la courbe sortent du cadre SVG et sont invisibles, ne laissant qu'une ligne plate ou incomplete.
-- Cause racine: le JS (`013_kpis.js:renderPnlSparkline()`) dessine les points du `<polyline>` sur une hauteur de 42 (`height=42`, `padY=5` → les points Y vont de 5 a 37). Mais le template `001_kpi_total_pnl.html` avait `viewBox="0 0 180 30"`, donc tout point y > 30 etait hors viewBox et invisible. Le mismatch entre les deux hauteurs faisait sortir les extremums de la courbe. Meme avec `overflow:visible` en CSS, le viewBox SVG tronque le rendu.
+### BUG-20260430-02 - [RÃ‰SOLU] Sparkline Net P&L coupe (viewBox SVG != hauteur JS)
+- Symptome: la sparkline du widget Net P&L est coupee/tronquee â€” les pics de la courbe sortent du cadre SVG et sont invisibles, ne laissant qu'une ligne plate ou incomplete.
+- Cause racine: le JS (`013_kpis.js:renderPnlSparkline()`) dessine les points du `<polyline>` sur une hauteur de 42 (`height=42`, `padY=5` â†’ les points Y vont de 5 a 37). Mais le template `001_kpi_total_pnl.html` avait `viewBox="0 0 180 30"`, donc tout point y > 30 etait hors viewBox et invisible. Le mismatch entre les deux hauteurs faisait sortir les extremums de la courbe. Meme avec `overflow:visible` en CSS, le viewBox SVG tronque le rendu.
 - Regle de prevention: TOUJOURS aligner le `viewBox` SVG sur les dimensions reelles utilisees par le JS. Quand tu modifies la hauteur de rendu dans `renderPnlSparkline()` (`height=42`), verifie que le viewBox dans le template HTML correspond exactement (`viewBox="0 0 180 42"`). Les 3 couches doivent etre coherentes: (1) JS `height`, (2) SVG `viewBox`, (3) CSS `height` sur l'element SVG. En cas de mismatch, c'est le viewBox qui gagne (le plus restrictif) et les points hors viewBox sont silencieusement coupes sans erreur JS.
 - Test de non-regression: verifier que `grep 'viewBox' templates/partials/pages/today/widgets/001_kpi_total_pnl.html` contient `"0 0 180 42"` et que `grep 'height =' static/js/split/013_kpis.js` contient `42`. Verifier manuellement que la sparkline affiche tous les points (les pics ne sont pas coupes).
 - Fichiers a surveiller: `templates/partials/pages/today/widgets/001_kpi_total_pnl.html` (viewBox SVG), `static/js/split/013_kpis.js` (height du JS), `static/css/split/003_settings_chip_remove_hover.css` (height CSS 42 OK), `static/css/split/038_kpi_upgrade.css` (overflow:visible), `static/css/split/043_dashboard_pnl_motion_fix.css` (overflow+contain).
 
 
-### BUG-20260430-03 - [RÉSOLU] Deplacer le contexte du jour casse l'autosave si les IDs quittent la modale
+### BUG-20260430-03 - [RÃ‰SOLU] Deplacer le contexte du jour casse l'autosave si les IDs quittent la modale
 - Symptome: en transformant le contexte du jour en widget dashboard, les champs `entryDate`, `entryInstrument`, `htfContext`, `dailyNotes` et `dayForm` ne sont plus dans `#entryModal`, alors que l'autosave et les fonctions de creation de jour les utilisent toujours.
 - Cause racine: la logique day context etait couplee a la presence visuelle du formulaire dans la modale (`triggerDayAutosave()` ignorait les changements quand la modale etait fermee, et `saveDayContext()` se basait surtout sur `state.currentDayId`).
 - Regle de prevention: quand un formulaire visible est deplace entre surfaces, garder une seule source DOM avec les IDs historiques ou refactorer toutes les fonctions d'acces en helpers explicites. Ne pas laisser un guard visuel (`modal hidden`) bloquer une logique devenue dashboard.
@@ -326,7 +326,7 @@ Format obligatoire d'une lesson:
 - Fichiers a surveiller: `templates/partials/pages/today/widgets/006_day_context.html`, `templates/partials/pages/today/grid.html`, `templates/partials/overlays/entry_modal.html`, `static/js/split/014_today_page.js`, `static/js/split/018_day_form.js`, `static/js/split/026_autosave_du_jour.js`, `static/js/split/017_modal_gestion_globale.js`.
 
 
-### BUG-20260430-04 - [RÉSOLU] Clic calendrier: ne pas ouvrir la modale si un jour a deja des trades
+### BUG-20260430-04 - [RÃ‰SOLU] Clic calendrier: ne pas ouvrir la modale si un jour a deja des trades
 - Symptome: le clic sur une case calendrier contenant des trades ouvrait directement la modale de jour ou le picker multi-instruments, alors que l'UX attendue est une revue visuelle inline des trades.
 - Cause racine: `bindCalendarGridActions()` ne distinguait que "aucune entree", "une entree" et "plusieurs entrees"; il ne testait pas le nombre total de trades avant d'ouvrir la modale.
 - Regle de prevention: pour les interactions calendrier, raisonner sur le nombre total de trades (`sum(day.trades.length)`) avant le nombre d'entrees day. Le cas `tradeCount > 0` doit rester un chemin inline dedie; le cas `tradeCount === 0` garde le flux historique.
@@ -335,7 +335,7 @@ Format obligatoire d'une lesson:
 - Fichiers a surveiller: `static/js/split/015_calendar.js`, `static/js/split/056_journal_day_trade_cards.js`, `templates/partials/pages/journal/calendar_focus.html`, `static/css/split/046_journal_day_trade_cards.css`.
 
 
-### BUG-20260501-01 - [RÉSOLU] leverage jamais persiste en DB (payload.pop detruit la cle)
+### BUG-20260501-01 - [RÃ‰SOLU] leverage jamais persiste en DB (payload.pop detruit la cle)
 - Symptome: le champ `leverage` (colonne DB creee par migration v6) reste toujours NULL en base, meme apres creation/mise a jour d'un trade avec un levier.
 - Cause racine: `_auto_calc_pnl()` dans `03_core_helpers.py` utilisait `payload.pop("leverage", None)` aux 3 branches (pnl manuel, infos manquantes, calcul auto). `pop()` SUPPRIME la cle du payload, donc l'INSERT/UPDATE SQL ne recoit jamais la valeur. Le calcul utilisait bien le levier (ligne 252, branche calcul auto) mais il etait perdu apres.
 - Regle de prevention: TOUJOURS utiliser `payload.get("leverage")` pas `payload.pop("leverage")` dans `_auto_calc_pnl()`. Le pop detruit la donnee. Si tu veux lire sans supprimer, c'est `get()`. Si tu dois pop (par ex. pour eviter de passer un champ calcule a SQL), remets-le dans le payload apres usage.
@@ -343,7 +343,7 @@ Format obligatoire d'une lesson:
 - Fichiers a surveiller: `app_parts/03_core_helpers.py` (fonction `_auto_calc_pnl`), `app_parts/10_routes_trades.py` (routes create/update).
 
 
-### BUG-20260501-02 - [RÉSOLU] Orphelins dans app_parts/__archive__ jamais nettoies + header.html vide
+### BUG-20260501-02 - [RÃ‰SOLU] Orphelins dans app_parts/__archive__ jamais nettoies + header.html vide
 - Symptome: 18 fichiers orphelins dans `app_parts/__archive__/` (anciennes versions non chargees) + `templates/partials/pages/journal/header.html` vide (1 ligne commentaire) cassant 22 IDs DOM.
 - Cause racine: accumulation d'archives sans cleanup. Le header a ete vide pendant un refactoring sans restaurer les IDs (prevMonth, nextMonth, stats, month picker, focus toggle).
 - Regle de prevention: apres chaque refactoring, verifier `git ls-files app_parts/__archive__/` = 0. Verifier que les IDs DOM references par les JS existent dans les templates HTML (`rg -rn '#prevMonth\|#nextMonth\|#monthLabel' templates/ --type html`).
@@ -351,7 +351,7 @@ Format obligatoire d'une lesson:
 - Fichiers a surveiller: `app_parts/__archive__/*`, `templates/partials/pages/journal/header.html`, tous les JS qui referencent des IDs de navigation/stats header.
 
 
-### BUG-20260501-03 - [RÉSOLU] Parametre mort `existing` dans _auto_calc_pnl + catch silencieux state.js
+### BUG-20260501-03 - [RÃ‰SOLU] Parametre mort `existing` dans _auto_calc_pnl + catch silencieux state.js
 - Symptome: `_auto_calc_pnl()` acceptait `existing=None` mais ne l'utilisait jamais. `19_ai_chat.py` lui passait `existing` pour rien. State.js ligne 79 catch silencieux qui avale les erreurs de listeners.
 - Cause racine: accumulation de code mort et de catch aveugles.
 - Regle de prevention: apres chaque refactoring, chercher les parametres de fonction inutilises (`grep -rn "def.*existing=None" app_parts/`). Les catch doivent toujours logger (`console.warn` minimum).
@@ -359,132 +359,132 @@ Format obligatoire d'une lesson:
 |- Fichiers a surveiller: `app_parts/03_core_helpers.py`, `app_parts/19_ai_chat.py`, `static/js/split/000_state.js`.
 
 
-### BUG-20260501-04 - [RÉSOLU] Changement de type d'un champ state (tag string → array) sans retrocompat
+### BUG-20260501-04 - [RÃ‰SOLU] Changement de type d'un champ state (tag string â†’ array) sans retrocompat
 - Symptome: apres migration `tag` de string vers array, les filtres chargeaient depuis localStorage avec `typeof tag === "string"` et plantaient les fonctions qui attendaient un array.
 - Cause racine: le format stocke en localStorage etait `"news_trade"` (string) mais le nouveau code attend `["news_trade"]` (array).
 - Regle de prevention: TOUJOURS gerer la retrocompat dans `sanitizeJournalTradeFilters()` quand un champ change de type. Pattern: `if (Array.isArray(raw.tag)) { ... } else if (typeof raw.tag === "string") { out.tag = [raw.tag]; }`.
-- Test de non-regression: charger un filtre depuis localStorage avec ancien format string → doit retourner un array.
+- Test de non-regression: charger un filtre depuis localStorage avec ancien format string â†’ doit retourner un array.
 - Fichiers a surveiller: `static/js/split/003_addcustomstrategyfromsettings.js` (sanitize).
 
 
-### BUG-20260501-05 - [RÉSOLU] Placeholder invisible quand input a une valeur
+### BUG-20260501-05 - [RÃ‰SOLU] Placeholder invisible quand input a une valeur
 - Symptome: le placeholder "2 car. min" ne s'affichait pas quand le champ contenait deja "a" car les placeholders sont caches par la valeur de l'input.
 - Cause racine: utilisation d'un `placeholder` au lieu d'un element HTML positionne.
 - Regle de prevention: pour afficher un hint en presence d'une valeur, utiliser un `<span>` en absolute overlay, pas le placeholder de l'input. Placer le span en `position: absolute; right: 8px; top: 50%; transform: translateY(-50%); pointer-events: none;` avec `padding-right` sur l'input pour eviter le chevauchement.
-- Test de non-regression: saisir "a" → le hint "2 car. min" est visible a droite du "a".
+- Test de non-regression: saisir "a" â†’ le hint "2 car. min" est visible a droite du "a".
 - Fichiers a surveiller: `static/js/split/006_comparetext.js`, `static/css/split/033_priority2_journal_trade.css`.
 
 
-### BUG-20260501-06 - [RÉSOLU] Template stats jamais rendu → page blanche (doublon BUG-20260501-09 fusionné)
-- Symptome: navigation vers Stats → ecran vide, aucune erreur JS hormis `Cannot set properties of null (setting 'textContent')` sur `#statStreakCur`.
+### BUG-20260501-06 - [RÃ‰SOLU] Template stats jamais rendu â†’ page blanche (doublon BUG-20260501-09 fusionnÃ©)
+- Symptome: navigation vers Stats â†’ ecran vide, aucune erreur JS hormis `Cannot set properties of null (setting 'textContent')` sur `#statStreakCur`.
 - Cause racine: le contenu de la page Stats etait dans un `<template id="statsTemplate">` mais aucun code JS ne le clonait dans `<section class="page" data-page="stats">`. Les elements attendus par `renderPerformance()` n'existaient pas dans le DOM.
 - Regle de prevention: quand un template HTML est utilise pour une page, verifier que le JS appelle `template.content.cloneNode(true)` dans `openPage()` avant tout render. Pattern: `if (section && tmpl && !section._rendered) { section.appendChild(tmpl.content.cloneNode(true)); section._rendered = true; }`.
-- Test de non-regression: naviguer vers Stats → le contenu apparait (pas de page blanche).
+- Test de non-regression: naviguer vers Stats â†’ le contenu apparait (pas de page blanche).
 - Fichiers a surveiller: `static/js/split/009_navigation.js`, `templates/partials/pages/stats.html`.
 
 
-### BUG-20260501-07 - [RÉSOLU] applyVisualSettings() ne sync pas la checkbox dark mode
+### BUG-20260501-07 - [RÃ‰SOLU] applyVisualSettings() ne sync pas la checkbox dark mode
 - Symptome: toggler le theme depuis le rail (`#themeToggle`) changeait l'apparence mais la checkbox `#prefDarkMode` dans Settings restait sur l'ancienne valeur.
 - Cause racine: `applyVisualSettings()` mettait a jour `body.light-mode` mais pas la checkbox.
 - Regle de prevention: toute fonction `apply*Settings()` doit sync les controles UI correspondants s'ils existent dans le DOM. Ajouter `var cb = document.getElementById("prefDarkMode"); if (cb) cb.checked = prefersDark;` dans `applyVisualSettings()`.
-- Test de non-regression: toggler theme depuis le rail → ouvrir Settings → checkbox en phase.
+- Test de non-regression: toggler theme depuis le rail â†’ ouvrir Settings â†’ checkbox en phase.
 - Fichiers a surveiller: `static/js/split/002_prettify.js`.
 
 
-### BUG-20260501-08 - [RÉSOLU] Champs API key en type=text exposé en partage d'ecran
+### BUG-20260501-08 - [RÃ‰SOLU] Champs API key en type=text exposÃ© en partage d'ecran
 - Symptome: le champ `#settingsApiKeyMasked` etait en `type="text"`, visible en partage d'ecran.
 - Cause racine: pas de mesure de securite sur un champ sensible.
-- Regle de prevention: toujours utiliser `type="password"` pour les cles API, avec un bouton toggle œil pour afficher/masquer. Pattern: `<input type="password">` + bouton `#settingsApiToggle` qui switch entre `type="password"` et `type="text"`.
-- Test de non-regression: ouvrir Settings → la cle est masquee (dots).
+- Regle de prevention: toujours utiliser `type="password"` pour les cles API, avec un bouton toggle Å“il pour afficher/masquer. Pattern: `<input type="password">` + bouton `#settingsApiToggle` qui switch entre `type="password"` et `type="text"`.
+- Test de non-regression: ouvrir Settings â†’ la cle est masquee (dots).
 - Fichiers a surveiller: `templates/partials/pages/settings/api_card.html`, `static/js/split/003_addcustomstrategyfromsettings.js`, `static/css/split/034_priority3_stats_settings_insights.css`.
 
 
-### ~~BUG-20260501-09~~ [FUSIONNÉ AVEC BUG-20260501-06] Stats page template jamais rendu → page blanche
-- Note: Ce bug est un doublon exact de BUG-20260501-06 (même symptôme, même cause, même fix). Conservé pour référence historique.
+### ~~BUG-20260501-09~~ [FUSIONNÃ‰ AVEC BUG-20260501-06] Stats page template jamais rendu â†’ page blanche
+- Note: Ce bug est un doublon exact de BUG-20260501-06 (mÃªme symptÃ´me, mÃªme cause, mÃªme fix). ConservÃ© pour rÃ©fÃ©rence historique.
 
 
-### BUG-20260501-10 - [RÉSOLU] Widget drag drop intercepte les clics sur les cellules calendrier
+### BUG-20260501-10 - [RÃ‰SOLU] Widget drag drop intercepte les clics sur les cellules calendrier
 - Symptome: calendrier Today non clickable. Curseur pointer montre bien l'interactivite mais aucun evenement click ne se declenche.
-- Cause racine: `initWidgetDragDrop()` dans `047_today_widget_board.js` attache un `pointerdown` sur chaque widget. L'exclusion listait `button` (elements HTML) mais pas `[role="button"]`. Les cellules `.day` sont des `<div role="button">` → le drag les capturait et le click ne passait jamais.
+- Cause racine: `initWidgetDragDrop()` dans `047_today_widget_board.js` attache un `pointerdown` sur chaque widget. L'exclusion listait `button` (elements HTML) mais pas `[role="button"]`. Les cellules `.day` sont des `<div role="button">` â†’ le drag les capturait et le click ne passait jamais.
 - Regle de prevention: la liste d'exclusion du drag drop doit toujours inclure `[role="button"]` a cote de `button`. Les elements avec `role="button"` sont interactifs et ne doivent pas initier le drag.
-- Test de non-regression: cliquer sur une case du calendrier Today → navigation vers le Journal.
+- Test de non-regression: cliquer sur une case du calendrier Today â†’ navigation vers le Journal.
 - Fichiers a surveiller: `static/js/split/047_today_widget_board.js`.
 
 
-### BUG-20260501-11 - [RÉSOLU] Autosave day context ecrase les textareas (state.allDays pas patche)
-- Symptome: taper un texte dans Analyse HTF → click hors champ → autosave → le texte revient a l'ancienne valeur.
-- Cause racine: `saveDayContext()` patchait `state.days` apres sauvegarde mais pas `state.allDays`. `findTodayContextDay()` cherche dans `state.allDays` en priorite → trouvait l'ancienne donnee → `renderTodayContextWidget()` re-ecrivait la textarea.
+### BUG-20260501-11 - [RÃ‰SOLU] Autosave day context ecrase les textareas (state.allDays pas patche)
+- Symptome: taper un texte dans Analyse HTF â†’ click hors champ â†’ autosave â†’ le texte revient a l'ancienne valeur.
+- Cause racine: `saveDayContext()` patchait `state.days` apres sauvegarde mais pas `state.allDays`. `findTodayContextDay()` cherche dans `state.allDays` en priorite â†’ trouvait l'ancienne donnee â†’ `renderTodayContextWidget()` re-ecrivait la textarea.
 - Regle de prevention: TOUJOURS patcher les DEUX stores (`state.days` ET `state.allDays`) apres une sauvegarde local. Meme pattern: boucle for identique sur les deux tableaux.
-- Test de non-regression: ecrire dans une textarea du contexte jour → focusout → rafraichir → le texte est preserve.
+- Test de non-regression: ecrire dans une textarea du contexte jour â†’ focusout â†’ rafraichir â†’ le texte est preserve.
 |- Fichiers a surveiller: `static/js/split/018_day_form.js`.
 
 
-### BUG-20260501-13 - [RÉSOLU] Knowledge cards sauvegardables dans l'UI Insights
+### BUG-20260501-13 - [RÃ‰SOLU] Knowledge cards sauvegardables dans l'UI Insights
 - Symptome: les patterns ML etaient calcules a la volee mais on ne pouvait pas les sauvegarder/bookmarker. La table `knowledge_cards` existait sans UI.
 - Cause racine: la table knowledge_cards etait creee en migration v4 mais aucune route CRUD ni UI n'y accedait. Les patterns etaient generes a la volee par analyze_patterns() sans persistance.
 - Regle de prevention: quand on cree une table en DB, implementer AU MOINS les routes CRUD de base avant de passer a autre chose, meme si l'UI vient plus tard.
-- Test de non-regression: cliquer sur l'etoile d'une insight card → recharger la page → l'etoile est encore jaune.
+- Test de non-regression: cliquer sur l'etoile d'une insight card â†’ recharger la page â†’ l'etoile est encore jaune.
 - Changement: routes CRUD POST/GET/DELETE `/api/ml/knowledge`, bouton etoile sur chaque insight card, etat sauvegarde persistant via classe `.is-saved` + API.
 - Fichiers a surveiller: `app_parts/21_routes_ml.py`, `static/js/split/049_insights.js`, `static/css/split/031_insights.css`.
 
 
 
-### BUG-20260501-12 - [RÉSOLU] Session ajoutee comme etape wizard + champ trade
+### BUG-20260501-12 - [RÃ‰SOLU] Session ajoutee comme etape wizard + champ trade
 - Symptome: impossible de selectionner la session de trading par trade (Asia, London, NY AM, NY PM).
 - Cause racine: le champ `session` existait en DB sur `days` (par jour) mais pas sur `trades` (par trade). Aucune UI pour le saisir par trade.
 - Regle de prevention: quand un champ existe dans un contexte (day) mais est aussi pertinent dans un autre (trade), l'ajouter aux deux schemas et whitelists + UI associee.
-- Test de non-regression: creer un trade via wizard → selectionner une session → verifier dans l'editeur XXL que la session est conservee → flip card → session visible.
+- Test de non-regression: creer un trade via wizard â†’ selectionner une session â†’ verifier dans l'editeur XXL que la session est conservee â†’ flip card â†’ session visible.
 - Changement: `session` ajoute a `TRADE_TEXT_FIELDS`, migration v8 (`_migrate_v7_to_v8`), etape wizard dediee (entre instrument et strategy), champ select dans l'editeur XXL, affichage dans les flip cards.
 - Valeurs session: `asia`, `london`, `ny_am`, `ny_pm`.
 - Fichiers a surveiller: `app_parts/00_paths_constants.py`, `app_parts/02_database.py`, `static/js/split/040_wizard_core.js`, `static/js/split/042_wizsetdate.js`, `static/js/split/041_wizskip.js`, `static/js/split/043_wizsetdir.js`, `static/js/split/059_trade_editor_controller.js`, `static/js/split/056_journal_day_trade_cards.js`.
 
 
-### BUG-20260502-01 - [RÉSOLU] Jour sans trade affiche $0.00 et refuse le clic wizard
+### BUG-20260502-01 - [RÃ‰SOLU] Jour sans trade affiche $0.00 et refuse le clic wizard
 - Symptome: un jour qui existe en DB (contexte seul, sans trade) affiche 0,00$ sur la case calendrier. Le clic ouvre openExistingDay() qui recharge le calendrier sans effet visible (pas de flip cards car pas de trades).
 - Cause racine: dayCell() affichait le PnL meme pour `info.trades === 0`. Le click handler appelait openExistingDay() / openPickerForDate() quand tradeCount === 0 au lieu d'ouvrir le wizard.
 - Regle de prevention: dayCell() doit cacher le metric si `info.trades === 0`. Le click handler doit ouvrir le wizard quand `tradeCount === 0`, pas openExistingDay().
-- Test de non-regression: cliquer sur un jour avec entree DB mais 0 trade → le wizard s'ouvre. La case calendrier n'affiche pas 0,00$.
-- Changement: dayCell() ligne 313: `if (info)` → `if (info && info.trades > 0)`. Click handler: affiche renderJournalDayContext() (carte contexte + bouton Nouveau trade) au lieu d'ouvrir directement le wizard. Nouvelle fonction renderJournalDayContext() dans 015_calendar.js + CSS dans 046_journal_day_trade_cards.css.
+- Test de non-regression: cliquer sur un jour avec entree DB mais 0 trade â†’ le wizard s'ouvre. La case calendrier n'affiche pas 0,00$.
+- Changement: dayCell() ligne 313: `if (info)` â†’ `if (info && info.trades > 0)`. Click handler: affiche renderJournalDayContext() (carte contexte + bouton Nouveau trade) au lieu d'ouvrir directement le wizard. Nouvelle fonction renderJournalDayContext() dans 015_calendar.js + CSS dans 046_journal_day_trade_cards.css.
 - Fichiers a surveiller: `static/js/split/015_calendar.js` (dayCell + bindCalendarGridActions + renderJournalDayContext), `static/css/split/046_journal_day_trade_cards.css` (.journal-day-context-empty).
 
 
-### BUG-20260502-02 - [RÉSOLU] PnL=0 ecrase par _auto_calc_pnl (impossible d'avoir un trade break-even)
-- Symptome: un trade avec PnL=0 explicite (break-even) voit son PnL recalculé par _auto_calc_pnl() a partir d'entry/exit/size, effaçant le 0 intentionnel.
+### BUG-20260502-02 - [RÃ‰SOLU] PnL=0 ecrase par _auto_calc_pnl (impossible d'avoir un trade break-even)
+- Symptome: un trade avec PnL=0 explicite (break-even) voit son PnL recalculÃ© par _auto_calc_pnl() a partir d'entry/exit/size, effaÃ§ant le 0 intentionnel.
 - Cause racine: la condition `pnl is not None and pnl != 0` ne distinguait pas "pnl non fourni" (None) de "pnl=0 explicite".
 - Regle de prevention: toujours verifier la presence de la cle dans le dictionnaire avec `"pnl" in payload` plutot que de tester la valeur. Les payloads sans `pnl` n'ont pas la cle; les payloads avec pnl=0 ont la cle.
-- Test de non-regression: envoyer un trade avec `pnl=0` + entry/exit/size → le PnL reste 0 (pas recalculé). Envoyer un trade sans `pnl` → le PnL est calculé a partir d'entry/exit/size.
-- Changement: `if pnl is not None and pnl != 0` → `if "pnl" in payload` dans _auto_calc_pnl().
+- Test de non-regression: envoyer un trade avec `pnl=0` + entry/exit/size â†’ le PnL reste 0 (pas recalculÃ©). Envoyer un trade sans `pnl` â†’ le PnL est calculÃ© a partir d'entry/exit/size.
+- Changement: `if pnl is not None and pnl != 0` â†’ `if "pnl" in payload` dans _auto_calc_pnl().
 - Fichiers a surveiller: `app_parts/03_core_helpers.py` (fonction _auto_calc_pnl).
 
 
-### BUG-20260502-03 - [RÉSOLU] Ligne morte `payload.get("leverage")` dans _auto_calc_pnl()
-- Symptome: une ligne `payload.get("leverage")` est appelée sans assignation ni usage, résultat ignoré.
+### BUG-20260502-03 - [RÃ‰SOLU] Ligne morte `payload.get("leverage")` dans _auto_calc_pnl()
+- Symptome: une ligne `payload.get("leverage")` est appelÃ©e sans assignation ni usage, rÃ©sultat ignorÃ©.
 - Cause racine: code mort residuel d'un refactoring, probablement un oubli ou un copier-coller.
-- Regle de prevention: apres chaque refactoring, chercher les appels de fonction dont le retour n'est pas utilisé et qui n'ont pas d'effet de bord. `grep -rn '\.get.*$' app_parts/ | grep -v '='` peut aider.
-- Test de non-regression: lancer les tests existants — la ligne supprimée etait sans effet.
-- Changement: suppression de la ligne `payload.get("leverage")` dans le bloc de retour anticipé.
+- Regle de prevention: apres chaque refactoring, chercher les appels de fonction dont le retour n'est pas utilisÃ© et qui n'ont pas d'effet de bord. `grep -rn '\.get.*$' app_parts/ | grep -v '='` peut aider.
+- Test de non-regression: lancer les tests existants â€” la ligne supprimÃ©e etait sans effet.
+- Changement: suppression de la ligne `payload.get("leverage")` dans le bloc de retour anticipÃ©.
 - Fichiers a surveiller: `app_parts/03_core_helpers.py` (fonction _auto_calc_pnl).
 
 
-### BUG-20260502-04 - [RÉSOLU] loadAllDays() et loadStats() avalent les erreurs sans feedback
+### BUG-20260502-04 - [RÃ‰SOLU] loadAllDays() et loadStats() avalent les erreurs sans feedback
 - Symptome: les KPIs du dashboard affichent des zeros sans indication que les donnees n'ont pas pu etre chargees. L'utilisateur voit des stats a zero sans comprendre pourquoi.
 - Cause racine: les catch de loadAllDays() et loadStats() utilisaient `console.error(e)` sans toast ni feedback utilisateur.
-- Regle de prevention: toute erreur de chargement de donnees (API call) doit avoir un toast utilisateur. `console.error` seul est insuffisant. `loadMonth()` faisait deja un toast — les deux autres doivent faire pareil.
-- Test de non-regression: simuler une erreur reseau → toast visible.
-- Changement: `catch (e) { console.error(e); }` → `catch (e) { toast(e.message || "...", "error"); }` dans loadAllDays() et loadStats().
+- Regle de prevention: toute erreur de chargement de donnees (API call) doit avoir un toast utilisateur. `console.error` seul est insuffisant. `loadMonth()` faisait deja un toast â€” les deux autres doivent faire pareil.
+- Test de non-regression: simuler une erreur reseau â†’ toast visible.
+- Changement: `catch (e) { console.error(e); }` â†’ `catch (e) { toast(e.message || "...", "error"); }` dans loadAllDays() et loadStats().
 - Fichiers a surveiller: `static/js/split/012_data_loading.js`.
 
 
-### BUG-20260502-05 - [RÉSOLU] Race condition dans loadSettingsState() (fetch async ecrase les modifs)
+### BUG-20260502-05 - [RÃ‰SOLU] Race condition dans loadSettingsState() (fetch async ecrase les modifs)
 - Symptome: si l'utilisateur modifie un setting avant que le fetch backend de loadSettingsState() ne resolve, sa modification est perdue car le callback du fetch ecrase state.settings.
 - Cause racine: fetch async /api/user/settings resolvait apres le retour de loadSettingsState(). Le callback .then() ecrasait state.settings sans verifier si l'utilisateur avait modifie entre temps.
 - Regle de prevention: dans un pattern "fast localStorage puis async fetch", prendre un snapshot JSON.stringify(state.settings) avant le fetch, et dans le callback, verifier que le snapshot n'a pas change avant d'ecraser.
-- Test de non-regression: modifier un setting → le fetch resolvant apres ne doit pas annuler la modification.
+- Test de non-regression: modifier un setting â†’ le fetch resolvant apres ne doit pas annuler la modification.
 - Changement: snapshot JSON.stringify() avant fetch, guard `if (JSON.stringify(state.settings) !== localSnapshot) return;` dans le callback.
 - Fichiers a surveiller: `static/js/split/002_prettify.js` (loadSettingsState).
 
 
-### BUG-20260502-06 - [RÉSOLU] Double definition de _applyJournalFilter() (code mort)
+### BUG-20260502-06 - [RÃ‰SOLU] Double definition de _applyJournalFilter() (code mort)
 - Symptome: la fonction _applyJournalFilter() est definie dans 004_loadjournaltablesort.js ET 054_journal_filter_picker_override.js. La premiere est ecrasee par la seconde (054 charge apres 004 dans le bundle).
 - Cause racine: le fichier 004_loadjournaltablesort.js contenait une copie legacy de _applyJournalFilter() qui n'etait jamais appelee (tous les appels sont dans 054).
 - Regle de prevention: avant d'ajouter une fonction avec le meme nom, verifier si elle existe deja dans un fichier charge plus tot. Utiliser `grep -rn 'function _apply' static/js/split/` pour detecter les doublons.
@@ -493,233 +493,233 @@ Format obligatoire d'une lesson:
 - Fichiers a surveiller: `static/js/split/004_loadjournaltablesort.js`, `static/js/split/054_journal_filter_picker_override.js`.
 
 
-### BUG-20260502-07 - [RÉSOLU] Month picker popover jamais binde a cause d'un return precoce
+### BUG-20260502-07 - [RÃ‰SOLU] Month picker popover jamais binde a cause d'un return precoce
 - Symptome: le popover #calendarMonthPicker avec selection graphique des mois ne fonctionne pas. Clic sur #monthLabel (le nom du mois) ne fait rien.
 - Cause racine: bindCalendarMonthPicker() avait un guard `if (monthInput) return;` qui sortait immediatement parce que #journalMonthInput existe dans le header. De plus, le trigger etait `#monthLabelBtn` qui n'existe pas dans le template (le bon trigger est `#monthLabel`).
 - Regle de prevention: ne pas blocker un composant UI parce qu'un autre existe. Les deux peuvent coexister (input month natif + popover graphique). Verifier que les IDs references dans le JS existent dans les templates HTML.
-- Test de non-regression: cliquer sur #monthLabel → le popover s'ouvre avec selection de mois et navigation d'annee.
+- Test de non-regression: cliquer sur #monthLabel â†’ le popover s'ouvre avec selection de mois et navigation d'annee.
 - Changement: suppression du guard `if (monthInput) return;`, trigger change de `#monthLabelBtn` a `#monthLabel`.
 - Fichiers a surveiller: `static/js/split/011_calendar_nav.js` (bindCalendarMonthPicker), `templates/partials/pages/journal/header.html` (#calendarMonthPicker, #monthLabel, #monthPopover).
 
 
-### BUG-20260502-08 - [RÉSOLU] PriceLine du chart pas mise a jour par WebSocket
+### BUG-20260502-08 - [RÃ‰SOLU] PriceLine du chart pas mise a jour par WebSocket
 - Symptome: la ligne pointillee verte du dernier prix reste figee au dernier fetch periodique (15-60s). Quand le prix monte puis descend, on voit brievement une double ligne (verte figee + rouge par defaut).
 - Cause racine: le WebSocket ne mettait jamais a jour `countdownPriceLine.applyOptions({ price: candle.close })`. La priceLine restait au prix du dernier `_fetchAndRender()`. De plus, `priceLineVisible: true` (defaut de Lightweight Charts) ajoutait sa propre ligne qui change de couleur.
 - Regle de prevention: toujours mettre a jour la priceLine custom DANS le handler WebSocket, pas seulement dans le fetch periodique. Ajouter `priceLineVisible: false` sur la serie candlestick pour eviter la double ligne.
-- Test de non-regression: le WebSocket pousse des mises a jour → la priceLine bouge en temps reel. Pas de double ligne.
+- Test de non-regression: le WebSocket pousse des mises a jour â†’ la priceLine bouge en temps reel. Pas de double ligne.
 - Changement: `series.createPriceLine({ price: candle.close })` dans ws.onmessage + `priceLineVisible: false` sur les deux series (widget + chart XXL).
 - Fichiers a surveiller: `static/js/split/060_btc_chart_widget.js` (ws.onmessage + createChart), `static/js/split/062_chart_page.js` (idem).
 
 
-### BUG-20260502-09 - [RÉSOLU] Countdown `_fetchAndRender()` sans keepZoom resetait le zoom
+### BUG-20260502-09 - [RÃ‰SOLU] Countdown `_fetchAndRender()` sans keepZoom resetait le zoom
 - Symptome: a l'ouverture d'une nouvelle bougie (timer a 0:00), le zoom utilisateur etait perdu.
-- Cause racine: `_fetchAndRender()` appele sans argument → keepZoom = undefined → `chart.timeScale().fitContent()` resetait le zoom.
+- Cause racine: `_fetchAndRender()` appele sans argument â†’ keepZoom = undefined â†’ `chart.timeScale().fitContent()` resetait le zoom.
 - Regle de prevention: tout auto-refresh (countdown, periodic, WebSocket k.x) doit passer `_fetchAndRender(true)`. Seuls les changements manuels (timeframe, symbole) appellent sans keepZoom.
-- Test de non-regression: zoomer sur le chart → attendre l'ouverture d'une bougie → le zoom est preserve.
+- Test de non-regression: zoomer sur le chart â†’ attendre l'ouverture d'une bougie â†’ le zoom est preserve.
 - Changement: `_fetchAndRender(true)` dans le countdown du widget BTC (le chart XXL etait deja correct).
 - Fichiers a surveiller: `static/js/split/060_btc_chart_widget.js` (fonction tick dans _startCountdown).
 
 
-### BUG-20260502-10 - [RÉSOLU] Fonctions favoris/dupliquer definies dans le mauvais scope
+### BUG-20260502-10 - [RÃ‰SOLU] Fonctions favoris/dupliquer definies dans le mauvais scope
 - Symptome: ReferenceError: _toggleTradeFavorite is not defined au clic sur le coeur.
 - Cause racine: les fonctions ont ete inserees AVANT la fermeture de `journalTradeFlipCardHtml()` rendant leur scope local a la fonction. Inaccessible depuis le click handler.
 - Regle de prevention: quand on ajoute des fonctions a la fin d'un fichier JS, verifier qu'elles sont apres le dernier `}` de la fonction precedente, pas dedans. Toujours verifier le scope dans le bundle build (app.js).
-- Test de non-regression: clic sur coeur → API PUT /api/trades/:id avec tags ['favoris'] → coeur se remplit.
+- Test de non-regression: clic sur coeur â†’ API PUT /api/trades/:id avec tags ['favoris'] â†’ coeur se remplit.
 - Changement: deplacement des deux fonctions apres le `}` fermant de `journalTradeFlipCardHtml()`.
 - Fichiers a surveiller: `static/js/split/056_journal_day_trade_cards.js` (fin du fichier).
 
 
 ## 9) Lessons apprises et bugs a ne pas reproduire
-### BUG-20260503-01 - [RÉSOLU] Carte contexte HTF avec wizard fluide
+### BUG-20260503-01 - [RÃ‰SOLU] Carte contexte HTF avec wizard fluide
 
-- Symptome: Clic sur jour sans trade → la wizard s'ouvrait direct ou une carte moche apparaissait.
+- Symptome: Clic sur jour sans trade â†’ la wizard s'ouvrait direct ou une carte moche apparaissait.
 - Cause racine: `renderJournalDayContext()` avait un HTML basique et etait supprime/restaure.
 - Regle de prevention: Un jour sans trade affiche une carte style journal (classes `journal-flip-*`) avec les donnees HTF (bias, notes, instrument) et un bouton "+ Creer un trade". La wizard s'ouvre avec `contextCard: true` pour s'aligner pres de la carte (taille reduite a 480px, position fluide).
-- Test de non-regression: Cliquer sur le 1er mai (jour avec contexte, sans trade) → carte HTF avec infos. Cliquer "+ Creer un trade" → wizard positionnee a cote de la carte.
+- Test de non-regression: Cliquer sur le 1er mai (jour avec contexte, sans trade) â†’ carte HTF avec infos. Cliquer "+ Creer un trade" â†’ wizard positionnee a cote de la carte.
 - Fichiers a surveiller: `static/js/split/015_calendar.js` (renderJournalDayContext), `static/js/split/040_wizard_core.js` (wizOpen contextCard), `static/css/split/022a_wizard_backdrop.css` (.wiz-context-card).
 
 
-### BUG-20260504-01 - [RÉSOLU] UX bugs #23-#45 : 23 correctifs UX, accessibilite, performance
+### BUG-20260504-01 - [RÃ‰SOLU] UX bugs #23-#45 : 23 correctifs UX, accessibilite, performance
 
 - Symptome: Nombreux composants sans etat vide, accessibilite absente (pas d'aria-label, tooltips title inaccessibles mobile), input month deforme sur Firefox/Safari, table journal freeze avec >100 trades, settings ordre illogique, cle API non editable dans l'UI.
 - Cause racine: Approche feature-first sans revue UX systematique ni test cross-browser. Accumulation de patterns "on verra plus tard" pour les placeholders, l'accessibilite et le lazy loading.
-- Regle de prevention: Chaque nouveau composant doit avoir: 1) etat vide explicite, 2) aria-label sur elements visuels, 3) test quick cross-browser (Chrome + Firefox), 4) lazy loading si affichage de listes >100 items. Les settings cards suivent l'ordre logique: Profil→Prefs→Strategies→Tags→API (technique en dernier).
-- Test de non-regression: Table journal >100 trades → scroll infini charge par 100. Input month → meme rendu Chrome/Firefox. Settings → card Donnees affiche path/taille DB. API key → bouton Modifier → saisie → Enregistrer → POST /api/settings/key.
+- Regle de prevention: Chaque nouveau composant doit avoir: 1) etat vide explicite, 2) aria-label sur elements visuels, 3) test quick cross-browser (Chrome + Firefox), 4) lazy loading si affichage de listes >100 items. Les settings cards suivent l'ordre logique: Profilâ†’Prefsâ†’Strategiesâ†’Tagsâ†’API (technique en dernier).
+- Test de non-regression: Table journal >100 trades â†’ scroll infini charge par 100. Input month â†’ meme rendu Chrome/Firefox. Settings â†’ card Donnees affiche path/taille DB. API key â†’ bouton Modifier â†’ saisie â†’ Enregistrer â†’ POST /api/settings/key.
 - Fichiers a surveiller: `static/js/split/006_comparetext.js` (lazy load IntersectionObserver), `static/js/split/013_kpis.js` (ARIA progressbar), `static/js/split/015_calendar.js` (search empty msg), `static/js/split/028_global_keys.js` (shortcuts / et F), `static/js/split/032_breakdowns.js` (sort badge), `static/js/split/047_today_widget_board.js` (confirm reset), `static/js/split/049_insights.js` (debounce + aria-label), `static/css/split/005_journal_toolbar_filters.css` (input month cross-browser), `templates/partials/pages/settings.html` (ordre), `templates/partials/pages/settings/data_card.html` (nouveau), `app_parts/07_routes_pages.py` (POST /api/settings/key), `app_parts/16_export.py` (GET /api/db/info).
 
 
-### BUG-20260504-02 - [RÉSOLU] Knowledge cards unsave en 2 appels + pas de cache
-- Symptome: Unsave d'une knowledge card nécessitait un GET (liste) puis un DELETE (par ID) → 2 appels réseau. `_markSavedCards()` fetchait l'API à chaque render Insights.
+### BUG-20260504-02 - [RÃ‰SOLU] Knowledge cards unsave en 2 appels + pas de cache
+- Symptome: Unsave d'une knowledge card nÃ©cessitait un GET (liste) puis un DELETE (par ID) â†’ 2 appels rÃ©seau. `_markSavedCards()` fetchait l'API Ã  chaque render Insights.
 - Cause racine: `toggleSave()` faisait un GET pour trouver l'ID de la card, puis un DELETE par ID. `_markSavedCards()` n'avait pas de cache.
-- Regle de prevention: Utiliser un DELETE par kind+title (query params) pour unsave en 1 appel. Ajouter un cache in-memory (`_savedCardCache`) pour `_markSavedCards`, invalider après chaque save/unsave.
-- Test de non-regression: Cliquer sur l'étoile d'une insight card → elle se remplit (save) ou se vide (unsave) sans erreur réseau. Recharger la page → les étoiles remplies sont toujours remplies.
+- Regle de prevention: Utiliser un DELETE par kind+title (query params) pour unsave en 1 appel. Ajouter un cache in-memory (`_savedCardCache`) pour `_markSavedCards`, invalider aprÃ¨s chaque save/unsave.
+- Test de non-regression: Cliquer sur l'Ã©toile d'une insight card â†’ elle se remplit (save) ou se vide (unsave) sans erreur rÃ©seau. Recharger la page â†’ les Ã©toiles remplies sont toujours remplies.
 - Changement: Nouvelle route `DELETE /api/ml/knowledge?kind=X&title=Y` dans `21_routes_ml.py`. Refacto de `toggleSave()` et `_markSavedCards()` dans `049_insights.js`.
 - Fichiers a surveiller: `app_parts/21_routes_ml.py`, `static/js/split/049_insights.js`.
 
 
-### BUG-20260504-03 - [RÉSOLU] Settings : pas de Danger Zone pour les actions destructrices
+### BUG-20260504-03 - [RÃ‰SOLU] Settings : pas de Danger Zone pour les actions destructrices
 - Symptome: Aucune section visuellement distincte pour le reset de donnees. Les actions destructrices n'existaient pas dans l'UI.
 - Cause racine: Pas de backend de reset, pas de template, pas de CSS.
 - Regle de prevention: Toute action destructive doit avoir: 1) backend avec backup automatique, 2) double confirmation utilisateur, 3) zone rouge visuellement separee, 4) rate limiting.
-- Test de non-regression: POST /api/data/reset avec confirm=RESET ALL DATA → 200 + backup cree. Sans confirmation → 400.
+- Test de non-regression: POST /api/data/reset avec confirm=RESET ALL DATA â†’ 200 + backup cree. Sans confirmation â†’ 400.
 - Changement: Nouvelle route POST /api/data/reset avec backup automatique (17_reset.py). Template danger_card.html avec bouton btn-danger rouge. CSS danger zone avec bordures rouges. JS: double confirm() avant appel API.
 - Fichiers a surveiller: `app_parts/17_reset.py`, `app_parts/__init__.py`, `templates/partials/pages/settings/danger_card.html`, `templates/partials/pages/settings.html`, `static/js/split/003_addcustomstrategyfromsettings.js`, `static/css/split/034_priority3_stats_settings_insights.css`.
 
 
-### BUG-20260504-04 - [RÉSOLU] Stats fusionnees dans la page Insights
+### BUG-20260504-04 - [RÃ‰SOLU] Stats fusionnees dans la page Insights
 - Symptome: La page Stats etait separee d'Insights, avec un design different.
 - Cause racine: Separation artificielle Stats vs Insights.
 - Regle de prevention: Les donnees de performance doivent apparaitre dans Insights.
-- Test de non-regression: Naviguer vers Insights → breakdowns et period compare s'affichent.
+- Test de non-regression: Naviguer vers Insights â†’ breakdowns et period compare s'affichent.
 - Changement: Suppression complete de la page Stats (template, rail, navigation, raccourci S, commande palette). Contenu Stats deplace dans Insights. Filtres Insights synchronises avec localStorage et heritage de la periode du journal.
 - Fichiers a surveiller: `templates/index.html`, `templates/partials/layout/rail.html`, `templates/partials/pages/stats/*` (supprimes), `templates/partials/pages/insights.html`, `static/js/split/009_navigation.js`, `static/js/split/028_global_keys.js`, `static/js/split/029_command_palette.js`, `static/js/split/008_boot.js`, `static/js/split/049_insights.js`, `static/js/split/002_prettify.js`, `static/js/split/003_addcustomstrategyfromsettings.js`, `static/js/split/007_loadcalendarmonthfocusmode.js`, `static/js/split/012_data_loading.js`.
 
 
 
-### BUG-20260503-02 - [RÉSOLU] hidden + style=display:none doublon → masquage cassé
-- Symptome: des elements ont `class="hidden"` ET `style="display:none"` dans le template. Le JS retire la classe via `classList.toggle()` mais pas le style inline → l'element reste invisible.
-- Cause racine: accumulation de deux mécanismes de masquage (classe CSS + inline style) sans coordination. Le JS ne gérait que la classe.
-- Regle de prevention: UN SEUL mécanisme de masquage par element. Si le template a `class="hidden"`, pas de `style="display:none"` en plus. Le JS pilote l'état via la classe uniquement (ou le style uniquement, pas les deux).
-- Test de non-regression: `grep -r 'style=["\x27]*display\s*:\s*none' templates/` + vérifier que le toggle JS fonctionne pour chaque element concerné.
+### BUG-20260503-02 - [RÃ‰SOLU] hidden + style=display:none doublon â†’ masquage cassÃ©
+- Symptome: des elements ont `class="hidden"` ET `style="display:none"` dans le template. Le JS retire la classe via `classList.toggle()` mais pas le style inline â†’ l'element reste invisible.
+- Cause racine: accumulation de deux mÃ©canismes de masquage (classe CSS + inline style) sans coordination. Le JS ne gÃ©rait que la classe.
+- Regle de prevention: UN SEUL mÃ©canisme de masquage par element. Si le template a `class="hidden"`, pas de `style="display:none"` en plus. Le JS pilote l'Ã©tat via la classe uniquement (ou le style uniquement, pas les deux).
+- Test de non-regression: `grep -r 'style=["\x27]*display\s*:\s*none' templates/` + vÃ©rifier que le toggle JS fonctionne pour chaque element concernÃ©.
 - Fichiers a surveiller: `templates/partials/overlays/*.html`, templates avec `hidden` + `style="display:none"`.
 
-### BUG-20260503-03 - [RÉSOLU] État vide contexte jour sans trade
-- Symptome: un jour avec entree DB (contexte, notes) mais 0 trade affichait un message basique ou rien. La carte contexte n'avait pas d'état intermédiaire.
-- Cause racine: `renderJournalDayContext()` n'avait pas de design dédié pour "contexte présent, zéro trade".
-- Regle de prevention: tout widget/composant doit avoir 3 états: loading (`...`), vide (`—`), et valeur réelle. Le contexte jour sans trade affiche une carte avec les infos HTF (bias, notes, instrument) + bouton "+ Créer un trade".
-- Test de non-regression: cliquer sur un jour avec contexte mais sans trade → carte informative visible.
+### BUG-20260503-03 - [RÃ‰SOLU] Ã‰tat vide contexte jour sans trade
+- Symptome: un jour avec entree DB (contexte, notes) mais 0 trade affichait un message basique ou rien. La carte contexte n'avait pas d'Ã©tat intermÃ©diaire.
+- Cause racine: `renderJournalDayContext()` n'avait pas de design dÃ©diÃ© pour "contexte prÃ©sent, zÃ©ro trade".
+- Regle de prevention: tout widget/composant doit avoir 3 Ã©tats: loading (`...`), vide (`â€”`), et valeur rÃ©elle. Le contexte jour sans trade affiche une carte avec les infos HTF (bias, notes, instrument) + bouton "+ CrÃ©er un trade".
+- Test de non-regression: cliquer sur un jour avec contexte mais sans trade â†’ carte informative visible.
 - Fichiers a surveiller: `static/js/split/015_calendar.js`, `static/css/split/046_journal_day_trade_cards.css`.
 
-### BUG-20260503-04 - [RÉSOLU] Popover sélecteur mois et input natif en conflit
-- Symptome: deux mécanismes de navigation mensuelle coexistaient — l'input natif `<input type="month">` ET un popover de sélection graphique. Le popover était bloqué par un guard `if (monthInput) return;`.
-- Cause racine: le popover avait été ajouté comme amélioration sans supprimer l'input natif. Le guard empêchait le popover de s'initialiser.
-- Regle de prevention: quand on ajoute un mécanisme alternatif, supprimer l'ancien OU s'assurer qu'il n'y a pas de guard bloquant. Un seul système de navigation par composant.
-- Test de non-regression: le header journal a un seul élément cliquable pour la navigation mois. Cliquer → le popover/input s'ouvre.
+### BUG-20260503-04 - [RÃ‰SOLU] Popover sÃ©lecteur mois et input natif en conflit
+- Symptome: deux mÃ©canismes de navigation mensuelle coexistaient â€” l'input natif `<input type="month">` ET un popover de sÃ©lection graphique. Le popover Ã©tait bloquÃ© par un guard `if (monthInput) return;`.
+- Cause racine: le popover avait Ã©tÃ© ajoutÃ© comme amÃ©lioration sans supprimer l'input natif. Le guard empÃªchait le popover de s'initialiser.
+- Regle de prevention: quand on ajoute un mÃ©canisme alternatif, supprimer l'ancien OU s'assurer qu'il n'y a pas de guard bloquant. Un seul systÃ¨me de navigation par composant.
+- Test de non-regression: le header journal a un seul Ã©lÃ©ment cliquable pour la navigation mois. Cliquer â†’ le popover/input s'ouvre.
 - Fichiers a surveiller: `templates/partials/pages/journal/header.html`, `static/js/split/011_calendar_nav.js`.
 
-### BUG-20260503-05 - [RÉSOLU] Accents UI corrompus dans Stats
-- Symptome: les labels des breakdowns (stratégie, instrument) avaient des accents affichés comme caractères brisés (`Ã©` au lieu de `é`).
-- Cause racine: caractères UTF-8 non encodés en HTML entities dans les templates ou le JS, ou conversion d'encodage incorrecte.
-- Regle de prevention: utiliser les HTML entities (`&eacute;` pour é, `&egrave;` pour è, `&rsquo;` pour apostrophe) dans les templates HTML. Vérifier avec le scan encodage section 3.4.
-- Test de non-regression: `rg '\xC3' static/app.js | head -5` → doit retourner 0 (pas d'octets UTF-8 bruts non ASCII dans le bundle).
-- Fichiers a surveiller: templates HTML, `static/js/split/032_breakdowns.js`, tout fichier avec texte accentué.
+### BUG-20260503-05 - [RÃ‰SOLU] Accents UI corrompus dans Stats
+- Symptome: les labels des breakdowns (stratÃ©gie, instrument) avaient des accents affichÃ©s comme caractÃ¨res brisÃ©s (`ÃƒÂ©` au lieu de `Ã©`).
+- Cause racine: caractÃ¨res UTF-8 non encodÃ©s en HTML entities dans les templates ou le JS, ou conversion d'encodage incorrecte.
+- Regle de prevention: utiliser les HTML entities (`&eacute;` pour Ã©, `&egrave;` pour Ã¨, `&rsquo;` pour apostrophe) dans les templates HTML. VÃ©rifier avec le scan encodage section 3.4.
+- Test de non-regression: `rg '\xC3' static/app.js | head -5` â†’ doit retourner 0 (pas d'octets UTF-8 bruts non ASCII dans le bundle).
+- Fichiers a surveiller: templates HTML, `static/js/split/032_breakdowns.js`, tout fichier avec texte accentuÃ©.
 
-### BUG-20260503-06 - [RÉSOLU] KPI streak counter sans animation
-- Symptome: le compteur de streak (série de trades gagnants) passait instantanément de l'ancienne valeur à la nouvelle sans transition visuelle.
+### BUG-20260503-06 - [RÃ‰SOLU] KPI streak counter sans animation
+- Symptome: le compteur de streak (sÃ©rie de trades gagnants) passait instantanÃ©ment de l'ancienne valeur Ã  la nouvelle sans transition visuelle.
 - Cause racine: `textContent = value` direct, pas de boucle d'animation.
-- Regle de prevention: tout KPI numérique doit animer de la valeur précédente vers la nouvelle via `requestAnimationFrame`. Fonction générique `_animateCounter(el, target, suffix, opts)` avec durée proportionnelle à l'écart (200-600ms).
-- Test de non-regression: changer de période → les KPIs numériques défilent (comptent) de l'ancienne à la nouvelle valeur.
+- Regle de prevention: tout KPI numÃ©rique doit animer de la valeur prÃ©cÃ©dente vers la nouvelle via `requestAnimationFrame`. Fonction gÃ©nÃ©rique `_animateCounter(el, target, suffix, opts)` avec durÃ©e proportionnelle Ã  l'Ã©cart (200-600ms).
+- Test de non-regression: changer de pÃ©riode â†’ les KPIs numÃ©riques dÃ©filent (comptent) de l'ancienne Ã  la nouvelle valeur.
 - Fichiers a surveiller: `static/js/split/013_kpis.js`, `static/js/split/049_insights.js`.
 
-### BUG-20260503-07 - [RÉSOLU] #btcChartPrice manquant dans le template
-- Symptome: `document.getElementById("btcChartPrice")` retournait systématiquement null. Le code avait un `if (el)` guard silencieux → la fonctionnalité (affichage du prix en haut du widget BTC) était morte sans erreur visible.
-- Cause racine: l'element `<span id="btcChartPrice">` n'existait pas dans le template HTML du widget BTC. Ajouté dans le JS uniquement mais jamais dans le template.
-- Regle de prevention: quand un `getElementById()` est systématiquement dans un `if (el)` guard sans jamais s'exécuter, VÉRIFIER que l'élément existe dans le template HTML — c'est un pattern de bug silencieux. Chercher dans les templates, pas dans le JS.
-- Test de non-regression: `grep 'btcChartPrice' templates/partials/pages/today/widgets/` → doit retourner au moins une occurrence dans un fichier .html.
+### BUG-20260503-07 - [RÃ‰SOLU] #btcChartPrice manquant dans le template
+- Symptome: `document.getElementById("btcChartPrice")` retournait systÃ©matiquement null. Le code avait un `if (el)` guard silencieux â†’ la fonctionnalitÃ© (affichage du prix en haut du widget BTC) Ã©tait morte sans erreur visible.
+- Cause racine: l'element `<span id="btcChartPrice">` n'existait pas dans le template HTML du widget BTC. AjoutÃ© dans le JS uniquement mais jamais dans le template.
+- Regle de prevention: quand un `getElementById()` est systÃ©matiquement dans un `if (el)` guard sans jamais s'exÃ©cuter, VÃ‰RIFIER que l'Ã©lÃ©ment existe dans le template HTML â€” c'est un pattern de bug silencieux. Chercher dans les templates, pas dans le JS.
+- Test de non-regression: `grep 'btcChartPrice' templates/partials/pages/today/widgets/` â†’ doit retourner au moins une occurrence dans un fichier .html.
 - Fichiers a surveiller: `templates/partials/pages/today/widgets/011_btc_chart.html`, `static/js/split/060_btc_chart_widget.js`.
 
-### BUG-20260503-08 - [RÉSOLU] Stats overflow ellipsis cassé
-- Symptome: les labels longs dans les breakdowns Stats/Insights (noms de stratégies, instruments) dépassaient de leur conteneur sans ellipsis.
-- Cause racine: `text-overflow: ellipsis` appliqué mais sans `overflow: hidden` + `white-space: nowrap` sur les elements concernés.
-- Regle de prevention: `text-overflow: ellipsis` nécessite TOUJOURS les trois propriétés: `overflow: hidden; white-space: nowrap; text-overflow: ellipsis;`.
-- Test de non-regression: un nom de stratégie long (>20 car) dans les breakdowns → tronqué avec `...`.
+### BUG-20260503-08 - [RÃ‰SOLU] Stats overflow ellipsis cassÃ©
+- Symptome: les labels longs dans les breakdowns Stats/Insights (noms de stratÃ©gies, instruments) dÃ©passaient de leur conteneur sans ellipsis.
+- Cause racine: `text-overflow: ellipsis` appliquÃ© mais sans `overflow: hidden` + `white-space: nowrap` sur les elements concernÃ©s.
+- Regle de prevention: `text-overflow: ellipsis` nÃ©cessite TOUJOURS les trois propriÃ©tÃ©s: `overflow: hidden; white-space: nowrap; text-overflow: ellipsis;`.
+- Test de non-regression: un nom de stratÃ©gie long (>20 car) dans les breakdowns â†’ tronquÃ© avec `...`.
 - Fichiers a surveiller: `static/css/split/031_insights.css`, `static/css/split/032_breakdowns.css`.
 
-### BUG-20260503-09 - [RÉSOLU] URL API key hardcodée au lieu d'env var
-- Symptome: l'URL de l'API LLM (DeepSeek) était hardcodée dans le code JS/frontend au lieu d'être fournie via variable d'environnement backend.
-- Cause racine: pas de mécanisme de configuration par env var pour l'URL de l'API.
-- Regle de prevention: toute URL de service externe (API LLM, Binance, WebSocket) doit être configurable via backend (env var → `/api/config`), pas hardcodée dans le JS. Le JS lit `state.config.apiUrl`.
-- Test de non-regression: `grep -rn 'https\?://api\.deepseek' static/js/split/` → 0 résultats (l'URL vient de state.config via backend).
-- Fichiers a surveiller: `app_parts/00_paths_constants.py` (env vars), `static/js/split/` (références URL API).
+### BUG-20260503-09 - [RÃ‰SOLU] URL API key hardcodÃ©e au lieu d'env var
+- Symptome: l'URL de l'API LLM (DeepSeek) Ã©tait hardcodÃ©e dans le code JS/frontend au lieu d'Ãªtre fournie via variable d'environnement backend.
+- Cause racine: pas de mÃ©canisme de configuration par env var pour l'URL de l'API.
+- Regle de prevention: toute URL de service externe (API LLM, Binance, WebSocket) doit Ãªtre configurable via backend (env var â†’ `/api/config`), pas hardcodÃ©e dans le JS. Le JS lit `state.config.apiUrl`.
+- Test de non-regression: `grep -rn 'https\?://api\.deepseek' static/js/split/` â†’ 0 rÃ©sultats (l'URL vient de state.config via backend).
+- Fichiers a surveiller: `app_parts/00_paths_constants.py` (env vars), `static/js/split/` (rÃ©fÃ©rences URL API).
 
-### BUG-20260505-01 - [RÉSOLU] KPIs Dashboard non filtrés par période Journal
-- Symptome: les KPIs du Dashboard (Net P&L, Winrate, RR, Trades) affichaient des données all-time au lieu de la période sélectionnée dans le Journal (mois/trimestre/custom).
+### BUG-20260505-01 - [RÃ‰SOLU] KPIs Dashboard non filtrÃ©s par pÃ©riode Journal
+- Symptome: les KPIs du Dashboard (Net P&L, Winrate, RR, Trades) affichaient des donnÃ©es all-time au lieu de la pÃ©riode sÃ©lectionnÃ©e dans le Journal (mois/trimestre/custom).
 - Cause racine: `getTradesForCurrentFilter()` ne filtrait pas les trades. Utilisait `state.allDays` directement sans appliquer `journalRangeMode`, `currentMonth`, ou `journalCustomFrom/To`.
-- Regle de prevention: toute fonction qui alimente les KPIs doit filtrer par la période Journal courante. `getTradesForCurrentFilter()` est LA fonction canonique — utiliser `monthRange()`, `quarterRange()` ou `journalCustomFrom/To` selon `journalRangeMode`.
-- Test de non-regression: Dashboard affiche mois en cours → cliquer sur un mois différent dans le Journal → Dashboard reflète le nouveau mois.
+- Regle de prevention: toute fonction qui alimente les KPIs doit filtrer par la pÃ©riode Journal courante. `getTradesForCurrentFilter()` est LA fonction canonique â€” utiliser `monthRange()`, `quarterRange()` ou `journalCustomFrom/To` selon `journalRangeMode`.
+- Test de non-regression: Dashboard affiche mois en cours â†’ cliquer sur un mois diffÃ©rent dans le Journal â†’ Dashboard reflÃ¨te le nouveau mois.
 - Fichiers a surveiller: `static/js/split/013_kpis.js` (getTradesForCurrentFilter), `static/js/split/012_data_loading.js` (loadStats refreshDays).
 
-### BUG-20260505-02 - [RÉSOLU] fetch() sans r.ok guard → SyntaxError silencieux
-- Symptome: quand le serveur Flask retourne une page HTML 500, `r.json()` lève une `SyntaxError` non catchée → la chaîne de promesse reste pendante, l'utilisateur ne voit rien.
-- Cause racine: pattern `fetch(url).then(r => r.json())` sans vérifier `r.ok`. Sur HTTP 500, Flask renvoie HTML, pas JSON.
-- Regle de prevention: TOUT appel `fetch()` qui appelle `.json()` doit d'abord vérifier `res.ok`. Pattern: `.then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })`. Utiliser la fonction helper `api()` de `001_utilities.js` quand possible.
-- Test de non-regression: `grep -rn 'fetch.*\.json' static/app.js` → chaque occurrence doit avoir un `r.ok` ou `res.ok` guard dans la même fonction ou avant.
+### BUG-20260505-02 - [RÃ‰SOLU] fetch() sans r.ok guard â†’ SyntaxError silencieux
+- Symptome: quand le serveur Flask retourne une page HTML 500, `r.json()` lÃ¨ve une `SyntaxError` non catchÃ©e â†’ la chaÃ®ne de promesse reste pendante, l'utilisateur ne voit rien.
+- Cause racine: pattern `fetch(url).then(r => r.json())` sans vÃ©rifier `r.ok`. Sur HTTP 500, Flask renvoie HTML, pas JSON.
+- Regle de prevention: TOUT appel `fetch()` qui appelle `.json()` doit d'abord vÃ©rifier `res.ok`. Pattern: `.then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })`. Utiliser la fonction helper `api()` de `001_utilities.js` quand possible.
+- Test de non-regression: `grep -rn 'fetch.*\.json' static/app.js` â†’ chaque occurrence doit avoir un `r.ok` ou `res.ok` guard dans la mÃªme fonction ou avant.
 - Fichiers a surveiller: `static/js/split/001_utilities.js` (api helper), tous les fichiers split avec fetch().
 
-### BUG-20260505-03 - [RÉSOLU] state.allDays jamais invalidé après édition de trade
-- Symptome: après édition d'un trade via flip card, les KPIs du Dashboard restaient sur les données du boot (state.allDays pas rechargé). Il fallait un refresh manuel.
+### BUG-20260505-03 - [RÃ‰SOLU] state.allDays jamais invalidÃ© aprÃ¨s Ã©dition de trade
+- Symptome: aprÃ¨s Ã©dition d'un trade via flip card, les KPIs du Dashboard restaient sur les donnÃ©es du boot (state.allDays pas rechargÃ©). Il fallait un refresh manuel.
 - Cause racine: `_journalRefreshStateDebounced()` appelait `loadStats({ refreshDays: false })` qui ne recharge PAS `state.allDays`. Ensuite `loadStats()` utilisait l'ancien state pour calculer les KPIs.
-- Regle de prevention: `refreshDays: true` doit être passé à `loadStats()` après toute modification de trade. `_journalRefreshStateDebounced()` doit toujours utiliser `refreshDays: true`. Après save, state.allDays est re-fetché via `loadAllDays()`.
-- Test de non-regression: éditer un trade → les KPIs Dashboard se mettent à jour sans refresh manuel.
+- Regle de prevention: `refreshDays: true` doit Ãªtre passÃ© Ã  `loadStats()` aprÃ¨s toute modification de trade. `_journalRefreshStateDebounced()` doit toujours utiliser `refreshDays: true`. AprÃ¨s save, state.allDays est re-fetchÃ© via `loadAllDays()`.
+- Test de non-regression: Ã©diter un trade â†’ les KPIs Dashboard se mettent Ã  jour sans refresh manuel.
 - Fichiers a surveiller: `static/js/split/012_data_loading.js`, `static/js/split/056_journal_day_trade_cards.js` (_journalRefreshStateDebounced).
 
-### BUG-20260505-04 - [RÉSOLU] _waitForContainer : setTimeout fixe → polling DOM
-- Symptome: 3 widgets (BTC chart, Chart XXL, Favoris Carousel) utilisaient `setTimeout(init, 300/400/500)` avec des délais arbitraires. Parfois le DOM n'était pas prêt, parfois le délai était trop long.
-- Cause racine: `setTimeout` fixe qui ne s'adapte pas à l'état réel du DOM.
-- Regle de prevention: utiliser `_waitForContainer(callback, 20, 50)` (polling 50ms × 20 = 1s max) pour toute initialisation différée de widget. Pas de `setTimeout` fixe. Le polling s'exécute dès que le DOM est prêt et abandonne après 1s avec un `console.warn`.
-- Test de non-regression: les 3 widgets s'initialisent correctement après un rebuild + refresh navigateur.
+### BUG-20260505-04 - [RÃ‰SOLU] _waitForContainer : setTimeout fixe â†’ polling DOM
+- Symptome: 3 widgets (BTC chart, Chart XXL, Favoris Carousel) utilisaient `setTimeout(init, 300/400/500)` avec des dÃ©lais arbitraires. Parfois le DOM n'Ã©tait pas prÃªt, parfois le dÃ©lai Ã©tait trop long.
+- Cause racine: `setTimeout` fixe qui ne s'adapte pas Ã  l'Ã©tat rÃ©el du DOM.
+- Regle de prevention: utiliser `_waitForContainer(callback, 20, 50)` (polling 50ms Ã— 20 = 1s max) pour toute initialisation diffÃ©rÃ©e de widget. Pas de `setTimeout` fixe. Le polling s'exÃ©cute dÃ¨s que le DOM est prÃªt et abandonne aprÃ¨s 1s avec un `console.warn`.
+- Test de non-regression: les 3 widgets s'initialisent correctement aprÃ¨s un rebuild + refresh navigateur.
 - Fichiers a surveiller: `static/js/split/060_btc_chart_widget.js`, `static/js/split/062_chart_page.js`, `static/js/split/063_favorites_carousel.js`.
 
-### BUG-20260505-05 - [RÉSOLU] Sauvegarde Settings sans feedback utilisateur
-- Symptome: cliquer sur "Enregistrer" dans Settings → rien ne se passe visuellement pendant 0-300ms. L'utilisateur ne sait pas si la sauvegarde a eu lieu.
-- Cause racine: les boutons save n'étaient pas désactivés pendant l'appel API et leur texte ne changeait pas.
-- Regle de prevention: tout bouton déclenchant une opération asynchrone doit: 1) se désactiver immédiatement, 2) changer son texte pour indiquer l'action en cours, 3) se réactiver à la fin (ou après 1.5s minimum).
-- Test de non-regression: cliquer "Enregistrer" → le bouton devient gris avec texte "Sauvegarde..." → redevient "Enregistrer" à la fin.
+### BUG-20260505-05 - [RÃ‰SOLU] Sauvegarde Settings sans feedback utilisateur
+- Symptome: cliquer sur "Enregistrer" dans Settings â†’ rien ne se passe visuellement pendant 0-300ms. L'utilisateur ne sait pas si la sauvegarde a eu lieu.
+- Cause racine: les boutons save n'Ã©taient pas dÃ©sactivÃ©s pendant l'appel API et leur texte ne changeait pas.
+- Regle de prevention: tout bouton dÃ©clenchant une opÃ©ration asynchrone doit: 1) se dÃ©sactiver immÃ©diatement, 2) changer son texte pour indiquer l'action en cours, 3) se rÃ©activer Ã  la fin (ou aprÃ¨s 1.5s minimum).
+- Test de non-regression: cliquer "Enregistrer" â†’ le bouton devient gris avec texte "Sauvegarde..." â†’ redevient "Enregistrer" Ã  la fin.
 - Fichiers a surveiller: `static/js/split/003_addcustomstrategyfromsettings.js`, `static/js/split/002_prettify.js`.
 
-### BUG-20260505-06 - [RÉSOLU] Navigation page non persistée entre sessions
-- Symptome: après un refresh navigateur, l'utilisateur revenait toujours sur la page Dashboard (page par défaut) même s'il était sur Insights ou Settings.
-- Cause racine: `state.currentPage` était initialisé à la valeur par défaut sans lire `localStorage("lastPage")`.
+### BUG-20260505-06 - [RÃ‰SOLU] Navigation page non persistÃ©e entre sessions
+- Symptome: aprÃ¨s un refresh navigateur, l'utilisateur revenait toujours sur la page Dashboard (page par dÃ©faut) mÃªme s'il Ã©tait sur Insights ou Settings.
+- Cause racine: `state.currentPage` Ã©tait initialisÃ© Ã  la valeur par dÃ©faut sans lire `localStorage("lastPage")`.
 - Regle de prevention: au boot, lire `localStorage("lastPage")` et restaurer la page. Dans `goPage()`, sauvegarder la page courante dans localStorage. Pattern: `state.currentPage = localStorage.getItem("lastPage") || "today";`.
-- Test de non-regression: naviguer vers Insights → refresh → la page Insights s'affiche.
+- Test de non-regression: naviguer vers Insights â†’ refresh â†’ la page Insights s'affiche.
 - Fichiers a surveiller: `static/js/split/008_boot.js`, `static/js/split/009_navigation.js`.
 
-### BUG-20260505-07 - [RÉSOLU] Sparkline PnL sans ligne zéro ni dates
-- Symptome: la sparkline du widget Net P&L Dashboard n'avait ni ligne horizontale zéro (repère visuel) ni labels de dates (contexte temporel). Le graphique était flottant.
-- Cause racine: le SVG ne dessinait que le polyline des PnL, sans axe ni repère.
-- Regle de prevention: toute sparkline doit avoir: 1) une ligne zéro horizontale (tireté, position dynamique selon min/max), 2) trois labels de dates (première, milieu, dernière des 30 périodes), 3) la ligne zéro positionnée en absolu dans le viewBox.
-- Test de non-regression: la sparkline affiche une ligne horizontale pointillée au niveau zéro (même si la courbe est tout positive ou négative) et 3 dates espacées.
+### BUG-20260505-07 - [RÃ‰SOLU] Sparkline PnL sans ligne zÃ©ro ni dates
+- Symptome: la sparkline du widget Net P&L Dashboard n'avait ni ligne horizontale zÃ©ro (repÃ¨re visuel) ni labels de dates (contexte temporel). Le graphique Ã©tait flottant.
+- Cause racine: le SVG ne dessinait que le polyline des PnL, sans axe ni repÃ¨re.
+- Regle de prevention: toute sparkline doit avoir: 1) une ligne zÃ©ro horizontale (tiretÃ©, position dynamique selon min/max), 2) trois labels de dates (premiÃ¨re, milieu, derniÃ¨re des 30 pÃ©riodes), 3) la ligne zÃ©ro positionnÃ©e en absolu dans le viewBox.
+- Test de non-regression: la sparkline affiche une ligne horizontale pointillÃ©e au niveau zÃ©ro (mÃªme si la courbe est tout positive ou nÃ©gative) et 3 dates espacÃ©es.
 - Fichiers a surveiller: `static/js/split/013_kpis.js` (renderPnlSparkline), `static/css/split/038_kpi_upgrade.css`.
 
-### BUG-20260505-08 - [RÉSOLU] Settings hiérarchie hero/featured désordonnée
-- Symptome: les cards Settings n'avaient pas d'ordre logique. Les actions destructrices (Danger Zone) étaient mélangées avec les réglages quotidiens.
+### BUG-20260505-08 - [RÃ‰SOLU] Settings hiÃ©rarchie hero/featured dÃ©sordonnÃ©e
+- Symptome: les cards Settings n'avaient pas d'ordre logique. Les actions destructrices (Danger Zone) Ã©taient mÃ©langÃ©es avec les rÃ©glages quotidiens.
 - Cause racine: ajout de cards dans l'ordre chronologique des features, sans architecture de page.
-- Regle de prevention: les Settings suivent une hiérarchie claire: Profil (hero, full width) → Préférences → Stratégies → Tags → Données → API Key (featured, full width) → Danger Zone (full, bordure rouge). Les cards hero/featured sont pleine largeur, les autres en grille 2 colonnes.
-- Test de non-regression: la page Settings affiche les cards dans l'ordre ci-dessus, sans trou ni désordre.
+- Regle de prevention: les Settings suivent une hiÃ©rarchie claire: Profil (hero, full width) â†’ PrÃ©fÃ©rences â†’ StratÃ©gies â†’ Tags â†’ DonnÃ©es â†’ API Key (featured, full width) â†’ Danger Zone (full, bordure rouge). Les cards hero/featured sont pleine largeur, les autres en grille 2 colonnes.
+- Test de non-regression: la page Settings affiche les cards dans l'ordre ci-dessus, sans trou ni dÃ©sordre.
 - Fichiers a surveiller: `templates/partials/pages/settings.html`, templates des cards individuelles.
 
-### BUG-20260505-09 - [RÉSOLU] Strategy/Tag chips non réordonnables (drag & drop)
-- Symptome: impossible de changer l'ordre des stratégies ou tags dans Settings. L'ordre était celui de la création ou alphabétique.
-- Cause racine: les chips étaient des `<span>` statiques sans attribut `draggable="true"` ni handlers drag/drop.
-- Regle de prevention: toute liste ordonnée de chips (stratégies, tags, instruments) doit supporter le drag & drop natif HTML5. Chaque chip a `draggable="true"` et `data-reorder-value`. Le drop réordonne le tableau et persiste sur le backend.
-- Test de non-regression: glisser une stratégie du milieu vers le haut → l'ordre est mis à jour et persiste après refresh.
+### BUG-20260505-09 - [RÃ‰SOLU] Strategy/Tag chips non rÃ©ordonnables (drag & drop)
+- Symptome: impossible de changer l'ordre des stratÃ©gies ou tags dans Settings. L'ordre Ã©tait celui de la crÃ©ation ou alphabÃ©tique.
+- Cause racine: les chips Ã©taient des `<span>` statiques sans attribut `draggable="true"` ni handlers drag/drop.
+- Regle de prevention: toute liste ordonnÃ©e de chips (stratÃ©gies, tags, instruments) doit supporter le drag & drop natif HTML5. Chaque chip a `draggable="true"` et `data-reorder-value`. Le drop rÃ©ordonne le tableau et persiste sur le backend.
+- Test de non-regression: glisser une stratÃ©gie du milieu vers le haut â†’ l'ordre est mis Ã  jour et persiste aprÃ¨s refresh.
 - Fichiers a surveiller: `static/js/split/003_addcustomstrategyfromsettings.js`, `static/css/split/003_settings_chip_remove_hover.css`.
 
-### BUG-20260505-10 - [RÉSOLU] Journal Night Mode ☾ absent
-- Symptome: le Journal n'avait pas de mode nuit pour le trading en soirée. L'interface était trop lumineuse.
-- Cause racine: pas de toggle ni de classe CSS pour un mode nuit spécifique au Journal.
-- Regle de prevention: proposer un mode nuit par page (icon moon/sun) avec état persisté dans localStorage. Le mode nuit réduit le contraste, réchauffe les couleurs, et assombrit le calendrier. Pattern localStorage-driven: `localStorage.getItem("journalNightMode")`.
-- Test de non-regression: cliquer sur l'icone ☾ → le Journal passe en tons chauds tamisés. Refresh → l'état est conservé.
-- Fichiers a surveiller: `templates/partials/pages/journal/header.html` (bouton ☾), `static/js/split/004_loadjournaltablesort.js` (toggle), `static/css/split/046_journal_day_trade_cards.css`.
+### BUG-20260505-10 - [RÃ‰SOLU] Journal Night Mode â˜¾ absent
+- Symptome: le Journal n'avait pas de mode nuit pour le trading en soirÃ©e. L'interface Ã©tait trop lumineuse.
+- Cause racine: pas de toggle ni de classe CSS pour un mode nuit spÃ©cifique au Journal.
+- Regle de prevention: proposer un mode nuit par page (icon moon/sun) avec Ã©tat persistÃ© dans localStorage. Le mode nuit rÃ©duit le contraste, rÃ©chauffe les couleurs, et assombrit le calendrier. Pattern localStorage-driven: `localStorage.getItem("journalNightMode")`.
+- Test de non-regression: cliquer sur l'icone â˜¾ â†’ le Journal passe en tons chauds tamisÃ©s. Refresh â†’ l'Ã©tat est conservÃ©.
+- Fichiers a surveiller: `templates/partials/pages/journal/header.html` (bouton â˜¾), `static/js/split/004_loadjournaltablesort.js` (toggle), `static/css/split/046_journal_day_trade_cards.css`.
 
-### BUG-20260505-11 - [RÉSOLU] KPIs placeholders "0.00$" au lieu de "—"
-- Symptome: au chargement initial, les KPIs affichaient `+0.00$` au lieu de `—`. L'utilisateur croyait voir des données réelles (zéro) alors que rien n'était chargé.
+### BUG-20260505-11 - [RÃ‰SOLU] KPIs placeholders "0.00$" au lieu de "â€”"
+- Symptome: au chargement initial, les KPIs affichaient `+0.00$` au lieu de `â€”`. L'utilisateur croyait voir des donnÃ©es rÃ©elles (zÃ©ro) alors que rien n'Ã©tait chargÃ©.
 - Cause racine: les templates avaient `0.00$` comme valeur initiale. `fmtMoney(val || 0)` transformait null/undefined en `0.00$`.
-- Regle de prevention: les templates doivent avoir `—` (&mdash;) comme valeur initiale pour tout KPI. `fmtMoney()` ne doit JAMAIS recevoir `|| 0` — utiliser `val != null ? fmtMoney(val) : "—"`. Les trois états doivent être: loading=`...`, vide=`—`, valeur réelle=fmtMoney(val).
-- Test de non-regression: au premier chargement, tous les KPIs Dashboard affichent `—` (pas `0.00$`). Après chargement des données, ils affichent les vraies valeurs.
+- Regle de prevention: les templates doivent avoir `â€”` (&mdash;) comme valeur initiale pour tout KPI. `fmtMoney()` ne doit JAMAIS recevoir `|| 0` â€” utiliser `val != null ? fmtMoney(val) : "â€”"`. Les trois Ã©tats doivent Ãªtre: loading=`...`, vide=`â€”`, valeur rÃ©elle=fmtMoney(val).
+- Test de non-regression: au premier chargement, tous les KPIs Dashboard affichent `â€”` (pas `0.00$`). AprÃ¨s chargement des donnÃ©es, ils affichent les vraies valeurs.
 - Fichiers a surveiller: tous les templates HTML de widgets KPIs, `static/js/split/013_kpis.js`.
 
-### BUG-20260505-12 - [RÉSOLU] Delta ▲/▼ indicateurs KPIs absents
-- Symptome: les KPIs du Dashboard (Net P&L, Winrate, etc.) n'indiquaient pas la variation par rapport à la période précédente. Impossible de savoir si la performance s'améliore ou se dégrade.
-- Cause racine: pas de calcul ni d'affichage de delta (période courante vs période précédente).
-- Regle de prevention: tout KPI numérique doit afficher: valeur courante + delta (▲ hausse / ▼ baisse) par rapport à la période précédente. Le delta doit être calculé par `loadStats()` et stocké dans `state.kpiDeltas`. Fonction `_renderKpiDelta(el, value, previous)`.
-- Test de non-regression: le Dashboard affiche ▲ ou ▼ à côté de chaque KPI avec la valeur de variation.
+### BUG-20260505-12 - [RÃ‰SOLU] Delta â–²/â–¼ indicateurs KPIs absents
+- Symptome: les KPIs du Dashboard (Net P&L, Winrate, etc.) n'indiquaient pas la variation par rapport Ã  la pÃ©riode prÃ©cÃ©dente. Impossible de savoir si la performance s'amÃ©liore ou se dÃ©grade.
+- Cause racine: pas de calcul ni d'affichage de delta (pÃ©riode courante vs pÃ©riode prÃ©cÃ©dente).
+- Regle de prevention: tout KPI numÃ©rique doit afficher: valeur courante + delta (â–² hausse / â–¼ baisse) par rapport Ã  la pÃ©riode prÃ©cÃ©dente. Le delta doit Ãªtre calculÃ© par `loadStats()` et stockÃ© dans `state.kpiDeltas`. Fonction `_renderKpiDelta(el, value, previous)`.
+- Test de non-regression: le Dashboard affiche â–² ou â–¼ Ã  cÃ´tÃ© de chaque KPI avec la valeur de variation.
 - Fichiers a surveiller: `static/js/split/013_kpis.js`, `static/js/split/012_data_loading.js`.
 
 
-## 10) Features, conventions et APIs documentées
+## 10) Features, conventions et APIs documentÃ©es
 
-Cette section documente les features ajoutées, les conventions établies, et les endpoints API spéciaux — sans format de bug car ce ne sont pas des régressions.
+Cette section documente les features ajoutÃ©es, les conventions Ã©tablies, et les endpoints API spÃ©ciaux â€” sans format de bug car ce ne sont pas des rÃ©gressions.
 
 ### FEATURE-20260501 - BTC chart widget en direct
 - Ajout d'un widget graphique bougies chandeliers BTC/USDT dans le dashboard Today.
@@ -765,56 +765,56 @@ Cette section documente les features ajoutées, les conventions établies, et le
 
 
 ### CONVENTION-20260501 - exit_price = mapping conditionnel WIN/LOSS (MAJ 2026-05-01)
-- Regle: `exit_price` est mappe conditionnellement selon le resultat du trade. Si WIN → exit_price = take_profit. Si LOSS → exit_price = stop_loss.
+- Regle: `exit_price` est mappe conditionnellement selon le resultat du trade. Si WIN â†’ exit_price = take_profit. Si LOSS â†’ exit_price = stop_loss.
 - Le backend (`05_payload_normalizers.py`) derive `is_win` depuis direction + entry vs exit si non fourni explicitement.
 - Le frontend affiche `exit_price` sous le label "TP" dans la section Niveaux de l'editeur XXL, mais le bloc Resultat a un select Statut (Ouvert/Cloture) qui permet de corriger le mapping.
 - `syncExitMapping()` dans `021_rr_preview.js` auto-remplit SL ou TP quand l'utilisateur change isWin.
 - La DB conserve les deux colonnes (`take_profit`, `stop_loss`) pour retrocompatibilite.
-- **Ne JAMAIS afficher exit_price ET take_profit en meme temps** — seul exit_price (label "TP") est visible.
-- Cas particulier: SL=TP → RR preview affiche un avertissement au lieu de 1.00R.
+- **Ne JAMAIS afficher exit_price ET take_profit en meme temps** â€” seul exit_price (label "TP") est visible.
+- Cas particulier: SL=TP â†’ RR preview affiche un avertissement au lieu de 1.00R.
 - Correction du bug: une perte short avec exit_price mais sans TP causait SL=TP=1.00R (nonsensical).
 - Fichiers a surveiller: `app_parts/05_payload_normalizers.py` (normalisation conditionnelle), `static/js/split/021_rr_preview.js` (syncExitMapping), `static/js/split/059_trade_editor_controller.js` (label TP), `templates/partials/pages/journal/table.html`, `static/js/split/056_journal_day_trade_cards.js`, `app_parts/03_core_helpers.py` (skip validation si is_win explicite).
 
 
-### CONVENTION-20260503 - Refacto loader `app_parts/__init__.py` (exec → namespace dédié)
+### CONVENTION-20260503 - Refacto loader `app_parts/__init__.py` (exec â†’ namespace dÃ©diÃ©)
 
-- **Motivation**: Le loader utilisait `exec(_code, globals(), globals())` qui chargeait tous les modules dans le même espace de noms que le package `app_parts` lui-même. Causes de fragilité: 1) collisions silencieuses entre modules (ex: `_time` écrasé entre deux fichiers), 2) pas de détection de chevauchement, 3) `globals()` implicite rendait le code difficile à instrumenter.
-- **Nouveau loader**: Chaque fichier est compilé et exécuté dans un dictionnaire namespace dédié `_NS`. Après chargement, un proxy `_AppPartsModule` est installé sur `app_parts` qui délègue les lectures/écritures à `_NS`. Les collisions de noms publics sont détectées et loguées en warning.
-- **Monkey-patching**: `app_parts.DB_PATH = X` (utilisé dans les tests) propage dans `_NS` via `__setattr__` — toutes les fonctions voient la nouvelle valeur à l'appel car leur `__globals__` pointe sur `_NS`.
-- **Rétrocompat**: `from app_parts import *` dans `app.py` continue de fonctionner (les noms sont copiés dans `__dict__` après chargement).
-- **Test de non-régression**: `python -m unittest discover -s tests -v` → 41 tests passent (dont le guardrail playbook mis à jour). Le serveur démarre avec `python app.py`.
-- **Fichiers modifiés**: `app_parts/__init__.py` (seulement ce fichier — les 25 modules `app_parts/*.py` sont inchangés).
+- **Motivation**: Le loader utilisait `exec(_code, globals(), globals())` qui chargeait tous les modules dans le mÃªme espace de noms que le package `app_parts` lui-mÃªme. Causes de fragilitÃ©: 1) collisions silencieuses entre modules (ex: `_time` Ã©crasÃ© entre deux fichiers), 2) pas de dÃ©tection de chevauchement, 3) `globals()` implicite rendait le code difficile Ã  instrumenter.
+- **Nouveau loader**: Chaque fichier est compilÃ© et exÃ©cutÃ© dans un dictionnaire namespace dÃ©diÃ© `_NS`. AprÃ¨s chargement, un proxy `_AppPartsModule` est installÃ© sur `app_parts` qui dÃ©lÃ¨gue les lectures/Ã©critures Ã  `_NS`. Les collisions de noms publics sont dÃ©tectÃ©es et loguÃ©es en warning.
+- **Monkey-patching**: `app_parts.DB_PATH = X` (utilisÃ© dans les tests) propage dans `_NS` via `__setattr__` â€” toutes les fonctions voient la nouvelle valeur Ã  l'appel car leur `__globals__` pointe sur `_NS`.
+- **RÃ©trocompat**: `from app_parts import *` dans `app.py` continue de fonctionner (les noms sont copiÃ©s dans `__dict__` aprÃ¨s chargement).
+- **Test de non-rÃ©gression**: `python -m unittest discover -s tests -v` â†’ 41 tests passent (dont le guardrail playbook mis Ã  jour). Le serveur dÃ©marre avec `python app.py`.
+- **Fichiers modifiÃ©s**: `app_parts/__init__.py` (seulement ce fichier â€” les 25 modules `app_parts/*.py` sont inchangÃ©s).
 
-### BUG-20260503-D09 - [RÉSOLU] Skeleton KPI reste figé après erreur API
-- Symptome: Si le fetch `/api/stats` échoue (réseau, 500), `renderKPIs()` n'est jamais appelée. Le `.loading` class sur `[data-widget-board="today"]` n'est pas retiré → le shimmer skeleton reste indéfiniment.
-- Cause racine: `loadStats()` avait `catch { toast() }` mais ne nettoyait pas le skeleton. Le `finally { loading(false) }` ne gérait que la loadingBar globale (#loadingBar), pas le skeleton widget.
-- Regle de prevention: TOUT `catch` d'un fetch qui alimente un render doit netoyer l'état de chargement du widget correspondant. Pattern: `var board = document.querySelector('[data-widget-board="today"]'); if (board) board.classList.remove("loading");`. Le `finally` ne suffit pas si le render est dans le `try`.
-- Test de non-regression: Simuler une erreur API → le skeleton disparaît, le toast d'erreur s'affiche, un état d'erreur visuel apparaît (bordure rouge subtile avec "Erreur de chargement").
+### BUG-20260503-D09 - [RÃ‰SOLU] Skeleton KPI reste figÃ© aprÃ¨s erreur API
+- Symptome: Si le fetch `/api/stats` Ã©choue (rÃ©seau, 500), `renderKPIs()` n'est jamais appelÃ©e. Le `.loading` class sur `[data-widget-board="today"]` n'est pas retirÃ© â†’ le shimmer skeleton reste indÃ©finiment.
+- Cause racine: `loadStats()` avait `catch { toast() }` mais ne nettoyait pas le skeleton. Le `finally { loading(false) }` ne gÃ©rait que la loadingBar globale (#loadingBar), pas le skeleton widget.
+- Regle de prevention: TOUT `catch` d'un fetch qui alimente un render doit netoyer l'Ã©tat de chargement du widget correspondant. Pattern: `var board = document.querySelector('[data-widget-board="today"]'); if (board) board.classList.remove("loading");`. Le `finally` ne suffit pas si le render est dans le `try`.
+- Test de non-regression: Simuler une erreur API â†’ le skeleton disparaÃ®t, le toast d'erreur s'affiche, un Ã©tat d'erreur visuel apparaÃ®t (bordure rouge subtile avec "Erreur de chargement").
 - Fichiers a surveiller: `static/js/split/012_data_loading.js` (catch de loadStats), `static/js/split/013_kpis.js` (renderKPIs loading removal), `static/css/split/003_settings_chip_remove_hover.css` (.widget-board[data-load-error] styles).
 
-### BUG-20260503-D23 - [RÉSOLU] États vides sans action claire
-- Symptome: Plusieurs états vides (recent entries, favoris, journal filters, calendar search) n'avaient aucun bouton d'action pour sortir de l'état vide.
-- Cause racine: Approche "message seulement" sans CTA — l'utilisateur devait deviner quoi faire.
-- Regle de prevention: TOUT état vide doit proposer une action claire : "Ajouter", "Voir", "Réinitialiser", "Créer". Pas de message seul.
-- Test de non-regression: Naviguer vers chaque écran sans données → un bouton d'action est visible.
+### BUG-20260503-D23 - [RÃ‰SOLU] Ã‰tats vides sans action claire
+- Symptome: Plusieurs Ã©tats vides (recent entries, favoris, journal filters, calendar search) n'avaient aucun bouton d'action pour sortir de l'Ã©tat vide.
+- Cause racine: Approche "message seulement" sans CTA â€” l'utilisateur devait deviner quoi faire.
+- Regle de prevention: TOUT Ã©tat vide doit proposer une action claire : "Ajouter", "Voir", "RÃ©initialiser", "CrÃ©er". Pas de message seul.
+- Test de non-regression: Naviguer vers chaque Ã©cran sans donnÃ©es â†’ un bouton d'action est visible.
 - Fichiers a surveiller: `014_today_page.js` (recent empty), `012_favorites_carousel.html` (fav empty), `table.html` (journal filter empty), `015_calendar.js` (calendar/search empty).
 
 
-### BUG-20260505-03 - [RÉSOLU] Wizard clics morts + draft auto-resume
-- Symptome: Dès l'ouverture du wizard, plus aucun clic ne marche. Après un refresh, la wizard reprend à l'étape du crash PC (3/12 au lieu de 1/12).
-- Cause racine: 3 causes combinées — (1) setTimeout(wizNext,200) jamais annulé → timer stale après fermeture (2) wizClose() ne nettoyait pas paddingTop/paddingLeft/onclick/wiz-rail-mode (3) Draft auto-repris à chaque wizOpen()
-- Regle de prevention: (1) Toujours stocker le timer ID et clearTimeout dans wizClose() (2) wizClose() doit nettoyer TOUS les résidus d'état (inline styles, classes dynamiques, onclick) (3) _wizClearDraft() en tête de wizOpen() — le draft est crash recovery, jamais repris auto.
-- Test de non-regression: Ouvrir wizard depuis le rail, cliquer sur Suivant/cartes, fermer, rouvrir — doit repartir à l'étape 1. Répéter 3x.
+### BUG-20260505-03 - [RÃ‰SOLU] Wizard clics morts + draft auto-resume
+- Symptome: DÃ¨s l'ouverture du wizard, plus aucun clic ne marche. AprÃ¨s un refresh, la wizard reprend Ã  l'Ã©tape du crash PC (3/12 au lieu de 1/12).
+- Cause racine: 3 causes combinÃ©es â€” (1) setTimeout(wizNext,200) jamais annulÃ© â†’ timer stale aprÃ¨s fermeture (2) wizClose() ne nettoyait pas paddingTop/paddingLeft/onclick/wiz-rail-mode (3) Draft auto-repris Ã  chaque wizOpen()
+- Regle de prevention: (1) Toujours stocker le timer ID et clearTimeout dans wizClose() (2) wizClose() doit nettoyer TOUS les rÃ©sidus d'Ã©tat (inline styles, classes dynamiques, onclick) (3) _wizClearDraft() en tÃªte de wizOpen() â€” le draft est crash recovery, jamais repris auto.
+- Test de non-regression: Ouvrir wizard depuis le rail, cliquer sur Suivant/cartes, fermer, rouvrir â€” doit repartir Ã  l'Ã©tape 1. RÃ©pÃ©ter 3x.
 - Fichiers a surveiller: 040_wizard_core.js, 042_wizsetdate.js, 025_wizard_steps_ui.css
 
-### CONVENTION-20260503-02 - Conflit de namespace `_time` dans le loader partagé
+### CONVENTION-20260503-02 - Conflit de namespace `_time` dans le loader partagÃ©
 - Symptome: 500 INTERNAL SERVER ERROR sur `/api/days` et `/api/stats` des l'ouverture du journal. TypeError: 'module' object is not callable sur `_time()` dans le rate limiter.
-- Cause racine: `03_core_helpers.py` fait `from time import time as _time` (la fonction). `23_routes_market.py` fait `import time as _time` (le module). Dans le namespace partagé `_NS` du loader, le dernier fichier charge écrase le premier → `_time` devient le module `time`, pas la fonction `time()`.
-- Regle de prevention: NE JAMAIS utiliser `_time` comme alias d'import dans les fichiers app_parts. Utiliser `_time_mod` pour le module (`import time as _time_mod`) et `_time` ou `_time_fn` pour la fonction (`from time import time as _time_fn`). Vérifier avec `grep -n 'import.*as _time' app_parts/*.py` apres ajout d'un fichier.
-- Test de non-regression: Charger le module app_parts → `_time` doit etre callable. Toutes les routes `@ratelimit` doivent repondre 200.
+- Cause racine: `03_core_helpers.py` fait `from time import time as _time` (la fonction). `23_routes_market.py` fait `import time as _time` (le module). Dans le namespace partagÃ© `_NS` du loader, le dernier fichier charge Ã©crase le premier â†’ `_time` devient le module `time`, pas la fonction `time()`.
+- Regle de prevention: NE JAMAIS utiliser `_time` comme alias d'import dans les fichiers app_parts. Utiliser `_time_mod` pour le module (`import time as _time_mod`) et `_time` ou `_time_fn` pour la fonction (`from time import time as _time_fn`). VÃ©rifier avec `grep -n 'import.*as _time' app_parts/*.py` apres ajout d'un fichier.
+- Test de non-regression: Charger le module app_parts â†’ `_time` doit etre callable. Toutes les routes `@ratelimit` doivent repondre 200.
 - Fichiers a surveiller: app_parts/__init__.py, app_parts/03_core_helpers.py, app_parts/23_routes_market.py, app_parts/15_parse_trade.py, app_parts/19_ai_chat.py
 
-### CONVENTION-20260506-01 — Pagination backend aggTrades + force cache bust
+### CONVENTION-20260506-01 â€” Pagination backend aggTrades + force cache bust
 - Symptome: La route `/api/market/aggtrades` ne paginait pas et envoyait limit=5000 a Binance (max 1000). Le cache etait un dict sans limite de taille. Le cache hit renvoyait des metadata incompletes. Le param force n'existait pas. Les int() levaient 500 sur input invalide.
 - Cause racine: Implementation initiale minimaliste sans pagination, cache size limit, ou validation de parametres.
 - Regle de prevention: TOUJOURS clamber les parametres limite. Paginer en backend avec _MAX_PAGES = 8. Stoker le payload complet dans le cache (pas seulement trades). Expurger les entrees expirees quand le cache depasse _CACHE_MAX_KEYS = 100. Ajouter force=1 pour bypass cache. Utiliser _parse_int_param() avec try/except plutot que int() direct.
@@ -822,85 +822,85 @@ Cette section documente les features ajoutées, les conventions établies, et le
 - Changement: Rewrite complet de market_aggtrades(), ajout de _purge_cache(), _parse_int_param(), _fetch_binance_agg(), _MAX_PAGES, MAX_TOTAL_TRADES.
 - Fichiers a surveiller: app_parts/23_routes_market.py
 
-### CONVENTION-20260506-02 — Pagination aggTrades par fromId (pas startTime+1ms)
+### CONVENTION-20260506-02 â€” Pagination aggTrades par fromId (pas startTime+1ms)
 - Cause racine: startTime+1ms peut skipper des trades ayant le meme timestamp milliseconde. Plusieurs aggTrades Binance peuvent partager le meme T.
 - Regle de prevention: TOUJOURS paginer par fromId=lastAggTradeId+1 pour les pages suivantes. La premiere page utilise startTime/endTime pour le filtrage temporel. Filtrer cote backend les trades > endTime.
 - Test de non-regression: /api/market/aggtrades?symbol=BTCUSDT&limit=5000 doit retourner exactement 5000 trades sans trous. Verifier que les trades ont des ids consecutifs.
 - Fichiers a surveiller: app_parts/23_routes_market.py
 
-### CONVENTION-20260506-03 — rAF _running guard pour eviter les boucles orphelines
+### CONVENTION-20260506-03 â€” rAF _running guard pour eviter les boucles orphelines
 - Cause racine: start() sans guard peut etre appele plusieurs fois (init + pageChange listener).
 - Regle de prevention: Toujours garder _running flag dans start/stop. start() check _running en tete, return si deja lance. loop() check _running a chaque frame. stop() met _running=false puis cancelAnimationFrame.
 - Fichiers a surveiller: static/js/split/066_orderflow_engine.js
 
-### CONVENTION-20260506-04 — abort(400) retourne HTML → try/except ValueError + jsonify
+### CONVENTION-20260506-04 â€” abort(400) retourne HTML â†’ try/except ValueError + jsonify
 - Cause racine: abort(400) dans Flask peut retourner une page HTML si pas de handler errorhandler(400) dedie.
 - Regle de prevention: Ne jamais utiliser abort() dans les routes API. Utiliser raise ValueError dans les helpers, try/except dans la route, return jsonify({"error": str(e)}), 400.
 - Fichiers a surveiller: app_parts/23_routes_market.py
 
-### BUG-20260506-05 — Timeout Binance 10s cause UI bloquee 10 secondes
-- Symptome: Au refresh, page noire sans donnees pendant ~10s, puis data apparait. `klines?interval=1d&limit=100` → 502 apres 10.02s.
+### BUG-20260506-05 â€” Timeout Binance 10s cause UI bloquee 10 secondes
+- Symptome: Au refresh, page noire sans donnees pendant ~10s, puis data apparait. `klines?interval=1d&limit=100` â†’ 502 apres 10.02s.
 - Cause racine: `urllib.request.urlopen(req, timeout=10)` dans `market_klines()` et `_fetch_binance_page()`. Quand Binance est lent/unreachable, le thread Flask est bloque 10s. Le frontend attend les donnees VWAP 90D avant de rendre completement.
 - Regle de prevention: Timeout = 3s max pour les proxies API externes. Ajouter `log.warning` sur les timeouts Binance pour diagnositic. Les VWAP multi-TF doivent echouer silencieusement (log only, pas de toast).
-- Test de non-regression: Charger la page Today → le widget BTC chart doit s'afficher immediatement meme si Binance est down. Les VWAP doivent etre absents (pas d'etat d'erreur visible).
+- Test de non-regression: Charger la page Today â†’ le widget BTC chart doit s'afficher immediatement meme si Binance est down. Les VWAP doivent etre absents (pas d'etat d'erreur visible).
 - Fichiers a surveiller: app_parts/23_routes_market.py, static/js/split/060_btc_chart_widget.js
 
-### BUG-20260506-06 — JS bundle bloque en Pending (serveur Flask mono-thread)
+### BUG-20260506-06 â€” JS bundle bloque en Pending (serveur Flask mono-thread)
 - Symptome: `app.js` reste en Pending (0 B) dans le navigateur, CSS se charge normalement. La page reste noire sans data.
-- Cause racine: `app.run(host, port, debug)` sans `threaded=True`. Flask par defaut est mono-thread. Quand le proxy Binance bloque le thread (3s), la reponse du JS (657 KB) est suspendue → le navigateur attend.
+- Cause racine: `app.run(host, port, debug)` sans `threaded=True`. Flask par defaut est mono-thread. Quand le proxy Binance bloque le thread (3s), la reponse du JS (657 KB) est suspendue â†’ le navigateur attend.
 - Regle de prevention: Toujours `threaded=True` sur `app.run()` en dev. En prod, utiliser waitress/gunicorn.
-- Test de non-regression: Lancer le serveur, charger la page → `app.js` doit charger en <500ms meme si Binance est down.
+- Test de non-regression: Lancer le serveur, charger la page â†’ `app.js` doit charger en <500ms meme si Binance est down.
 - Fichiers a surveiller: app_parts/18_launcher.py
 
-### BUG-20260506-07 — Pagination klines par `batch[-1][0]` cause doublons
+### BUG-20260506-07 â€” Pagination klines par `batch[-1][0]` cause doublons
 - Symptome: des bougies en double apparaissent dans les donnees klines paginees (meme open_time).
-- Cause racine: `current_start = batch[-1][0]` réutilise l'open_time de la dernière bougie comme startTime de la page suivante. Binance inclusive start → la derniere bougie est fetchée deux fois.
+- Cause racine: `current_start = batch[-1][0]` rÃ©utilise l'open_time de la derniÃ¨re bougie comme startTime de la page suivante. Binance inclusive start â†’ la derniere bougie est fetchÃ©e deux fois.
 - Regle de prevention: TOUJOURS paginer les klines par `last_open_time + interval_ms`. Ajouter une dedupe par open_time en post-traitement.
-- Test de non-regression: fetch 150 bougies de 1h → les 150 doivent avoir des open_time uniques et consecutifs.
+- Test de non-regression: fetch 150 bougies de 1h â†’ les 150 doivent avoir des open_time uniques et consecutifs.
 - Fichiers a surveiller: app_parts/23_routes_market.py
 
-### BUG-20260507-01 — DELETE routes sans check existence → 200 OK meme si rien supprime
+### BUG-20260507-01 â€” DELETE routes sans check existence â†’ 200 OK meme si rien supprime
 - Symptome: `delete_day(999)` et `delete_trade(999)` retournaient `{"ok": true}` 200 pour des IDs inexistants.
 - Cause racine: les routes DELETE executaient directement le SQL sans SELECT prealable.
 - Regle de prevention: TOUJOURS verifier l'existence avec `SELECT id` avant DELETE sur des ressources individuelles. Pour les batchs, utiliser `cur.rowcount` au lieu de `len(ids)`.
-- Test de non-regression: `DELETE /api/days/999999` → 404. `DELETE /api/trades/999999` → 404. `DELETE /api/trades/batch` avec 501 IDs → 400.
+- Test de non-regression: `DELETE /api/days/999999` â†’ 404. `DELETE /api/trades/999999` â†’ 404. `DELETE /api/trades/batch` avec 501 IDs â†’ 400.
 - Fichiers a surveiller: app_parts/09_routes_days.py, app_parts/10_routes_trades.py
 
-### BUG-20260507-02 — /api/trades/instruments pas de fallback config si DB vide
+### BUG-20260507-02 â€” /api/trades/instruments pas de fallback config si DB vide
 - Symptome: avec une DB vide, la route retourne `[]` au lieu des instruments par defaut definis dans INSTRUMENTS.
 - Cause racine: la route ne faisait que `SELECT DISTINCT instrument FROM days` sans fallback.
 - Regle de prevention: TOUJOURS prevoir un fallback sur les valeurs de config quand une requete DB retourne 0 resultats. Les instruments par defaut du config.json sont la source de verite, la DB est un sur-ensemble dynamique.
 - Fichiers a surveiller: app_parts/10_routes_trades.py
 
-### CONVENTION-20260507-01 — Index manquants sur trades
+### CONVENTION-20260507-01 â€” Index manquants sur trades
 - Cause racine: les colonnes `strategy`, `is_win`, `created_at` sont frequemment filtrees/triees sans index.
 - Regle: Ajouter les indexes sur les colonnes de filtrage et tri frequents dans `init_db()`. Migration si table existe deja.
 - Fichiers a surveiller: app_parts/02_database.py
 
-### CONVENTION-20260507-02 — ML _load_trades_with_context doit utiliser derive_trade_metrics()
+### CONVENTION-20260507-02 â€” ML _load_trades_with_context doit utiliser derive_trade_metrics()
 - Cause racine: le module ML lisait les colonnes brutes `pnl`, `is_win`, `rr` directement depuis la DB, contournant `derive_trade_metrics()` qui normalise ces valeurs.
 - Regle: Toujours passer par `derive_trade_metrics()` pour les metriques derivees (pnl, rr, is_win) meme dans les modules non-stats. Les valeurs brutes DB peuvent etre NULL ou incoherentes.
 - Fichiers a surveiller: app_parts/20_ml_engine.py
 
-### BUG-20260507-03 — Cache ML : date_to absent de la cle de cache
+### BUG-20260507-03 â€” Cache ML : date_to absent de la cle de cache
 - Symptome: Deux requetes `analyze_patterns` avec le meme `date_from` mais des `date_to` differents retournaient le meme resultat en cache.
 - Cause racine: la construction de `cache_key` incluait `pattern|{mtime}|inst={inst}|from={from}` mais pas `|to={to}`.
 - Regle de prevention: TOUS les parametres de requete doivent etre inclus dans la cle de cache. Un parametre oublie = donnees incoherentes silencieuses.
 - Fichiers a surveiller: app_parts/20_ml_engine.py
 
-### CONVENTION-20260507-03 — Couche service extraite (06a_trade_service + 06b_day_service)
+### CONVENTION-20260507-03 â€” Couche service extraite (06a_trade_service + 06b_day_service)
 - Motivation: extraire la logique metier des routes pour la rendre reutilisable par l'IA chat et les tests.
-- Regle: Les fonctions `service_*` prennent `db` en parametre explicite, ne dependent pas du contexte Flask. Les routes restent minces (parse → service → jsonify). Charger les services AVANT les routes dans `__init__.py`.
+- Regle: Les fonctions `service_*` prennent `db` en parametre explicite, ne dependent pas du contexte Flask. Les routes restent minces (parse â†’ service â†’ jsonify). Charger les services AVANT les routes dans `__init__.py`.
 - Fichiers a surveiller: app_parts/06a_trade_service.py, app_parts/06b_day_service.py, app_parts/__init__.py
 
-### BUG-20260503-08 — [RÉSOLU] pnl REAL DEFAULT 0 en DB empeche la distinction pnl-absent vs pnl=0
+### BUG-20260503-08 â€” [RÃ‰SOLU] pnl REAL DEFAULT 0 en DB empeche la distinction pnl-absent vs pnl=0
 - Symptome: quand _auto_calc_pnl() ne set pas pnl (pas d'entry/exit/size), le DEFAULT 0 en DB prenait le relais, rendant impossible la distinction entre "pnl non fourni" (None) et "pnl=0 explicite". Cassait le recalcul en update (le pnl=0 existant bloquait le guard `payload.get("pnl") is not None`).
 - Cause racine: `pnl REAL DEFAULT 0` dans le CREATE TABLE de 02_database.py.
 - Regle de prevention: les colonnes avec une semantique "optionnelle/inconnue" ne doivent PAS avoir de DEFAULT. NULL est la valeur correcte pour "non renseigne". Uniquement les colonnes ou 0 a un sens metier (ex: position_size) peuvent avoir DEFAULT 0.
 
-## Leçons retenues (mai 2026)
+## LeÃ§ons retenues (mai 2026)
 
-### VWAP — ne pas polluer l'axe logique LWC
+### VWAP â€” ne pas polluer l'axe logique LWC
 Les series VWAP 7D/30D/90D en fallback 15m/1h/4h ajoutent des centaines de points
 supplementaires sur l'axe logique de Lightweight Charts (~1800 vs 300 bougies 3m).
 Cela rend le zoom instable et les calculs de range invalides.
@@ -908,15 +908,15 @@ Cela rend le zoom instable et les calculs de range invalides.
 principales (`_mainCandles`) avant `setData()`. Le VWAP direct depuis
 `_mainCandles` (quand coveredSecs >= periodSec) est deja aligne, pas besoin.
 
-### localStorage — relire au besoin
+### localStorage â€” relire au besoin
 Les settings VWAP sont stockes dans localStorage (`chartVwapPeriods`) mais
 le widget 060 (today) ne lisait cette valeur qu'a l'init. Les changements
 depuis le menu settings n'etaient pas visibles.
 **Fix** : relire localStorage au debut de chaque `_calcAndDrawVwap()`.
-- Test de non-regression: creer un trade sans entry/exit/size → pnl=None (pas 0.0). Update avec exit_price → pnl recalcule depuis les donnees existantes.
+- Test de non-regression: creer un trade sans entry/exit/size â†’ pnl=None (pas 0.0). Update avec exit_price â†’ pnl recalcule depuis les donnees existantes.
 - Fichiers a surveiller: app_parts/02_database.py (CREATE TABLE trades), app_parts/05_payload_normalizers.py, app_parts/03_core_helpers.py
 
-### VWAP — ne pas tirer l'echelle prix vers le bas
+### VWAP â€” ne pas tirer l'echelle prix vers le bas
 Les VWAP multi-TF (7D, 30D, 90D) peuvent avoir des prix bien en dessous de la
 bougie courante (marche baissier, vieilles donnees). Sans precaution, la price
 scale autoscale s'etend pour inclure TOUTES les series visibles, tirant l'axe Y
@@ -926,27 +926,27 @@ chaque serie VWAP. Les VWAP restent sur la price scale `'right'` (alignees avec
 les bougies) mais n'influencent pas le calcul du range vertical.
 - Applique dans `060_btc_chart_widget.js` et `062_chart_page.js`.
 
-### VWAP canonique — flood API Binance → 502
+### VWAP canonique â€” flood API Binance â†’ 502
 Le module VWAP canonique (055) fetch 4 intervalles differents (15m, 15m, 1h, 4h)
 a chaque chargement, ce qui multiplie les appels API par 5 (1 widget + 4 VWAP).
-Binance rate-limite → 502 → chart disparait.
+Binance rate-limite â†’ 502 â†’ chart disparait.
 **Fix** : 
 - `_KLINES_CACHE_TTL` passe de 30s a 300s (5min) dans `app_parts/23_routes_market.py`
 - Retry 3 fois sur 429/502/503 avec backoff 1-2s dans `_fetch_klines_page()`
-- VWAP utilise `getLastClosedCandleEndTime()` → fenetre stable → meilleur hit cache
+- VWAP utilise `getLastClosedCandleEndTime()` â†’ fenetre stable â†’ meilleur hit cache
 - Fichiers a surveiller: `app_parts/23_routes_market.py`
 
-### Horloge Windows decalee → countdown affiche '—'
+### Horloge Windows decalee â†’ countdown affiche 'â€”'
 L'horloge Windows/locale peut etre decalee de plusieurs heures (veille WSL,
 mauvaise synchro NTP). Le guard anti-timestamp detectait lastCandleTime > Date.now()
-et affichait '—'.
+et affichait 'â€”'.
 **Fix** : calculer `clockOffset = serverTime - Date.now()` au premier fetch,
 puis utiliser `adjustedNow = Date.now() + clockOffset` dans tous les calculs
 de countdown et auto-refresh. clockOffset n'est pas recalcule sur les messages WS
 (pour eviter le reset du countdown a 3:00 en boucle).
 - Applique dans `060_btc_chart_widget.js` et `062_chart_page.js`.
 
-### Countdown — anchor base sur candleCloseMs + performance.now()
+### Countdown â€” anchor base sur candleCloseMs + performance.now()
 Le clockOffset (= serveurTime - Date.now()) etait recalcule sur chaque evenement,
 causant des sauts de countdown (Bug A: depart toujours a 3:00 meme si bougie de 2min;
 Bug B: saut a 8 min lors d'un drag/pan chart).
@@ -987,40 +987,40 @@ les fenetres temporelles non-bornees.
   a `['D-NY', '24H', '7D', '30D', '90D']`. `VWAP_COLORS` mis a jour.
   Filtrage des periodes inconnues au chargement depuis localStorage.
 - **Template `chart.html`** : boutons VWAP : 'Jour NY' + '24h' remplacent '1 jour'.
-- Ne pas toucher au mapping timeframe `'1D' → '1d'` (c'est Binance, pas VWAP).
+- Ne pas toucher au mapping timeframe `'1D' â†’ '1d'` (c'est Binance, pas VWAP).
 
-### Event bus VWAP — synchro widget ↔ page chart (4 mai 2026)
+### Event bus VWAP â€” synchro widget â†” page chart (4 mai 2026)
 **Cause** : quand 062 modifie `localStorage.chartVwapPeriods`, le widget 060 ne recoit aucun
 signal car l'event natif `storage` ne se declenche PAS dans le meme document/onglet.
 Le widget relisait la config au chargement mais pas apres changement.
 **Fix** :
 - **055** : `readActiveVwapPeriods()`, `saveActiveVwapPeriods()`, `normalizeVwapPeriods()`
-  (legacy '1D' → 'D-NY'). `saveActiveVwapPeriods()` declenche `CustomEvent('chart:vwap-periods-changed')`.
+  (legacy '1D' â†’ 'D-NY'). `saveActiveVwapPeriods()` declenche `CustomEvent('chart:vwap-periods-changed')`.
   Tout expose dans `window.BtcVwap`.
 - **062** : toggle VWAP passe par `BtcVwap.saveActiveVwapPeriods()` au lieu de `localStorage.setItem()` direct.
 - **060** : `_refreshWidgetVwapFromPrefs()` ecoute `chart:vwap-periods-changed` ET l'event natif `storage`.
   Recalcul VWAP a chaque changement de periode.
 
-### Countdown `—` — cache klines TTL 5min + force=1 (4 mai 2026)
+### Countdown `â€”` â€” cache klines TTL 5min + force=1 (4 mai 2026)
 **Cause** : le cache backend `_KLINES_CACHE_TTL = 300` (5 min) renvoyait des bougies expirees
-pour les fetchs live sans `endTime`. `_updateCountdownAnchor()` rejetait l'anchor stale → `countdownAnchor = null` → affichage `—`.
+pour les fetchs live sans `endTime`. `_updateCountdownAnchor()` rejetait l'anchor stale â†’ `countdownAnchor = null` â†’ affichage `â€”`.
 **Fix** :
 - **Backend** : ajout du parametre `force` sur `fetch_klines()` et `market_klines()`.
   `force=True` skip le cache, mais le cache est quand meme mis a jour apres fetch.
 - **Frontend 060 + 062** : `force=1` sur `_fetchAndRender()` et `_fetchLatestCandleOnly()`,
-  pas sur les VWAP canoniques (startTime/endTime → cache stable).
+  pas sur les VWAP canoniques (startTime/endTime â†’ cache stable).
 - **Fallback stale anchor** : si `remaining < -intervalMs`, log warning + `_fetchLatestCandleOnly()` auto.
   `_startCountdown()` appelle aussi `_fetchLatestCandleOnly()` si pas d'anchor.
 - **wsConnected** : `newWs.onopen` manquant dans 062 ajoute (set `wsConnected = true`).
 
-### Timeout Binance 10s → 3s + threaded=True (6 mai 2026)
+### Timeout Binance 10s â†’ 3s + threaded=True (6 mai 2026)
 **Cause** : `urllib.request.urlopen(req, timeout=10)` bloquait le thread Flask 10s sur Binance lent/unreachable.
-Flask mono-thread → `app.js` (657 KB) reste en Pending → page noire sans data.
+Flask mono-thread â†’ `app.js` (657 KB) reste en Pending â†’ page noire sans data.
 **Fix** : timeout Binance 3s max, `threaded=True` sur `app.run()` en dev.
 - Fichiers: `app_parts/23_routes_market.py`, `app_parts/18_launcher.py`
 
 
-### Leçon T-0004: Midnight Engine - bornes strictes et fenetres NY
+### LeÃ§on T-0004: Midnight Engine - bornes strictes et fenetres NY
 
 **Date:** 2026-05-04
 
@@ -1033,41 +1033,41 @@ Flask mono-thread → `app.js` (657 KB) reste en Pending → page noire sans dat
 - Route `GET /api/models/midnight/day?symbol=BTCUSDT&date=YYYY-MM-DD`
 
 
-### Leçon T-0005: Corriger les bugs sans les patchs qui créent d'autres bugs (4-5 mai 2026)
+### LeÃ§on T-0005: Corriger les bugs sans les patchs qui crÃ©ent d'autres bugs (4-5 mai 2026)
 
 **Date:** 2026-05-04/05
 
-**Probleme:** Une série de bugs corrigés en rafale, mais chaque fix méritait une approche mesurée plutôt qu'un patch agressif.
+**Probleme:** Une sÃ©rie de bugs corrigÃ©s en rafale, mais chaque fix mÃ©ritait une approche mesurÃ©e plutÃ´t qu'un patch agressif.
 
-**Bugs corrigés:**
+**Bugs corrigÃ©s:**
 
-1. **Loader collisions (`app_parts/__init__.py`)** : Le calcul de collisions (`_after - _before`) ne pouvait jamais rien détecter car les nouveaux noms ne sont pas dans les anciens. **Fix**: comparer les VALEURS avant/après, pas les noms.
+1. **Loader collisions (`app_parts/__init__.py`)** : Le calcul de collisions (`_after - _before`) ne pouvait jamais rien dÃ©tecter car les nouveaux noms ne sont pas dans les anciens. **Fix**: comparer les VALEURS avant/aprÃ¨s, pas les noms.
 
-2. **PnL non recalculé sur update** : Si l'ancien trade a un pnl non-null, `_auto_calc_pnl` retourne sans recalculer même si entry/exit/size changent. **Fix**: Invalider `pnl` avant `_auto_calc_pnl` si un champ de calcul a changé, dans `service_update_trade`, `update_trade` route, et chat IA.
+2. **PnL non recalculÃ© sur update** : Si l'ancien trade a un pnl non-null, `_auto_calc_pnl` retourne sans recalculer mÃªme si entry/exit/size changent. **Fix**: Invalider `pnl` avant `_auto_calc_pnl` si un champ de calcul a changÃ©, dans `service_update_trade`, `update_trade` route, et chat IA.
 
-3. **Upload image extension incohérente** : `_save_pending_image` pouvait sauvegarder `image.exe` (le nom) contenant un PNG valide. **Fix**: Toujours utiliser l'extension sniffée du contenu binaire.
+3. **Upload image extension incohÃ©rente** : `_save_pending_image` pouvait sauvegarder `image.exe` (le nom) contenant un PNG valide. **Fix**: Toujours utiliser l'extension sniffÃ©e du contenu binaire.
 
-4. **Markdown IA liens non filtrés** : Les liens markdown `[texte](url)` étaient injectés directement en `<a href="$2">`, permettant `javascript:`. Les données JSON des actions étaient injectées en attribut HTML `data-ai-action-data='${JSON.stringify(...)}'`, cassant si les données contiennent `'`. **Fix**: `_aiSafeHref()` valide les protocoles (http/https/mailto), `_aiActionStore` stocke les données en mémoire plutôt que dans le DOM.
+4. **Markdown IA liens non filtrÃ©s** : Les liens markdown `[texte](url)` Ã©taient injectÃ©s directement en `<a href="$2">`, permettant `javascript:`. Les donnÃ©es JSON des actions Ã©taient injectÃ©es en attribut HTML `data-ai-action-data='${JSON.stringify(...)}'`, cassant si les donnÃ©es contiennent `'`. **Fix**: `_aiSafeHref()` valide les protocoles (http/https/mailto), `_aiActionStore` stocke les donnÃ©es en mÃ©moire plutÃ´t que dans le DOM.
 
-5. **ChartViewCore padding top/bottom inversé** : `computePriceRange` appliquait `padding.top` au bas (from=low) et `padding.bottom` au haut (to=high). **Fix**: Inverser le mapping.
+5. **ChartViewCore padding top/bottom inversÃ©** : `computePriceRange` appliquait `padding.top` au bas (from=low) et `padding.bottom` au haut (to=high). **Fix**: Inverser le mapping.
 
-6. **Config WIDGET_VIEW/CHART_VIEW pas alignée** : Le core `054` avait `0.22/0.18` pendant que le widget `060` utilisait `0.08/0.08`. **Fix**: Aligner le core à `0.08/0.08` (widget) et `0.10/0.08` (chart).
+6. **Config WIDGET_VIEW/CHART_VIEW pas alignÃ©e** : Le core `054` avait `0.22/0.18` pendant que le widget `060` utilisait `0.08/0.08`. **Fix**: Aligner le core Ã  `0.08/0.08` (widget) et `0.10/0.08` (chart).
 
-7. **start.bat pip install à chaque lancement** : `pip install -r requirements.txt` ralentit chaque démarrage. **Fix**: Hasher `requirements.txt`, ne réinstaller que si le hash change.
+7. **start.bat pip install Ã  chaque lancement** : `pip install -r requirements.txt` ralentit chaque dÃ©marrage. **Fix**: Hasher `requirements.txt`, ne rÃ©installer que si le hash change.
 
-8. **Widget BTC live Y trop figé** : `maybeFollowBtcWidgetPriceY()` ne recadrait qu'à 16%/84%, throttle absent, `S.candles` pas updaté en live → widget immobile. **Fix**: Upsert WS candles, zone 28%/72%, throttle 250ms, grace period 2.5s post-focus, zones adaptatives par TF, restauration candle-only post-VWAP.
+8. **Widget BTC live Y trop figÃ©** : `maybeFollowBtcWidgetPriceY()` ne recadrait qu'Ã  16%/84%, throttle absent, `S.candles` pas updatÃ© en live â†’ widget immobile. **Fix**: Upsert WS candles, zone 28%/72%, throttle 250ms, grace period 2.5s post-focus, zones adaptatives par TF, restauration candle-only post-VWAP.
 
-9. **VWAP pollue l'autoscale Y** : Les séries VWAP faisaient autoscaleinfoProvider implicite → range Y s'étend vers VWAP loin → jump visuel. **Fix**: `autoscaleInfoProvider: () => null` dans `055` (applyOptions) ET `060` (création). `getBtcWidgetCurrentPriceRange()` préfère `manualPriceRange` en mode follow. Restauration étagée (0/50/150/400/1000ms) post-VWAP.
+9. **VWAP pollue l'autoscale Y** : Les sÃ©ries VWAP faisaient autoscaleinfoProvider implicite â†’ range Y s'Ã©tend vers VWAP loin â†’ jump visuel. **Fix**: `autoscaleInfoProvider: () => null` dans `055` (applyOptions) ET `060` (crÃ©ation). `getBtcWidgetCurrentPriceRange()` prÃ©fÃ¨re `manualPriceRange` en mode follow. Restauration Ã©tagÃ©e (0/50/150/400/1000ms) post-VWAP.
 
-10. **visibleBars non calibrés en durée** : 3m=120 bougies (6h) mais 5m=110 bougies (9h10) → même "nombre" mais pas la même durée → rendu incohérent. **Fix**: Calibrer en durée (~6h pour TF courts) plutôt qu'en nombre fixe.
+10. **visibleBars non calibrÃ©s en durÃ©e** : 3m=120 bougies (6h) mais 5m=110 bougies (9h10) â†’ mÃªme "nombre" mais pas la mÃªme durÃ©e â†’ rendu incohÃ©rent. **Fix**: Calibrer en durÃ©e (~6h pour TF courts) plutÃ´t qu'en nombre fixe.
 
-**Règles de prévention retenues:**
-- Après un redesign de widget avec follow live, tester sur 3-4 timeframes successifs
-- Un fix "simple" (ex: countdownAnchor=null) est mieux qu'un système complexe
-- Toujours vérifier que les configs canoniques du core sont alignées avec les overrides des widgets
-- Les séries d'indicateurs (VWAP) ne doivent JAMAIS influencer l'autoscale — toujours `autoscaleInfoProvider: () => null`
-- Pour les liens et données dynamiques dans le HTML, toujours valider/sanitiser côté JS plutôt que d'injecter en brut
-- Avant tout fix de race condition async, vérifier si le problème vient d'un ordre de chargement ou d'un scope JS
+**RÃ¨gles de prÃ©vention retenues:**
+- AprÃ¨s un redesign de widget avec follow live, tester sur 3-4 timeframes successifs
+- Un fix "simple" (ex: countdownAnchor=null) est mieux qu'un systÃ¨me complexe
+- Toujours vÃ©rifier que les configs canoniques du core sont alignÃ©es avec les overrides des widgets
+- Les sÃ©ries d'indicateurs (VWAP) ne doivent JAMAIS influencer l'autoscale â€” toujours `autoscaleInfoProvider: () => null`
+- Pour les liens et donnÃ©es dynamiques dans le HTML, toujours valider/sanitiser cÃ´tÃ© JS plutÃ´t que d'injecter en brut
+- Avant tout fix de race condition async, vÃ©rifier si le problÃ¨me vient d'un ordre de chargement ou d'un scope JS
 
 
 ### Lecon T-0006: Market clock drift, live Y jump, et optimisations de chargement (5 mai 2026)

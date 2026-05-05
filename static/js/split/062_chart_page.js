@@ -46,6 +46,14 @@
   // Guards anti-boucle
   var chartReady = false;
   var _isFetching = false;
+
+  function _normalizeChartCandles(rows) {
+    return (rows || [])
+      .filter(function(c) { return c && c.time != null && c.open != null && c.high != null && c.low != null && c.close != null; })
+      .map(function(c) { return { time: Number(c.time), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close), volume: Number(c.volume || 0) }; })
+      .filter(function(c) { return Number.isFinite(c.time) && Number.isFinite(c.open) && Number.isFinite(c.high) && Number.isFinite(c.low) && Number.isFinite(c.close) && c.high >= c.low; })
+      .sort(function(a, b) { return a.time - b.time; });
+  }
   var _lastFetchTs = 0;
   var _FETCH_COOLDOWN_MS = 5000;
 
@@ -1201,7 +1209,8 @@
       try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
     }
 
-    var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=500';
+    var _chartLimitMap = { '1m': 260, '3m': 240, '5m': 220, '15m': 220, '30m': 180, '1h': 160, '2h': 140, '4h': 120, '1d': 120 };
+    var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=' + (_chartLimitMap[currentInterval] || 220);
     fetch(url)
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
@@ -1211,8 +1220,10 @@
           window.BtcMarketClock.sync(Number(data.serverTime), 'klines-fetch-chart');
         }
 
-        var candles = data.candles || [];
+        var candles = _normalizeChartCandles(data.candles || []);
         if (!candles.length) return;
+
+        candlestickSeries.setData(chartStyle === 'candlestick' ? candles : candles.map(function (c) { return { time: c.time, value: c.close }; }));
 
         var last = candles[candles.length - 1];
         lastCandleTime = last.time * 1000;
@@ -1221,8 +1232,6 @@
         _startCountdown();
         _startAutoRefresh();
         _updateStats(candles);
-
-        candlestickSeries.setData(chartStyle === 'candlestick' ? candles : candles.map(function (c) { return { time: c.time, value: c.close }; }));
         _mainCandles = candles;
 
         // Point fantôme pour étendre le range autorisé par LWC
@@ -1447,7 +1456,8 @@
 
         var raw = data.candles || [];
         if (!raw.length) return;
-        var candles = raw.map(function (c) { return { time: Number(c.time), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close), volume: Number(c.volume) }; });
+        var candles = _normalizeChartCandles(raw);
+        if (!candles.length) return;
         var latest = candles[candles.length - 1];
         if (!latest || !latest.time) return;
         if (_mainCandles && _mainCandles.length > 0) {

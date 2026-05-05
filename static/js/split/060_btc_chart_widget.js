@@ -1092,7 +1092,8 @@
       var priceEl = document.getElementById('btcChartPrice');
       if (priceEl) priceEl.textContent = '$' + Number(last.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
 
-      S.candleSeries.setData(candles);
+      // DEBUG 060: attraper Value is null
+      try { S.candleSeries.setData(candles); } catch (e) { console.error('[DEBUG 060 setData] Value is null!', e.message, 'len:', candles.length, 'first3:', JSON.stringify(candles.slice(0,3))); var ok = candles.filter(function(c) { return c && c.time && c.open != null && c.high != null && c.low != null && c.close != null; }); if (ok.length) S.candleSeries.setData(ok); candles = ok; }
       _renderIndicators(candles);
 
       // VWAP — seulement sur init/user/timeframe (pas sur auto)

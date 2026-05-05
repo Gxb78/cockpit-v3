@@ -67,14 +67,34 @@ def _klines_purge():
             del _klines_cache[k]
 
 
-def _find_stale_klines_cache(symbol, interval):
-    """Cherche n'importe quel cache pour ce symbol+interval, meme limit different.
-    Retourne (response, ts) du plus recent, ou (None, None)."""
+def _cache_covers_range(resp, start_time, end_time):
+    """Verifie que le cache couvre bien la plage demandee."""
+    candles = resp.get("candles") or []
+    if not candles:
+        return False
+    first_ms = int(candles[0]["time"]) * 1000
+    last_ms = int(candles[-1]["time"]) * 1000
+    if start_time and first_ms > start_time:
+        return False
+    if end_time and last_ms < end_time - 60_000:
+        return False
+    return True
+
+
+def _find_stale_klines_cache(symbol, interval, requested_limit):
+    """Retourne un cache compatible avec la taille demandee.
+    Retourne (response, ts) du plus recent, ou (None, None).
+    Ne retourne jamais un mini-cache (limit=3) pour un full render."""
     prefix = f"{symbol}:{interval}:"
-    candidates = [
-        v for k, v in _klines_cache.items()
-        if k.startswith(prefix) and v.get("response", {}).get("candles")
-    ]
+    min_required = 2 if requested_limit <= 10 else min(30, max(10, requested_limit // 10))
+    candidates = []
+    for k, v in _klines_cache.items():
+        if not k.startswith(prefix):
+            continue
+        resp = v.get("response", {})
+        candles = resp.get("candles") or []
+        if len(candles) >= min_required:
+            candidates.append(v)
     if not candidates:
         return None, None
     candidates.sort(key=lambda x: x.get("ts", 0), reverse=True)
@@ -189,8 +209,11 @@ def fetch_klines(symbol, interval, limit, start_time=None, end_time=None, force=
                 resp["upstream_error"] = upstream_error
                 return resp, 200
             # Fallback large : n'importe quel cache pour ce symbol+interval
-            from_cache_fn, from_cache_ts = _find_stale_klines_cache(symbol, interval)
+            from_cache_fn, from_cache_ts = _find_stale_klines_cache(symbol, interval, limit)
             if from_cache_fn:
+                # Pour les requetes bornees (VWAP, etc.), verifier la couverture temporelle
+                if (start_time or end_time) and not _cache_covers_range(from_cache_fn, start_time, end_time):
+                    return err[0], err[1]
                 resp = copy.deepcopy(from_cache_fn)
                 resp["source"] = "cache"
                 resp.setdefault("cache", {})
