@@ -1121,3 +1121,13 @@ and return _empty_klines_response() with 200 instead. This prevents VWAP 502 fro
 the chart when Binance is unreachable for bounded queries.
 
 **Date**: 2026-05-05
+
+
+### BUG-20260505-02 - [RESOLU] Prix/countdown/timers perdus apres refactor _fetchAndRender
+
+- Symptome: Le prix BTC met du temps a s'afficher (attend le WS retarde de 700ms). Le countdown reste sur `—`. L'auto-refresh REST ne se declenche jamais.
+- Cause racine: Le refactor render/WS a supprime les side-effects critiques de `_fetchAndRender()` : mise a jour du prix DOM, `S.lastCandleTime`, `_updateCountdownAnchor`, `_startCountdown()`, `_startAutoRefresh()`, `countdownPriceLine.applyOptions`. Ces initialisations dependaient donc du WS (retarde 700ms) au lieu du REST fetch immediat.
+- Regle de prevention: Lors d'un refactor de fonction fetch/render, toujours verifier que les side-effects UI (prix, countdown, timers) sont preserves. Le WS est un relais live, pas la source initiale.
+- Test de non-regression: Charger le widget BTC -> le prix apparait des que `/api/market/klines` repond. Le countdown affiche un decompte, pas `—`. Changer de timeframe -> prix et countdown se mettent a jour immediatement (cache puis fetch).
+- Changement: Restauration des side-effects dans `_fetchAndRender()` (chemin cache + chemin reseau). `_fetchWidgetCandles` retourne `data` complet pour sync `BtcMarketClock` via `serverTime`.
+- Fichiers a surveiller: `static/js/split/060_btc_chart_widget.js` (`_fetchAndRender`, `_fetchWidgetCandles`).

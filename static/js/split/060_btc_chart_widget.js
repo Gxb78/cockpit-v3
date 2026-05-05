@@ -1019,8 +1019,7 @@
     var url = '/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=300&soft=1';
     var r = await fetch(url, { signal: signal });
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    var data = await r.json();
-    return data.candles || [];
+    return await r.json();
   }
 
   function _scheduleFetchAndRender(tf, source) {
@@ -1130,11 +1129,22 @@
       applyBtcWidgetBestView();
 
       var lastCached = cached[cached.length - 1];
-      var priceEl = document.getElementById('btcChartPrice');
-      if (priceEl && lastCached) {
-        priceEl.textContent = ' ' + Number(lastCached.close).toLocaleString('fr-FR', {
-          minimumFractionDigits: 2,
-        });
+      if (lastCached) {
+        S.lastCandleTime = lastCached.time * 1000;
+        _updateCountdownAnchor(lastCached, 'cache');
+
+        var priceEl = document.getElementById('btcChartPrice');
+        if (priceEl) {
+          priceEl.textContent = '$' + Number(lastCached.close).toLocaleString('fr-FR', {
+            minimumFractionDigits: 2,
+          });
+        }
+        if (S.countdownPriceLine) {
+          try { S.countdownPriceLine.applyOptions({ price: lastCached.close }); } catch(e) {}
+        }
+
+        _startCountdown();
+        _updateCountdownLabel();
       }
     }
 
@@ -1158,15 +1168,19 @@
     // On remplace les donnees seulement quand le nouveau fetch est pret.
 
     try {
-      var candles = await _fetchWidgetCandles(tf, S.fetchAbort.signal);
+      var data = await _fetchWidgetCandles(tf, S.fetchAbort.signal);
 
       if (token !== S.renderToken || tf !== S.timeframe) {
         console.warn('[BTC-WIDGET] stale render ignored after fetch', { token: token, tf: tf });
         return;
       }
 
-      candles = _normalizeCandles(candles);
+      var candles = _normalizeCandles(data.candles || []);
       if (candles.length < 2) return;
+
+      if (data.serverTime != null && window.BtcMarketClock && Number.isFinite(Number(data.serverTime))) {
+        window.BtcMarketClock.sync(Number(data.serverTime), 'klines-fetch-widget');
+      }
 
       _writeWidgetCache(tf, candles);
 
@@ -1183,6 +1197,25 @@
       if (token !== S.renderToken || tf !== S.timeframe) return;
 
       applyBtcWidgetBestView();
+
+      var last = candles[candles.length - 1];
+      S.lastCandleTime = last.time * 1000;
+      _updateCountdownAnchor(last, 'fetch');
+
+      var priceEl = document.getElementById('btcChartPrice');
+      if (priceEl) {
+        priceEl.textContent = '$' + Number(last.close).toLocaleString('fr-FR', {
+          minimumFractionDigits: 2,
+        });
+      }
+
+      if (S.countdownPriceLine) {
+        try { S.countdownPriceLine.applyOptions({ price: last.close }); } catch(e) {}
+      }
+
+      _startCountdown();
+      _startAutoRefresh();
+      _updateCountdownLabel();
 
       if (token !== S.renderToken || tf !== S.timeframe) return;
 
