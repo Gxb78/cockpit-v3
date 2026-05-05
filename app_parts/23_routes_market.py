@@ -69,16 +69,17 @@ def _klines_purge():
 
 def _find_stale_klines_cache(symbol, interval):
     """Cherche n'importe quel cache pour ce symbol+interval, meme limit different.
-    Retourne le response le plus recent, ou None."""
+    Retourne (response, ts) du plus recent, ou (None, None)."""
     prefix = f"{symbol}:{interval}:"
     candidates = [
         v for k, v in _klines_cache.items()
         if k.startswith(prefix) and v.get("response", {}).get("candles")
     ]
     if not candidates:
-        return None
+        return None, None
     candidates.sort(key=lambda x: x.get("ts", 0), reverse=True)
-    return copy.deepcopy(candidates[0]["response"])
+    best = candidates[0]
+    return copy.deepcopy(best["response"]), best.get("ts", 0)
 
 
 def _fetch_klines_page(url):
@@ -188,14 +189,14 @@ def fetch_klines(symbol, interval, limit, start_time=None, end_time=None, force=
                 resp["upstream_error"] = upstream_error
                 return resp, 200
             # Fallback large : n'importe quel cache pour ce symbol+interval
-            from_cache_fn = _find_stale_klines_cache(symbol, interval)
+            from_cache_fn, from_cache_ts = _find_stale_klines_cache(symbol, interval)
             if from_cache_fn:
                 resp = copy.deepcopy(from_cache_fn)
                 resp["source"] = "cache"
                 resp.setdefault("cache", {})
                 resp["cache"]["hit"] = True
                 resp["cache"]["stale"] = True
-                resp["cache"]["age"] = int(now - _time_mod.time())
+                resp["cache"]["age"] = int(now - from_cache_ts)
                 resp["upstream_error"] = upstream_error
                 return resp, 200
             # Sinon, propager l'erreur

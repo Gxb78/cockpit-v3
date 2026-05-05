@@ -12566,8 +12566,8 @@ TradeEditorController.renderHtml = function (day, trade) {
       try {
         var cachedRaw = sessionStorage.getItem('btcWidgetCandles:' + S.timeframe);
         if (cachedRaw) {
-          var cachedCandles = JSON.parse(cachedRaw);
-          if (Array.isArray(cachedCandles) && cachedCandles.length) {
+          var cachedCandles = _normalizeCandles(JSON.parse(cachedRaw));
+          if (cachedCandles && cachedCandles.length >= 2) {
             S.candleSeries.setData(cachedCandles);
             S.candles = cachedCandles;
             requestAnimationFrame(function () {
@@ -12591,7 +12591,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       S.candles = candles;
 
       // Cache en sessionStorage pour prochain reload
-      try { sessionStorage.setItem('btcWidgetCandles:' + S.timeframe, JSON.stringify(candles)); } catch(e) {}
+      try { if (candles && candles.length >= 2) { sessionStorage.setItem('btcWidgetCandles:' + S.timeframe, JSON.stringify(candles)); } } catch(e) {}
 
       _startCountdown();
       _startAutoRefresh();

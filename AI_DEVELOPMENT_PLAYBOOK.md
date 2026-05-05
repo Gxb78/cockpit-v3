@@ -1100,3 +1100,11 @@ Flask mono-thread → `app.js` (657 KB) reste en Pending → page noire sans dat
 **Actions:** renderInFlight bloque REST fallback pendant full fetch. sessionStorage cache immediat au reload. _clearAllSeries retire avant await. _find_stale_klines_cache() fallback par symbol+interval.
 
 **Regle:** Ne JAMAIS supprimer une declaration var sans verifier toutes ses utilisations dans la fonction. Un diff Git doit etre relu avant commit.
+
+### Lecon T-0008: Cache sessionStorage et stale cache age (5 mai 2026)
+
+**Probleme:** sessionStorage causait Value is null sur donnees corrompues. _find_stale_klines_cache calculait cache.age avec _time_mod.time() au lieu du ts du cache.
+
+**Actions:** _normalizeCandles avant setData + guard length >= 2. _find_stale_klines_cache retourne (response, ts), cache.age = int(now - from_cache_ts).
+
+**Regle:** Tout cache storage doit normaliser ses donnees avant usage. Toujours utiliser le vrai timestamp du cache pour calculer son age.
