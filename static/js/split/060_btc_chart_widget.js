@@ -874,34 +874,42 @@
     }, delay);
   }
 
-  function _upsertLiveCandle(candle) {
-    if (!candle || !Number.isFinite(candle.time)) return;
-    if (!Array.isArray(S.candles)) S.candles = [];
-    var last = S.candles[S.candles.length - 1];
-    if (last && last.time === candle.time) {
-      Object.assign(last, candle);
-    } else {
-      S.candles.push(candle);
-      if (S.candles.length > 300) S.candles = S.candles.slice(-300);
+  function _upsertLiveCandle(rawCandle) {
+    var normalized = _normalizeCandles([rawCandle]);
+    if (!normalized.length) {
+      console.warn('[BTC-WIDGET] invalid live candle ignored', { tf: S.timeframe, raw: rawCandle });
+      return false;
     }
+    var candle = normalized[0];
+    if (!Array.isArray(S.candles)) S.candles = [];
+    var idx = -1;
+    for (var i = S.candles.length - 1; i >= 0; i--) {
+      if (S.candles[i].time === candle.time) { idx = i; break; }
+    }
+    if (idx >= 0) { S.candles[idx] = candle; }
+    else { S.candles.push(candle); }
+    if (S.candles.length > 300) S.candles = S.candles.slice(-300);
+    return true;
   }
 
   function _handleWsMessage(raw) {
     var d = JSON.parse(raw), k = d && d.k;
     if (!k) return;
     var candle = { time: Math.floor(k.t / 1000), openTime: k.t, closeTime: k.T, open: parseFloat(k.o), high: parseFloat(k.h), low: parseFloat(k.l), close: parseFloat(k.c), volume: parseFloat(k.v) };
-    _upsertLiveCandle(candle);
+    var ok = _upsertLiveCandle(candle);
+    if (!ok) return;
+    var safeCandle = S.candles[S.candles.length - 1];
     var priceEl = document.getElementById('btcChartPrice');
-    if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
+    if (priceEl) priceEl.textContent = '$' + safeCandle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
     S.lastCandleTime = k.t;
 
     var eventMs = Number(d.E);
     if (window.BtcMarketClock && Number.isFinite(eventMs)) {
       window.BtcMarketClock.sync(eventMs, 'ws-event');
     }
-    _updateCountdownAnchor(candle, 'ws', Number.isFinite(eventMs) ? eventMs : undefined);
-    if (S.candleSeries) { try { S.candleSeries.update(candle); } catch(e) {} }
-    if (S.countdownPriceLine) { try { S.countdownPriceLine.applyOptions({ price: candle.close }); } catch(e) {} }
+    _updateCountdownAnchor(safeCandle, 'ws', Number.isFinite(eventMs) ? eventMs : undefined);
+    if (S.candleSeries) { try { S.candleSeries.update(safeCandle); } catch(e) {} }
+    if (S.countdownPriceLine) { try { S.countdownPriceLine.applyOptions({ price: safeCandle.close }); } catch(e) {} }
     _withProgrammaticRange(function () { maybeFollowBtcWidgetPriceY(); });
   }
 
