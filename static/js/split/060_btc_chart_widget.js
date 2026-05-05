@@ -1042,7 +1042,7 @@
 
       if (token !== S.renderToken || tf !== S.timeframe) return;
       _connectWs('idle-after-render', { token: token, tf: tf });
-    }, 700);
+    }, 1200);
   }
 
   function _scheduleVwapDraw(token, tf) {
@@ -1111,6 +1111,7 @@
     var i = 0;
     function next() {
       if (i >= tfs.length) return;
+      if (S.renderInFlight) { setTimeout(next, 1000); return; }
       var tf = tfs[i++];
       if (S.candleCache[_cacheKey(tf)]) { setTimeout(next, 250); return; }
 
@@ -1257,7 +1258,7 @@
 
       if (!S.didPrefetchTfs) {
         S.didPrefetchTfs = true;
-        _prefetchWidgetTimeframesIdle();
+        setTimeout(_prefetchWidgetTimeframesIdle, 3000);
       }
 
     } catch (e) {
