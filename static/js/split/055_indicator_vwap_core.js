@@ -113,6 +113,30 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
   }
 
   // â”€â”€ NORMALISATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  function _numRequired(v) {
+    if (v === null || v === undefined || v === '') return NaN;
+    var n = Number(v);
+    return Number.isFinite(n) ? n : NaN;
+  }
+
+  function _numOptional(v, fallback) {
+    if (v === null || v === undefined || v === '') return fallback;
+    var n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  function _numRequired(v) {
+    if (v === null || v === undefined || v === '') return NaN;
+    var n = Number(v);
+    return Number.isFinite(n) ? n : NaN;
+  }
+
+  function _numOptional(v, fallback) {
+    if (v === null || v === undefined || v === '') return fallback;
+    var n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
   function _normalizeTimeToSeconds(t) {
     if (t == null) return NaN;
     if (typeof t === 'number') return t > 1e12 ? Math.floor(t / 1000) : t;
@@ -124,23 +148,59 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
   }
 
   function normalizeCandlesForLwc(raw) {
-    return (raw || [])
-      .map(function (c) {
-        var rawTime = c.time != null ? c.time : (c.openTime != null ? c.openTime : c.t);
-        return {
-          time: _normalizeTimeToSeconds(rawTime),
-          open: Number(c.open),
-          high: Number(c.high),
-          low: Number(c.low),
-          close: Number(c.close),
-          volume: Number(c.volume),
-        };
-      })
-      .filter(function (c) {
-        return Number.isFinite(c.time) && Number.isFinite(c.open)
-          && Number.isFinite(c.high) && Number.isFinite(c.low)
-          && Number.isFinite(c.close);
-      })
+    var byTime = {};
+
+    (raw || []).forEach(function (c) {
+      if (!c) return;
+
+      var rawTime = c.time != null ? c.time : (c.openTime != null ? c.openTime : c.t);
+      var time = _normalizeTimeToSeconds(rawTime);
+
+      var open = _numRequired(c.open);
+      var high = _numRequired(c.high);
+      var low = _numRequired(c.low);
+      var close = _numRequired(c.close);
+      var volume = _numOptional(c.volume, 0);
+
+      if (!Number.isFinite(time) || time <= 0) return;
+      if (!Number.isFinite(open) || !Number.isFinite(high) || !Number.isFinite(low) || !Number.isFinite(close)) return;
+
+      if (high < low) return;
+      if (high < Math.max(open, close)) return;
+      if (low > Math.min(open, close)) return;
+
+      byTime[time] = {
+        time: time,
+        open: open,
+        high: high,
+        low: low,
+        close: close,
+        volume: volume,
+      };
+    });
+
+    return Object.keys(byTime)
+      .map(function (t) { return byTime[t]; })
+      .sort(function (a, b) { return a.time - b.time; });
+  }
+
+  function sanitizeLineData(points) {
+    var byTime = {};
+
+    (points || []).forEach(function (p) {
+      if (!p) return;
+
+      var time = Number(p.time);
+      var value = Number(p.value);
+
+      if (!Number.isFinite(time) || time <= 0) return;
+      if (!Number.isFinite(value)) return;
+
+      byTime[time] = { time: time, value: value };
+    });
+
+    return Object.keys(byTime)
+      .map(function (t) { return byTime[t]; })
       .sort(function (a, b) { return a.time - b.time; });
   }
 
@@ -297,6 +357,10 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
       lastValueVisible: true,
       autoscaleInfoProvider: function () { return null; },
     });
+        aligned = sanitizeLineData(aligned);
+    if (aligned.length < 2) return;
+        aligned = sanitizeLineData(aligned);
+    if (aligned.length < 2) return;
     s.setData(aligned);
   }
 
