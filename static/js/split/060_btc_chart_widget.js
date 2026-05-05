@@ -72,6 +72,7 @@
     fetchAbort: null,
     pendingRenderTimer: null,
     pendingWsTimer: null,
+    pendingVwapTimer: null,
     candleCache: {},
     // Resize
     resizeObserver: null,
@@ -1044,6 +1045,21 @@
     }, 700);
   }
 
+  function _scheduleVwapDraw(token, tf) {
+    if (S.pendingVwapTimer) clearTimeout(S.pendingVwapTimer);
+
+    S.pendingVwapTimer = setTimeout(function () {
+      S.pendingVwapTimer = null;
+
+      if (token !== S.renderToken || tf !== S.timeframe) return;
+      if (!S.activeVwapPeriods || !S.activeVwapPeriods.length) return;
+
+      _calcAndDrawVwap().catch(function (e) {
+        console.warn('[BTC-WIDGET] VWAP async render failed', e);
+      });
+    }, 350);
+  }
+
   function _cacheKey(tf) {
     return 'BTCUSDT:' + tf;
   }
@@ -1128,6 +1144,12 @@
       S.pendingWsTimer = null;
     }
 
+    // Annule la VWAP en attente
+    if (S.pendingVwapTimer) {
+      clearTimeout(S.pendingVwapTimer);
+      S.pendingVwapTimer = null;
+    }
+
     // Ferme le WS precedent AVANT de lancer le nouveau render
     _disconnectWs('render-start:' + tf);
 
@@ -1165,12 +1187,7 @@
       if (token !== S.renderToken || tf !== S.timeframe) return;
 
       if (S.activeVwapPeriods.length > 0) {
-        setTimeout(function () {
-          if (token !== S.renderToken || tf !== S.timeframe) return;
-          _calcAndDrawVwap().catch(function (e) {
-            console.warn('[BTC-WIDGET] VWAP async render failed', e);
-          });
-        }, 0);
+        _scheduleVwapDraw(token, tf);
       }
 
       if (token !== S.renderToken || tf !== S.timeframe) return;
