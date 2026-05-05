@@ -76,6 +76,7 @@
     candleCache: {},
     // Resize
     resizeObserver: null,
+    didPrefetchTfs: false,
   };
 
   // VWAP periods from localStorage
@@ -1102,6 +1103,33 @@
     } catch(e) {}
   }
 
+  function _prefetchWidgetTimeframesIdle() {
+    var tfs = ['5m', '15m', '30m', '1h', '4h', '1d'];
+    var current = S.timeframe;
+    tfs = tfs.filter(function (tf) { return tf !== current; });
+
+    var i = 0;
+    function next() {
+      if (i >= tfs.length) return;
+      var tf = tfs[i++];
+      if (S.candleCache[_cacheKey(tf)]) { setTimeout(next, 250); return; }
+
+      fetch('/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=300&soft=1')
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (data && data.candles) _writeWidgetCache(tf, data.candles);
+        })
+        .catch(function () {})
+        .then(function () { setTimeout(next, 250); });
+    }
+
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(next, { timeout: 3000 });
+    } else {
+      setTimeout(next, 1500);
+    }
+  }
+
   async function _fetchAndRender(source) {
     var token = ++S.renderToken;
     var tf = S.timeframe;
@@ -1160,9 +1188,6 @@
       clearTimeout(S.pendingVwapTimer);
       S.pendingVwapTimer = null;
     }
-
-    // Ferme le WS precedent AVANT de lancer le nouveau render
-    _disconnectWs('render-start:' + tf);
 
     // Ne pas vider les series pendant un changement rapide :
     // LWC peut encore avoir un render rAF en cours.
@@ -1229,6 +1254,11 @@
       if (token !== S.renderToken || tf !== S.timeframe) return;
 
       _scheduleWsConnect(token, tf);
+
+      if (!S.didPrefetchTfs) {
+        S.didPrefetchTfs = true;
+        _prefetchWidgetTimeframesIdle();
+      }
 
     } catch (e) {
       if (e && e.name === 'AbortError') return;
