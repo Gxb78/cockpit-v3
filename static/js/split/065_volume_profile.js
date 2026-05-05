@@ -23,6 +23,13 @@
     colorLvn: 'rgba(255,255,255,0.15)',
   };
 
+  // ── VP SOURCE CONFIG : interval + limit par période ──
+  var VP_SOURCE_CONFIG = {
+    day:   { interval: '15m', limit: 110 },
+    week:  { interval: '1h',  limit: 180 },
+    month: { interval: '4h',  limit: 220 },
+  };
+
   // ── STATE ──
   var state = {
     ctx: null,
@@ -33,6 +40,8 @@
     candles: [],
     settings: null,
     data: null,           // calculated VP data
+    vpCandles: {},        // cache per period (day, week, month)
+    vpFetchPending: {},   // prevent concurrent fetches
   };
 
   // ── INIT ──
@@ -212,15 +221,13 @@
   // ── CALCULATION ──
   function _calcVP() {
     if (!state.settings.active) { state.data = null; return; }
-    var candles = state.candles;
-    if (!candles || candles.length < 2) { state.data = null; return; }
-
     var s = state.settings;
-    var bucketSize = s.bucketSize;
 
-    // Filter candles by period
-    var filtered = _filterPeriod(candles, s.period);
+    // Get candles for the period (cached or empty if pending fetch)
+    var filtered = _getPeriodCandles(s.period);
     if (!filtered || filtered.length < 2) { state.data = null; return; }
+
+    var bucketSize = s.bucketSize;
 
     // Find price range
     var minPrice = Infinity, maxPrice = -Infinity;
@@ -318,6 +325,90 @@
     };
   }
 
+  // ── NORMALIZERS ──
+  function _numRequired(v) {
+    if (v === null || v === undefined || v === '') return NaN;
+    var n = Number(v);
+    return Number.isFinite(n) ? n : NaN;
+  }
+
+  function _numOptional(v, fallback) {
+    if (v === null || v === undefined || v === '') return fallback;
+    var n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  function _normalizeVpCandles(rows) {
+    return (rows || []).map(function (c) {
+      return {
+        time: _numRequired(c.time),
+        open: _numRequired(c.open),
+        high: _numRequired(c.high),
+        low: _numRequired(c.low),
+        close: _numRequired(c.close),
+        volume: _numOptional(c.volume, 0),
+      };
+    }).filter(function (c) {
+      return Number.isFinite(c.time)
+        && Number.isFinite(c.open)
+        && Number.isFinite(c.high)
+        && Number.isFinite(c.low)
+        && Number.isFinite(c.close)
+        && c.high >= c.low
+        && c.high >= Math.max(c.open, c.close)
+        && c.low <= Math.min(c.open, c.close);
+    }).sort(function (a, b) {
+      return a.time - b.time;
+    });
+  }
+
+  // ── PERIOD CANDLES (cache + fetch) ──
+  function _getPeriodCandles(period) {
+    if (period === 'visible') {
+      return state.candles;
+    }
+
+    var cached = state.vpCandles[period];
+    if (cached && cached.length >= 2) {
+      return cached;
+    }
+
+    // Trigger fetch if not already pending
+    _fetchVpCandles(period);
+
+    // Return empty until fetch completes
+    return [];
+  }
+
+  function _fetchVpCandles(period) {
+    var cfg = VP_SOURCE_CONFIG[period];
+    if (!cfg || state.vpFetchPending[period]) return;
+
+    state.vpFetchPending[period] = true;
+
+    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + encodeURIComponent(cfg.interval) 
+            + '&limit=' + cfg.limit + '&soft=1';
+
+    fetch(url)
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data || !data.candles) return;
+
+        var candles = _normalizeVpCandles(data.candles);
+        if (candles.length >= 2) {
+          state.vpCandles[period] = candles;
+          _calcVP();
+          _renderVP();
+        }
+      })
+      .catch(function (e) {
+        console.warn('[VP] fetch failed for period=' + period, e);
+      })
+      .finally(function () {
+        state.vpFetchPending[period] = false;
+      });
+  }
+
   function _filterPeriod(candles, period) {
     if (!candles || !candles.length) return null;
     if (period === 'visible') {
@@ -338,7 +429,7 @@
     for (var i = 0; i < candles.length; i++) {
       if (candles[i].time >= cutoff) result.push(candles[i]);
     }
-    return result.length >= 2 ? result : candles;
+    return result.length >= 2 ? result : [];
   }
 
   // ── RENDER ──
@@ -500,7 +591,7 @@
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.globalAlpha = 0.5;
-    var infoTxt = 'VP ' + vp.bucketSize + '$\xa0|\xa0' + vp.candleCount + ' candles';
+    var infoTxt = 'VP ' + s.period + ' | ' + vp.bucketSize + '$ | ' + vp.candleCount + ' candles';
     ctx.fillText(infoTxt, 6, 6);
     ctx.restore();
   }
