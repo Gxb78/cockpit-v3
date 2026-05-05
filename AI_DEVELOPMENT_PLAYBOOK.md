@@ -1108,3 +1108,16 @@ Flask mono-thread â†’ `app.js` (657 KB) reste en Pending â†’ page noir
 **Actions:** _normalizeCandles avant setData + guard length >= 2. _find_stale_klines_cache retourne (response, ts), cache.age = int(now - from_cache_ts).
 
 **Regle:** Tout cache storage doit normaliser ses donnees avant usage. Toujours utiliser le vrai timestamp du cache pour calculer son age.
+
+## T-0009: Stale cache for bounded requests must honor soft mode
+
+**Bug**: When a VWAP (or any bounded) request hits Binance error, the stale cache fallback
+_find_stale_klines_cache found a cache for the same symbol+interval, but _cache_covers_range
+rejected it because it didn't cover the requested time range. The code returned 502 (hard error)
+instead of honoring soft=1 and returning 200 with empty candles.
+
+**Fix**: Before returning err[0], err[1] (502) on bounded request cache miss, check if soft:
+and return _empty_klines_response() with 200 instead. This prevents VWAP 502 from breaking
+the chart when Binance is unreachable for bounded queries.
+
+**Date**: 2026-05-05

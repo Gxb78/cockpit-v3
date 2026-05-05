@@ -263,6 +263,8 @@ def fetch_klines(symbol, interval, limit, start_time=None, end_time=None, force=
             if from_cache_fn:
                 # Pour les requetes bornees (VWAP, etc.), verifier la couverture temporelle
                 if (start_time or end_time) and not _cache_covers_range(from_cache_fn, start_time, end_time):
+                    if soft:
+                        return _empty_klines_response(symbol, interval, upstream_error), 200
                     return err[0], err[1]
                 resp = copy.deepcopy(from_cache_fn)
                 resp["source"] = "cache"
