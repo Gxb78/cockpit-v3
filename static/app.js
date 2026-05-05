@@ -13935,7 +13935,7 @@ TradeEditorController.renderHtml = function (day, trade) {
           '<div class="chart-settings-label">' +
             '<span class="chart-session-dot" style="background:' + sess.color + '"></span> ' +
             '<span>' + sess.name + '</span>' +
-            '<span class="chart-session-hours">' + sess.startHour + 'h–' + sess.endHour + 'h UTC</span>' +
+            '<span class="chart-session-hours">' + sess.timezone + ' ' + sess.start + '–' + sess.end + '</span>' +
           '</div>' +
           '<div class="chart-settings-controls">' +
             '<input type="color" class="chart-settings-color chart-session-color" data-sess-id="' + sess.id + '" value="' + sess.color + '">' +
@@ -14011,9 +14011,10 @@ TradeEditorController.renderHtml = function (day, trade) {
         // Reset sessions to defaults
         if (window.ChartDrawings) {
           var defaultSess = [
-            { id: 'asian', name: 'Asie', startHour: 0, endHour: 8, color: '#ffdd00', active: true, opacity: 0.12 },
-            { id: 'london', name: 'Londres', startHour: 8, endHour: 16, color: '#0066ff', active: true, opacity: 0.12 },
-            { id: 'newyork', name: 'New York', startHour: 13, endHour: 22, color: '#ff0066', active: true, opacity: 0.12 },
+            { id: 'asian', name: 'Asie',      timezone: 'Asia/Tokyo',        start: '09:00', end: '15:00', color: '#ffdd00', active: true, opacity: 0.12 },
+            { id: 'london', name: 'Londres',   timezone: 'Europe/London',     start: '08:00', end: '16:30', color: '#0066ff', active: true, opacity: 0.12 },
+            { id: 'ny_rth', name: 'NY RTH',    timezone: 'America/New_York', start: '09:30', end: '16:00', color: '#ff0066', active: true, opacity: 0.12 },
+            { id: 'ny_ext', name: 'NY Ext',    timezone: 'America/New_York', start: '08:00', end: '17:00', color: '#ff7733', active: false, opacity: 0.08 },
           ];
           window.ChartDrawings.updateSessions(defaultSess);
         }
@@ -14800,15 +14801,66 @@ TradeEditorController.renderHtml = function (day, trade) {
   var MAX_UNDO = 30;
 
   // ── SESSION PRESETS ──
-  // Hours in UTC, startHour < endHour = within same day, startHour > endHour = spans midnight
+  // Chaque session définit ses horaires en heure locale du marché.
+  // timezone = fuseau horaire IANA (ex: 'America/New_York')
+  // start/end = heures locales au format 'HH:MM'
+  // Le rendu convertit automatiquement en UTC selon la date affichée,
+  // ce qui gère correctement les passages à l'heure d'été (DST).
   var SESSION_PRESETS = [
-    { id: 'asian',     name: 'Asie',      startHour: 0,  endHour: 8,  color: '#ffdd00', active: true,  opacity: 0.12 },
-    { id: 'london',    name: 'Londres',   startHour: 8,  endHour: 16, color: '#0066ff', active: true,  opacity: 0.12 },
-    { id: 'newyork',   name: 'New York',  startHour: 13, endHour: 22, color: '#ff0066', active: true,  opacity: 0.12 },
+    { id: 'asian',     name: 'Asie',      timezone: 'Asia/Tokyo',          start: '09:00', end: '15:00', color: '#ffdd00', active: true,  opacity: 0.12 },
+    { id: 'london',    name: 'Londres',   timezone: 'Europe/London',       start: '08:00', end: '16:30', color: '#0066ff', active: true,  opacity: 0.12 },
+    { id: 'ny_rth',    name: 'NY RTH',    timezone: 'America/New_York',   start: '09:30', end: '16:00', color: '#ff0066', active: true,  opacity: 0.12 },
+    { id: 'ny_ext',    name: 'NY Ext',    timezone: 'America/New_York',   start: '08:00', end: '17:00', color: '#ff7733', active: false, opacity: 0.08 },
   ];
 
   var SESSION_STORAGE_KEY = 'chartSessionSettings';
   // ── / SESSION PRESETS
+
+  // ── TIMEZONE HELPERS ──
+  // Calcule le décalage UTC (en minutes) d'une timezone pour une date donnée.
+  // Utilise Intl.DateTimeFormat.formatToParts — fiable sur tous les navigateurs modernes.
+  function _getTzOffsetMinutes(dateMs, timezone) {
+    try {
+      var parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: timezone,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false,
+      }).formatToParts(new Date(dateMs));
+      var v = {};
+      for (var pi = 0; pi < parts.length; pi++) { v[parts[pi].type] = parts[pi].value; }
+      var tzDate = Date.UTC(
+        parseInt(v.year), parseInt(v.month) - 1,
+        parseInt(v.day), parseInt(v.hour),
+        parseInt(v.minute), parseInt(v.second)
+      );
+      return Math.round((tzDate - dateMs) / 60000);
+    } catch (e) { return 0; }
+  }
+
+  // Convertit les horaires locaux d'une session en secondes UTC pour un jour donné.
+  // dayUtcSeconds = minuit UTC du jour (timestamp en secondes)
+  // Retourne { startUtcSeconds, endUtcSeconds }
+  function _getSessionUtcRangeForChartDay(dayUtcSeconds, session) {
+    var dateMs = dayUtcSeconds * 1000;
+    var offsetMinutes = _getTzOffsetMinutes(dateMs, session.timezone);
+
+    var startP = session.start.split(':');
+    var endP = session.end.split(':');
+    var startLocalMin = parseInt(startP[0]) * 60 + parseInt(startP[1]);
+    var endLocalMin = parseInt(endP[0]) * 60 + parseInt(endP[1]);
+
+    var startUtc = dayUtcSeconds + (startLocalMin - offsetMinutes) * 60;
+    var endUtc = dayUtcSeconds + (endLocalMin - offsetMinutes) * 60;
+
+    // Gérer les sessions qui traversent minuit (start > end)
+    if (endUtc <= startUtc) {
+      endUtc += 86400;
+    }
+
+    return { startUtcSeconds: startUtc, endUtcSeconds: endUtc };
+  }
+  // ── / TIMEZONE HELPERS
 
   // ── STATE ──
 
@@ -15034,6 +15086,34 @@ TradeEditorController.renderHtml = function (day, trade) {
       var r = localStorage.getItem(SESSION_STORAGE_KEY);
       if (r) {
         var saved = JSON.parse(r);
+
+        // Migration : détecter l'ancien format (startHour/endHour) et le convertir
+        var needsMigration = saved.length > 0 && saved[0].startHour !== undefined;
+        if (needsMigration) {
+          var OLD_TO_NEW = {
+            'asian':   { timezone: 'Asia/Tokyo',        start: '09:00', end: '15:00' },
+            'london':  { timezone: 'Europe/London',     start: '08:00', end: '16:30' },
+            'newyork': { timezone: 'America/New_York',  start: '09:30', end: '16:00' },
+          };
+          var OLD_ID_MAP = { 'newyork': 'ny_rth' };
+          saved = saved.map(function (old) {
+            var preset = OLD_TO_NEW[old.id];
+            if (!preset) return old; // unknown, keep as-is
+            return {
+              id: OLD_ID_MAP[old.id] || old.id,
+              name: old.name,
+              timezone: preset.timezone,
+              start: preset.start,
+              end: preset.end,
+              color: old.color || '#ff0066',
+              active: old.active !== false,
+              opacity: old.opacity != null ? old.opacity : 0.12,
+            };
+          });
+          // Sauvegarder au nouveau format immédiatement
+          try { localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(saved)); } catch(e) {}
+        }
+
         // Merge with presets: keep saved if exists, fallback to preset defaults
         state.sessions = SESSION_PRESETS.map(function (preset) {
           var existing = null;
@@ -16036,17 +16116,12 @@ TradeEditorController.renderHtml = function (day, trade) {
       if (!session.active) continue;
 
       for (var t = dayStart; t < dayEnd; t += 86400) {
-        var sStart = t + session.startHour * 3600;
-        var sEnd = t + session.endHour * 3600;
-
-        // Handle midnight-spanning sessions (e.g. 22:00-08:00)
-        if (session.startHour > session.endHour) {
-          sEnd += 86400;
-        }
+        // Convertir les horaires locaux en UTC pour ce jour précis
+        var range = _getSessionUtcRangeForChartDay(t, session);
 
         // Clip to visible range
-        var clipStart = Math.max(sStart, from);
-        var clipEnd = Math.min(sEnd, to);
+        var clipStart = Math.max(range.startUtcSeconds, from);
+        var clipEnd = Math.min(range.endUtcSeconds, to);
         if (clipStart >= clipEnd) continue;
 
         var x1 = state.chart.timeScale().timeToCoordinate(clipStart);

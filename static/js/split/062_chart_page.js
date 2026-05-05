@@ -1043,7 +1043,7 @@
           '<div class="chart-settings-label">' +
             '<span class="chart-session-dot" style="background:' + sess.color + '"></span> ' +
             '<span>' + sess.name + '</span>' +
-            '<span class="chart-session-hours">' + sess.startHour + 'h–' + sess.endHour + 'h UTC</span>' +
+            '<span class="chart-session-hours">' + sess.timezone + ' ' + sess.start + '–' + sess.end + '</span>' +
           '</div>' +
           '<div class="chart-settings-controls">' +
             '<input type="color" class="chart-settings-color chart-session-color" data-sess-id="' + sess.id + '" value="' + sess.color + '">' +
@@ -1119,9 +1119,10 @@
         // Reset sessions to defaults
         if (window.ChartDrawings) {
           var defaultSess = [
-            { id: 'asian', name: 'Asie', startHour: 0, endHour: 8, color: '#ffdd00', active: true, opacity: 0.12 },
-            { id: 'london', name: 'Londres', startHour: 8, endHour: 16, color: '#0066ff', active: true, opacity: 0.12 },
-            { id: 'newyork', name: 'New York', startHour: 13, endHour: 22, color: '#ff0066', active: true, opacity: 0.12 },
+            { id: 'asian', name: 'Asie',      timezone: 'Asia/Tokyo',        start: '09:00', end: '15:00', color: '#ffdd00', active: true, opacity: 0.12 },
+            { id: 'london', name: 'Londres',   timezone: 'Europe/London',     start: '08:00', end: '16:30', color: '#0066ff', active: true, opacity: 0.12 },
+            { id: 'ny_rth', name: 'NY RTH',    timezone: 'America/New_York', start: '09:30', end: '16:00', color: '#ff0066', active: true, opacity: 0.12 },
+            { id: 'ny_ext', name: 'NY Ext',    timezone: 'America/New_York', start: '08:00', end: '17:00', color: '#ff7733', active: false, opacity: 0.08 },
           ];
           window.ChartDrawings.updateSessions(defaultSess);
         }
