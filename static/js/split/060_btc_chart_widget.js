@@ -69,6 +69,7 @@
     FETCH_COOLDOWN_MS: 5000,
     firstFetchMs: 0,
     liveYSuppressUntil: 0,
+    renderInFlight: false,
     // Resize
     resizeObserver: null,
   };
@@ -667,6 +668,9 @@
         var nowMs = window.BtcMarketClock ? window.BtcMarketClock.now() : Date.now();
         var estimated = intervalMs ? intervalMs - (nowMs % intervalMs) : 0;
         _updateCountdownLabel(estimated > 0 ? _formatCountdown(estimated) : '—');
+
+        if (S.renderInFlight) return;
+
         var clockReady = window.BtcMarketClock && window.BtcMarketClock.isSynced && window.BtcMarketClock.isSynced();
         if (S.chartReady && clockReady && !S.wsConnected && Date.now() - (S.lastCountdownFetchAt || 0) > 5000) {
           S.lastCountdownFetchAt = Date.now();
@@ -699,6 +703,7 @@
     var interval = Math.min(60000, Math.max(15000, Math.floor(ms / 4)));
     S.refreshTimer = setInterval(function () {
       if (!S.chartReady) return;
+      if (S.renderInFlight) return;
       if (!S.countdownAnchor) return;
       // Si WS fonctionne, pas besoin de REST refresh
       if (S.wsConnected && !S.wsError) return;
@@ -711,8 +716,8 @@
 
   // REST fallback léger — update la dernière bougie, pas de full render
   function _fetchLatestCandleOnly() {
+    if (S.renderInFlight) return Promise.resolve();
     var token = S.renderToken;
-    var tf = S.timeframe;
     return fetch('/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=3')
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
@@ -1030,6 +1035,7 @@
   async function _fetchAndRender(keepZoom, _source) {
     if (!S.candleSeries) return;
     var token = ++S.renderToken;
+    S.renderInFlight = true;
     console.log('[BTC-WIDGET] render start token=', token, 'tf=', S.timeframe, 'source=', _source);
 
     // Reset live state au chargement (follow ON)
@@ -1038,7 +1044,7 @@
     // Debounce auto-refresh
     if (_source !== 'user') {
       var now = Date.now();
-      if (S.lastFetchTs && (now - S.lastFetchTs) < S.FETCH_COOLDOWN_MS) return;
+      if (S.lastFetchTs && (now - S.lastFetchTs) < S.FETCH_COOLDOWN_MS) { S.renderInFlight = (token === S.renderToken) ? false : S.renderInFlight; return; }
       S.lastFetchTs = now;
     }
     if (!S.firstFetchMs) S.firstFetchMs = Date.now();
@@ -1047,7 +1053,23 @@
     var shouldResetWs = _source === 'init' || _source === 'user' || _source === 'timeframe';
     if (shouldResetWs) _disconnectWs('render:' + _source);
 
-    _clearAllSeries();
+    // Cache sessionStorage : affiche les dernieres bougies immediatement
+    if (keepZoom === false) {
+      try {
+        var cachedRaw = sessionStorage.getItem('btcWidgetCandles:' + S.timeframe);
+        if (cachedRaw) {
+          var cachedCandles = JSON.parse(cachedRaw);
+          if (Array.isArray(cachedCandles) && cachedCandles.length) {
+            S.candleSeries.setData(cachedCandles);
+            S.candles = cachedCandles;
+            requestAnimationFrame(function () {
+              if (token !== S.renderToken) return;
+              _withProgrammaticRange(function () { applyBtcWidgetBestView(); });
+            });
+          }
+        }
+      } catch(e) {}
+    }
 
     try {
       var candles = await _fetchWidgetCandles(S.timeframe);
@@ -1059,6 +1081,9 @@
       S.lastCandleTime = candleTimeMs;
       _updateCountdownAnchor(last, 'fetch');
       S.candles = candles;
+
+      // Cache en sessionStorage pour prochain reload
+      try { sessionStorage.setItem('btcWidgetCandles:' + S.timeframe, JSON.stringify(candles)); } catch(e) {}
 
       _startCountdown();
       _startAutoRefresh();
@@ -1101,15 +1126,16 @@
       if (S.candles && S.candles.length) {
         S.chartReady = true;
         _updateCountdownLabel('—');
-        return;
-      }
-
-      // Premier chargement sans cache : afficher etat erreur
-      if (!S.chartReady) {
+      } else if (!S.chartReady) {
+        // Premier chargement sans cache : afficher etat erreur
         var container = document.getElementById('btcChartContainer');
         if (container) container.innerHTML = '<div class="chart-error-state">'
           + '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
           + '<div>Marche indisponible</div><span>API Binance injoignable</span></div>';
+      }
+    } finally {
+      if (token === S.renderToken) {
+        S.renderInFlight = false;
       }
     }
   }

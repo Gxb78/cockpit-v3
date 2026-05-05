@@ -1388,7 +1388,7 @@
         var nowMs = window.BtcMarketClock ? window.BtcMarketClock.now() : Date.now();
         var estimated = intervalMs ? intervalMs - (nowMs % intervalMs) : 0;
         _updateCountdownLabel(estimated > 0 ? _formatCountdown(estimated) : '—');
-        if (chartReady && clockSynced && !wsConnected && Date.now() - (lastCountdownFetchAt || 0) > 5000) {
+        if (chartReady && clockSynced && !_isFetching && !wsConnected && Date.now() - (lastCountdownFetchAt || 0) > 5000) {
           lastCountdownFetchAt = Date.now();
           _fetchLatestCandleOnly();
         }
@@ -1421,6 +1421,7 @@
     var interval = Math.min(60000, Math.max(15000, Math.floor(ms / 4)));
     refreshTimer = setInterval(function () {
       if (!chart || !candlestickSeries) return;
+      if (_isFetching) return;
       if (!countdownAnchor) return;
       if (wsConnected && !wsError) return;
       var elapsed = performance.now() - countdownAnchor.perfAtAnchor;
@@ -1431,6 +1432,7 @@
 
   // ── REST FALLBACK LÉGER ──
   function _fetchLatestCandleOnly() {
+    if (_isFetching) return Promise.resolve();
     var interval = currentInterval;
     var sym = currentSymbol;
     var url = '/api/market/klines?symbol=' + sym + '&interval=' + interval + '&limit=3';
