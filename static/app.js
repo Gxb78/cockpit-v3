@@ -11615,8 +11615,11 @@ TradeEditorController.renderHtml = function (day, trade) {
   function _normalizeCandles(rows) {
     return (rows || []).map(function (c) { return {
       time: Number(c.time), open: Number(c.open), high: Number(c.high),
-      low: Number(c.low), close: Number(c.close), volume: Number(c.volume),
-    }; }).filter(function (c) { return Number.isFinite(c.time) && Number.isFinite(c.open) && Number.isFinite(c.close); });
+      low: Number(c.low), close: Number(c.close), volume: Number(c.volume || 0),
+    }; }).filter(function (c) {
+      return Number.isFinite(c.time) && Number.isFinite(c.open) && Number.isFinite(c.high) &&
+        Number.isFinite(c.low) && Number.isFinite(c.close) && c.high >= c.low;
+    });
   }
 
   function _waitFrame() {
