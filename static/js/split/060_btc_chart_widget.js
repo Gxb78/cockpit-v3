@@ -1107,9 +1107,16 @@
       try { S.candleSeries.setData(candles); } catch (e) { console.error('[DEBUG 060 setData] Value is null!', e.message, 'len:', candles.length, 'first3:', JSON.stringify(candles.slice(0,3))); var ok = candles.filter(function(c) { return c && c.time && c.open != null && c.high != null && c.low != null && c.close != null; }); if (ok.length) S.candleSeries.setData(ok); candles = ok; }
       _renderIndicators(candles);
 
-      // VWAP — seulement sur init/user/timeframe (pas sur auto)
+      // VWAP — lance en differe, ne bloque pas le premier affichage
       if (S.activeVwapPeriods.length > 0 && shouldResetWs) {
-        _calcAndDrawVwap().finally(function () {});
+        var renderToken = S.renderToken;
+        var renderTf = S.timeframe;
+        setTimeout(function () {
+          if (renderToken !== S.renderToken || renderTf !== S.timeframe) return;
+          _calcAndDrawVwap().catch(function (e) {
+            console.warn('[BTC-WIDGET] VWAP async render failed', e);
+          });
+        }, 0);
       }
 
       // WS : connecter APRES setData
