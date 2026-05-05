@@ -1123,6 +1123,24 @@ the chart when Binance is unreachable for bounded queries.
 **Date**: 2026-05-05
 
 
+### Lecon T-0009: Cache SQLite historique klines — pagination Binance (5 mai 2026)
+
+**Problème:** Pour le Volume Profile longue durée (90D, 366D), on avait besoin de 2000+ candles par intervalle. L'endpoint `/api/market/klines` limité à `limit=1000` ne pouvait pas servir ces périodes en un seul appel. Le frontend bricolait avec des `limit` approximatives.
+
+**Solution:** Nouveau module `app_parts/24_market_history_cache.py`:
+- Table SQLite `market_klines(symbol, interval, time, open, high, low, close, volume)` avec PK composite
+- Endpoint `GET /api/market/klines/history?symbol=&interval=&days=` 
+- Si le cache SQLite couvre la période (tolérance 2 intervalles pour bougie courante), retour direct depuis SQLite
+- Sinon, pagination Binance avec `startTime` (pas de `limit=1000`), upsert `INSERT OR IGNORE`, puis retour depuis SQLite
+- Réutilisation des helpers existants : `_normalize_candle()`, `_interval_to_ms()`, `_fetch_klines_page()` du namespace partagé (23_routes_market.py)
+
+**Règle:** Ne jamais paginer depuis le frontend. Le backend doit gérer l'historique, la pagination et le cache. Le frontend demande juste une période (`days`). Pour les gros volumes (366D/4h = 9 pages Binance), le cache SQLite rend le second appel instantané.
+
+**Test de validation:** `curl http://127.0.0.1:5000/api/market/klines/history?symbol=BTCUSDT&interval=4h&days=366` → 2196 candles en 1.8s (binance+sqlite), puis 0.0s (sqlite seul).
+
+**Fichiers à surveiller:** `app_parts/24_market_history_cache.py`, `app_parts/__init__.py` (ordre de chargement), `data/journal.db` (table market_klines).
+
+
 ### BUG-20260505-02 - [RESOLU] Prix/countdown/timers perdus apres refactor _fetchAndRender
 
 - Symptome: Le prix BTC met du temps a s'afficher (attend le WS retarde de 700ms). Le countdown reste sur `—`. L'auto-refresh REST ne se declenche jamais.
