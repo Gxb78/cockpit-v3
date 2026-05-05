@@ -1,13 +1,13 @@
-// ---------- VWAP Core — Canonical source, stable by design ----------
+// ---------- VWAP Core â€” Canonical source, stable by design ----------
 // Module unique pour 060 (widget BTC) et 062 (chart page).
-// Règle absolue : VWAP ne dépend JAMAIS du timeframe affiché.
+// RÃ¨gle absolue : VWAP ne dÃ©pend JAMAIS du timeframe affichÃ©.
 // Le chart choisit juste comment AFFICHER, pas comment CALCULER.
 //
 // Architecture:
-//   VWAP_SOURCE_CONFIG  → source canonique fixe par période
-//   getCanonicalVwap()  → cache global + pending dedup
-//   alignIndicatorToCandles() → alignement vers les bougies du chart
-//   drawVwapForChart()  → helper haut niveau pour 060/062
+//   VWAP_SOURCE_CONFIG  â†’ source canonique fixe par pÃ©riode
+//   getCanonicalVwap()  â†’ cache global + pending dedup
+//   alignIndicatorToCandles() â†’ alignement vers les bougies du chart
+//   drawVwapForChart()  â†’ helper haut niveau pour 060/062
 
 window.BtcMarketClock = window.BtcMarketClock || (function () {
   var _offsetMs = 0;
@@ -34,12 +34,12 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
 
 (function () {
 
-  // ── CONFIG CANONIQUE ──────────────────────────────────────
-  // Indépendante du timeframe actif du chart.
-  // Chaque période a une source stable, prévisible, rapide.
+  // â”€â”€ CONFIG CANONIQUE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // IndÃ©pendante du timeframe actif du chart.
+  // Chaque pÃ©riode a une source stable, prÃ©visible, rapide.
   // Modes :
-  //   'rolling' → fenêtre glissante de durationMs depuis endTime
-  //   'session' → session calendaire (UTC_DAY, NY_DAY)
+  //   'rolling' â†’ fenÃªtre glissante de durationMs depuis endTime
+  //   'session' â†’ session calendaire (UTC_DAY, NY_DAY)
   var VWAP_SOURCE_CONFIG = {
     'D-NY': { mode: 'session', session: 'NY_DAY', interval: '15m', limit: 110, refreshMs: 60000 },
     '24H':  { mode: 'rolling', durationMs: 24 * 60 * 60 * 1000, interval: '15m', limit: 110, refreshMs: 60000 },
@@ -52,7 +52,7 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
     'D-NY': '#f59e0b', '24H': '#eab308', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6',
   };
 
-  // ── BORNES TEMPORELLES ────────────────────────────────────
+  // â”€â”€ BORNES TEMPORELLES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function _getUtcDayBounds(nowMs) {
     var d = new Date(nowMs);
     var start = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0);
@@ -73,11 +73,11 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
       }
       if (config.session === 'NY_DAY') {
         // NY day: 00:00 America/New_York
-        // En UTC, NY = UTC-5 (EST) ou UTC-4 (EDT, mars à novembre)
-        // Approximation: on calcule via Date locale du navigateur… pas idéal
-        // Phase 1: on délègue le calcul au backend si possible, sinon frontend approximatif
+        // En UTC, NY = UTC-5 (EST) ou UTC-4 (EDT, mars Ã  novembre)
+        // Approximation: on calcule via Date locale du navigateurâ€¦ pas idÃ©al
+        // Phase 1: on dÃ©lÃ¨gue le calcul au backend si possible, sinon frontend approximatif
         var d = new Date(nowMs);
-        // EST/EDT simplifié: 2e dimanche de mars → 1er dimanche de novembre = EDT (-4)
+        // EST/EDT simplifiÃ©: 2e dimanche de mars â†’ 1er dimanche de novembre = EDT (-4)
         var year = d.getUTCFullYear();
         var marStart = Date.UTC(year, 2, 8); // 8 mars
         var marDst = marStart - ((new Date(marStart)).getUTCDay() * 86400000);
@@ -104,15 +104,15 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
     return m[interval] || 3600000;
   }
 
-  // endTime fixé sur la dernière bougie FERMÉE de l'intervalle source
-  // garanti identique entre deux appels à quelques ms d'écart
+  // endTime fixÃ© sur la derniÃ¨re bougie FERMÃ‰E de l'intervalle source
+  // garanti identique entre deux appels Ã  quelques ms d'Ã©cart
   function _getLastClosedCandleEndTime(interval, now) {
     now = now || Date.now();
     var ms = _intervalToMs(interval);
     return Math.floor(now / ms) * ms - 1;
   }
 
-  // ── NORMALISATION ─────────────────────────────────────────
+  // â”€â”€ NORMALISATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function _normalizeTimeToSeconds(t) {
     if (t == null) return NaN;
     if (typeof t === 'number') return t > 1e12 ? Math.floor(t / 1000) : t;
@@ -144,7 +144,7 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
       .sort(function (a, b) { return a.time - b.time; });
   }
 
-  // ── CALCUL VWAP ───────────────────────────────────────────
+  // â”€â”€ CALCUL VWAP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Cumul strict : typicalPrice * volume, running average
   function computeVwapSeries(candles) {
     var cumPV = 0, cumVol = 0, out = [];
@@ -160,9 +160,9 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
     return out;
   }
 
-  // ── FETCH KLINES ──────────────────────────────────────────
+  // â”€â”€ FETCH KLINES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function _fetchKlines(symbol, interval, startTime, endTime, limit) {
-    var params = 'symbol=' + symbol + '&interval=' + interval + '&limit=' + limit;
+    var params = 'symbol=' + symbol + '&interval=' + interval + '&limit=' + limit + '&soft=1';
     if (startTime) params += '&startTime=' + startTime;
     if (endTime) params += '&endTime=' + endTime;
     return fetch('/api/market/klines?' + params)
@@ -206,7 +206,7 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
     return computeVwapSeries(candles);
   }
 
-  // ── CACHE GLOBAL ──────────────────────────────────────────
+  // â”€â”€ CACHE GLOBAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   var _cache = {};
   var _pending = {};
 
@@ -225,7 +225,7 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
       return cached.data;
     }
 
-    // Évite les doubles fetchs simultanés (widget + chart page)
+    // Ã‰vite les doubles fetchs simultanÃ©s (widget + chart page)
     if (_pending[key]) {
       return _pending[key];
     }
@@ -235,6 +235,11 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
         _cache[key] = { createdAt: Date.now(), data: data };
         return data;
       })
+      .catch(function (e) {
+        console.warn("[VWAP] canonical fetch failed", period, e);
+        if (cached && cached.data) return cached.data;
+        return [];
+      })
       .finally(function () {
         delete _pending[key];
       });
@@ -243,10 +248,10 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
     return promise;
   }
 
-  // ── ALIGNEMENT ────────────────────────────────────────────
+  // â”€â”€ ALIGNEMENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Transforme les points VWAP canoniques pour qu'ils aient les
   // timestamps des bougies du chart actif.
-  // Le temps du point canonique est préservé (time: candle.time)
+  // Le temps du point canonique est prÃ©servÃ© (time: candle.time)
   function alignIndicatorToCandles(indicatorPoints, candles) {
     if (!indicatorPoints || !indicatorPoints.length || !candles || !candles.length) return [];
 
@@ -259,7 +264,7 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
 
     for (var ci = 0; ci < candles.length; ci++) {
       var t = candles[ci].time;
-      // Avancer j jusqu'au dernier point ≤ candle.time
+      // Avancer j jusqu'au dernier point â‰¤ candle.time
       while (j + 1 < sorted.length && sorted[j + 1].time <= t) j++;
       var p = sorted[j];
       if (p && p.time <= t) {
@@ -269,8 +274,8 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
     return out;
   }
 
-  // ── DRAW HIGH-LEVEL ───────────────────────────────────────
-  // Helper pour 060 et 062 — fetch le VWAP canonique, aligne, setData
+  // â”€â”€ DRAW HIGH-LEVEL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Helper pour 060 et 062 â€” fetch le VWAP canonique, aligne, setData
   async function drawVwapForChart(state, period, shouldAbort) {
     // state doit avoir: symbol, candles, vwapSeriesMap
     var canonicalVwap = await getCanonicalVwap(state.symbol || 'BTCUSDT', period);
@@ -295,7 +300,7 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
     s.setData(aligned);
   }
 
-  // ── EVENT BUS VWAP — normalisation + synchro cross-component ──
+  // â”€â”€ EVENT BUS VWAP â€” normalisation + synchro cross-component â”€â”€
   function normalizeVwapPeriods(periods) {
     var legacyMap = { '1D': 'D-NY' };
     var seen = {};
@@ -328,7 +333,7 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
     return normalized;
   }
 
-  // ── EXPOSE ────────────────────────────────────────────────
+  // â”€â”€ EXPOSE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   window.BtcVwap = {
     VWAP_SOURCE_CONFIG: VWAP_SOURCE_CONFIG,
     VWAP_COLORS: VWAP_COLORS,

@@ -11,7 +11,15 @@ import json as _json
 import time as _time_mod
 import copy
 
-BINANCE_API = "https://api.binance.com"
+BINANCE_BASE_URLS = [
+    "https://api.binance.com",
+    "https://data-api.binance.vision",
+    "https://api1.binance.com",
+    "https://api2.binance.com",
+    "https://api3.binance.com",
+    "https://api4.binance.com",
+]
+BINANCE_API = BINANCE_BASE_URLS[0]
 MAX_PER_REQUEST = 1000
 MAX_TOTAL_TRADES = 8000
 _MAX_PAGES = 8
@@ -48,6 +56,64 @@ def fetch_binance_server_time():
         return server_time
     except Exception:
         return None
+
+
+def _empty_klines_response(symbol, interval, upstream_error=None):
+    return {
+        "symbol": symbol,
+        "interval": interval,
+        "candles": [],
+        "serverTime": fetch_binance_server_time(),
+        "source": "unavailable",
+        "cache": {
+            "hit": False,
+            "stale": False,
+            "age": 0,
+            "ttl": _KLINES_CACHE_TTL,
+        },
+        "upstream_error": upstream_error,
+    }
+
+
+def _fetch_binance_json(path_qs, timeout=2.5):
+    import time as _time
+    errors = []
+
+    for base in BINANCE_BASE_URLS:
+        url = base + path_qs
+
+        for attempt in range(2):
+            try:
+                req = urllib.request.Request(
+                    url,
+                    headers={"User-Agent": "Journal/1.0"},
+                )
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    raw = resp.read().decode("utf-8")
+                    return _json.loads(raw), None
+
+            except urllib.error.HTTPError as e:
+                detail = e.read().decode("utf-8", errors="replace")[:200]
+                errors.append(f"{base} HTTP {e.code}: {detail}")
+
+                if e.code in (500, 502, 503, 504) and attempt == 0:
+                    _time.sleep(0.25)
+                    continue
+
+                break
+
+            except urllib.error.URLError as e:
+                errors.append(f"{base} network: {e.reason}")
+                break
+
+            except Exception as e:
+                errors.append(f"{base}: {str(e)}")
+                break
+
+    return None, ({
+        "error": "Binance unavailable",
+        "details": errors[-5:],
+    }, 502)
 
 
 def _klines_cache_key(symbol, interval, limit, start_time, end_time):
@@ -102,32 +168,16 @@ def _find_stale_klines_cache(symbol, interval, requested_limit):
     return copy.deepcopy(best["response"]), best.get("ts", 0)
 
 
-def _fetch_klines_page(url):
-    """Fetch une page de klines Binance avec retry sur 429/502/503. Retourne (batch_or_None, error_json_or_None)."""
-    import time as _time
-    max_attempts = 3
-    for attempt in range(max_attempts):
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Journal/1.0"})
-            with urllib.request.urlopen(req, timeout=3) as resp:
-                raw = resp.read().decode("utf-8")
-                batch = _json.loads(raw)
-            return batch, None
-        except urllib.error.HTTPError as e:
-            code = e.code
-            if code in (429, 502, 503) and attempt < max_attempts - 1:
-                _time.sleep(1 + attempt)
-                continue
-            detail = e.read().decode("utf-8", errors="replace")[:200]
-            return None, ({"error": f"Binance HTTP {code}: {detail}"}, code)
-        except urllib.error.URLError as e:
-            return None, ({"error": f"Erreur reseau: {e.reason}"}, 502)
-        except Exception as e:
-            if attempt < max_attempts - 1:
-                _time.sleep(1 + attempt)
-                continue
-            return None, ({"error": str(e)}, 500)
-    return None, ({"error": "Max retries exceeded"}, 502)
+def _fetch_klines_page(path_qs):
+    """Fetch une page de klines Binance via multi-endpoint + retry. Retourne (batch_or_None, error_json_or_None)."""
+    batch, err = _fetch_binance_json(path_qs)
+    if err:
+        return None, err
+
+    if not isinstance(batch, list):
+        return None, ({"error": "Format inattendu Binance", "raw": str(batch)[:300]}, 502)
+
+    return batch, None
 
 
 def _normalize_candle(k):
@@ -155,7 +205,7 @@ def _dedupe_klines(candles):
     return result
 
 
-def fetch_klines(symbol, interval, limit, start_time=None, end_time=None, force=False):
+def fetch_klines(symbol, interval, limit, start_time=None, end_time=None, force=False, soft=False):
     """Fetch klines avec cache, stale fallback, pagination dedupee.
 
     Retourne un dict avec le nouveau contrat :
@@ -190,13 +240,13 @@ def fetch_klines(symbol, interval, limit, start_time=None, end_time=None, force=
 
     while len(all_raw) < limit:
         fetch = min(MAX_PER_REQUEST, limit - len(all_raw))
-        url = f"{BINANCE_API}/api/v3/klines?symbol={symbol}&interval={interval}&limit={fetch}"
+        path_qs = f"/api/v3/klines?symbol={symbol}&interval={interval}&limit={fetch}"
         if current_start:
-            url += f"&startTime={current_start}"
+            path_qs += f"&startTime={current_start}"
         if end_time:
-            url += f"&endTime={end_time}"
+            path_qs += f"&endTime={end_time}"
 
-        batch, err = _fetch_klines_page(url)
+        batch, err = _fetch_klines_page(path_qs)
         if err:
             upstream_error = err[0].get("error", str(err[0]))
             # Stale fallback: si on a du cache, le retourner avec flag stale
@@ -223,6 +273,8 @@ def fetch_klines(symbol, interval, limit, start_time=None, end_time=None, force=
                 resp["upstream_error"] = upstream_error
                 return resp, 200
             # Sinon, propager l'erreur
+            if soft:
+                return _empty_klines_response(symbol, interval, upstream_error), 200
             return err[0], err[1]
 
         if not batch:
@@ -303,10 +355,11 @@ def market_klines():
         start_time = _parse_int_param("startTime")
         end_time = _parse_int_param("endTime")
         force = bool(_parse_int_param("force", 0))
+        soft = bool(_parse_int_param("soft", 0))
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
-    data, status = fetch_klines(symbol, interval, limit, start_time, end_time, force=force)
+    data, status = fetch_klines(symbol, interval, limit, start_time, end_time, force=force, soft=soft)
     if status != 200 and isinstance(data, dict) and "error" in data:
         return jsonify(data), status
 
