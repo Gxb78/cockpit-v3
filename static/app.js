@@ -11638,6 +11638,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     candleCache: {},
     // Resize
     resizeObserver: null,
+    didPrefetchTfs: false,
   };
 
   // VWAP periods from localStorage
@@ -11714,6 +11715,12 @@ TradeEditorController.renderHtml = function (day, trade) {
     return Object.keys(byTime)
       .map(function (t) { return byTime[t]; })
       .sort(function (a, b) { return a.time - b.time; });
+  }
+
+  function _toValidServerTime(v) {
+    if (v === null || v === undefined || v === '') return NaN;
+    var n = Number(v);
+    return Number.isFinite(n) && n > 1e12 ? n : NaN;
   }
 
   function _waitFrame() {
@@ -12581,14 +12588,15 @@ TradeEditorController.renderHtml = function (day, trade) {
     var url = '/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=300&soft=1';
     var r = await fetch(url, { signal: signal });
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    var data = await r.json();
-    return data.candles || [];
+    return await r.json();
   }
 
   function _scheduleFetchAndRender(tf, source) {
     if (tf) S.timeframe = tf;
 
     if (S.pendingRenderTimer) clearTimeout(S.pendingRenderTimer);
+    if (S.pendingWsTimer) { clearTimeout(S.pendingWsTimer); S.pendingWsTimer = null; }
+    if (S.pendingVwapTimer) { clearTimeout(S.pendingVwapTimer); S.pendingVwapTimer = null; }
 
     S.pendingRenderTimer = setTimeout(function () {
       S.pendingRenderTimer = null;
@@ -12604,7 +12612,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 
       if (token !== S.renderToken || tf !== S.timeframe) return;
       _connectWs('idle-after-render', { token: token, tf: tf });
-    }, 700);
+    }, 1800);
   }
 
   function _scheduleVwapDraw(token, tf) {
@@ -12665,6 +12673,34 @@ TradeEditorController.renderHtml = function (day, trade) {
     } catch(e) {}
   }
 
+  function _prefetchWidgetTimeframesIdle() {
+    var tfs = ['5m', '15m', '30m', '1h', '4h', '1d'];
+    var current = S.timeframe;
+    tfs = tfs.filter(function (tf) { return tf !== current; });
+
+    var i = 0;
+    function next() {
+      if (i >= tfs.length) return;
+      if (S.renderInFlight) { setTimeout(next, 1000); return; }
+      var tf = tfs[i++];
+      if (S.candleCache[_cacheKey(tf)]) { setTimeout(next, 250); return; }
+
+      fetch('/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=300&soft=1')
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (data && data.candles) _writeWidgetCache(tf, data.candles);
+        })
+        .catch(function () {})
+        .then(function () { setTimeout(next, 250); });
+    }
+
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(next, { timeout: 3000 });
+    } else {
+      setTimeout(next, 1500);
+    }
+  }
+
   async function _fetchAndRender(source) {
     var token = ++S.renderToken;
     var tf = S.timeframe;
@@ -12692,11 +12728,24 @@ TradeEditorController.renderHtml = function (day, trade) {
       applyBtcWidgetBestView();
 
       var lastCached = cached[cached.length - 1];
-      var priceEl = document.getElementById('btcChartPrice');
-      if (priceEl && lastCached) {
-        priceEl.textContent = ' ' + Number(lastCached.close).toLocaleString('fr-FR', {
-          minimumFractionDigits: 2,
-        });
+      if (lastCached) {
+        S.lastCandleTime = lastCached.time * 1000;
+        var cacheNow = window.BtcMarketClock ? window.BtcMarketClock.now() : Date.now();
+        if (!Number.isFinite(cacheNow) || cacheNow <= 0) cacheNow = Date.now();
+        _updateCountdownAnchor(lastCached, 'cache', cacheNow);
+
+        var priceEl = document.getElementById('btcChartPrice');
+        if (priceEl) {
+          priceEl.textContent = '$' + Number(lastCached.close).toLocaleString('fr-FR', {
+            minimumFractionDigits: 2,
+          });
+        }
+        if (S.countdownPriceLine) {
+          try { S.countdownPriceLine.applyOptions({ price: lastCached.close }); } catch(e) {}
+        }
+
+        _startCountdown();
+        _updateCountdownLabel();
       }
     }
 
@@ -12712,23 +12761,25 @@ TradeEditorController.renderHtml = function (day, trade) {
       S.pendingVwapTimer = null;
     }
 
-    // Ferme le WS precedent AVANT de lancer le nouveau render
-    _disconnectWs('render-start:' + tf);
-
     // Ne pas vider les series pendant un changement rapide :
     // LWC peut encore avoir un render rAF en cours.
     // On remplace les donnees seulement quand le nouveau fetch est pret.
 
     try {
-      var candles = await _fetchWidgetCandles(tf, S.fetchAbort.signal);
+      var data = await _fetchWidgetCandles(tf, S.fetchAbort.signal);
 
       if (token !== S.renderToken || tf !== S.timeframe) {
         console.warn('[BTC-WIDGET] stale render ignored after fetch', { token: token, tf: tf });
         return;
       }
 
-      candles = _normalizeCandles(candles);
+      var candles = _normalizeCandles(data.candles || []);
       if (candles.length < 2) return;
+
+      var serverNow = _toValidServerTime(data.serverTime);
+      if (Number.isFinite(serverNow) && window.BtcMarketClock) {
+        window.BtcMarketClock.sync(serverNow, 'klines-fetch-widget');
+      }
 
       _writeWidgetCache(tf, candles);
 
@@ -12746,6 +12797,27 @@ TradeEditorController.renderHtml = function (day, trade) {
 
       applyBtcWidgetBestView();
 
+      var last = candles[candles.length - 1];
+      S.lastCandleTime = last.time * 1000;
+      var fetchNow = Number.isFinite(serverNow) ? serverNow : (window.BtcMarketClock ? window.BtcMarketClock.now() : Date.now());
+      if (!Number.isFinite(fetchNow) || fetchNow <= 0) fetchNow = Date.now();
+      _updateCountdownAnchor(last, 'fetch', fetchNow);
+
+      var priceEl = document.getElementById('btcChartPrice');
+      if (priceEl) {
+        priceEl.textContent = '$' + Number(last.close).toLocaleString('fr-FR', {
+          minimumFractionDigits: 2,
+        });
+      }
+
+      if (S.countdownPriceLine) {
+        try { S.countdownPriceLine.applyOptions({ price: last.close }); } catch(e) {}
+      }
+
+      _startCountdown();
+      _startAutoRefresh();
+      _updateCountdownLabel();
+
       if (token !== S.renderToken || tf !== S.timeframe) return;
 
       if (S.activeVwapPeriods.length > 0) {
@@ -12755,6 +12827,11 @@ TradeEditorController.renderHtml = function (day, trade) {
       if (token !== S.renderToken || tf !== S.timeframe) return;
 
       _scheduleWsConnect(token, tf);
+
+      if (!S.didPrefetchTfs) {
+        S.didPrefetchTfs = true;
+        setTimeout(_prefetchWidgetTimeframesIdle, 3000);
+      }
 
     } catch (e) {
       if (e && e.name === 'AbortError') return;
