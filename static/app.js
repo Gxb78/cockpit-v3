@@ -12225,6 +12225,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   function _fetchLatestCandleOnly() {
     if (S.renderInFlight) return Promise.resolve();
     var token = S.renderToken;
+    var tf = S.timeframe;
     return fetch('/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=3')
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {

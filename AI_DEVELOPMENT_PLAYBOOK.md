@@ -1092,3 +1092,11 @@ Flask mono-thread → `app.js` (657 KB) reste en Pending → page noire sans dat
 - Live Y = breakout, pas tracking (le tracking cree des jumps)
 - Verifier x != null avant Number.isFinite(Number(x))
 - Optim chargement: local > CDN, timeout court > long, pas force=1
+
+### Lecon T-0007: Anti-flash et stale cache (5 mai 2026)
+
+**Probleme:** Flash 1 bougie au changement TF cause par _clearAllSeries avant fetch + REST fallback concurrent. 502 intermittent quand Binance injoignable sans cache.
+
+**Actions:** renderInFlight bloque REST fallback pendant full fetch. sessionStorage cache immediat au reload. _clearAllSeries retire avant await. _find_stale_klines_cache() fallback par symbol+interval.
+
+**Regle:** Ne JAMAIS supprimer une declaration var sans verifier toutes ses utilisations dans la fonction. Un diff Git doit etre relu avant commit.
