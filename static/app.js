@@ -12321,15 +12321,11 @@ TradeEditorController.renderHtml = function (day, trade) {
     if (S.renderInFlight) return Promise.resolve();
     var token = S.renderToken;
     var tf = S.timeframe;
-    return fetch('/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=3')
+    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=3&soft=1';
+    return fetch(url)
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
-        if (token !== S.renderToken) return;
-        if (tf !== S.timeframe) return;
-
-        if (data.serverTime != null && window.BtcMarketClock && Number.isFinite(Number(data.serverTime))) {
-          window.BtcMarketClock.sync(Number(data.serverTime), 'klines-latest');
-        }
+        if (token !== S.renderToken || tf !== S.timeframe) return;
 
         var raw = data.candles || [];
         if (!raw.length) return;
