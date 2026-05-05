@@ -1131,7 +1131,8 @@
       var lastCached = cached[cached.length - 1];
       if (lastCached) {
         S.lastCandleTime = lastCached.time * 1000;
-        _updateCountdownAnchor(lastCached, 'cache');
+        var cacheNow = window.BtcMarketClock ? window.BtcMarketClock.now() : Date.now();
+        _updateCountdownAnchor(lastCached, 'cache', cacheNow);
 
         var priceEl = document.getElementById('btcChartPrice');
         if (priceEl) {
@@ -1178,8 +1179,9 @@
       var candles = _normalizeCandles(data.candles || []);
       if (candles.length < 2) return;
 
-      if (data.serverTime != null && window.BtcMarketClock && Number.isFinite(Number(data.serverTime))) {
-        window.BtcMarketClock.sync(Number(data.serverTime), 'klines-fetch-widget');
+      var serverNow = Number(data.serverTime);
+      if (Number.isFinite(serverNow) && window.BtcMarketClock) {
+        window.BtcMarketClock.sync(serverNow, 'klines-fetch-widget');
       }
 
       _writeWidgetCache(tf, candles);
@@ -1200,7 +1202,8 @@
 
       var last = candles[candles.length - 1];
       S.lastCandleTime = last.time * 1000;
-      _updateCountdownAnchor(last, 'fetch');
+      var fetchNow = Number.isFinite(serverNow) ? serverNow : (window.BtcMarketClock ? window.BtcMarketClock.now() : Date.now());
+      _updateCountdownAnchor(last, 'fetch', fetchNow);
 
       var priceEl = document.getElementById('btcChartPrice');
       if (priceEl) {
