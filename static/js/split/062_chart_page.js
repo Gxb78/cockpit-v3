@@ -1280,12 +1280,13 @@
         var phantomTime = last.time + intervalSec * 5;
         try { candlestickSeries.update({ time: phantomTime, open: last.close, high: last.close, low: last.close, close: last.close }); } catch(e) {}
 
-        // WS : connecter APRES setData
-        if (shouldResetWs) {
-          setTimeout(function () {
-            _connectWs('after-render:' + _source, { force: true });
-          }, 250);
-        }
+        // WS 062 desactive - le dashboard BTC widget gere son propre WS
+        //
+        // if (shouldResetWs) {
+        //   setTimeout(function () {
+        //     _connectWs('after-render:' + _source, { force: true });
+        //   }, 250);
+        // }
 
         // VWAP — seulement sur init/user/timeframe (pas sur auto)
         if (activeVwapPeriods.length > 0 && shouldResetWs) {
