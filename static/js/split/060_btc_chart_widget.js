@@ -989,7 +989,6 @@
       btn.addEventListener('click', function () {
         document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
         btn.classList.add('active');
-        S.timeframe = btn.dataset.interval;
         var ci = document.getElementById('btcChartCustom');
         if (ci) ci.value = '';
         _scheduleFetchAndRender(btn.dataset.interval, 'user');
@@ -1004,8 +1003,7 @@
         if (!/^\d+(m|h|d|w|M)$/.test(val)) { this.classList.add('jedit-field-error'); this.title = 'Format: chiffre + m/h/d/w/M'; return; }
         this.classList.remove('jedit-field-error'); this.title = '';
         document.querySelectorAll('.btc-chart-interval').forEach(function (b) { b.classList.remove('active'); });
-        S.timeframe = val;
-        _scheduleFetchAndRender(S.timeframe, 'user');
+        _scheduleFetchAndRender(val, 'user');
       });
       customInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') this.blur(); });
     }
@@ -1024,12 +1022,14 @@
   }
 
   function _scheduleFetchAndRender(tf, source) {
+    if (tf) S.timeframe = tf;
+
     if (S.pendingRenderTimer) clearTimeout(S.pendingRenderTimer);
 
     S.pendingRenderTimer = setTimeout(function () {
       S.pendingRenderTimer = null;
       _fetchAndRender(source || 'user');
-    }, 120);
+    }, 80);
   }
 
   function _scheduleWsConnect(token, tf) {
