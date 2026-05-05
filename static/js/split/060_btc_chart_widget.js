@@ -71,6 +71,7 @@
     renderInFlight: false,
     fetchAbort: null,
     pendingRenderTimer: null,
+    pendingWsTimer: null,
     // Resize
     resizeObserver: null,
   };
@@ -1043,6 +1044,17 @@
     }, 120);
   }
 
+  function _scheduleWsConnect(token, tf) {
+    if (S.pendingWsTimer) clearTimeout(S.pendingWsTimer);
+
+    S.pendingWsTimer = setTimeout(function () {
+      S.pendingWsTimer = null;
+
+      if (token !== S.renderToken || tf !== S.timeframe) return;
+      _connectWs('idle-after-render', { token: token, tf: tf });
+    }, 700);
+  }
+
   async function _fetchAndRender(source) {
     var token = ++S.renderToken;
     var tf = S.timeframe;
@@ -1054,6 +1066,12 @@
       try { S.fetchAbort.abort(); } catch(e) {}
     }
     S.fetchAbort = new AbortController();
+
+    // Annule le timer WS en attente
+    if (S.pendingWsTimer) {
+      clearTimeout(S.pendingWsTimer);
+      S.pendingWsTimer = null;
+    }
 
     // Ferme le WS precedent AVANT de lancer le nouveau render
     _disconnectWs('render-start:' + tf);
@@ -1100,7 +1118,7 @@
 
       if (token !== S.renderToken || tf !== S.timeframe) return;
 
-      _connectWs('render-complete', { force: true, token: token, tf: tf });
+      _scheduleWsConnect(token, tf);
 
     } catch (e) {
       if (e && e.name === 'AbortError') return;
