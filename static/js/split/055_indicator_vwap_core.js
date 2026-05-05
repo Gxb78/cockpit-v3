@@ -125,18 +125,6 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
     return Number.isFinite(n) ? n : fallback;
   }
 
-  function _numRequired(v) {
-    if (v === null || v === undefined || v === '') return NaN;
-    var n = Number(v);
-    return Number.isFinite(n) ? n : NaN;
-  }
-
-  function _numOptional(v, fallback) {
-    if (v === null || v === undefined || v === '') return fallback;
-    var n = Number(v);
-    return Number.isFinite(n) ? n : fallback;
-  }
-
   function _normalizeTimeToSeconds(t) {
     if (t == null) return NaN;
     if (typeof t === 'number') return t > 1e12 ? Math.floor(t / 1000) : t;
@@ -357,9 +345,7 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
       lastValueVisible: true,
       autoscaleInfoProvider: function () { return null; },
     });
-        aligned = sanitizeLineData(aligned);
-    if (aligned.length < 2) return;
-        aligned = sanitizeLineData(aligned);
+    aligned = sanitizeLineData(aligned);
     if (aligned.length < 2) return;
     s.setData(aligned);
   }

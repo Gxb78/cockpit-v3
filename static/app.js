@@ -9930,18 +9930,6 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
     return Number.isFinite(n) ? n : fallback;
   }
 
-  function _numRequired(v) {
-    if (v === null || v === undefined || v === '') return NaN;
-    var n = Number(v);
-    return Number.isFinite(n) ? n : NaN;
-  }
-
-  function _numOptional(v, fallback) {
-    if (v === null || v === undefined || v === '') return fallback;
-    var n = Number(v);
-    return Number.isFinite(n) ? n : fallback;
-  }
-
   function _normalizeTimeToSeconds(t) {
     if (t == null) return NaN;
     if (typeof t === 'number') return t > 1e12 ? Math.floor(t / 1000) : t;
@@ -10162,9 +10150,7 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
       lastValueVisible: true,
       autoscaleInfoProvider: function () { return null; },
     });
-        aligned = sanitizeLineData(aligned);
-    if (aligned.length < 2) return;
-        aligned = sanitizeLineData(aligned);
+    aligned = sanitizeLineData(aligned);
     if (aligned.length < 2) return;
     s.setData(aligned);
   }
@@ -12881,11 +12867,41 @@ TradeEditorController.renderHtml = function (day, trade) {
   var _isFetching = false;
 
   function _normalizeChartCandles(rows) {
-    return (rows || [])
-      .filter(function(c) { return c && c.time != null && c.open != null && c.high != null && c.low != null && c.close != null; })
-      .map(function(c) { return { time: Number(c.time), open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close), volume: Number(c.volume || 0) }; })
-      .filter(function(c) { return Number.isFinite(c.time) && Number.isFinite(c.open) && Number.isFinite(c.high) && Number.isFinite(c.low) && Number.isFinite(c.close) && c.high >= c.low; })
-      .sort(function(a, b) { return a.time - b.time; });
+    var byTime = {};
+
+    (rows || []).forEach(function (c) {
+      if (!c) return;
+
+      var rawTime = c.time != null ? c.time : (c.openTime != null ? c.openTime : c.t);
+      var time = _numRequired(rawTime);
+      if (time > 1e12) time = Math.floor(time / 1000);
+
+      var open = _numRequired(c.open);
+      var high = _numRequired(c.high);
+      var low = _numRequired(c.low);
+      var close = _numRequired(c.close);
+      var volume = _numOptional(c.volume, 0);
+
+      if (!Number.isFinite(time) || time <= 0) return;
+      if (!Number.isFinite(open) || !Number.isFinite(high) || !Number.isFinite(low) || !Number.isFinite(close)) return;
+
+      if (high < low) return;
+      if (high < Math.max(open, close)) return;
+      if (low > Math.min(open, close)) return;
+
+      byTime[time] = {
+        time: time,
+        open: open,
+        high: high,
+        low: low,
+        close: close,
+        volume: volume,
+      };
+    });
+
+    return Object.keys(byTime)
+      .map(function (t) { return byTime[t]; })
+      .sort(function (a, b) { return a.time - b.time; });
   }
   var _lastFetchTs = 0;
   var _FETCH_COOLDOWN_MS = 5000;
@@ -13263,16 +13279,27 @@ TradeEditorController.renderHtml = function (day, trade) {
     var d = JSON.parse(raw);
     var k = d && d.k;
     if (!k) return;
-    var candle = {
+
+    var rawCandle = {
       time: Math.floor(k.t / 1000),
       openTime: k.t,
       closeTime: k.T,
-      open: parseFloat(k.o),
-      high: parseFloat(k.h),
-      low: parseFloat(k.l),
-      close: parseFloat(k.c),
-      volume: parseFloat(k.v),
+      open: k.o,
+      high: k.h,
+      low: k.l,
+      close: k.c,
+      volume: k.v,
     };
+
+    var candle = _normalizeLiveChartCandle(rawCandle);
+    if (!candle) {
+      console.warn('[chart][WS] invalid candle ignored', {
+        interval: currentInterval,
+        raw: rawCandle,
+      });
+      return;
+    }
+
     lastPrice = candle.close;
     var priceEl = document.getElementById('chartPrice');
     if (priceEl) priceEl.textContent = '$' + candle.close.toLocaleString('fr-FR', { minimumFractionDigits: 2 });
