@@ -155,6 +155,12 @@
       .sort(function (a, b) { return a.time - b.time; });
   }
 
+  function _toValidServerTime(v) {
+    if (v === null || v === undefined || v === '') return NaN;
+    var n = Number(v);
+    return Number.isFinite(n) && n > 1e12 ? n : NaN;
+  }
+
   function _waitFrame() {
     return new Promise(function (resolve) { requestAnimationFrame(resolve); });
   }
@@ -1027,6 +1033,8 @@
     if (tf) S.timeframe = tf;
 
     if (S.pendingRenderTimer) clearTimeout(S.pendingRenderTimer);
+    if (S.pendingWsTimer) { clearTimeout(S.pendingWsTimer); S.pendingWsTimer = null; }
+    if (S.pendingVwapTimer) { clearTimeout(S.pendingVwapTimer); S.pendingVwapTimer = null; }
 
     S.pendingRenderTimer = setTimeout(function () {
       S.pendingRenderTimer = null;
@@ -1042,7 +1050,7 @@
 
       if (token !== S.renderToken || tf !== S.timeframe) return;
       _connectWs('idle-after-render', { token: token, tf: tf });
-    }, 1200);
+    }, 1800);
   }
 
   function _scheduleVwapDraw(token, tf) {
@@ -1161,6 +1169,7 @@
       if (lastCached) {
         S.lastCandleTime = lastCached.time * 1000;
         var cacheNow = window.BtcMarketClock ? window.BtcMarketClock.now() : Date.now();
+        if (!Number.isFinite(cacheNow) || cacheNow <= 0) cacheNow = Date.now();
         _updateCountdownAnchor(lastCached, 'cache', cacheNow);
 
         var priceEl = document.getElementById('btcChartPrice');
@@ -1205,7 +1214,7 @@
       var candles = _normalizeCandles(data.candles || []);
       if (candles.length < 2) return;
 
-      var serverNow = Number(data.serverTime);
+      var serverNow = _toValidServerTime(data.serverTime);
       if (Number.isFinite(serverNow) && window.BtcMarketClock) {
         window.BtcMarketClock.sync(serverNow, 'klines-fetch-widget');
       }
@@ -1229,6 +1238,7 @@
       var last = candles[candles.length - 1];
       S.lastCandleTime = last.time * 1000;
       var fetchNow = Number.isFinite(serverNow) ? serverNow : (window.BtcMarketClock ? window.BtcMarketClock.now() : Date.now());
+      if (!Number.isFinite(fetchNow) || fetchNow <= 0) fetchNow = Date.now();
       _updateCountdownAnchor(last, 'fetch', fetchNow);
 
       var priceEl = document.getElementById('btcChartPrice');
