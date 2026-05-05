@@ -72,6 +72,7 @@
     fetchAbort: null,
     pendingRenderTimer: null,
     pendingWsTimer: null,
+    candleCache: {},
     // Resize
     resizeObserver: null,
   };
@@ -1043,6 +1044,49 @@
     }, 700);
   }
 
+  function _cacheKey(tf) {
+    return 'BTCUSDT:' + tf;
+  }
+
+  function _readWidgetCache(tf) {
+    var key = _cacheKey(tf);
+
+    if (S.candleCache[key] && S.candleCache[key].candles) {
+      return S.candleCache[key].candles;
+    }
+
+    try {
+      var raw = sessionStorage.getItem('btcWidgetCandles:' + tf);
+      if (!raw) return null;
+
+      var candles = _normalizeCandles(JSON.parse(raw));
+      if (candles.length >= 2) {
+        S.candleCache[key] = {
+          candles: candles,
+          ts: Date.now(),
+        };
+        return candles;
+      }
+    } catch(e) {}
+
+    return null;
+  }
+
+  function _writeWidgetCache(tf, candles) {
+    candles = _normalizeCandles(candles);
+    if (candles.length < 2) return;
+
+    var key = _cacheKey(tf);
+    S.candleCache[key] = {
+      candles: candles,
+      ts: Date.now(),
+    };
+
+    try {
+      sessionStorage.setItem('btcWidgetCandles:' + tf, JSON.stringify(candles));
+    } catch(e) {}
+  }
+
   async function _fetchAndRender(source) {
     var token = ++S.renderToken;
     var tf = S.timeframe;
@@ -1054,6 +1098,29 @@
       try { S.fetchAbort.abort(); } catch(e) {}
     }
     S.fetchAbort = new AbortController();
+
+    // Cache : affiche immediatement les donnees deja vues
+    var cached = _readWidgetCache(tf);
+    if (cached && cached.length >= 2) {
+      S.candles = cached;
+      S.manualPriceRange = null;
+
+      try { _clearIndicators(); } catch(e) {}
+      Object.keys(S.vwapSeriesMap || {}).forEach(function (k) {
+        try { S.vwapSeriesMap[k].setData([]); } catch(e) {}
+      });
+
+      if (S.candleSeries) S.candleSeries.setData(cached);
+      applyBtcWidgetBestView();
+
+      var lastCached = cached[cached.length - 1];
+      var priceEl = document.getElementById('btcChartPrice');
+      if (priceEl && lastCached) {
+        priceEl.textContent = ' ' + Number(lastCached.close).toLocaleString('fr-FR', {
+          minimumFractionDigits: 2,
+        });
+      }
+    }
 
     // Annule le timer WS en attente
     if (S.pendingWsTimer) {
@@ -1078,6 +1145,8 @@
 
       candles = _normalizeCandles(candles);
       if (candles.length < 2) return;
+
+      _writeWidgetCache(tf, candles);
 
       S.candles = candles;
       S.manualPriceRange = null;
