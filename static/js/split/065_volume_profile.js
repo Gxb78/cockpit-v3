@@ -11,7 +11,7 @@
   var DEFAULTS = {
     active: false,
     bucketSize: 10,       // $10 buckets for BTC
-    period: 'visible',    // 'visible', 'day', 'week', 'month'
+    period: 'visible',    // 'visible', '5d', '7d', '30d', '90d', '366d'
     vaPercent: 70,        // Value Area % (68, 70, 80)
     showPOC: true,
     showVAH: true,
@@ -25,9 +25,18 @@
 
   // ── VP SOURCE CONFIG : interval + limit par période ──
   var VP_SOURCE_CONFIG = {
-    day:   { interval: '15m', limit: 110 },
-    week:  { interval: '1h',  limit: 180 },
-    month: { interval: '4h',  limit: 220 },
+    '5d':   { label: '5D',   interval: '15m', limit: 500 },
+    '7d':   { label: '7D',   interval: '15m', limit: 700 },
+    '30d':  { label: '30D',  interval: '1h',  limit: 750 },
+    '90d':  { label: '90D',  interval: '4h',  limit: 560 },
+    '366d': { label: '366D', interval: '12h', limit: 750 },
+  };
+
+  // ── LEGACY MIGRATION ──
+  var legacyPeriodMap = {
+    day: '5d',
+    week: '7d',
+    month: '30d',
   };
 
   // ── STATE ──
@@ -195,6 +204,10 @@
       state.settings = r ? Object.assign({}, DEFAULTS, JSON.parse(r)) : Object.assign({}, DEFAULTS);
     } catch (e) {
       state.settings = Object.assign({}, DEFAULTS);
+    }
+    // Migrate legacy periods to new config
+    if (state.settings && legacyPeriodMap[state.settings.period]) {
+      state.settings.period = legacyPeriodMap[state.settings.period];
     }
   }
 
@@ -409,29 +422,6 @@
       });
   }
 
-  function _filterPeriod(candles, period) {
-    if (!candles || !candles.length) return null;
-    if (period === 'visible') {
-      // Use ALL candles (the chart shows the visible range, but for VP we want context)
-      // Return all candles — the user can see the full picture
-      return candles;
-    }
-    var now = Math.floor(Date.now() / 1000);
-    var todayStart = Math.floor(now / 86400) * 86400;
-    var cutoff;
-    switch (period) {
-      case 'day':   cutoff = todayStart; break;
-      case 'week':  cutoff = todayStart - 6 * 86400; break;
-      case 'month': cutoff = todayStart - 29 * 86400; break;
-      default:      return candles;
-    }
-    var result = [];
-    for (var i = 0; i < candles.length; i++) {
-      if (candles[i].time >= cutoff) result.push(candles[i]);
-    }
-    return result.length >= 2 ? result : [];
-  }
-
   // ── RENDER ──
   function _renderVP() {
     var ctx = state.ctx;
@@ -591,7 +581,8 @@
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.globalAlpha = 0.5;
-    var infoTxt = 'VP ' + s.period + ' | ' + vp.bucketSize + '$ | ' + vp.candleCount + ' candles';
+    var periodLabel = (VP_SOURCE_CONFIG[s.period] && VP_SOURCE_CONFIG[s.period].label) || s.period;
+    var infoTxt = 'VP ' + periodLabel + ' | ' + vp.bucketSize + '$ | ' + vp.candleCount + ' candles';
     ctx.fillText(infoTxt, 6, 6);
     ctx.restore();
   }
