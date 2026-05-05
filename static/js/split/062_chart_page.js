@@ -47,6 +47,18 @@
   var chartReady = false;
   var _isFetching = false;
 
+  function _numRequired(v) {
+    if (v === null || v === undefined || v === '') return NaN;
+    var n = Number(v);
+    return Number.isFinite(n) ? n : NaN;
+  }
+
+  function _numOptional(v, fallback) {
+    if (v === null || v === undefined || v === '') return fallback;
+    var n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
   function _normalizeChartCandles(rows) {
     var byTime = {};
 
