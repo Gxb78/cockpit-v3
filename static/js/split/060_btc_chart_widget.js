@@ -100,14 +100,54 @@
     return num * (mult[unit] || 3600000);
   }
 
+  function _numRequired(v) {
+    if (v === null || v === undefined || v === '') return NaN;
+    var n = Number(v);
+    return Number.isFinite(n) ? n : NaN;
+  }
+
+  function _numOptional(v, fallback) {
+    if (v === null || v === undefined || v === '') return fallback;
+    var n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
   function _normalizeCandles(rows) {
-    return (rows || []).map(function (c) { return {
-      time: Number(c.time), open: Number(c.open), high: Number(c.high),
-      low: Number(c.low), close: Number(c.close), volume: Number(c.volume || 0),
-    }; }).filter(function (c) {
-      return Number.isFinite(c.time) && Number.isFinite(c.open) && Number.isFinite(c.high) &&
-        Number.isFinite(c.low) && Number.isFinite(c.close) && c.high >= c.low;
+    var byTime = {};
+
+    (rows || []).forEach(function (c) {
+      if (!c) return;
+
+      var rawTime = c.time != null ? c.time : (c.openTime != null ? c.openTime : c.t);
+      var time = _numRequired(rawTime);
+      if (time > 1e12) time = Math.floor(time / 1000);
+
+      var open = _numRequired(c.open);
+      var high = _numRequired(c.high);
+      var low = _numRequired(c.low);
+      var close = _numRequired(c.close);
+      var volume = _numOptional(c.volume, 0);
+
+      if (!Number.isFinite(time) || time <= 0) return;
+      if (!Number.isFinite(open) || !Number.isFinite(high) || !Number.isFinite(low) || !Number.isFinite(close)) return;
+
+      if (high < low) return;
+      if (high < Math.max(open, close)) return;
+      if (low > Math.min(open, close)) return;
+
+      byTime[time] = {
+        time: time,
+        open: open,
+        high: high,
+        low: low,
+        close: close,
+        volume: volume,
+      };
     });
+
+    return Object.keys(byTime)
+      .map(function (t) { return byTime[t]; })
+      .sort(function (a, b) { return a.time - b.time; });
   }
 
   function _waitFrame() {
@@ -237,49 +277,54 @@
   async function _calcAndDrawVwap() {
     var token = S.renderToken;
     var tf = S.timeframe;
-    try { S.activeVwapPeriods = (window.BtcVwap && window.BtcVwap.readActiveVwapPeriods) ? window.BtcVwap.readActiveVwapPeriods() : []; } catch(e) {}
-    Object.keys(S.vwapSeriesMap).forEach(function (k) { if (S.activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k); });
-    if (!S.activeVwapPeriods.length) return;
-    if (!window.BtcVwap) return;
 
     try {
-      try { S.chart.applyOptions({ handleScroll: false, handleScale: false }); } catch(e) {}
-      try { S.chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false }); } catch(e) {}
+      S.activeVwapPeriods = (window.BtcVwap && window.BtcVwap.readActiveVwapPeriods)
+        ? window.BtcVwap.readActiveVwapPeriods()
+        : [];
+    } catch(e) {}
 
-      var state = {
-        symbol: 'BTCUSDT',
-        candles: S.candles,
-        vwapSeriesMap: S.vwapSeriesMap,
-      };
+    Object.keys(S.vwapSeriesMap).forEach(function (k) {
+      if (S.activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
+    });
 
-      var vwapOrder = ['D-NY', '24H', '7D', '30D', '90D'];
-      for (var vi = 0; vi < vwapOrder.length; vi++) {
-        var p = vwapOrder[vi];
-        if (S.activeVwapPeriods.indexOf(p) < 0) continue;
-        if (token !== S.renderToken || tf !== S.timeframe) return;
+    if (!S.activeVwapPeriods.length) return;
+    if (!window.BtcVwap) return;
+    if (!S.candles || !S.candles.length) return;
+
+    // Re-sanitize defensif avant d'utiliser les candles comme base d'alignement VWAP.
+    S.candles = _normalizeCandles(S.candles);
+    if (S.candles.length < 2) return;
+
+    var state = {
+      symbol: 'BTCUSDT',
+      candles: S.candles,
+      vwapSeriesMap: S.vwapSeriesMap,
+    };
+
+    var vwapOrder = ['D-NY', '24H', '7D', '30D', '90D'];
+
+    for (var vi = 0; vi < vwapOrder.length; vi++) {
+      var p = vwapOrder[vi];
+
+      if (S.activeVwapPeriods.indexOf(p) < 0) continue;
+      if (token !== S.renderToken || tf !== S.timeframe) return;
+
+      try {
         await window.BtcVwap.drawVwapForChart(state, p, function () {
           return token !== S.renderToken || tf !== S.timeframe;
         });
-        if (token !== S.renderToken || tf !== S.timeframe) return;
-        await _waitFrame();
+      } catch (e) {
+        console.warn('[BTC-WIDGET] VWAP draw failed', p, e);
       }
-    } finally {
-      try { S.chart.applyOptions({ handleScroll: true, handleScale: true }); } catch(e) {}
-      try { S.chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: true, rightBarStaysOnScroll: true }); } catch(e) {}
+
+      if (token !== S.renderToken || tf !== S.timeframe) return;
+      await _waitFrame();
     }
 
-    if (S.follow && !S.userDetached && !S.userDragging && token === S.renderToken && tf === S.timeframe) {
-      [0, 50, 150, 400, 1000].forEach(function (delay) {
-        setTimeout(function () {
-          if (token !== S.renderToken || tf !== S.timeframe) return;
-          if (!S.follow || S.userDetached || S.userDragging) return;
-          _withProgrammaticRange(function () {
-            var priceRange = computeBtcWidgetPriceRange(S.candles, S.timeframe);
-            setBtcWidgetPriceRange(priceRange);
-          });
-        }, delay);
-      });
-    }
+    // Note : la VWAP ne touche plus au viewport.
+    // applyOptions et setBtcWidgetPriceRange ne sont plus appeles ici.
+    // Le viewport reste sous controle exclusif de applyBtcWidgetBestView / maybeFollowBtcWidgetPriceY.
   }
 
   function _refreshWidgetVwapFromPrefs() {
