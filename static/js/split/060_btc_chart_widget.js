@@ -1064,15 +1064,9 @@
     // Ferme le WS precedent AVANT de lancer le nouveau render
     _disconnectWs('render-start:' + tf);
 
-    // Reset defensif LWC
-    try { if (S.candleSeries) S.candleSeries.setData([]); } catch(e) {}
-    try { _clearIndicators(); } catch(e) {}
-    Object.keys(S.vwapSeriesMap || {}).forEach(function (k) {
-      try { S.vwapSeriesMap[k].setData([]); } catch(e) {}
-    });
-
-    S.candles = [];
-    S.manualPriceRange = null;
+    // Ne pas vider les series pendant un changement rapide :
+    // LWC peut encore avoir un render rAF en cours.
+    // On remplace les donnees seulement quand le nouveau fetch est pret.
 
     try {
       var candles = await _fetchWidgetCandles(tf, S.fetchAbort.signal);
@@ -1086,6 +1080,12 @@
       if (candles.length < 2) return;
 
       S.candles = candles;
+      S.manualPriceRange = null;
+
+      try { _clearIndicators(); } catch(e) {}
+      Object.keys(S.vwapSeriesMap || {}).forEach(function (k) {
+        try { S.vwapSeriesMap[k].setData([]); } catch(e) {}
+      });
 
       if (S.candleSeries) S.candleSeries.setData(candles);
 
