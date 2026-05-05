@@ -40,14 +40,14 @@ def fetch_binance_server_time():
             f"{BINANCE_API}/api/v3/time",
             headers={"User-Agent": "Journal/1.0"},
         )
-        with urllib.request.urlopen(req, timeout=2) as resp:
+        with urllib.request.urlopen(req, timeout=0.5) as resp:
             data = _json.loads(resp.read().decode("utf-8"))
         server_time = int(data.get("serverTime"))
         _BINANCE_TIME_CACHE["serverTime"] = server_time
         _BINANCE_TIME_CACHE["ts"] = now
         return server_time
     except Exception:
-        return int(_time_mod.time() * 1000)
+        return None
 
 
 def _klines_cache_key(symbol, interval, limit, start_time, end_time):

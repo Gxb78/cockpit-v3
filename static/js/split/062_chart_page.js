@@ -473,6 +473,7 @@
   function _loadLibrary(cb) {
     if (typeof window.LightweightCharts !== 'undefined') { cb(); return; }
     var urls = [
+      '/static/vendor/lightweight-charts.standalone.production.js',
       'https://unpkg.com/lightweight-charts@5.0.7/dist/lightweight-charts.standalone.production.js',
       'https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.7/dist/lightweight-charts.standalone.production.js',
     ];
@@ -1206,7 +1207,7 @@
       .then(function (data) {
         if (data.error) { console.error('[chart]', data.error); toast(data.error, 'error'); return; }
 
-        if (window.BtcMarketClock && Number.isFinite(Number(data.serverTime))) {
+        if (data.serverTime != null && window.BtcMarketClock && Number.isFinite(Number(data.serverTime))) {
           window.BtcMarketClock.sync(Number(data.serverTime), 'klines-fetch-chart');
         }
 
@@ -1432,13 +1433,13 @@
   function _fetchLatestCandleOnly() {
     var interval = currentInterval;
     var sym = currentSymbol;
-    var url = '/api/market/klines?symbol=' + sym + '&interval=' + interval + '&limit=3&force=1';
+    var url = '/api/market/klines?symbol=' + sym + '&interval=' + interval + '&limit=3';
     return fetch(url)
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
         if (interval !== currentInterval || sym !== currentSymbol) return;
 
-        if (window.BtcMarketClock && Number.isFinite(Number(data.serverTime))) {
+        if (data.serverTime != null && window.BtcMarketClock && Number.isFinite(Number(data.serverTime))) {
           window.BtcMarketClock.sync(Number(data.serverTime), 'klines-latest-chart');
         }
 

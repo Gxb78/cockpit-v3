@@ -547,11 +547,9 @@
     var candles = S.candles;
     if (!candles || !candles.length) return;
     var last = candles[candles.length - 1];
-    var price = last.close;
-    if (!Number.isFinite(price)) return;
+    if (!last) return;
 
     var now = performance.now();
-    if (!force && now - (S.lastLiveYAdjustAt || 0) < 250) return;
 
     var currentRange = getBtcWidgetCurrentPriceRange();
     if (!currentRange) {
@@ -563,22 +561,22 @@
     var height = currentRange.to - currentRange.from;
     if (!Number.isFinite(height) || height <= 0) return;
 
-    var pos = (price - currentRange.from) / height;
-    var zone = _getLiveYZone(S.timeframe);
-    var shouldMove = force || pos < zone.low || pos > zone.high;
-    if (Number.isFinite(last.high) && last.high > currentRange.to) shouldMove = true;
-    if (Number.isFinite(last.low) && last.low < currentRange.from) shouldMove = true;
+    var buffer = height * 0.035;
 
-    if (!shouldMove) return;
+    // Ne bouge que si la bougie live sort du cadre (avec marge)
+    var breaksTop = Number.isFinite(last.high) && last.high > currentRange.to - buffer;
+    var breaksBottom = Number.isFinite(last.low) && last.low < currentRange.from + buffer;
+
+    if (!force && !breaksTop && !breaksBottom) return;
+
+    // Throttle lent : pas à chaque tick WS
+    if (!force && now - (S.lastLiveYAdjustAt || 0) < 1000) return;
+
+    var desiredRange = computeBtcWidgetPriceRange(candles, S.timeframe);
+    if (!desiredRange) return;
 
     S.lastLiveYAdjustAt = now;
-    var anchor = 0.52;
-    var nextRange = { from: price - height * anchor, to: price + height * (1 - anchor) };
-    var pad = height * 0.06;
-    if (Number.isFinite(last.high) && last.high > nextRange.to) nextRange.to = last.high + pad;
-    if (Number.isFinite(last.low) && last.low < nextRange.from) nextRange.from = last.low - pad;
-
-    _withProgrammaticRange(function () { setBtcWidgetPriceRange(nextRange); });
+    _withProgrammaticRange(function () { setBtcWidgetPriceRange(desiredRange); });
   }
 
   // ── COUNTDOWN ANCHOR (basé sur candleCloseMs + performance.now()) ──
@@ -715,13 +713,13 @@
   function _fetchLatestCandleOnly() {
     var token = S.renderToken;
     var tf = S.timeframe;
-    return fetch('/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=3&force=1')
+    return fetch('/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=3')
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
         if (token !== S.renderToken) return;
         if (tf !== S.timeframe) return;
 
-        if (window.BtcMarketClock && Number.isFinite(Number(data.serverTime))) {
+        if (data.serverTime != null && window.BtcMarketClock && Number.isFinite(Number(data.serverTime))) {
           window.BtcMarketClock.sync(Number(data.serverTime), 'klines-latest');
         }
 
@@ -1022,7 +1020,7 @@
 
     if (!candles.length) throw new Error('empty candles');
 
-    if (window.BtcMarketClock && Number.isFinite(Number(data.serverTime))) {
+    if (data.serverTime != null && window.BtcMarketClock && Number.isFinite(Number(data.serverTime))) {
       window.BtcMarketClock.sync(Number(data.serverTime), 'klines-fetch');
     }
 
@@ -1136,6 +1134,7 @@
       return;
     }
     var urls = [
+      '/static/vendor/lightweight-charts.standalone.production.js',
       'https://unpkg.com/lightweight-charts@5.0.7/dist/lightweight-charts.standalone.production.js',
       'https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.7/dist/lightweight-charts.standalone.production.js',
       'https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/5.0.7/lightweight-charts.standalone.production.js',

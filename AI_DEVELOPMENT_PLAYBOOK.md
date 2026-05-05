@@ -1069,3 +1069,26 @@ Flask mono-thread → `app.js` (657 KB) reste en Pending → page noire sans dat
 - Pour les liens et données dynamiques dans le HTML, toujours valider/sanitiser côté JS plutôt que d'injecter en brut
 - Avant tout fix de race condition async, vérifier si le problème vient d'un ordre de chargement ou d'un scope JS
 
+
+### Lecon T-0006: Market clock drift, live Y jump, et optimisations de chargement (5 mai 2026)
+
+**Date:** 2026-05-05
+
+**Probleme:** Malgre les fixs precedents, le widget BTC sautait encore apres 3-4s. Cause racine: decalage dhorloge ~9h entre Date.now() et timestamps Binance, provoquant rejet anchor countdown et boucle REST/WS refocus.
+
+**Actions:**
+
+1. BtcMarketClock global avec sync serverTime WS/klines.
+2. _updateCountdownAnchor utilise BtcMarketClock.now() + nowMsOverride.
+3. REST fallback bloque tant que clock pas sync.
+4. _fetchLatestCandleOnly sans force=1.
+5. LWC charge en local avant CDN.
+6. Live Y breakout-only (sortie de cadre + throttle 1s).
+7. Guard data.serverTime != null (Number(null)=0 piege).
+
+**Regles de prevention:**
+- Countdown marche ne doit JAMAIS dependre de Date.now() brut
+- WS: utiliser d.E comme nowMsOverride plutot que clock globale
+- Live Y = breakout, pas tracking (le tracking cree des jumps)
+- Verifier x != null avant Number.isFinite(Number(x))
+- Optim chargement: local > CDN, timeout court > long, pas force=1
