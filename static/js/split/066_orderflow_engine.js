@@ -700,23 +700,34 @@
     var x = this.timeToX(fc.start);
     if (x < this.layout.chartLeft || x > this.layout.chartRight) return;
 
-    ctx.save();
-    ctx.strokeStyle = fc.complete ? 'rgba(34,197,94,0.35)' : 'rgba(245,158,11,0.45)';
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(x, this.layout.topMargin);
-    ctx.lineTo(x, h - this.layout.bottomMargin);
-    ctx.stroke();
+    var topY = this.layout.topMargin;
+    var botY = h - this.layout.bottomMargin;
 
+    ctx.save();
+
+    // Fond tinté discret à droite de la ligne (zone footprint)
+    ctx.fillStyle = 'rgba(56,211,238,0.03)';
+    ctx.fillRect(x, topY, this.layout.chartRight - x, botY - topY);
+
+    // Ligne verticale fine
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 4]);
+    ctx.beginPath();
+    ctx.moveTo(x, topY);
+    ctx.lineTo(x, botY);
+    ctx.stroke();
     ctx.setLineDash([]);
-    ctx.font = '10px "JetBrains Mono", monospace';
-    ctx.fillStyle = fc.complete ? 'rgba(34,197,94,0.75)' : 'rgba(245,158,11,0.80)';
+
+    // Label discret
+    ctx.font = '9px "JetBrains Mono", monospace';
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.fillText(
-      fc.complete ? 'Footprint 15m' : 'Footprint partial 15m',
+      'FP ' + (fc.complete ? '15m' : 'partial'),
       Math.max(x + 6, this.layout.chartLeft + 6),
-      this.layout.topMargin + 6
+      topY + 4
     );
     ctx.restore();
   };
@@ -1782,8 +1793,8 @@
       var yLow = this.priceToY(c.low);
 
       // === 1. WICK ===
-      ctx.strokeStyle = isBull ? '#22c55e' : '#ef4444';
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = isBull ? 'rgba(34,197,94,0.5)' : 'rgba(239,68,68,0.5)';
+      ctx.lineWidth = 0.5;
       ctx.beginPath();
       ctx.moveTo(cx, yHigh);
       ctx.lineTo(cx, yLow);
@@ -1794,16 +1805,18 @@
       var bodyBottom = Math.max(yOpen, yClose);
       var bodyH = Math.max(2, bodyBottom - bodyTop);
 
-      if (inCoverage) {
-        ctx.fillStyle = isBull ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)';
-      } else {
-        // Hors couverture footprint: mode OHLC simplifie explicite.
-        ctx.fillStyle = isBull ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)';
-      }
+      // Couleur adaptée au mode
+      var bodyColor = isBull
+        ? (inCoverage ? 'rgba(34,197,94,0.6)' : 'rgba(34,197,94,0.15)')
+        : (inCoverage ? 'rgba(239,68,68,0.6)' : 'rgba(239,68,68,0.15)');
+      ctx.fillStyle = bodyColor;
       ctx.fillRect(cx - minCandleW / 2, bodyTop, minCandleW, bodyH);
-      // Contour du body
-      ctx.strokeStyle = isBull ? '#22c55e' : '#ef4444';
-      ctx.lineWidth = 1;
+
+      // Contour fin
+      ctx.strokeStyle = isBull
+        ? (inCoverage ? 'rgba(34,197,94,0.4)' : 'rgba(34,197,94,0.1)')
+        : (inCoverage ? 'rgba(239,68,68,0.4)' : 'rgba(239,68,68,0.1)');
+      ctx.lineWidth = 0.5;
       ctx.strokeRect(cx - minCandleW / 2, bodyTop, minCandleW, bodyH);
 
       // Skinny: pas de footprint
@@ -1823,16 +1836,20 @@
         ctx.globalAlpha = 1;
       }
 
-      // Delta label pour les bougies avec footprint réel
-      if (isRealFootprint && c.delta != null) {
-        ctx.save();
-        ctx.font = '9px "JetBrains Mono", monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
+      // Delta label pour les bougies avec footprint réel (pas en mode skinny)
+      if (isRealFootprint && c.delta != null && renderMode !== 'skinny') {
         var deltaVal = Math.round(c.delta);
-        ctx.fillStyle = deltaVal >= 0 ? 'rgba(34,197,94,0.85)' : 'rgba(239,68,68,0.85)';
-        ctx.fillText(String(deltaVal), cx, Math.min(h - this.layout.bottomMargin - 12, yLow + 12));
-        ctx.restore();
+        var deltaStr = String(deltaVal);
+        // Pas de label si la bougie est trop serrée (compact) — sauf delta significatif
+        if (renderMode !== 'compact' || Math.abs(deltaVal) > 50) {
+          ctx.save();
+          ctx.font = renderMode === 'compact' ? '7px sans-serif' : '8px \"JetBrains Mono\", monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          ctx.fillStyle = deltaVal >= 0 ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)';
+          ctx.fillText(deltaStr, cx, Math.min(h - this.layout.bottomMargin - 10, yLow + 10));
+          ctx.restore();
+        }
       }
 
       if (!hasLevels) {
@@ -1912,9 +1929,10 @@
 
     var ps = this.priceScale;
     var ts = this.timeScale;
-    var vpWidth = 40;
-    var vpX = w - vpWidth - 25;
-    var chartRight = vpX - 5; // limite droite du chart
+    var lay = this.layout;
+    var vpWidth = lay.vpWidth;
+    var vpX = w - vpWidth - 10;
+    var chartRight = vpX - 8;
 
     var visibleStart = ts.startTime;
     var visibleEnd = ts.endTime;
@@ -1961,16 +1979,29 @@
     var vah = vaPrices.reduce(function (a, b) { return Math.max(a, b); }, -Infinity);
     var val = vaPrices.reduce(function (a, b) { return Math.min(a, b); }, Infinity);
 
+    // VP background strip
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,0.02)';
+    ctx.fillRect(vpX, 0, vpWidth + 30, h);
+
+    // VP label
+    ctx.font = '8px "JetBrains Mono", monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillText('VP visible', vpX + 2, 4);
+
     // Draw VP histogram
     for (var pi = 0; pi < prices.length; pi++) {
       var price = prices[pi];
       var vol = volMap[price];
       var y = this.priceToY(price);
+      if (y < 0 || y > h) continue;
       var barW = (vol / maxVolLevel) * vpWidth;
 
-      // VA range: ligne horizontale subtile aux extremites
+      // VA edge lines
       if (price <= vah && price >= val && (price === vah || price === val)) {
-        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(vpX, y);
@@ -1978,13 +2009,18 @@
         ctx.stroke();
       }
 
-      // Volume bar
-      ctx.fillStyle = 'rgba(255,255,255,0.06)';
-      ctx.fillRect(vpX + vpWidth - barW, y - 3, barW, 6);
+      // Volume bar — gradient from dim to brighter based on volume ratio
+      var volRatio = vol / maxVolLevel;
+      var alpha = 0.04 + volRatio * 0.12;
+      ctx.fillStyle = 'rgba(255,255,255,' + alpha + ')';
+      ctx.fillRect(vpX + vpWidth - barW, y - 2, barW, 4);
 
-      // POC line
+      // POC highlight
       if (price === pocPrice) {
-        ctx.strokeStyle = 'rgba(245,158,11,0.6)';
+        ctx.fillStyle = 'rgba(245,158,11,0.25)';
+        ctx.fillRect(vpX + vpWidth - barW, y - 3, barW, 6);
+
+        ctx.strokeStyle = 'rgba(245,158,11,0.35)';
         ctx.lineWidth = 1;
         ctx.setLineDash([3, 3]);
         ctx.beginPath();
@@ -1995,17 +2031,18 @@
       }
     }
 
-    // VAH/VAL labels
+    // VAH/VAL/POC labels
     ctx.font = '8px "JetBrains Mono", monospace';
-    ctx.fillStyle = 'rgba(34,197,94,0.5)';
     ctx.textAlign = 'left';
-    ctx.fillText('VAH', vpX + vpWidth + 4, this.priceToY(vah) + 3);
-    ctx.fillStyle = 'rgba(239,68,68,0.5)';
-    ctx.fillText('VAL', vpX + vpWidth + 4, this.priceToY(val) + 3);
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(34,197,94,0.35)';
+    ctx.fillText('VAH', vpX + vpWidth + 4, this.priceToY(vah));
+    ctx.fillStyle = 'rgba(239,68,68,0.35)';
+    ctx.fillText('VAL', vpX + vpWidth + 4, this.priceToY(val));
+    ctx.fillStyle = 'rgba(245,158,11,0.5)';
+    ctx.fillText('POC', vpX + vpWidth + 4, this.priceToY(pocPrice));
 
-    // POC label
-    ctx.fillStyle = 'rgba(245,158,11,0.7)';
-    ctx.fillText('POC', vpX + vpWidth + 4, this.priceToY(pocPrice) + 3);
+    ctx.restore();
   };
 
 
