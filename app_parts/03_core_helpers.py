@@ -54,7 +54,7 @@ def _safe_columns(columns, table):
 # ---------- Rate limiter memoire (sans dependance externe) ----------
 
 from collections import defaultdict
-from time import time as _time
+import time as _time_mod
 from functools import wraps
 
 _ratelimit_buckets = defaultdict(list)
@@ -73,7 +73,7 @@ def ratelimit(max_per_minute=60):
     def decorator(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
-            now = _time()
+            now = _time_mod.time()
             key = f.__name__
             bucket = _ratelimit_buckets[key]
             cutoff = now - 60.0

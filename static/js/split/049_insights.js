@@ -300,6 +300,7 @@
     var from = document.getElementById("filterFrom");
     var to = document.getElementById("filterTo");
     var instr = document.getElementById("filterInstrument");
+    var strat = document.getElementById("filterStrategy");
     var refresh = document.getElementById("insightsRefreshBtn");
     if (!from || !to) return;
 

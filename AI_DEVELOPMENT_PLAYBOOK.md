@@ -1203,3 +1203,4 @@ if end_time is not None:
      - Couper/rallumer live: aucune reprise de controle de la vue si utilisateur detache.
      - `reset` / `auto` doivent recadrer explicitement.
 - Fichiers a surveiller: `static/js/split/066_orderflow_engine.js`, `static/js/split/066a_orderflow_viewport.js`, `tests/test_market_aggtrades.py`.
+ - Runtime hotfix prioritaire: si des routes API basculent en 500 avec `TypeError: 'module' object is not callable`, verifier les aliases globaux partages (`_time`, etc.) dans `app_parts`.

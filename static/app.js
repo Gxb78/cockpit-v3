@@ -8895,6 +8895,7 @@ function _closeSelect(trigger, dropdown) {
     var from = document.getElementById("filterFrom");
     var to = document.getElementById("filterTo");
     var instr = document.getElementById("filterInstrument");
+    var strat = document.getElementById("filterStrategy");
     var refresh = document.getElementById("insightsRefreshBtn");
     if (!from || !to) return;
 
@@ -17032,120 +17033,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   // OrderflowEngine — classe principale, boucle rAF
   // ============================================================
 
-  var OF = window.OF = {};
-
-  // ── VIEWPORT CONTROLLER ──
-  // Machine d'état centralisée pour toutes les mutations de la vue.
-  // Règle : un fetch data ne doit JAMAIS recadrer la vue si mode !== 'auto'.
-  // Le mode passe en 'manual' dès que l'utilisateur interagit.
-  OF.ViewportController = function (engine) {
-    this.engine = engine;
-    this.mode = 'auto';        // 'auto' | 'manual'
-    this.userDetached = false;
-
-    // Aliases lisibles vers timeScale/priceScale de l'engine
-    Object.defineProperty(this, 'timeRange', {
-      get: function () { return { from: engine.timeScale.startTime, to: engine.timeScale.endTime }; },
-      set: function (r) { engine.timeScale.startTime = r.from; engine.timeScale.endTime = r.to; engine._dirty = true; },
-    });
-    Object.defineProperty(this, 'priceRange', {
-      get: function () { return { from: engine.priceScale.minPrice, to: engine.priceScale.maxPrice }; },
-      set: function (r) { engine.priceScale.minPrice = r.from; engine.priceScale.maxPrice = r.to; engine._dirty = true; },
-    });
-  };
-
-  // Détecte une interaction utilisateur et bascule en manual si nécessaire
-  OF.ViewportController.prototype._touch = function (reason) {
-    if (this.mode === 'auto') {
-      this.mode = 'manual';
-      this.userDetached = true;
-    }
-  };
-
-  // Recadrer la vue sur les données. SILENCIEUX si mode=manual.
-  OF.ViewportController.prototype.setDataRange = function (reason) {
-    if (this.mode === 'manual') return;
-    this.engine._fitToData();
-  };
-
-  // Fit prix seulement (utilisé par les boutons Fit / touches)
-  OF.ViewportController.prototype.fitPrice = function (reason, margin) {
-    this._touch(reason);
-    this.engine._fitPrice(margin || 0.05);
-  };
-
-  // Fit temps (centrer sur donnees)
-  OF.ViewportController.prototype.fitTime = function (reason) {
-    this._touch(reason || 'fit-time');
-    this.engine._fitToData();
-  };
-
-  // Reset complet : range temporel défaut + fit price
-  OF.ViewportController.prototype.reset = function (reason) {
-    this._touch(reason);
-    this.engine._resetDefaultView();
-  };
-
-  // Pan libre temps+prix
-  OF.ViewportController.prototype.pan = function (dx, dy, reason) {
-    this._touch(reason || 'pan');
-    this.engine._pan(dx, dy);
-  };
-
-  // Scroll temps
-  OF.ViewportController.prototype.scrollTime = function (dir, pixels, reason) {
-    this._touch(reason || 'scroll');
-    this.engine._scrollTime(dir, pixels);
-  };
-
-  // Zoom prix uniquement
-  OF.ViewportController.prototype.zoomPrice = function (y, factor, reason) {
-    this._touch(reason || 'zoom');
-    this.engine._zoomPrice(y, factor);
-  };
-
-  // Zoom global prix+temps
-  OF.ViewportController.prototype.zoomGlobal = function (y, factor, reason) {
-    this._touch(reason || 'zoom');
-    this.engine._zoomGlobal(y, factor);
-  };
-
-  // Zoom temps uniquement
-  OF.ViewportController.prototype.zoomTime = function (factor, reason) {
-    this._touch(reason || 'zoom-time');
-    this.engine._zoomTime(factor);
-  };
-
-  // Decalage temporel (ms)
-  OF.ViewportController.prototype.nudgeTime = function (dtMs, reason) {
-    this._touch(reason || 'nudge-time');
-    this.engine.timeScale.startTime += dtMs;
-    this.engine.timeScale.endTime += dtMs;
-    this.engine._dirty = true;
-  };
-
-  // Decalage prix (unites)
-  OF.ViewportController.prototype.nudgePrice = function (dPrice, reason) {
-    this._touch(reason || 'nudge-price');
-    this.engine.priceScale.minPrice += dPrice;
-    this.engine.priceScale.maxPrice += dPrice;
-    this.engine._dirty = true;
-  };
-
-  // Bascule explicite des modes
-  OF.ViewportController.prototype.setMode = function (mode, userDetached) {
-    this.mode = mode === 'auto' ? 'auto' : 'manual';
-    this.userDetached = !!userDetached;
-  };
-
-  // Application explicite des ranges (seul point d'ecriture des scales)
-  OF.ViewportController.prototype.applyTimeRange = function (from, to) {
-    this.timeRange = { from: from, to: to };
-  };
-  OF.ViewportController.prototype.applyPriceRange = function (from, to) {
-    this.priceRange = { from: from, to: to };
-  };
-  // ── / VIEWPORT CONTROLLER
+  var OF = window.OF = window.OF || {};
 
   function OrderflowEngine(canvasId) {
     this.canvas = document.getElementById(canvasId);
@@ -17777,8 +17665,9 @@ TradeEditorController.renderHtml = function (day, trade) {
     ctx.fillStyle = '#0a0a0f';
     ctx.fillRect(0, 0, w, h);
     this._drawGrid(ctx, w, h);
+    this._drawFootprintCoverage(ctx, state, w, h);
     if (state.candles && state.candles.length > 0) {
-      this._drawFootprint(ctx, w, h);
+      this._drawFootprint(ctx, w, h, state);
       this._drawVolumeProfile(ctx, w, h);
     }
     this._drawPriceAxis(ctx, w, h);
@@ -17790,6 +17679,35 @@ TradeEditorController.renderHtml = function (day, trade) {
     ctx.textAlign = 'left';
     ctx.textBaseline = 'bottom';
     ctx.fillText(state.hint, 10, h - 2);
+  };
+
+  OrderflowEngine.prototype._drawFootprintCoverage = function (ctx, state, w, h) {
+    if (!state || !state.market || !state.market.footprintCoverage) return;
+    var fc = state.market.footprintCoverage;
+    if (!Number.isFinite(fc.start)) return;
+
+    var x = this.timeToX(fc.start);
+    if (x < this.layout.chartLeft || x > this.layout.chartRight) return;
+
+    ctx.save();
+    ctx.strokeStyle = fc.complete ? 'rgba(34,197,94,0.35)' : 'rgba(245,158,11,0.45)';
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(x, this.layout.topMargin);
+    ctx.lineTo(x, h - this.layout.bottomMargin);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+    ctx.font = '10px "JetBrains Mono", monospace';
+    ctx.fillStyle = fc.complete ? 'rgba(34,197,94,0.75)' : 'rgba(245,158,11,0.80)';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(
+      fc.complete ? 'Footprint 15m' : 'Footprint partial 15m',
+      Math.max(x + 6, this.layout.chartLeft + 6),
+      this.layout.topMargin + 6
+    );
+    ctx.restore();
   };
 
   OrderflowEngine.prototype.render = function () {
@@ -18094,6 +18012,10 @@ TradeEditorController.renderHtml = function (day, trade) {
   function initOrderflow() {
     var container = document.querySelector('.page[data-page="orderflow"]');
     if (!container) return;
+    if (!OF.ViewportController) {
+      setTimeout(initOrderflow, 0);
+      return;
+    }
     var engine = new OrderflowEngine('ofCanvas');
     window.__ofEngine = engine;
 
@@ -18760,7 +18682,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   // Footprint renderer
   // ============================================================
 
-  OrderflowEngine.prototype._drawFootprint = function (ctx, w, h) {
+  OrderflowEngine.prototype._drawFootprint = function (ctx, w, h, state) {
     var candles = this._candles;
     if (!candles || candles.length === 0) return;
 
@@ -18768,7 +18690,9 @@ TradeEditorController.renderHtml = function (day, trade) {
     var ts = this.timeScale;
     var visibleStart = ts.startTime;
     var visibleEnd = ts.endTime;
-    var coverage = this._getFootprintCoverageRange();
+    var coverage = (state && state.market && state.market.footprintCoverage)
+      ? state.market.footprintCoverage
+      : this._getFootprintCoverageRange();
     var coverageStart = coverage ? coverage.start : null;
     var coverageEnd = coverage ? coverage.end : null;
 
@@ -18887,7 +18811,6 @@ TradeEditorController.renderHtml = function (day, trade) {
       }
     }
 
-    this._drawFootprintCoverageMarker(ctx, coverageStart);
   };
 
   OrderflowEngine.prototype._getFootprintCoverageRange = function () {
@@ -18895,37 +18818,6 @@ TradeEditorController.renderHtml = function (day, trade) {
     var end = this.timeScale.endTime || Date.now();
     var start = end - this._footprintWindowMs;
     return { start: start, end: end };
-  };
-
-  OrderflowEngine.prototype._drawFootprintCoverageMarker = function (ctx, coverageStart) {
-    if (!Number.isFinite(coverageStart)) return;
-    if (coverageStart < this.timeScale.startTime || coverageStart > this.timeScale.endTime) return;
-
-    var x = this.timeToX(coverageStart);
-    var top = this.layout.topMargin;
-    var bottom = this.canvas.height / this.dpr - this.layout.bottomMargin;
-    if (!Number.isFinite(x) || x < this.layout.chartLeft || x > this.layout.chartRight) return;
-
-    ctx.save();
-    ctx.setLineDash([5, 4]);
-    ctx.strokeStyle = 'rgba(245,158,11,0.95)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x, top);
-    ctx.lineTo(x, bottom);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    var label = 'Footprint live coverage: last 15m';
-    ctx.font = '11px \"JetBrains Mono\", monospace';
-    var textW = ctx.measureText(label).width;
-    var px = Math.min(this.layout.chartRight - textW - 8, Math.max(this.layout.chartLeft + 8, x + 8));
-    var py = top + 14;
-    ctx.fillStyle = 'rgba(10,10,15,0.86)';
-    ctx.fillRect(px - 4, py - 10, textW + 8, 14);
-    ctx.fillStyle = 'rgba(245,158,11,0.95)';
-    ctx.fillText(label, px, py);
-    ctx.restore();
   };
 
   // ============================================================
@@ -19562,15 +19454,105 @@ TradeEditorController.renderHtml = function (day, trade) {
 
 // ---- 066a_orderflow_viewport.js ----
 // ---------- 066a_orderflow_viewport.js ----------
-// Couche viewport dediee: centralise les regles d'etat (auto/manual/follow-ready).
+// ViewportController orderflow: machine d'etat + setters uniques.
 
 (function () {
   'use strict';
 
   var OF = window.OF = window.OF || {};
-  if (!OF.ViewportController) return;
 
-  // Etat normalise expose pour debug/tests.
+  OF.ViewportController = function (engine) {
+    this.engine = engine;
+    this.mode = 'auto'; // 'auto' | 'manual'
+    this.userDetached = false;
+
+    Object.defineProperty(this, 'timeRange', {
+      get: function () { return { from: engine.timeScale.startTime, to: engine.timeScale.endTime }; },
+      set: function (r) { engine.timeScale.startTime = r.from; engine.timeScale.endTime = r.to; engine._dirty = true; },
+    });
+    Object.defineProperty(this, 'priceRange', {
+      get: function () { return { from: engine.priceScale.minPrice, to: engine.priceScale.maxPrice }; },
+      set: function (r) { engine.priceScale.minPrice = r.from; engine.priceScale.maxPrice = r.to; engine._dirty = true; },
+    });
+  };
+
+  OF.ViewportController.prototype._touch = function (reason) {
+    if (this.mode === 'auto') {
+      this.mode = 'manual';
+      this.userDetached = true;
+    }
+  };
+
+  OF.ViewportController.prototype.setDataRange = function (reason) {
+    if (this.mode === 'manual') return;
+    this.engine._fitToData();
+  };
+
+  OF.ViewportController.prototype.fitPrice = function (reason, margin) {
+    this._touch(reason);
+    this.engine._fitPrice(margin || 0.05);
+  };
+
+  OF.ViewportController.prototype.fitTime = function (reason) {
+    this._touch(reason || 'fit-time');
+    this.engine._fitToData();
+  };
+
+  OF.ViewportController.prototype.reset = function (reason) {
+    this._touch(reason);
+    this.engine._resetDefaultView();
+  };
+
+  OF.ViewportController.prototype.pan = function (dx, dy, reason) {
+    this._touch(reason || 'pan');
+    this.engine._pan(dx, dy);
+  };
+
+  OF.ViewportController.prototype.scrollTime = function (dir, pixels, reason) {
+    this._touch(reason || 'scroll');
+    this.engine._scrollTime(dir, pixels);
+  };
+
+  OF.ViewportController.prototype.zoomPrice = function (y, factor, reason) {
+    this._touch(reason || 'zoom');
+    this.engine._zoomPrice(y, factor);
+  };
+
+  OF.ViewportController.prototype.zoomGlobal = function (y, factor, reason) {
+    this._touch(reason || 'zoom');
+    this.engine._zoomGlobal(y, factor);
+  };
+
+  OF.ViewportController.prototype.zoomTime = function (factor, reason) {
+    this._touch(reason || 'zoom-time');
+    this.engine._zoomTime(factor);
+  };
+
+  OF.ViewportController.prototype.nudgeTime = function (dtMs, reason) {
+    this._touch(reason || 'nudge-time');
+    var r = this.timeRange;
+    this.applyTimeRange(r.from + dtMs, r.to + dtMs);
+  };
+
+  OF.ViewportController.prototype.nudgePrice = function (dPrice, reason) {
+    this._touch(reason || 'nudge-price');
+    var r = this.priceRange;
+    this.applyPriceRange(r.from + dPrice, r.to + dPrice);
+  };
+
+  OF.ViewportController.prototype.setMode = function (mode, userDetached) {
+    this.mode = mode === 'auto' ? 'auto' : 'manual';
+    this.userDetached = !!userDetached;
+  };
+
+  OF.ViewportController.prototype.applyTimeRange = function (from, to) {
+    this.timeRange = { from: from, to: to };
+  };
+  OF.ViewportController.prototype.applyPriceRange = function (from, to) {
+    this.priceRange = { from: from, to: to };
+  };
+
+  // Extensions utiles debug/ops
   OF.ViewportController.prototype.getState = function () {
     return {
       mode: this.mode,
@@ -19580,17 +19562,13 @@ TradeEditorController.renderHtml = function (day, trade) {
     };
   };
 
-  // Utilitaire explicite pour repasser en mode auto.
   OF.ViewportController.prototype.enableAuto = function (reason) {
     this.setMode('auto', false);
     this.setDataRange(reason || 'auto-enable');
   };
 
-  // Hook live: ne recadre jamais en mode manual.
   OF.ViewportController.prototype.onLiveTrade = function (_trade) {
     if (this.mode !== 'auto' || this.userDetached) return;
-    // En auto, on ne force pas ici de recadrage agressif: le flux live met
-    // juste a jour les donnees; le moteur decide quand ajuster la vue.
   };
 })();
 
