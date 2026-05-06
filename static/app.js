@@ -17034,6 +17034,77 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   var OF = window.OF = {};
 
+  // ── VIEWPORT CONTROLLER ──
+  // Machine d'état centralisée pour toutes les mutations de la vue.
+  // Règle : un fetch data ne doit JAMAIS recadrer la vue si mode !== 'auto'.
+  // Le mode passe en 'manual' dès que l'utilisateur interagit.
+  OF.ViewportController = function (engine) {
+    this.engine = engine;
+    this.mode = 'auto';        // 'auto' | 'manual'
+    this.userDetached = false;
+
+    // Aliases lisibles vers timeScale/priceScale de l'engine
+    Object.defineProperty(this, 'timeRange', {
+      get: function () { return { from: engine.timeScale.startTime, to: engine.timeScale.endTime }; },
+      set: function (r) { engine.timeScale.startTime = r.from; engine.timeScale.endTime = r.to; engine._dirty = true; },
+    });
+    Object.defineProperty(this, 'priceRange', {
+      get: function () { return { from: engine.priceScale.minPrice, to: engine.priceScale.maxPrice }; },
+      set: function (r) { engine.priceScale.minPrice = r.from; engine.priceScale.maxPrice = r.to; engine._dirty = true; },
+    });
+  };
+
+  // Détecte une interaction utilisateur et bascule en manual si nécessaire
+  OF.ViewportController.prototype._touch = function (reason) {
+    if (this.mode === 'auto') {
+      this.mode = 'manual';
+      this.userDetached = true;
+    }
+  };
+
+  // Recadrer la vue sur les données. SILENCIEUX si mode=manual.
+  OF.ViewportController.prototype.setDataRange = function (reason) {
+    if (this.mode === 'manual') return;
+    this.engine._fitToData();
+  };
+
+  // Fit prix seulement (utilisé par les boutons Fit / touches)
+  OF.ViewportController.prototype.fitPrice = function (reason, margin) {
+    this._touch(reason);
+    this.engine._fitPrice(margin || 0.05);
+  };
+
+  // Reset complet : range temporel défaut + fit price
+  OF.ViewportController.prototype.reset = function (reason) {
+    this._touch(reason);
+    this.engine._resetDefaultView();
+  };
+
+  // Pan libre temps+prix
+  OF.ViewportController.prototype.pan = function (dx, dy, reason) {
+    this._touch(reason || 'pan');
+    this.engine._pan(dx, dy);
+  };
+
+  // Scroll temps
+  OF.ViewportController.prototype.scrollTime = function (dir, pixels, reason) {
+    this._touch(reason || 'scroll');
+    this.engine._scrollTime(dir, pixels);
+  };
+
+  // Zoom prix uniquement
+  OF.ViewportController.prototype.zoomPrice = function (y, factor, reason) {
+    this._touch(reason || 'zoom');
+    this.engine._zoomPrice(y, factor);
+  };
+
+  // Zoom global prix+temps
+  OF.ViewportController.prototype.zoomGlobal = function (y, factor, reason) {
+    this._touch(reason || 'zoom');
+    this.engine._zoomGlobal(y, factor);
+  };
+  // ── / VIEWPORT CONTROLLER
+
   function OrderflowEngine(canvasId) {
     this.canvas = document.getElementById(canvasId);
     if (!this.canvas) throw new Error('Canvas #' + canvasId + ' not found');
@@ -17068,6 +17139,9 @@ TradeEditorController.renderHtml = function (day, trade) {
 
     // Indicateur de dirty — on ne redraw que si nécessaire
     this._dirty = true;
+
+    // Viewport controller — centralise toutes les mutations de la vue
+    this.viewport = new OF.ViewportController(this);
 
     // Dernières dimensions connues (pour détecter les changements)
     this._lastW = 0;
@@ -17203,27 +17277,26 @@ TradeEditorController.renderHtml = function (day, trade) {
 
       // Ctrl+wheel = zoom prix uniquement
       if (e.ctrlKey || e.metaKey) {
-        self._zoomPrice(e.offsetY, e.deltaY < 0 ? 1.08 : 0.92);
+        self.viewport.zoomPrice(e.offsetY, e.deltaY < 0 ? 1.08 : 0.92, 'ctrl-wheel');
         return;
       }
 
       // Sur l'axe prix : wheel vertical = zoom prix uniquement
       var inPriceAxis = e.offsetX > self.layout.chartRight;
       if (inPriceAxis && e.deltaY !== 0) {
-        self._zoomPrice(e.offsetY, e.deltaY < 0 ? 1.08 : 0.92);
+        self.viewport.zoomPrice(e.offsetY, e.deltaY < 0 ? 1.08 : 0.92, 'price-axis-wheel');
         return;
       }
 
       // Dans la zone chart : wheel vertical = zoom global (prix + temps)
-      // Glisser haut = dezoom, glisser bas = zoom
       if (e.deltaY !== 0) {
-        self._zoomGlobal(e.offsetY, e.deltaY < 0 ? 0.92 : 1.08);
+        self.viewport.zoomGlobal(e.offsetY, e.deltaY < 0 ? 0.92 : 1.08, 'chart-wheel');
         return;
       }
 
       // Wheel horizontal / trackpad lateral = scroll temps
       if (e.deltaX !== 0) {
-        self._scrollTime(e.deltaX > 0 ? 1 : -1, Math.abs(e.deltaX) * 0.8);
+        self.viewport.scrollTime(e.deltaX > 0 ? 1 : -1, Math.abs(e.deltaX) * 0.8, 'wheel-h');
       }
     }, { passive: false });
 
@@ -17260,7 +17333,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 
         self._hasMoved = true;
         // Drag libre : pan temps + prix simultanément
-        self._pan(dx, dy);
+        self.viewport.pan(dx, dy, 'drag');
       } else {
         self._dirty = true;
         c.style.cursor = e.offsetX > self.layout.chartRight ? 'ns-resize' : 'grab';
@@ -17285,7 +17358,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 
     // Double-click — reset zoom
     c.addEventListener('dblclick', function () {
-      self._resetView();
+      self.viewport.reset('dblclick');
     });
 
     // Resize
@@ -17307,95 +17380,86 @@ TradeEditorController.renderHtml = function (day, trade) {
 
     var k = e.key.toLowerCase();
     var handled = false;
+    var vp = this.viewport;
+    var centerY = this.canvas ? (this.canvas.height / 2 / (this.dpr || 1)) : 0;
 
-    // Space = reset vue complète
+    // Space/Enter = reset vue complète
     if (k === ' ' || k === 'enter') {
-      this._resetView();
+      vp.reset('key-space');
       handled = true;
     }
-    // H = centrer times (fit horizontal)
+    // H = fit temps (centrer sur les bougies)
     else if (k === 'h') {
+      vp._touch('key-h');
       this._fitToData();
       handled = true;
     }
-    // P = centrer prix (fit vertical)
+    // P = fit prix
     else if (k === 'p') {
-      var candles = this._candles;
-      if (candles && candles.length > 0) {
-        var minP = candles[0].low, maxP = candles[0].high;
-        for (var i = 0; i < candles.length; i++) {
-          if (candles[i].low < minP) minP = candles[i].low;
-          if (candles[i].high > maxP) maxP = candles[i].high;
-        }
-        var pad = (maxP - minP) * 0.15 || 200;
-        this.priceScale.minPrice = minP - pad;
-        this.priceScale.maxPrice = maxP + pad;
-      }
+      vp.fitPrice('key-p', 0.15);
       handled = true;
     }
-    // +/= = zoom prix IN (12%)
+    // +/= = zoom prix IN
     else if (k === '+' || k === '=') {
-      var centerY = this.canvas.height / 2 / (this.dpr || 1);
-      this._zoomPrice(centerY, 1.12);
+      vp.zoomPrice(centerY, 1.12, 'key-plus');
       handled = true;
     }
-    // - = zoom prix OUT (11%)
+    // -/_ = zoom prix OUT
     else if (k === '-' || k === '_') {
-      var centerY = this.canvas.height / 2 / (this.dpr || 1);
-      this._zoomPrice(centerY, 0.89);
+      vp.zoomPrice(centerY, 0.89, 'key-minus');
       handled = true;
     }
     // I = zoom IN prix
     else if (k === 'i') {
-      var centerY = this.canvas.height / 2 / (this.dpr || 1);
-      this._zoomPrice(centerY, 1.15);
+      vp.zoomPrice(centerY, 1.15, 'key-i');
       handled = true;
     }
     // O = zoom OUT prix
     else if (k === 'o') {
-      var centerY = this.canvas.height / 2 / (this.dpr || 1);
-      this._zoomPrice(centerY, 0.87);
+      vp.zoomPrice(centerY, 0.87, 'key-o');
       handled = true;
     }
-    // R = reset complètement (vue par défaut)
+    // R = reset complet (vue par défaut)
     else if (k === 'r') {
+      vp._touch('key-r');
       this._resetDefaultView();
       handled = true;
     }
-    // Arrow keys = fine scroll temps
+    // Arrow keys = scroll temps
     else if (k === 'arrowleft') {
-      var ts = this.timeScale;
-      var dt = -(ts.endTime - ts.startTime) * 0.05; // 5% du range
-      ts.startTime += dt;
-      ts.endTime += dt;
+      var dt = -(this.timeScale.endTime - this.timeScale.startTime) * 0.05;
+      vp._touch('key-left');
+      this.timeScale.startTime += dt;
+      this.timeScale.endTime += dt;
+      this._dirty = true;
       handled = true;
     } else if (k === 'arrowright') {
-      var ts = this.timeScale;
-      var dt = (ts.endTime - ts.startTime) * 0.05;
-      ts.startTime += dt;
-      ts.endTime += dt;
+      var dt = (this.timeScale.endTime - this.timeScale.startTime) * 0.05;
+      vp._touch('key-right');
+      this.timeScale.startTime += dt;
+      this.timeScale.endTime += dt;
+      this._dirty = true;
       handled = true;
     }
-    // Arrow up = pan prix DOWN (zoom out visuel, prix monte)
+    // Arrow up/down = pan prix
     else if (k === 'arrowup') {
-      var ps = this.priceScale;
-      var dp = (ps.maxPrice - ps.minPrice) * 0.02; // 2% du range
-      ps.minPrice -= dp;
-      ps.maxPrice -= dp;
+      vp._touch('key-up');
+      var dp = (this.priceScale.maxPrice - this.priceScale.minPrice) * 0.02;
+      this.priceScale.minPrice -= dp;
+      this.priceScale.maxPrice -= dp;
+      this._dirty = true;
       handled = true;
-    }
-    // Arrow down = pan prix UP (zoom in visuel, prix baisse)
-    else if (k === 'arrowdown') {
-      var ps = this.priceScale;
-      var dp = (ps.maxPrice - ps.minPrice) * 0.02;
-      ps.minPrice += dp;
-      ps.maxPrice += dp;
+    } else if (k === 'arrowdown') {
+      vp._touch('key-down');
+      var dp = (this.priceScale.maxPrice - this.priceScale.minPrice) * 0.02;
+      this.priceScale.minPrice += dp;
+      this.priceScale.maxPrice += dp;
+      this._dirty = true;
       handled = true;
     }
 
     if (handled) {
       e.preventDefault();
-      this._dirty = true;
     }
   };
 
@@ -17512,8 +17576,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     if (fitBtn) {
       fitBtn.addEventListener('click', function () {
         if (self._candles.length === 0) return;
-        self._fitPrice(0.05); // 5% margin
-        self._dirty = true;
+        self.viewport.fitPrice('fit-btn', 0.05);
         self._setStatus(self._buildStatus());
       });
     }
@@ -17522,7 +17585,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     var resetBtn = document.getElementById('ofResetBtn');
     if (resetBtn) {
       resetBtn.addEventListener('click', function () {
-        self._resetDefaultView();
+        self.viewport.reset('reset-btn');
       });
     }
   };
@@ -18122,7 +18185,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     var expectedRecent = Math.ceil(900000 / self._intervalMs); // bougies attendues dans les 15min
     self._partialData = fpCandleCount < expectedRecent && trades.length > 0;
 
-    self._fitToData();
+    self.viewport.setDataRange('load');
     self._dirty = true;
     self._updateStatsPanel();
 
@@ -18159,7 +18222,9 @@ TradeEditorController.renderHtml = function (day, trade) {
   /** Revenir en mode auto-range */
   OrderflowEngine.prototype.setAutoRange = function () {
     this._rangeUserOverridden = false;
-    this.setInterval(this._interval); // va appliquer auto-range
+    this.viewport.mode = 'auto';
+    this.viewport.userDetached = false;
+    this.setInterval(this._interval); // va appliquer auto-range via setDataRange
   };
 
   /** Recharger les donnees (force fetch — ignore le cache) */
