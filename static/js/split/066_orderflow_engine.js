@@ -122,17 +122,15 @@
   // Decalage temporel (ms)
   OF.ViewportController.prototype.nudgeTime = function (dtMs, reason) {
     this._touch(reason || 'nudge-time');
-    this.engine.timeScale.startTime += dtMs;
-    this.engine.timeScale.endTime += dtMs;
-    this.engine._dirty = true;
+    var r = this.timeRange;
+    this.applyTimeRange(r.from + dtMs, r.to + dtMs);
   };
 
   // Decalage prix (unites)
   OF.ViewportController.prototype.nudgePrice = function (dPrice, reason) {
     this._touch(reason || 'nudge-price');
-    this.engine.priceScale.minPrice += dPrice;
-    this.engine.priceScale.maxPrice += dPrice;
-    this.engine._dirty = true;
+    var r = this.priceRange;
+    this.applyPriceRange(r.from + dPrice, r.to + dPrice);
   };
 
   // Bascule explicite des modes

@@ -97,6 +97,50 @@ class MarketAggTradesTests(unittest.TestCase):
         self.assertIn("age", second.json["cache"])
         self.assertIsNone(second.json["upstream_error"])
 
+    def test_soft_mode_returns_unavailable_on_binance_error(self):
+        def fake_fetch_error(_path_qs):
+            return None, ({"error": "Binance unavailable"}, 502)
+
+        app_parts._fetch_binance_agg = fake_fetch_error
+        url = "/api/market/aggtrades?symbol=BTCUSDT&startTime=1700000000000&endTime=1700000060000&limit=1000&soft=1"
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.is_json)
+        self.assertEqual(resp.json["source"], "unavailable")
+        self.assertEqual(resp.json["trades"], [])
+        self.assertEqual(resp.json["count"], 0)
+        self.assertFalse(resp.json["cache"]["hit"])
+        self.assertFalse(resp.json["cache"]["stale"])
+        self.assertEqual(resp.json["upstream_error"], "Binance unavailable")
+
+    def test_stale_cache_fallback_sets_stale_and_upstream_error(self):
+        def fake_fetch_ok(_path_qs):
+            return [{
+                "id": 1,
+                "time": 1_700_000_000_000,
+                "price": 100.0,
+                "qty": 1.0,
+                "side": "buy",
+            }], None
+
+        url = "/api/market/aggtrades?symbol=BTCUSDT&startTime=1700000000000&endTime=1700000060000&limit=1000"
+        app_parts._fetch_binance_agg = fake_fetch_ok
+        first = self.client.get(url)
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.json["source"], "binance")
+
+        def fake_fetch_error(_path_qs):
+            return None, ({"error": "temporary upstream failure"}, 502)
+
+        app_parts._fetch_binance_agg = fake_fetch_error
+        # force=1 bypass le cache frais, ce qui force la branche stale fallback.
+        stale = self.client.get(url + "&force=1")
+        self.assertEqual(stale.status_code, 200)
+        self.assertEqual(stale.json["source"], "cache")
+        self.assertTrue(stale.json["cache"]["hit"])
+        self.assertTrue(stale.json["cache"]["stale"])
+        self.assertEqual(stale.json["upstream_error"], "temporary upstream failure")
+
 
 if __name__ == "__main__":
     unittest.main()

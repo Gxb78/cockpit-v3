@@ -1186,3 +1186,20 @@ if end_time is not None:
 - Test de non-regression: Charger le widget BTC -> le prix apparait des que `/api/market/klines` repond. Le countdown affiche un decompte, pas `—`. Changer de timeframe -> prix et countdown se mettent a jour immediatement (cache puis fetch).
 - Changement: Restauration des side-effects dans `_fetchAndRender()` (chemin cache + chemin reseau). `_fetchWidgetCandles` retourne `data` complet pour sync `BtcMarketClock` via `serverTime`.
 - Fichiers a surveiller: `static/js/split/060_btc_chart_widget.js` (`_fetchAndRender`, `_fetchWidgetCandles`).
+
+### BUG-20260506-03 - [RESOLU] Contrat viewport orderflow non etanche en mode manuel
+
+- Symptome: Des mutations directes `timeScale/priceScale` subsistaient hors setters uniques (notamment nudge/zoom), ce qui rendait le comportement manuel fragile apres interaction utilisateur.
+- Cause racine: `OF.ViewportController` et le moteur utilisaient encore des ecritures directes sur les scales au lieu d'un point d'entree unique.
+- Regle de prevention: Toute mutation viewport doit passer par `applyTimeRange()` / `applyPriceRange()`; `066_orderflow_engine.js` definit le controller principal et `066a_orderflow_viewport.js` l'etend uniquement (migration progressive explicite).
+- Test de non-regression:
+  1. Backend aggTrades:
+     - `soft=1` + erreur Binance -> `200`, `source=\"unavailable\"`, `trades=[]`.
+     - stale cache fallback -> `source=\"cache\"`, `cache.stale=true`, `upstream_error` renseigne.
+  2. Checklist manuelle orderflow viewport (mode manual):
+     - Interagir (drag/zoom/wheel) pour passer en manual.
+     - `reload` ne doit pas recadrer la vue manuelle.
+     - Changer timeframe puis revenir: la vue ne doit pas \"sauter\" hors action explicite reset/auto.
+     - Couper/rallumer live: aucune reprise de controle de la vue si utilisateur detache.
+     - `reset` / `auto` doivent recadrer explicitement.
+- Fichiers a surveiller: `static/js/split/066_orderflow_engine.js`, `static/js/split/066a_orderflow_viewport.js`, `tests/test_market_aggtrades.py`.

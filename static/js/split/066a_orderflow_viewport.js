@@ -1,5 +1,7 @@
 // ---------- 066a_orderflow_viewport.js ----------
 // Couche viewport dediee: centralise les regles d'etat (auto/manual/follow-ready).
+// Note: la classe OF.ViewportController est definie dans 066_orderflow_engine.js,
+// puis etendue ici pour garder une migration progressive sans casser le runtime.
 
 (function () {
   'use strict';
