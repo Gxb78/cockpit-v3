@@ -523,11 +523,14 @@ def market_aggtrades():
         if not batch:
             break
 
-        # Si c'est la première page, filtrer les trades > endTime
-        if not next_from_id and end_time:
+        # Filtrer TOUS les batches par start_time/end_time (pas seulement la première page)
+        # La pagination via fromId ne garantit pas endTime
+        if start_time is not None:
+            batch = [t for t in batch if t["time"] >= start_time]
+        if end_time is not None:
             batch = [t for t in batch if t["time"] <= end_time]
-            if not batch:
-                break
+        if not batch:
+            break
 
         all_trades.extend(batch)
         pages_used += 1

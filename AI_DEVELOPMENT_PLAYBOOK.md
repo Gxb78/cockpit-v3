@@ -1141,6 +1141,23 @@ the chart when Binance is unreachable for bounded queries.
 **Fichiers à surveiller:** `app_parts/24_market_history_cache.py`, `app_parts/__init__.py` (ordre de chargement), `data/journal.db` (table market_klines).
 
 
+### Lecon T-0010: Filtre endTime sur TOUTES les pages aggTrades (5 mai 2026)
+
+**Problème:** La pagination aggTrades utilisait `fromId` après la première page, mais `fromId` ne respecte pas `endTime`. Les pages suivantes pouvaient retourner des trades POSTÉRIEURS à la fenêtre demandée, polluant la footprint avec des données hors-fenêtre.
+
+**Correction:** Appliquer le filtre `start_time`/`end_time` sur CHAQUE batch, pas seulement la première page :
+```python
+if start_time is not None:
+    batch = [t for t in batch if t["time"] >= start_time]
+if end_time is not None:
+    batch = [t for t in batch if t["time"] <= end_time]
+```
+
+**Règle:** Toute pagination avec `fromId` (aggTrades) ou `startTime` (klines) doit filtrer les bornes temporelles sur CHAQUE page, pas seulement la première. `fromId` ne garanti pas le respect d'`endTime` — c'est un ID séquentiel, pas une garantie temporelle.
+
+**Test de non-régression:** `GET /api/market/aggtrades?symbol=BTCUSDT&startTime=X&endTime=Y&limit=8000` → aucun `trade.time < X`, aucun `trade.time > Y`.
+
+
 ### BUG-20260505-02 - [RESOLU] Prix/countdown/timers perdus apres refactor _fetchAndRender
 
 - Symptome: Le prix BTC met du temps a s'afficher (attend le WS retarde de 700ms). Le countdown reste sur `—`. L'auto-refresh REST ne se declenche jamais.
