@@ -1800,7 +1800,30 @@
 
       // === 3. FOOTPRINT LEVELS (overlay, seulement si disponibles) ===
       var levels = Array.isArray(c.levels) ? c.levels : [];
-      if (levels.length === 0) {
+      var hasLevels = levels.length > 0;
+      var isRealFootprint = inCoverage && hasLevels;
+
+      // Hors footprint réel : body plus transparent
+      if (!isRealFootprint) {
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = isBull ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)';
+        ctx.fillRect(cx - minCandleW/2, bodyTop, minCandleW, bodyH);
+        ctx.globalAlpha = 1;
+      }
+
+      // Delta label pour les bougies avec footprint réel
+      if (isRealFootprint && c.delta != null) {
+        ctx.save();
+        ctx.font = '9px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        var deltaVal = Math.round(c.delta);
+        ctx.fillStyle = deltaVal >= 0 ? 'rgba(34,197,94,0.85)' : 'rgba(239,68,68,0.85)';
+        ctx.fillText(String(deltaVal), cx, Math.min(h - this.layout.bottomMargin - 12, yLow + 12));
+        ctx.restore();
+      }
+
+      if (!hasLevels) {
         // Compact sans footprint: body transparent
         if (renderMode === 'compact') {
           ctx.fillStyle = isBull ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)';
