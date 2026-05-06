@@ -280,18 +280,17 @@
             self.scrollStart.timeEnd + dt
           );
         }
-        // Drag sur l'axe prix = pan prix uniquement (via snapshots)
+        // Drag sur l'axe prix = ZOOM prix (rétrécir/agrandir le range vertical)
         else {
-          self.viewport._touch('drag-price');
-          var dp = dy / self.scrollStart.pixelsPerPrice;
-          self.viewport.applyPriceRange(
-            self.scrollStart.priceMin + dp,
-            self.scrollStart.priceMax + dp
-          );
+          self.viewport._touch('drag-price-zoom');
+          // dy > 0 (drag bas) → zoom out, dy < 0 (drag haut) → zoom in
+          var factor = 1 + dy * 0.003;
+          factor = Math.max(0.5, Math.min(2, factor));
+          self.viewport.zoomPrice(e.offsetY, factor, 'price-axis-drag');
         }
       } else {
         self._dirty = true;
-        c.style.cursor = e.offsetX > self.layout.chartRight ? 'ns-resize' : 'grab';
+        c.style.cursor = e.offsetX > self.layout.chartRight ? 'row-resize' : 'grab';
       }
     });
 
@@ -684,7 +683,7 @@
     return {
       candles: this._candles,
       inCanvas: this.inCanvas,
-      hint: 'Drag↔=pan temps  Drag axe prix=pan prix  Shift+Drag=zoom prix  Wheel↕ chart=zoom temps  Wheel axe prix=zoom prix  Ctrl+Wheel=zoom global  Wheel↔=scroll temps  +/-=zoom prix  Space=reset  H=fit temps  P=fit prix  R=defaut',
+      hint: 'Drag↔=pan temps  Drag axe prix=zoom prix  Shift+Drag=zoom prix  Wheel↕ chart=zoom temps  Wheel axe prix=zoom prix  Ctrl+Wheel=zoom global  Wheel↔=scroll temps  +/-=zoom prix  Space=reset  H=fit temps  P=fit prix  R=defaut',
       market: this._marketState,
     };
   };
