@@ -17415,9 +17415,11 @@ TradeEditorController.renderHtml = function (day, trade) {
         if (interval === self._interval) return;
         tfBtns.forEach(function (b) { b.classList.remove('active'); });
         this.classList.add('active');
-        self._interval = interval;
+        // NE PAS toucher self._interval ici — setInterval() est le seul propriétaire
         if (self._loadTimer) clearTimeout(self._loadTimer);
-        self._loadTimer = setTimeout(function () { self.setInterval(interval); }, 200);
+        self._loadTimer = setTimeout(function () {
+          self.setInterval(interval, { source: 'timeframe-button', resetView: true });
+        }, 200);
       });
     });
 
@@ -18466,32 +18468,49 @@ TradeEditorController.renderHtml = function (day, trade) {
   };
 
   /** Changer le timeframe — re-aggregation locale si on a deja les rawTrades */
-  OrderflowEngine.prototype.setInterval = function (interval) {
-    if (interval === this._interval) return;
+  /** Timeframe ranges par défaut — auto-range adapté au timeframe */
+  OrderflowEngine.prototype._getAutoRangeMs = function (interval) {
+    var map = {
+      '1m': 60 * 60 * 1000,     // 1h
+      '3m': 2 * 60 * 60 * 1000,  // 2h
+      '5m': 3 * 60 * 60 * 1000,  // 3h
+      '15m': 6 * 60 * 60 * 1000, // 6h
+      '30m': 12 * 60 * 60 * 1000,// 12h
+      '1h': 24 * 60 * 60 * 1000, // 24h
+    };
+    return map[interval] || 2 * 60 * 60 * 1000;
+  };
+
+  OrderflowEngine.prototype.setInterval = function (interval, opts) {
+    opts = opts || {};
+    if (!interval) return;
+
+    var changed = interval !== this._interval;
+    if (!changed && !opts.force) return;
+
     this._interval = interval;
     this._intervalMs = this._intervalToMs(interval);
+
+    // Auto-range : recalcule le range logique par timeframe si pas d'override
     if (!this._rangeUserOverridden) {
-      var suggested = this._suggestRange(interval);
-      if (suggested !== this._requestedRangeMs) {
-        this._requestedRangeMs = suggested;
-        // Auto range button active, desactiver les ranges manuels
-        var rangeBtns = document.querySelectorAll('.of-range-btn');
-        var autoBtn = document.getElementById('ofAutoRange');
-        rangeBtns.forEach(function (b) { b.classList.remove('active'); });
-        rangeBtns.forEach(function (b) {
-          if (Number(b.dataset.range) === suggested) b.classList.add('active');
-        });
-        if (autoBtn) autoBtn.classList.add('active');
-      }
+      this._requestedRangeMs = this._getAutoRangeMs(interval);
     }
+
+    // Sur changement de timeframe, repasser en mode auto (vue claire)
+    if (this.viewport && this.viewport.setMode) {
+      this.viewport.setMode('auto', false);
+    }
+
     if (this._klinesCandles && this._klinesCandles.length > 0) {
       // Intervalle change → re-fetch complet (klines au nouvel intervalle)
-      this.loadData(this._symbol, interval);
+      this.loadData(this._symbol, this._interval);
     } else if (this._rawTrades && this._rawTrades.length > 0 && this._currentRange) {
       this._reaggregate();
     } else {
+      // Pas encore de donnees → loadData initial
       this.loadData(this._symbol, interval);
     }
+    this._setStatus(this._buildStatus());
   };
 
   /** Changer le tick size (price step) — re-aggregation locale uniquement */
