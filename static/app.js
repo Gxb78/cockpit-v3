@@ -17273,17 +17273,19 @@ TradeEditorController.renderHtml = function (day, trade) {
         else if (!(e.offsetX > self.layout.chartRight)) {
           self.viewport._touch('drag-time');
           var dt = -dx / self.scrollStart.pixelsPerMs;
-          self.timeScale.startTime = self.scrollStart.time + dt;
-          self.timeScale.endTime = self.scrollStart.timeEnd + dt;
-          self._dirty = true;
+          self.viewport.applyTimeRange(
+            self.scrollStart.time + dt,
+            self.scrollStart.timeEnd + dt
+          );
         }
         // Drag sur l'axe prix = pan prix uniquement (via snapshots)
         else {
           self.viewport._touch('drag-price');
           var dp = dy / self.scrollStart.pixelsPerPrice;
-          self.priceScale.minPrice = self.scrollStart.priceMin + dp;
-          self.priceScale.maxPrice = self.scrollStart.priceMax + dp;
-          self._dirty = true;
+          self.viewport.applyPriceRange(
+            self.scrollStart.priceMin + dp,
+            self.scrollStart.priceMax + dp
+          );
         }
       } else {
         self._dirty = true;
