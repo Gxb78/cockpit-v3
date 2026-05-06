@@ -17750,7 +17750,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     ctx.font = '9px "JetBrains Mono", monospace';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'bottom';
-    ctx.fillText('Drag libre=pan temps+prix  Shift+Drag↕=zoom prix  Wheel↑=rétrécir temps  Wheel↓=agrandir temps  Ctrl+Wheel=zoom global  +/-=zoom prix  Space=reset  H=temps  P=prix  R=défaut', 10, h - 2);
+    ctx.fillText('Drag=pan libre  Wheel↕ chart=zoom temps+prix  Wheel axe prix=zoom prix  Ctrl+Wheel=zoom prix  Wheel↔=scroll temps  +/-=zoom prix  Space=reset  H=temps  P=prix  R=défaut', 10, h - 2);
   };
 
   /**
