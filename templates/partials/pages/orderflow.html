@@ -3,21 +3,21 @@
   <div class="of-layout">
     <canvas id="ofCanvas" class="of-canvas"></canvas>
 
-    <!-- Top bar avec labels de groupe -->
+    <!-- Top bar moderne -->
     <div class="of-topbar">
-      <div class="of-topbar-row of-topbar-row-1">
+      <div class="of-topbar-main">
+        <!-- Symbole -->
         <div class="of-pair-selector">
           <button type="button" class="of-pair-btn active" data-symbol="BTCUSDT">BTC/USDT</button>
           <button type="button" class="of-pair-btn" data-symbol="ETHUSDT">ETH/USDT</button>
           <button type="button" class="of-pair-btn" data-symbol="SOLUSDT">SOL/USDT</button>
         </div>
+
         <span class="of-sep"></span>
-        <button type="button" id="ofLiveBtn" class="of-live-btn active" title="Activer/desactiver le live">Live</button>
-        <button type="button" id="ofReloadBtn" class="of-reload-btn" title="Recharger les donnees">↻</button>
-      </div>
-      <div class="of-topbar-row of-topbar-row-2">
+
+        <!-- Bougie -->
         <div class="of-group">
-          <span class="of-group-label">Bougie</span>
+          <span class="of-group-label">Candle</span>
           <div class="of-timeframes">
             <button type="button" class="of-tf-btn active" data-interval="3m">3m</button>
             <button type="button" class="of-tf-btn" data-interval="5m">5m</button>
@@ -25,6 +25,10 @@
             <button type="button" class="of-tf-btn" data-interval="1h">1H</button>
           </div>
         </div>
+
+        <span class="of-sep"></span>
+
+        <!-- Range -->
         <div class="of-group">
           <span class="of-group-label">Range</span>
           <div class="of-range-group">
@@ -36,6 +40,10 @@
             <button type="button" class="of-range-btn" data-range="10800000">3H</button>
           </div>
         </div>
+
+        <span class="of-sep"></span>
+
+        <!-- Step -->
         <div class="of-group">
           <span class="of-group-label">Step</span>
           <div class="of-step-group">
@@ -45,12 +53,17 @@
             <button type="button" class="of-step-btn" data-step="50">$50</button>
           </div>
         </div>
-        <div class="of-group of-group--actions">
-          <button type="button" id="ofFitBtn" class="of-action-btn" title="Ajuster le range prix aux bougies visibles">⊞ Fit</button>
-          <button type="button" id="ofResetBtn" class="of-action-btn" title="Reset au range par défaut">⟲ Reset</button>
-        </div>
+
         <span class="of-sep"></span>
-        <span id="ofStatus" class="of-status" aria-live="polite">initializing…</span>
+
+        <!-- Actions -->
+        <button type="button" id="ofLiveBtn" class="of-live-btn active" title="Activer/desactiver le live">Live</button>
+        <button type="button" id="ofReloadBtn" class="of-reload-btn" title="Recharger les donnees">↻</button>
+        <button type="button" id="ofFitBtn" class="of-action-btn" title="Ajuster le range prix">⊞ Fit</button>
+        <button type="button" id="ofResetBtn" class="of-action-btn" title="Reset au range par défaut">⟲ Reset</button>
+      </div>
+      <div class="of-topbar-status">
+        <span id="ofStatus" class="of-status-pill" aria-live="polite">initializing…</span>
       </div>
     </div>
     <div id="ofStats" class="of-stats hidden"></div>

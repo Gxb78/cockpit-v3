@@ -1366,21 +1366,26 @@
 
   /** Construire le message de status */
   OrderflowEngine.prototype._buildStatus = function () {
-    var parts = [this._symbol + ' ' + this._interval];
+    var parts = [this._symbol + ' · ' + this._interval + ' candles'];
     if (this._candles.length > 0) {
       var ohlcH = Math.max(1, Math.round(this._requestedRangeMs / 3600000));
       var fpMins = Math.round(this._footprintWindowMs / 60000);
       parts.push('OHLC ' + ohlcH + 'h');
-      parts.push('Footprint ' + fpMins + 'm');
-      parts.push(this._partialData ? 'partial' : 'full');
+      parts.push('FP ' + fpMins + 'm');
+      if (this._partialData) parts.push('partial');
     }
+    // Viewport mode
+    if (this.viewport) {
+      parts.push(this.viewport.mode === 'auto' ? 'AUTO' : 'MANUAL');
+    }
+    // Live status
     if (this._liveEnabled && this._liveStatus === 'connected') {
       parts.push('LIVE');
       if (this._liveTradesCount > 0) parts.push('+' + this._liveTradesCount);
     } else if (this._liveEnabled && this._liveStatus === 'reconnecting') {
-      parts.push('LIVE·reconnecting');
+      parts.push('reconnecting');
     } else if (this._liveEnabled && this._liveStatus === 'error') {
-      parts.push('LIVE·error');
+      parts.push('error');
     } else if (!this._liveEnabled) {
       parts.push('LIVE off');
     }

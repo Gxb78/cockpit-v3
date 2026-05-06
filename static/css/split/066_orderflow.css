@@ -34,7 +34,7 @@
   user-select: none;
 }
 
-/* ── Top bar flottant — deux lignes ── */
+/* ── Top bar flottant — moderne ── */
 .of-topbar {
   position: absolute;
   top: 0;
@@ -43,24 +43,40 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 6px 16px;
+  padding: 8px 14px;
   z-index: 10;
   pointer-events: none;
 }
 
-.of-topbar-row {
+.of-topbar-main {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   pointer-events: auto;
+  flex-wrap: wrap;
 }
 
-.of-topbar-row-1 {
-  justify-content: flex-start;
+.of-topbar-status {
+  display: flex;
+  align-items: center;
+  pointer-events: auto;
+  padding: 0 2px;
 }
 
-.of-topbar-row-2 {
-  justify-content: flex-start;
+/* Status pill */
+.of-status-pill {
+  display: inline-block;
+  padding: 3px 14px;
+  border-radius: 12px;
+  background: rgba(10, 10, 15, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.45);
+  font-size: 10.5px;
+  font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
 }
 
 /* Groupes avec label */
@@ -70,22 +86,20 @@
   gap: 6px;
 }
 .of-group-label {
-  font-size: 10px;
-  color: rgba(255,255,255,0.35);
+  font-size: 9.5px;
+  color: rgba(255,255,255,0.3);
   font-family: 'JetBrains Mono', monospace;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
   white-space: nowrap;
-}
-.of-group--actions {
-  gap: 4px;
+  user-select: none;
 }
 
 /* Séparateur vertical */
 .of-sep {
   width: 1px;
-  height: 18px;
-  background: rgba(255,255,255,0.08);
+  height: 20px;
+  background: rgba(255,255,255,0.06);
   flex-shrink: 0;
 }
 
