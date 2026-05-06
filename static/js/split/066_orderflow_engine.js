@@ -294,6 +294,14 @@
       self._dirty = true;
     });
 
+    // lostpointercapture = capture perdue (clic hors canvas, perte focus)
+    // Garantit que _isPointerDown ne reste pas bloqué à true
+    c.addEventListener('lostpointercapture', function () {
+      self._isPointerDown = false;
+      self._hasMoved = false;
+      c.style.cursor = 'grab';
+    });
+
     c.addEventListener('pointerleave', function () {
       self.inCanvas = false;
       self._isPointerDown = false;
