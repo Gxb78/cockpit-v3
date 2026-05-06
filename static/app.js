@@ -17269,14 +17269,21 @@ TradeEditorController.renderHtml = function (day, trade) {
           var factor = dy < 0 ? 1.05 : 0.95;
           self.viewport.zoomPrice(e.offsetY, factor, 'shift-drag-price-zoom');
         }
-        // Drag dans la zone chart = pan temps uniquement
+        // Drag dans la zone chart = pan temps uniquement (via snapshots)
         else if (!(e.offsetX > self.layout.chartRight)) {
-          self.viewport.scrollTime(dx < 0 ? -1 : 1, Math.abs(dx), 'drag-time');
+          self.viewport._touch('drag-time');
+          var dt = -dx / self.scrollStart.pixelsPerMs;
+          self.timeScale.startTime = self.scrollStart.time + dt;
+          self.timeScale.endTime = self.scrollStart.timeEnd + dt;
+          self._dirty = true;
         }
-        // Drag sur l'axe prix = pan prix uniquement
+        // Drag sur l'axe prix = pan prix uniquement (via snapshots)
         else {
+          self.viewport._touch('drag-price');
           var dp = dy / self.scrollStart.pixelsPerPrice;
-          self.viewport.applyPriceRange(self.scrollStart.priceMin + dp, self.scrollStart.priceMax + dp);
+          self.priceScale.minPrice = self.scrollStart.priceMin + dp;
+          self.priceScale.maxPrice = self.scrollStart.priceMax + dp;
+          self._dirty = true;
         }
       } else {
         self._dirty = true;
