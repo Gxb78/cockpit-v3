@@ -17110,8 +17110,8 @@ TradeEditorController.renderHtml = function (day, trade) {
     this.layout = {
       topMargin: 30,
       bottomMargin: 40,
-      priceAxisWidth: 60,
-      vpWidth: 40,
+      priceAxisWidth: 64,
+      vpWidth: 120,
       chartLeft: 10,
       chartRight: 0,
       chartWidth: 0,
@@ -17188,8 +17188,8 @@ TradeEditorController.renderHtml = function (day, trade) {
     var lay = this.layout;
     lay.topMargin = 30;
     lay.bottomMargin = 40;
-    lay.priceAxisWidth = 60;
-    lay.vpWidth = 40;
+    lay.priceAxisWidth = 64;
+    lay.vpWidth = 120;
     lay.chartLeft = 10;
     lay.chartRight = Math.max(lay.chartLeft + 100, w - lay.priceAxisWidth - lay.vpWidth - 15);
     lay.chartWidth = Math.max(100, lay.chartRight - lay.chartLeft);
