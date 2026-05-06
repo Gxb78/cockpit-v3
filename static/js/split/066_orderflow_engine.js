@@ -211,7 +211,7 @@
 
       // Ctrl+Wheel = zoom global (temps + prix)
       if (e.ctrlKey || e.metaKey) {
-        self.viewport.zoomGlobal(e.offsetY, e.deltaY < 0 ? 0.92 : 1.08, 'ctrl-wheel-global');
+        self.viewport.zoomGlobal(e.offsetY, e.deltaY < 0 ? 1.08 : 0.92, 'ctrl-wheel-global');
         return;
       }
 
@@ -224,7 +224,7 @@
 
       // Dans la zone chart : wheel vertical = zoom temps uniquement
       if (e.deltaY !== 0) {
-        self.viewport.zoomTime(e.deltaY < 0 ? 0.92 : 1.08, 'chart-wheel-time', e.offsetX);
+        self.viewport.zoomTime(e.deltaY < 0 ? 1.08 : 0.92, 'chart-wheel-time', e.offsetX);
         return;
       }
 
@@ -286,7 +286,7 @@
           // Zoom basé sur le SNAPSHOT du range initial (scrollStart), pas le range muté
           // → pas de compounding, chaque frame part de la même baseline
           var baseRange = self.scrollStart.priceMax - self.scrollStart.priceMin;
-          var zoomFactor = 1 + dy * 0.0015; // 0.15% par pixel, moitié moins sensible qu'avant
+          var zoomFactor = 1 - dy * 0.0015; // drag UP (dy<0) = zoom IN, drag DOWN (dy>0) = zoom OUT
           zoomFactor = Math.max(0.3, Math.min(3, zoomFactor));
           var centerPrice = self.yToPrice(e.offsetY);
           var newRange = baseRange * (1 / zoomFactor);
