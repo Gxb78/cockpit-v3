@@ -224,7 +224,7 @@
 
       // Dans la zone chart : wheel vertical = zoom temps uniquement
       if (e.deltaY !== 0) {
-        self.viewport.zoomTime(e.deltaY < 0 ? 0.92 : 1.08, 'chart-wheel-time');
+        self.viewport.zoomTime(e.deltaY < 0 ? 0.92 : 1.08, 'chart-wheel-time', e.offsetX);
         return;
       }
 
@@ -977,13 +977,20 @@
    * Zoom centré au milieu du range visible
    * @param {number} factor - >1 zoom in (rétrécir temps), <1 zoom out (agrandir temps)
    */
-  OrderflowEngine.prototype._zoomTime = function (factor) {
+  /** Zoom temps centré sur la position X du curseur (comme LWC) */
+  OrderflowEngine.prototype._zoomTime = function (factor, anchorX) {
     var ts = this.timeScale;
+
+    // Calculer le timestamp sous le curseur
+    var anchorTime = anchorX != null ? this.xToTime(anchorX) : null;
+    if (anchorTime == null) {
+      anchorTime = ts.startTime + (ts.endTime - ts.startTime) / 2;
+    }
+
     var timeRange = ts.endTime - ts.startTime;
     var newTimeRange = timeRange * (1 / factor);
-    var midTime = ts.startTime + timeRange / 2;
 
-    var nextStart = midTime - newTimeRange / 2;
+    var nextStart = anchorTime - (anchorTime - ts.startTime) * (newTimeRange / timeRange);
     this.viewport.applyTimeRange(nextStart, nextStart + newTimeRange);
   };
 

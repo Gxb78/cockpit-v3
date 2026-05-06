@@ -68,9 +68,9 @@
     this.engine._zoomGlobal(y, factor);
   };
 
-  OF.ViewportController.prototype.zoomTime = function (factor, reason) {
+  OF.ViewportController.prototype.zoomTime = function (factor, reason, anchorX) {
     this._touch(reason || 'zoom-time');
-    this.engine._zoomTime(factor);
+    this.engine._zoomTime(factor, anchorX);
   };
 
   OF.ViewportController.prototype.nudgeTime = function (dtMs, reason) {
