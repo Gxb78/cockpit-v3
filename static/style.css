@@ -17413,21 +17413,26 @@ body.light-mode .draw-toolbar--inline {
   user-select: none;
 }
 
-/* ── Top bar flottant — moderne ── */
+/* ── Top bar flottant — 2 lignes modernes ── */
 .of-topbar {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  top: 6px;
+  left: 10px;
+  right: 10px;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 8px 14px;
+  padding: 6px 12px;
   z-index: 10;
   pointer-events: none;
+  background: rgba(10, 10, 15, 0.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
 }
 
-.of-topbar-main {
+.of-topbar-row {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -17435,27 +17440,17 @@ body.light-mode .draw-toolbar--inline {
   flex-wrap: wrap;
 }
 
-.of-topbar-status {
-  display: flex;
-  align-items: center;
-  pointer-events: auto;
-  padding: 0 2px;
-}
-
-/* Status pill */
+/* Status pill intégré dans ligne 2 */
 .of-status-pill {
   display: inline-block;
-  padding: 3px 14px;
-  border-radius: 12px;
-  background: rgba(10, 10, 15, 0.75);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255,255,255,0.06);
-  color: rgba(255,255,255,0.45);
-  font-size: 10.5px;
+  padding: 2px 12px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.4);
+  font-size: 10px;
   font-family: 'JetBrains Mono', monospace;
   white-space: nowrap;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color 0.15s, background 0.15s;
 }
 
 /* Groupes avec label */
@@ -17488,14 +17483,12 @@ body.light-mode .draw-toolbar--inline {
 }
 
 .of-pair-btn {
-  padding: 4px 10px;
-  border-radius: 5px;
+  padding: 5px 12px;
+  border-radius: 7px;
   border: 1px solid transparent;
-  background: rgba(10, 10, 15, 0.7);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(255,255,255,0.04);
   color: var(--text-muted, #94a3b8);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   cursor: pointer;
   transition: color 0.15s, background 0.15s, border-color 0.15s;
@@ -17503,13 +17496,13 @@ body.light-mode .draw-toolbar--inline {
 
 .of-pair-btn:hover {
   color: var(--text, #f1f5f9);
-  border-color: var(--border, #334155);
-  background: rgba(10, 10, 15, 0.85);
+  border-color: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.07);
 }
 
 .of-pair-btn.active {
   color: var(--cyan, #38d3ee);
-  border-color: rgba(56, 211, 238, 0.30);
+  border-color: rgba(56, 211, 238, 0.25);
   background: rgba(56, 211, 238, 0.08);
 }
 
@@ -17519,14 +17512,12 @@ body.light-mode .draw-toolbar--inline {
 }
 
 .of-tf-btn {
-  padding: 4px 9px;
-  border-radius: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
   border: 1px solid transparent;
-  background: rgba(10, 10, 15, 0.7);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(255,255,255,0.04);
   color: var(--text-faint, #64748b);
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 700;
   cursor: pointer;
   transition: color 0.15s, background 0.15s, border-color 0.15s;
@@ -17534,14 +17525,14 @@ body.light-mode .draw-toolbar--inline {
 
 .of-tf-btn:hover {
   color: var(--text-muted, #94a3b8);
-  border-color: var(--border, #334155);
-  background: rgba(10, 10, 15, 0.85);
+  border-color: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.07);
 }
 
 .of-tf-btn.active {
   color: var(--cyan, #38d3ee);
   border-color: rgba(56, 211, 238, 0.25);
-  background: rgba(56, 211, 238, 0.06);
+  background: rgba(56, 211, 238, 0.07);
 }
 
 /* ── Price step selector ── */
@@ -17554,13 +17545,11 @@ body.light-mode .draw-toolbar--inline {
 }
 
 .of-step-btn {
-  padding: 3px 7px;
+  padding: 4px 9px;
   border: none;
-  background: rgba(10, 10, 15, 0.7);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(255,255,255,0.04);
   color: var(--text-faint, #64748b);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   cursor: pointer;
   transition: color 0.15s, background 0.15s;
@@ -17568,7 +17557,7 @@ body.light-mode .draw-toolbar--inline {
 
 .of-step-btn:hover {
   color: var(--text-muted, #94a3b8);
-  background: rgba(10, 10, 15, 0.85);
+  background: rgba(255,255,255,0.07);
 }
 
 .of-step-btn.active {
@@ -17578,12 +17567,10 @@ body.light-mode .draw-toolbar--inline {
 
 /* ── Action buttons (Fit, Reset) ── */
 .of-action-btn {
-  padding: 3px 9px;
-  border-radius: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
   border: 1px solid rgba(255,255,255,0.06);
-  background: rgba(10, 10, 15, 0.7);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(255,255,255,0.04);
   color: var(--text-faint, #64748b);
   font-size: 10px;
   font-weight: 700;
@@ -17594,8 +17581,8 @@ body.light-mode .draw-toolbar--inline {
 
 .of-action-btn:hover {
   color: var(--text-muted, #94a3b8);
-  border-color: var(--border, #334155);
-  background: rgba(10, 10, 15, 0.85);
+  border-color: rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.07);
 }
 
 .of-action-btn:active {
@@ -17613,13 +17600,11 @@ body.light-mode .draw-toolbar--inline {
 }
 
 .of-range-btn {
-  padding: 3px 7px;
+  padding: 4px 9px;
   border: none;
-  background: rgba(10, 10, 15, 0.7);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(255,255,255,0.04);
   color: var(--text-faint, #64748b);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   cursor: pointer;
   transition: color 0.15s, background 0.15s;
@@ -17627,7 +17612,7 @@ body.light-mode .draw-toolbar--inline {
 
 .of-range-btn:hover {
   color: var(--text-muted, #94a3b8);
-  background: rgba(10, 10, 15, 0.85);
+  background: rgba(255,255,255,0.07);
 }
 
 .of-range-btn.active {
