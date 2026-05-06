@@ -283,10 +283,17 @@
         // Drag sur l'axe prix = ZOOM prix (rétrécir/agrandir le range vertical)
         else {
           self.viewport._touch('drag-price-zoom');
-          // dy > 0 (drag bas) → zoom out, dy < 0 (drag haut) → zoom in
-          var factor = 1 + dy * 0.003;
-          factor = Math.max(0.5, Math.min(2, factor));
-          self.viewport.zoomPrice(e.offsetY, factor, 'price-axis-drag');
+          // Zoom basé sur le SNAPSHOT du range initial (scrollStart), pas le range muté
+          // → pas de compounding, chaque frame part de la même baseline
+          var baseRange = self.scrollStart.priceMax - self.scrollStart.priceMin;
+          var zoomFactor = 1 + dy * 0.0015; // 0.15% par pixel, moitié moins sensible qu'avant
+          zoomFactor = Math.max(0.3, Math.min(3, zoomFactor));
+          var centerPrice = self.yToPrice(e.offsetY);
+          var newRange = baseRange * (1 / zoomFactor);
+          newRange = Math.max(10, Math.min(100000, newRange));
+          self.priceScale.minPrice = centerPrice - (centerPrice - self.scrollStart.priceMin) * (newRange / baseRange);
+          self.priceScale.maxPrice = self.priceScale.minPrice + newRange;
+          self._dirty = true;
         }
       } else {
         self._dirty = true;
