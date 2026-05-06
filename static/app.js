@@ -17297,7 +17297,8 @@ TradeEditorController.renderHtml = function (day, trade) {
     c.addEventListener('lostpointercapture', function () {
       self._isPointerDown = false;
       self._hasMoved = false;
-      c.style.cursor = 'grab';
+      c.style.cursor = self.inCanvas ? 'grab' : 'default';
+      self._dirty = true;
     });
 
     c.addEventListener('pointerleave', function () {
