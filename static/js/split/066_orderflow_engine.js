@@ -209,9 +209,9 @@
     c.addEventListener('wheel', function (e) {
       e.preventDefault();
 
-      // Ctrl+wheel = zoom prix uniquement
+      // Ctrl+Wheel = zoom global (temps + prix)
       if (e.ctrlKey || e.metaKey) {
-        self.viewport.zoomPrice(e.offsetY, e.deltaY < 0 ? 1.08 : 0.92, 'ctrl-wheel');
+        self.viewport.zoomGlobal(e.offsetY, e.deltaY < 0 ? 0.92 : 1.08, 'ctrl-wheel-global');
         return;
       }
 
@@ -222,9 +222,9 @@
         return;
       }
 
-      // Dans la zone chart : wheel vertical = zoom global (prix + temps)
+      // Dans la zone chart : wheel vertical = zoom temps uniquement
       if (e.deltaY !== 0) {
-        self.viewport.zoomGlobal(e.offsetY, e.deltaY < 0 ? 0.92 : 1.08, 'chart-wheel');
+        self.viewport.zoomTime(e.deltaY < 0 ? 0.92 : 1.08, 'chart-wheel-time');
         return;
       }
 
@@ -266,12 +266,19 @@
         if (Math.sqrt(dx * dx + dy * dy) < self._dragThreshold) return;
 
         self._hasMoved = true;
-        // Shift+Drag vertical = zoom prix, sinon drag libre = pan temps+prix.
+        // Shift+Drag vertical = zoom prix
         if (e.shiftKey) {
           var factor = dy < 0 ? 1.05 : 0.95;
           self.viewport.zoomPrice(e.offsetY, factor, 'shift-drag-price-zoom');
-        } else {
-          self.viewport.pan(dx, dy, 'drag');
+        }
+        // Drag dans la zone chart = pan temps uniquement
+        else if (!(e.offsetX > self.layout.chartRight)) {
+          self.viewport.scrollTime(dx < 0 ? -1 : 1, Math.abs(dx), 'drag-time');
+        }
+        // Drag sur l'axe prix = pan prix uniquement
+        else {
+          var dp = dy / self.scrollStart.pixelsPerPrice;
+          self.viewport.applyPriceRange(self.scrollStart.priceMin + dp, self.scrollStart.priceMax + dp);
         }
       } else {
         self._dirty = true;
@@ -659,7 +666,7 @@
     return {
       candles: this._candles,
       inCanvas: this.inCanvas,
-      hint: 'Drag=pan libre  Shift+Drag vertical=zoom prix  Wheel chart=zoom temps+prix  Wheel axe prix=zoom prix  Ctrl+Wheel=zoom prix  Wheel horizontal=scroll temps  +/-=zoom prix  Space=reset  H=temps  P=prix  R=defaut',
+      hint: 'Drag↔=pan temps  Drag axe prix=pan prix  Shift+Drag=zoom prix  Wheel↕ chart=zoom temps  Wheel axe prix=zoom prix  Ctrl+Wheel=zoom global  Wheel↔=scroll temps  +/-=zoom prix  Space=reset  H=fit temps  P=fit prix  R=defaut',
       market: this._marketState,
     };
   };
@@ -1513,6 +1520,25 @@
       this.loadData(this._symbol, interval);
     }
     this._setStatus(this._buildStatus());
+  };
+
+  /** Snapshot debug — injecté dans window.__ofEngine.debugSnapshot() */
+  OrderflowEngine.prototype.debugSnapshot = function () {
+    return {
+      symbol: this._symbol,
+      interval: this._interval,
+      intervalMs: this._intervalMs,
+      requestedRangeMs: this._requestedRangeMs,
+      viewport: this.viewport && this.viewport.getState ? this.viewport.getState() : null,
+      liveStatus: this._liveStatus,
+      liveEnabled: this._liveEnabled,
+      candles: this._candles ? this._candles.length : 0,
+      rawTrades: this._rawTrades ? this._rawTrades.length : 0,
+      klinesCandles: this._klinesCandles ? this._klinesCandles.length : 0,
+      footprintCandles: this._footprintMap ? Object.keys(this._footprintMap).length : 0,
+      partialData: !!this._partialData,
+      currentRange: this._currentRange,
+    };
   };
 
   /** Changer le tick size (price step) — re-aggregation locale uniquement */
