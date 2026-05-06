@@ -1949,8 +1949,9 @@
     var ts = this.timeScale;
     var lay = this.layout;
     var vpWidth = lay.vpWidth;
-    var vpX = w - vpWidth - 10;
-    var chartRight = vpX - 8;
+    // VP positionnée après chartRight avec gap 15px
+    var vpX = lay.chartRight + 15;
+    var priceAxisX = vpX + vpWidth;
 
     var visibleStart = ts.startTime;
     var visibleEnd = ts.endTime;
@@ -1997,17 +1998,17 @@
     var vah = vaPrices.reduce(function (a, b) { return Math.max(a, b); }, -Infinity);
     var val = vaPrices.reduce(function (a, b) { return Math.min(a, b); }, Infinity);
 
-    // VP background strip
+    // VP background strip — seulement dans la colonne VP
     ctx.save();
     ctx.fillStyle = 'rgba(255,255,255,0.02)';
-    ctx.fillRect(vpX, 0, vpWidth + 30, h);
+    ctx.fillRect(vpX, 0, vpWidth, h);
 
     // VP label
     ctx.font = '8px "JetBrains Mono", monospace';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.fillStyle = 'rgba(255,255,255,0.12)';
-    ctx.fillText('VP visible', vpX + 2, 4);
+    ctx.fillText('VP', vpX + 4, 4);
 
     // Draw VP histogram
     for (var pi = 0; pi < prices.length; pi++) {
@@ -2049,16 +2050,16 @@
       }
     }
 
-    // VAH/VAL/POC labels
+    // VAH/VAL/POC labels dans la colonne axe prix
     ctx.font = '8px "JetBrains Mono", monospace';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = 'rgba(34,197,94,0.35)';
-    ctx.fillText('VAH', vpX + vpWidth + 4, this.priceToY(vah));
+    ctx.fillText('VAH', priceAxisX + 4, this.priceToY(vah));
     ctx.fillStyle = 'rgba(239,68,68,0.35)';
-    ctx.fillText('VAL', vpX + vpWidth + 4, this.priceToY(val));
+    ctx.fillText('VAL', priceAxisX + 4, this.priceToY(val));
     ctx.fillStyle = 'rgba(245,158,11,0.5)';
-    ctx.fillText('POC', vpX + vpWidth + 4, this.priceToY(pocPrice));
+    ctx.fillText('POC', priceAxisX + 4, this.priceToY(pocPrice));
 
     ctx.restore();
   };
