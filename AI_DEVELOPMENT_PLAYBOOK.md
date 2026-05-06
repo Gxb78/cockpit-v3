@@ -1158,6 +1158,26 @@ if end_time is not None:
 **Test de non-régression:** `GET /api/market/aggtrades?symbol=BTCUSDT&startTime=X&endTime=Y&limit=8000` → aucun `trade.time < X`, aucun `trade.time > Y`.
 
 
+### Lecon T-0010 bis: Filtre endTime sur TOUTES les pages aggTrades (5 mai 2026)
+
+
+### Lecon T-0011: ViewportController — machine d'état pour la vue orderflow (6 mai 2026)
+
+**Problème:** timeScale/priceScale étaient mutés directement depuis 8 sources différentes (wheel, drag, keys, loadData, resize, setInterval, fit, reset). Un fetch data recadrait toujours la vue, même après un zoom utilisateur — reproduisant le bug historique du widget BTC.
+
+**Solution:**
+- `OF.ViewportController` avec mode `auto` | `manual`
+- `mode=auto` (défaut) : loadData recadre la vue automatiquement
+- `mode=manual` : loadData ne touche PAS la vue (setDataRange no-op)
+- Toute interaction utilisateur (wheel, drag, keys, clicks) bascule en `manual`
+- Les zooms passent par `applyPriceRange()` / `applyTimeRange()` — setters uniques
+- `setAutoRange()` remet mode=auto
+
+**Règle:** Un fetch data ne doit JAMAIS recadrer la vue si l'utilisateur a interagi. La vue appartient à l'utilisateur, pas aux données.
+
+**Fichiers:** `066_orderflow_engine.js`, `066a_orderflow_viewport.js`
+
+
 ### BUG-20260505-02 - [RESOLU] Prix/countdown/timers perdus apres refactor _fetchAndRender
 
 - Symptome: Le prix BTC met du temps a s'afficher (attend le WS retarde de 700ms). Le countdown reste sur `—`. L'auto-refresh REST ne se declenche jamais.

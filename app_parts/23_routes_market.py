@@ -387,6 +387,10 @@ _CACHE_MAX_KEYS = 100
 _aggtrade_cache = {}
 
 
+def _agg_cache_key(symbol, start_time, end_time, limit):
+    return f"{symbol}:{start_time}:{end_time}:{limit}"
+
+
 def _purge_cache():
     """Supprime les entrées expirées si le cache dépasse _CACHE_MAX_KEYS."""
     if len(_aggtrade_cache) <= _CACHE_MAX_KEYS:
@@ -401,6 +405,51 @@ def _purge_cache():
         sorted_keys = sorted(_aggtrade_cache.keys(), key=lambda k: _aggtrade_cache[k]["ts"])
         for k in sorted_keys[:len(_aggtrade_cache) - _CACHE_MAX_KEYS]:
             del _aggtrade_cache[k]
+
+
+def _find_stale_agg_cache(symbol):
+    """Retourne le cache aggTrades le plus recent pour un symbole."""
+    prefix = f"{symbol}:"
+    candidates = []
+    for k, v in _aggtrade_cache.items():
+        if k.startswith(prefix):
+            candidates.append(v)
+    if not candidates:
+        return None, None
+    candidates.sort(key=lambda x: x.get("ts", 0), reverse=True)
+    best = candidates[0]
+    return copy.deepcopy(best.get("response", {})), best.get("ts", 0)
+
+
+def _empty_aggtrades_response(symbol, start_time, end_time, limit, upstream_error=None):
+    return {
+        "symbol": symbol,
+        "trades": [],
+        "cached": False,
+        "count": 0,
+        "requested": {
+            "startTime": start_time,
+            "endTime": end_time,
+        },
+        "actual": {
+            "firstTradeTime": None,
+            "lastTradeTime": None,
+            "coverageMs": 0,
+        },
+        "limits": {
+            "maxTrades": limit,
+            "pagesUsed": 0,
+            "hitBinanceLimit": False,
+        },
+        "source": "unavailable",
+        "cache": {
+            "hit": False,
+            "stale": False,
+            "age": 0,
+            "ttl": _CACHE_TTL_S,
+        },
+        "upstream_error": upstream_error,
+    }
 
 
 def _parse_int_param(name, default=None):
@@ -426,20 +475,11 @@ def _format_aggTrade(t):
     }
 
 
-def _fetch_binance_agg(url):
-    """Fetch une page Binance, retourne (batch_or_None, error_json_or_None)."""
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Journal/1.0"})
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            raw = resp.read().decode("utf-8")
-            batch = _json.loads(raw)
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode("utf-8", errors="replace")[:200]
-        return None, ({"error": f"Binance HTTP {e.code}: {detail}"}, e.code)
-    except urllib.error.URLError as e:
-        return None, ({"error": f"Erreur reseau: {e.reason}"}, 502)
-    except Exception as e:
-        return None, ({"error": str(e)}, 500)
+def _fetch_binance_agg(path_qs):
+    """Fetch une page aggTrades via le fetcher Binance commun."""
+    batch, err = _fetch_binance_json(path_qs, timeout=3)
+    if err:
+        return None, err
 
     if not isinstance(batch, list):
         return None, ({"error": "Format inattendu Binance", "raw": str(batch)[:300]}, 502)
@@ -471,6 +511,7 @@ def market_aggtrades():
         end_time = _parse_int_param("endTime")
         limit = _parse_int_param("limit", 1000)
         force = _parse_int_param("force", 0)
+        soft = _parse_int_param("soft", 0)
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
@@ -486,13 +527,15 @@ def market_aggtrades():
             }), 400
 
     # Cache lookup (sauf si force=1)
-    cache_key = f"{symbol}:{start_time}:{end_time}:{desired}"
+    cache_key = _agg_cache_key(symbol, start_time, end_time, desired)
     now = _time_mod.time()
+    cached = _aggtrade_cache.get(cache_key)
     if not force:
-        cached = _aggtrade_cache.get(cache_key)
         if cached and (now - cached["ts"]) < _CACHE_TTL_S:
             resp = copy.deepcopy(cached["response"])
-            resp["cache"] = {"hit": True, "ttl": _CACHE_TTL_S, "age": int(now - cached["ts"])}
+            resp["source"] = "cache"
+            resp["cache"] = {"hit": True, "stale": False, "ttl": _CACHE_TTL_S, "age": int(now - cached["ts"])}
+            resp["upstream_error"] = None
             return jsonify(resp)
 
     # --- Pagination ---
@@ -503,21 +546,36 @@ def market_aggtrades():
     next_from_id = None
 
     while len(all_trades) < desired and pages_used < _MAX_PAGES:
-        url = f"{BINANCE_API}/api/v3/aggTrades?symbol={symbol}&limit=1000"
+        path_qs = f"/api/v3/aggTrades?symbol={symbol}&limit=1000"
         if next_from_id:
             # Pages suivantes: pagination par fromId (précise, pas de trous)
-            url += f"&fromId={next_from_id}"
+            path_qs += f"&fromId={next_from_id}"
         else:
             # Première page: avec startTime/endTime
             if start_time:
-                url += f"&startTime={start_time}"
+                path_qs += f"&startTime={start_time}"
             if end_time:
-                url += f"&endTime={end_time}"
+                path_qs += f"&endTime={end_time}"
 
-        batch, err = _fetch_binance_agg(url)
+        batch, err = _fetch_binance_agg(path_qs)
         if err:
+            upstream_error = err[0].get("error", str(err[0]))
+            if cached:
+                resp = copy.deepcopy(cached["response"])
+                resp["source"] = "cache"
+                resp["cache"] = {"hit": True, "stale": True, "ttl": _CACHE_TTL_S, "age": int(now - cached["ts"])}
+                resp["upstream_error"] = upstream_error
+                return jsonify(resp)
+            stale_resp, stale_ts = _find_stale_agg_cache(symbol)
+            if stale_resp:
+                stale_resp["source"] = "cache"
+                stale_resp["cache"] = {"hit": True, "stale": True, "ttl": _CACHE_TTL_S, "age": int(now - stale_ts)}
+                stale_resp["upstream_error"] = upstream_error
+                return jsonify(stale_resp)
             if all_trades:
                 break
+            if soft:
+                return jsonify(_empty_aggtrades_response(symbol, start_time, end_time, desired, upstream_error)), 200
             return jsonify(err[0]), err[1]
 
         if not batch:
@@ -578,10 +636,14 @@ def market_aggtrades():
             "pagesUsed": pages_used,
             "hitBinanceLimit": hit_limit,
         },
+        "source": "binance",
         "cache": {
             "hit": False,
             "ttl": _CACHE_TTL_S,
+            "stale": False,
+            "age": int(now - cached["ts"]) if cached else 0,
         },
+        "upstream_error": None,
     }
 
     # Mettre en cache (payload complet)

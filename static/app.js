@@ -17074,6 +17074,12 @@ TradeEditorController.renderHtml = function (day, trade) {
     this.engine._fitPrice(margin || 0.05);
   };
 
+  // Fit temps (centrer sur donnees)
+  OF.ViewportController.prototype.fitTime = function (reason) {
+    this._touch(reason || 'fit-time');
+    this.engine._fitToData();
+  };
+
   // Reset complet : range temporel défaut + fit price
   OF.ViewportController.prototype.reset = function (reason) {
     this._touch(reason);
@@ -17102,6 +17108,42 @@ TradeEditorController.renderHtml = function (day, trade) {
   OF.ViewportController.prototype.zoomGlobal = function (y, factor, reason) {
     this._touch(reason || 'zoom');
     this.engine._zoomGlobal(y, factor);
+  };
+
+  // Zoom temps uniquement
+  OF.ViewportController.prototype.zoomTime = function (factor, reason) {
+    this._touch(reason || 'zoom-time');
+    this.engine._zoomTime(factor);
+  };
+
+  // Decalage temporel (ms)
+  OF.ViewportController.prototype.nudgeTime = function (dtMs, reason) {
+    this._touch(reason || 'nudge-time');
+    this.engine.timeScale.startTime += dtMs;
+    this.engine.timeScale.endTime += dtMs;
+    this.engine._dirty = true;
+  };
+
+  // Decalage prix (unites)
+  OF.ViewportController.prototype.nudgePrice = function (dPrice, reason) {
+    this._touch(reason || 'nudge-price');
+    this.engine.priceScale.minPrice += dPrice;
+    this.engine.priceScale.maxPrice += dPrice;
+    this.engine._dirty = true;
+  };
+
+  // Bascule explicite des modes
+  OF.ViewportController.prototype.setMode = function (mode, userDetached) {
+    this.mode = mode === 'auto' ? 'auto' : 'manual';
+    this.userDetached = !!userDetached;
+  };
+
+  // Application explicite des ranges (seul point d'ecriture des scales)
+  OF.ViewportController.prototype.applyTimeRange = function (from, to) {
+    this.timeRange = { from: from, to: to };
+  };
+  OF.ViewportController.prototype.applyPriceRange = function (from, to) {
+    this.priceRange = { from: from, to: to };
   };
   // ── / VIEWPORT CONTROLLER
 
@@ -17155,6 +17197,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     this._rawTrades = [];
     this._klinesCandles = [];  // Bougies OHLC de base (depuis klines)
     this._footprintMap = {};   // Footprint indexé par candleTime (depuis aggTrades)
+    this._marketState = null;  // Contrat data unifie (066b_orderflow_data.js)
     this._isLiveData = false;
     this._loading = false;
     this._error = null;
@@ -17162,6 +17205,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     this._interval = '3m';
     this._tickSize = 10;
     this._intervalMs = 180000;
+    this._footprintWindowMs = 900000; // 15m
     this._coverageInfo = "";
     this._currentRange = null; // {start, end} du dernier fetch
     this._requestedRangeMs = 7200000; // 2h par defaut (3m → ~40 bougies)
@@ -17332,8 +17376,13 @@ TradeEditorController.renderHtml = function (day, trade) {
         if (Math.sqrt(dx * dx + dy * dy) < self._dragThreshold) return;
 
         self._hasMoved = true;
-        // Drag libre : pan temps + prix simultanément
-        self.viewport.pan(dx, dy, 'drag');
+        // Shift+Drag vertical = zoom prix, sinon drag libre = pan temps+prix.
+        if (e.shiftKey) {
+          var factor = dy < 0 ? 1.05 : 0.95;
+          self.viewport.zoomPrice(e.offsetY, factor, 'shift-drag-price-zoom');
+        } else {
+          self.viewport.pan(dx, dy, 'drag');
+        }
       } else {
         self._dirty = true;
         c.style.cursor = e.offsetX > self.layout.chartRight ? 'ns-resize' : 'grab';
@@ -17390,8 +17439,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
     // H = fit temps (centrer sur les bougies)
     else if (k === 'h') {
-      vp._touch('key-h');
-      this._fitToData();
+      vp.fitTime('key-h');
       handled = true;
     }
     // P = fit prix
@@ -17421,40 +17469,27 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
     // R = reset complet (vue par défaut)
     else if (k === 'r') {
-      vp._touch('key-r');
-      this._resetDefaultView();
+      vp.reset('key-r');
       handled = true;
     }
     // Arrow keys = scroll temps
     else if (k === 'arrowleft') {
       var dt = -(this.timeScale.endTime - this.timeScale.startTime) * 0.05;
-      vp._touch('key-left');
-      this.timeScale.startTime += dt;
-      this.timeScale.endTime += dt;
-      this._dirty = true;
+      vp.nudgeTime(dt, 'key-left');
       handled = true;
     } else if (k === 'arrowright') {
       var dt = (this.timeScale.endTime - this.timeScale.startTime) * 0.05;
-      vp._touch('key-right');
-      this.timeScale.startTime += dt;
-      this.timeScale.endTime += dt;
-      this._dirty = true;
+      vp.nudgeTime(dt, 'key-right');
       handled = true;
     }
     // Arrow up/down = pan prix
     else if (k === 'arrowup') {
-      vp._touch('key-up');
       var dp = (this.priceScale.maxPrice - this.priceScale.minPrice) * 0.02;
-      this.priceScale.minPrice -= dp;
-      this.priceScale.maxPrice -= dp;
-      this._dirty = true;
+      vp.nudgePrice(-dp, 'key-up');
       handled = true;
     } else if (k === 'arrowdown') {
-      vp._touch('key-down');
       var dp = (this.priceScale.maxPrice - this.priceScale.minPrice) * 0.02;
-      this.priceScale.minPrice += dp;
-      this.priceScale.maxPrice += dp;
-      this._dirty = true;
+      vp.nudgePrice(dp, 'key-down');
       handled = true;
     }
 
@@ -17653,10 +17688,9 @@ TradeEditorController.renderHtml = function (day, trade) {
     if (newRange < 10) newRange = 10;   // ~$10 minimum
     if (newRange > 100000) newRange = 100000; // ~$100k maximum
 
-    ps.minPrice = centerPrice - (centerPrice - ps.minPrice) * (newRange / range);
-    ps.maxPrice = ps.minPrice + newRange;
-
-    this._dirty = true;
+    var nextMin = centerPrice - (centerPrice - ps.minPrice) * (newRange / range);
+    var nextMax = nextMin + newRange;
+    this.viewport.applyPriceRange(nextMin, nextMax);
   };
 
   /**
@@ -17677,8 +17711,9 @@ TradeEditorController.renderHtml = function (day, trade) {
     if (newPriceRange < 10) newPriceRange = 10;
     if (newPriceRange > 100000) newPriceRange = 100000;
 
-    ps.minPrice = centerPrice - (centerPrice - ps.minPrice) * (newPriceRange / priceRange);
-    ps.maxPrice = ps.minPrice + newPriceRange;
+    var nextMin = centerPrice - (centerPrice - ps.minPrice) * (newPriceRange / priceRange);
+    var nextMax = nextMin + newPriceRange;
+    this.viewport.applyPriceRange(nextMin, nextMax);
 
     // === ZOOM TEMPS (proportionnel) ===
     // Zoom centré sur le milieu du temps visible
@@ -17686,10 +17721,8 @@ TradeEditorController.renderHtml = function (day, trade) {
     var newTimeRange = timeRange * (1 / factor);
     var midTime = ts.startTime + timeRange / 2;
 
-    ts.startTime = midTime - newTimeRange / 2;
-    ts.endTime = ts.startTime + newTimeRange;
-
-    this._dirty = true;
+    var nextStart = midTime - newTimeRange / 2;
+    this.viewport.applyTimeRange(nextStart, nextStart + newTimeRange);
   };
 
   /**
@@ -17698,15 +17731,11 @@ TradeEditorController.renderHtml = function (day, trade) {
   OrderflowEngine.prototype._pan = function (dx, dy) {
     // Horizontal = déplacement temps (range constant, utilise snapshot)
     var dt = -dx / this.scrollStart.pixelsPerMs;
-    this.timeScale.startTime = this.scrollStart.time + dt;
-    this.timeScale.endTime = this.scrollStart.timeEnd + dt;
+    this.viewport.applyTimeRange(this.scrollStart.time + dt, this.scrollStart.timeEnd + dt);
 
     // Vertical = déplacement prix (range constant, utilise snapshot)
     var dp = dy / this.scrollStart.pixelsPerPrice;
-    this.priceScale.minPrice = this.scrollStart.priceMin + dp;
-    this.priceScale.maxPrice = this.scrollStart.priceMax + dp;
-
-    this._dirty = true;
+    this.viewport.applyPriceRange(this.scrollStart.priceMin + dp, this.scrollStart.priceMax + dp);
   };
 
   /**
@@ -17715,9 +17744,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   OrderflowEngine.prototype._scrollTime = function (dir, pixels) {
     var ts = this.timeScale;
     var dt = (pixels * dir) / ts.pixelsPerMs;
-    ts.startTime += dt;
-    ts.endTime += dt;
-    this._dirty = true;
+    this.viewport.applyTimeRange(ts.startTime + dt, ts.endTime + dt);
   };
 
   /**
@@ -17726,8 +17753,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   OrderflowEngine.prototype._resetView = function () {
     var now = Date.now();
     var range = this._requestedRangeMs || 1800000;
-    this.timeScale.startTime = now - range;
-    this.timeScale.endTime = now + this._intervalMs * 4;
+    this.viewport.applyTimeRange(now - range, now + this._intervalMs * 4);
     this._fitPrice(0.05);
     this._dirty = true;
   };
@@ -17735,6 +17761,36 @@ TradeEditorController.renderHtml = function (day, trade) {
   // ============================================================
   // Rendu
   // ============================================================
+
+
+  OrderflowEngine.prototype._buildRenderState = function () {
+    return {
+      candles: this._candles,
+      inCanvas: this.inCanvas,
+      hint: 'Drag=pan libre  Shift+Drag vertical=zoom prix  Wheel chart=zoom temps+prix  Wheel axe prix=zoom prix  Ctrl+Wheel=zoom prix  Wheel horizontal=scroll temps  +/-=zoom prix  Space=reset  H=temps  P=prix  R=defaut',
+      market: this._marketState,
+    };
+  };
+
+  OrderflowEngine.prototype._renderFrame = function (ctx, state, viewport, w, h) {
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = '#0a0a0f';
+    ctx.fillRect(0, 0, w, h);
+    this._drawGrid(ctx, w, h);
+    if (state.candles && state.candles.length > 0) {
+      this._drawFootprint(ctx, w, h);
+      this._drawVolumeProfile(ctx, w, h);
+    }
+    this._drawPriceAxis(ctx, w, h);
+    this._drawTimeAxis(ctx, w, h);
+    if (state.inCanvas) this._drawCrosshair(ctx, w, h);
+    if (state.inCanvas) this._drawTooltip(ctx);
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.font = '9px "JetBrains Mono", monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(state.hint, 10, h - 2);
+  };
 
   OrderflowEngine.prototype.render = function () {
     var ctx = this.ctx;
@@ -17776,44 +17832,8 @@ TradeEditorController.renderHtml = function (day, trade) {
     var w = rw;
     var h = rh;
 
-    // --- Clear ---
-    ctx.clearRect(0, 0, w, h);
-
-    // --- Background ---
-    ctx.fillStyle = '#0a0a0f';
-    ctx.fillRect(0, 0, w, h);
-
-    // --- Grille ---
-    this._drawGrid(ctx, w, h);
-
-    // --- Footprint candles ---
-    if (this._candles.length > 0) {
-      this._drawFootprint(ctx, w, h);
-      this._drawVolumeProfile(ctx, w, h);
-    }
-
-    // --- Axe prix (Y à droite) ---
-    this._drawPriceAxis(ctx, w, h);
-
-    // --- Axe temps (X en bas) ---
-    this._drawTimeAxis(ctx, w, h);
-
-    // --- Crosshair ---
-    if (this.inCanvas) {
-      this._drawCrosshair(ctx, w, h);
-    }
-
-    // --- Status bar info ---
-    if (this.inCanvas) {
-      this._drawTooltip(ctx);
-    }
-
-    // --- Hint bar en bas ---
-    ctx.fillStyle = 'rgba(255,255,255,0.12)';
-    ctx.font = '9px "JetBrains Mono", monospace';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'bottom';
-    ctx.fillText('Drag=pan libre  Wheel↕ chart=zoom temps+prix  Wheel axe prix=zoom prix  Ctrl+Wheel=zoom prix  Wheel↔=scroll temps  +/-=zoom prix  Space=reset  H=temps  P=prix  R=défaut', 10, h - 2);
+    var state = this._buildRenderState();
+    this._renderFrame(ctx, state, this.viewport, w, h);
   };
 
   /**
@@ -18020,9 +18040,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   OrderflowEngine.prototype._panPrice = function (pixels) {
     var ps = this.priceScale;
     var dp = pixels / ps.pixelsPerUnit;
-    ps.minPrice += dp;
-    ps.maxPrice += dp;
-    this._dirty = true;
+    this.viewport.applyPriceRange(ps.minPrice + dp, ps.maxPrice + dp);
   };
 
   /**
@@ -18036,10 +18054,8 @@ TradeEditorController.renderHtml = function (day, trade) {
     var newTimeRange = timeRange * (1 / factor);
     var midTime = ts.startTime + timeRange / 2;
 
-    ts.startTime = midTime - newTimeRange / 2;
-    ts.endTime = ts.startTime + newTimeRange;
-
-    this._dirty = true;
+    var nextStart = midTime - newTimeRange / 2;
+    this.viewport.applyTimeRange(nextStart, nextStart + newTimeRange);
   };
 
   // ============================================================
@@ -18132,7 +18148,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     var now = Date.now();
     var startTime = now - this._requestedRangeMs;
     // Footprint: seulement les dernieres 15 min (900000ms)
-    var fpStartTime = now - 900000;
+    var fpStartTime = now - this._footprintWindowMs;
 
     Promise.all([
       OF.DataService.fetchKlines(this._symbol, this._interval, startTime, now),
@@ -18182,8 +18198,24 @@ TradeEditorController.renderHtml = function (day, trade) {
 
     // Partial = footprint partiel (pas assez de trades pour couvrir toutes les bougies recentes)
     var fpCandleCount = Object.keys(self._footprintMap).length;
-    var expectedRecent = Math.ceil(900000 / self._intervalMs); // bougies attendues dans les 15min
+    var expectedRecent = Math.ceil(self._footprintWindowMs / self._intervalMs); // bougies attendues dans la fenetre footprint
     self._partialData = fpCandleCount < expectedRecent && trades.length > 0;
+    if (OF.DataModel && typeof OF.DataModel.buildHybridState === 'function') {
+      self._marketState = OF.DataModel.buildHybridState({
+        symbol: self._symbol,
+        interval: self._interval,
+        intervalMs: self._intervalMs,
+        requestedStart: startTime,
+        requestedEnd: endTime,
+        ohlcCandles: self._klinesCandles,
+        footprintMap: self._footprintMap,
+        mergedCandles: self._candles,
+        footprintWindowMs: self._footprintWindowMs,
+        partial: self._partialData,
+        klinesMeta: klinesData || {},
+        aggTradesMeta: tradesData || {},
+      });
+    }
 
     self.viewport.setDataRange('load');
     self._dirty = true;
@@ -18234,7 +18266,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     this._loadRequestId++; // annuler tout fetch en cours
     var now = Date.now();
     var startTime = now - this._requestedRangeMs;
-    var fpStartTime = now - 900000;
+    var fpStartTime = now - this._footprintWindowMs;
     var self = this;
     var requestId = this._loadRequestId;
 
@@ -18319,7 +18351,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 
     // 1. Ensure live candles + push to rawTrades + trim
     var now = Date.now();
-    var fpWindow = 900000; // 15 min
+    var fpWindow = this._footprintWindowMs;
     var trimBefore = now - this._requestedRangeMs; // garder au moins le range demande
 
     for (var i = 0; i < buf.length; i++) {
@@ -18353,8 +18385,17 @@ TradeEditorController.renderHtml = function (day, trade) {
 
     // 5. Mettre à jour le flag partial
     var fpCount = Object.keys(this._footprintMap).length;
-    var expected = Math.ceil(900000 / this._intervalMs);
+    var expected = Math.ceil(this._footprintWindowMs / this._intervalMs);
     this._partialData = fpCount < expected && this._rawTrades.length > 0;
+    if (OF.DataModel && typeof OF.DataModel.refreshLiveState === 'function') {
+      this._marketState = OF.DataModel.refreshLiveState(this._marketState, {
+        ohlcCandles: this._klinesCandles,
+        footprintMap: this._footprintMap,
+        mergedCandles: this._candles,
+        partial: this._partialData,
+        footprintWindowMs: this._footprintWindowMs,
+      });
+    }
 
     this._dirty = true;
     this._updateStatsPanel();
@@ -18394,11 +18435,11 @@ TradeEditorController.renderHtml = function (day, trade) {
   OrderflowEngine.prototype._buildStatus = function () {
     var parts = [this._symbol + ' ' + this._interval];
     if (this._candles.length > 0) {
-      var ohlcH = Math.round(this._requestedRangeMs / 60000);
-      var fpMins = this._rawTrades.length > 0 ? 15 : 0;
-      parts.push('OHLC ' + ohlcH + 'min');
-      if (fpMins > 0) parts.push('FP ' + fpMins + 'min');
-      if (this._partialData) parts.push('⚠ FP partiel');
+      var ohlcH = Math.max(1, Math.round(this._requestedRangeMs / 3600000));
+      var fpMins = Math.round(this._footprintWindowMs / 60000);
+      parts.push('OHLC ' + ohlcH + 'h');
+      parts.push('Footprint ' + fpMins + 'm');
+      parts.push(this._partialData ? 'partial' : 'full');
     }
     if (this._liveEnabled && this._liveStatus === 'connected') {
       parts.push('LIVE');
@@ -18475,8 +18516,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     this._candles = OF.Aggregator.mergeOHLCWithFootprint(this._klinesCandles, this._footprintMap);
 
     // Restaurer la plage temps (ne pas reset le contexte utilisateur)
-    this.timeScale.startTime = savedStart;
-    this.timeScale.endTime = savedEnd;
+    this.viewport.applyTimeRange(savedStart, savedEnd);
 
     // Ajuster le prix uniquement si les bougies sortent du range visible
     var candles = this._candles || [];
@@ -18488,8 +18528,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       }
       if (minP < this.priceScale.minPrice || maxP > this.priceScale.maxPrice) {
         var pad = (maxP - minP) * 0.15 || 200;
-        this.priceScale.minPrice = minP - pad;
-        this.priceScale.maxPrice = maxP + pad;
+        this.viewport.applyPriceRange(minP - pad, maxP + pad);
       }
     }
 
@@ -18574,16 +18613,14 @@ TradeEditorController.renderHtml = function (day, trade) {
       if (candles[i].high > maxP) maxP = candles[i].high;
     }
     var pad = (maxP - minP) * 0.15 || 200;
-    this.priceScale.minPrice = minP - pad;
-    this.priceScale.maxPrice = maxP + pad;
+    this.viewport.applyPriceRange(minP - pad, maxP + pad);
 
     // Fit temps: centrer les dernieres N bougies
     var dataRange = candles[candles.length - 1].time - candles[0].time;
     var visibleCount = Math.min(candles.length, 30); // max 30 bougies visibles
     var endTime = candles[candles.length - 1].time + this._intervalMs * 4;
     var startTime = candles[Math.max(0, candles.length - visibleCount)].time;
-    this.timeScale.startTime = startTime - this._intervalMs;
-    this.timeScale.endTime = endTime;
+    this.viewport.applyTimeRange(startTime - this._intervalMs, endTime);
   };
 
   /** Renvoyer les bougies visibles (ou toutes si aucune visible) */
@@ -18612,16 +18649,14 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
     var range = maxP - minP;
     var pad = range * (margin || 0.05) || 50;
-    this.priceScale.minPrice = minP - pad;
-    this.priceScale.maxPrice = maxP + pad;
+    this.viewport.applyPriceRange(minP - pad, maxP + pad);
     this._dirty = true;
   };
 
   /** Reset complet : range temporel au défaut + fit price */
   OrderflowEngine.prototype._resetDefaultView = function () {
     var now = Date.now();
-    this.timeScale.startTime = now - this._requestedRangeMs;
-    this.timeScale.endTime = now;
+    this.viewport.applyTimeRange(now - this._requestedRangeMs, now);
     // Desactiver l'override utilisateur pour le range
     this._rangeUserOverridden = false;
     var autoBtn = document.getElementById('ofAutoRange');
@@ -18733,6 +18768,9 @@ TradeEditorController.renderHtml = function (day, trade) {
     var ts = this.timeScale;
     var visibleStart = ts.startTime;
     var visibleEnd = ts.endTime;
+    var coverage = this._getFootprintCoverageRange();
+    var coverageStart = coverage ? coverage.start : null;
+    var coverageEnd = coverage ? coverage.end : null;
 
     // Espacement entre bougies — adaptatif
     var candleGap = 0.2;
@@ -18752,6 +18790,9 @@ TradeEditorController.renderHtml = function (day, trade) {
       if (cx < -minCandleW || cx > this.layout.chartRight) continue;
 
       var isBull = c.close >= c.open;
+      var inCoverage = Number.isFinite(coverageStart) && Number.isFinite(coverageEnd)
+        ? (c.time >= coverageStart && c.time <= coverageEnd)
+        : true;
       var yOpen = this.priceToY(c.open);
       var yClose = this.priceToY(c.close);
       var yHigh = this.priceToY(c.high);
@@ -18770,7 +18811,12 @@ TradeEditorController.renderHtml = function (day, trade) {
       var bodyBottom = Math.max(yOpen, yClose);
       var bodyH = Math.max(2, bodyBottom - bodyTop);
 
-      ctx.fillStyle = isBull ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)';
+      if (inCoverage) {
+        ctx.fillStyle = isBull ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)';
+      } else {
+        // Hors couverture footprint: mode OHLC simplifie explicite.
+        ctx.fillStyle = isBull ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)';
+      }
       ctx.fillRect(cx - minCandleW / 2, bodyTop, minCandleW, bodyH);
       // Contour du body
       ctx.strokeStyle = isBull ? '#22c55e' : '#ef4444';
@@ -18779,6 +18825,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 
       // Skinny: pas de footprint
       if (renderMode === 'skinny') continue;
+      if (!inCoverage) continue;
 
       // === 3. FOOTPRINT LEVELS (overlay, seulement si disponibles) ===
       var levels = Array.isArray(c.levels) ? c.levels : [];
@@ -18839,6 +18886,46 @@ TradeEditorController.renderHtml = function (day, trade) {
         }
       }
     }
+
+    this._drawFootprintCoverageMarker(ctx, coverageStart);
+  };
+
+  OrderflowEngine.prototype._getFootprintCoverageRange = function () {
+    if (!this._candles || this._candles.length === 0) return null;
+    var end = this.timeScale.endTime || Date.now();
+    var start = end - this._footprintWindowMs;
+    return { start: start, end: end };
+  };
+
+  OrderflowEngine.prototype._drawFootprintCoverageMarker = function (ctx, coverageStart) {
+    if (!Number.isFinite(coverageStart)) return;
+    if (coverageStart < this.timeScale.startTime || coverageStart > this.timeScale.endTime) return;
+
+    var x = this.timeToX(coverageStart);
+    var top = this.layout.topMargin;
+    var bottom = this.canvas.height / this.dpr - this.layout.bottomMargin;
+    if (!Number.isFinite(x) || x < this.layout.chartLeft || x > this.layout.chartRight) return;
+
+    ctx.save();
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = 'rgba(245,158,11,0.95)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, bottom);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    var label = 'Footprint live coverage: last 15m';
+    ctx.font = '11px \"JetBrains Mono\", monospace';
+    var textW = ctx.measureText(label).width;
+    var px = Math.min(this.layout.chartRight - textW - 8, Math.max(this.layout.chartLeft + 8, x + 8));
+    var py = top + 14;
+    ctx.fillStyle = 'rgba(10,10,15,0.86)';
+    ctx.fillRect(px - 4, py - 10, textW + 8, 14);
+    ctx.fillStyle = 'rgba(245,158,11,0.95)';
+    ctx.fillText(label, px, py);
+    ctx.restore();
   };
 
   // ============================================================
@@ -19471,4 +19558,109 @@ TradeEditorController.renderHtml = function (day, trade) {
   };
 
 
+})();
+
+// ---- 066a_orderflow_viewport.js ----
+// ---------- 066a_orderflow_viewport.js ----------
+// Couche viewport dediee: centralise les regles d'etat (auto/manual/follow-ready).
+
+(function () {
+  'use strict';
+
+  var OF = window.OF = window.OF || {};
+  if (!OF.ViewportController) return;
+
+  // Etat normalise expose pour debug/tests.
+  OF.ViewportController.prototype.getState = function () {
+    return {
+      mode: this.mode,
+      userDetached: !!this.userDetached,
+      timeRange: this.timeRange,
+      priceRange: this.priceRange,
+    };
+  };
+
+  // Utilitaire explicite pour repasser en mode auto.
+  OF.ViewportController.prototype.enableAuto = function (reason) {
+    this.setMode('auto', false);
+    this.setDataRange(reason || 'auto-enable');
+  };
+
+  // Hook live: ne recadre jamais en mode manual.
+  OF.ViewportController.prototype.onLiveTrade = function (_trade) {
+    if (this.mode !== 'auto' || this.userDetached) return;
+    // En auto, on ne force pas ici de recadrage agressif: le flux live met
+    // juste a jour les donnees; le moteur decide quand ajuster la vue.
+  };
+})();
+
+// ---- 066b_orderflow_data.js ----
+// ---------- 066b_orderflow_data.js ----------
+// Contrat data unique pour decoupler fetch/merge/rendu.
+
+(function () {
+  'use strict';
+
+  var OF = window.OF = window.OF || {};
+
+  function _coverageFromWindow(endMs, windowMs, partial) {
+    return {
+      start: endMs - windowMs,
+      end: endMs,
+      complete: !partial,
+    };
+  }
+
+  function _sourceMeta(klinesMeta, aggTradesMeta) {
+    var km = klinesMeta || {};
+    var am = aggTradesMeta || {};
+    return {
+      klines: {
+        cache: km.cache || null,
+        stale: !!(km.cache && km.cache.stale),
+        error: km.upstream_error || null,
+      },
+      aggTrades: {
+        cache: am.cache || null,
+        stale: !!(am.cache && am.cache.stale),
+        error: am.upstream_error || null,
+        count: am.count || (Array.isArray(am.trades) ? am.trades.length : 0),
+        pagesUsed: am.limits && am.limits.pagesUsed ? am.limits.pagesUsed : 0,
+      },
+    };
+  }
+
+  OF.DataModel = {
+    buildHybridState: function (params) {
+      var end = params.requestedEnd || Date.now();
+      return {
+        symbol: params.symbol,
+        interval: params.interval,
+        intervalMs: params.intervalMs,
+        requestedRange: { start: params.requestedStart, end: end },
+        ohlcCandles: params.ohlcCandles || [],
+        footprintMap: params.footprintMap || {},
+        mergedCandles: params.mergedCandles || [],
+        footprintCoverage: _coverageFromWindow(end, params.footprintWindowMs || 900000, !!params.partial),
+        source: _sourceMeta(params.klinesMeta, params.aggTradesMeta),
+      };
+    },
+
+    refreshLiveState: function (prevState, patch) {
+      var state = prevState || {};
+      var end = Date.now();
+      var windowMs = patch.footprintWindowMs || (state.footprintCoverage ? (state.footprintCoverage.end - state.footprintCoverage.start) : 900000);
+      return {
+        symbol: state.symbol,
+        interval: state.interval,
+        intervalMs: state.intervalMs,
+        requestedRange: state.requestedRange || { start: end - 7200000, end: end },
+        ohlcCandles: patch.ohlcCandles || state.ohlcCandles || [],
+        footprintMap: patch.footprintMap || state.footprintMap || {},
+        mergedCandles: patch.mergedCandles || state.mergedCandles || [],
+        footprintCoverage: _coverageFromWindow(end, windowMs, !!patch.partial),
+        source: state.source || { klines: {}, aggTrades: {} },
+      };
+    },
+  };
 })();
