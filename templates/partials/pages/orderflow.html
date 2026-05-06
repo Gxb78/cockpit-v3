@@ -3,7 +3,7 @@
   <div class="of-layout">
     <canvas id="ofCanvas" class="of-canvas"></canvas>
 
-    <!-- Top bar deux lignes -->
+    <!-- Top bar avec labels de groupe -->
     <div class="of-topbar">
       <div class="of-topbar-row of-topbar-row-1">
         <div class="of-pair-selector">
@@ -12,35 +12,43 @@
           <button type="button" class="of-pair-btn" data-symbol="SOLUSDT">SOL/USDT</button>
         </div>
         <span class="of-sep"></span>
-        <div class="of-timeframes">
-          <button type="button" class="of-tf-btn active" data-interval="3m">3m</button>
-          <button type="button" class="of-tf-btn" data-interval="5m">5m</button>
-          <button type="button" class="of-tf-btn" data-interval="15m">15m</button>
-          <button type="button" class="of-tf-btn" data-interval="1h">1H</button>
-        </div>
-        <span class="of-sep"></span>
         <button type="button" id="ofLiveBtn" class="of-live-btn active" title="Activer/desactiver le live">Live</button>
         <button type="button" id="ofReloadBtn" class="of-reload-btn" title="Recharger les donnees">↻</button>
       </div>
       <div class="of-topbar-row of-topbar-row-2">
-        <div class="of-range-group">
-          <button type="button" class="of-range-btn active" id="ofAutoRange">Auto</button>
-          <span class="of-range-sep"></span>
-          <button type="button" class="of-range-btn" data-range="900000">15m</button>
-          <button type="button" class="of-range-btn" data-range="1800000">30m</button>
-          <button type="button" class="of-range-btn" data-range="3600000">1H</button>
-          <button type="button" class="of-range-btn" data-range="10800000">3H</button>
+        <div class="of-group">
+          <span class="of-group-label">Bougie</span>
+          <div class="of-timeframes">
+            <button type="button" class="of-tf-btn active" data-interval="3m">3m</button>
+            <button type="button" class="of-tf-btn" data-interval="5m">5m</button>
+            <button type="button" class="of-tf-btn" data-interval="15m">15m</button>
+            <button type="button" class="of-tf-btn" data-interval="1h">1H</button>
+          </div>
         </div>
-        <span class="of-sep"></span>
-        <div class="of-step-group">
-          <button type="button" class="of-step-btn" data-step="5">$5</button>
-          <button type="button" class="of-step-btn active" data-step="10">$10</button>
-          <button type="button" class="of-step-btn" data-step="25">$25</button>
-          <button type="button" class="of-step-btn" data-step="50">$50</button>
+        <div class="of-group">
+          <span class="of-group-label">Range</span>
+          <div class="of-range-group">
+            <button type="button" class="of-range-btn active" id="ofAutoRange">Auto</button>
+            <span class="of-range-sep"></span>
+            <button type="button" class="of-range-btn" data-range="900000">15m</button>
+            <button type="button" class="of-range-btn" data-range="1800000">30m</button>
+            <button type="button" class="of-range-btn" data-range="3600000">1H</button>
+            <button type="button" class="of-range-btn" data-range="10800000">3H</button>
+          </div>
         </div>
-        <span class="of-sep"></span>
-        <button type="button" id="ofFitBtn" class="of-action-btn" title="Ajuster le range prix aux bougies visibles">⊞ Fit</button>
-        <button type="button" id="ofResetBtn" class="of-action-btn" title="Reset au range par défaut">⟲ Reset</button>
+        <div class="of-group">
+          <span class="of-group-label">Step</span>
+          <div class="of-step-group">
+            <button type="button" class="of-step-btn" data-step="5">$5</button>
+            <button type="button" class="of-step-btn active" data-step="10">$10</button>
+            <button type="button" class="of-step-btn" data-step="25">$25</button>
+            <button type="button" class="of-step-btn" data-step="50">$50</button>
+          </div>
+        </div>
+        <div class="of-group of-group--actions">
+          <button type="button" id="ofFitBtn" class="of-action-btn" title="Ajuster le range prix aux bougies visibles">⊞ Fit</button>
+          <button type="button" id="ofResetBtn" class="of-action-btn" title="Reset au range par défaut">⟲ Reset</button>
+        </div>
         <span class="of-sep"></span>
         <span id="ofStatus" class="of-status" aria-live="polite">initializing…</span>
       </div>

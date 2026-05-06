@@ -63,6 +63,24 @@
   justify-content: flex-start;
 }
 
+/* Groupes avec label */
+.of-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.of-group-label {
+  font-size: 10px;
+  color: rgba(255,255,255,0.35);
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+.of-group--actions {
+  gap: 4px;
+}
+
 /* Séparateur vertical */
 .of-sep {
   width: 1px;
