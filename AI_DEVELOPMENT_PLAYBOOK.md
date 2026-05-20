@@ -1204,3 +1204,12 @@ if end_time is not None:
      - `reset` / `auto` doivent recadrer explicitement.
 - Fichiers a surveiller: `static/js/split/066_orderflow_engine.js`, `static/js/split/066a_orderflow_viewport.js`, `tests/test_market_aggtrades.py`.
  - Runtime hotfix prioritaire: si des routes API basculent en 500 avec `TypeError: 'module' object is not callable`, verifier les aliases globaux partages (`_time`, etc.) dans `app_parts`.
+
+### Lecon T-0012: Midnights levels shared core + redraw guard (20 mai 2026)
+
+- Probleme: le rendu des niveaux Midnight (open + STDV) devait etre coherent entre widget BTC (`060`) et page chart (`062`) sans multiplier les appels API au tick WS.
+- Solution:
+  - calcul `stdv_levels` cote backend dans `extract_midnight_features` et expose sous `levels.stdv_levels`;
+  - module frontend partage `056_indicator_midnight_core.js` avec cache memoire, dedup des requetes en cours, conversion date NY, nettoyage strict des `priceLine`;
+  - garde de redraw par `series._midnightDrawnDate` + `series._midnightDrawnSymbol` pour eviter les redraw inutiles.
+- Regle: tout indicateur horizontal partage entre plusieurs charts doit passer par un core unique (cache + clear + draw), pas par des impls dupliquees dans chaque page.

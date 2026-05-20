@@ -889,6 +889,16 @@
   // ── VWAP (multi-periode) — délègue à BtcVwap (055) ──
   var _mainCandles = [];  // Bougies principales (stockees pour alignment VWAP)
 
+  function _drawMidnightForChart(candle, force) {
+    if (!window.BtcMidnight || !candlestickSeries || !candle) return;
+    var ts = Number(candle.time);
+    if (!Number.isFinite(ts) || ts <= 0) return;
+    window.BtcMidnight.drawMidnightLines(candlestickSeries, currentSymbol, ts * 1000, !!force, chart)
+      .catch(function (e) {
+        console.warn('[chart] midnight draw failed', e);
+      });
+  }
+
   function _removeVwapSeries(key) {
     var s = vwapSeriesMap[key];
     if (s) {
@@ -1263,8 +1273,8 @@
       try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
     }
 
-    var _chartLimitMap = { '1m': 260, '3m': 240, '5m': 220, '15m': 220, '30m': 180, '1h': 160, '2h': 140, '4h': 120, '1d': 120 };
-    var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=' + (_chartLimitMap[currentInterval] || 220);
+    var _chartLimitMap = { '1m': 1000, '3m': 1000, '5m': 1000, '15m': 1000, '30m': 1000, '1h': 1000, '2h': 1000, '4h': 1000, '6h': 1000, '8h': 1000, '12h': 1000, '1d': 1000 };
+    var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=' + (_chartLimitMap[currentInterval] || 1000);
     fetch(url)
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
@@ -1287,6 +1297,7 @@
         _startAutoRefresh();
         _updateStats(candles);
         _mainCandles = candles;
+        _drawMidnightForChart(last, false);
 
         // Point fantôme pour étendre le range autorisé par LWC
         var intervalSec = Math.floor(_getIntervalMs(currentInterval) / 1000);
@@ -1521,7 +1532,7 @@
             _mainCandles[_mainCandles.length - 1] = latest;
           } else if (latest.time > (last ? last.time : 0)) {
             _mainCandles.push(latest);
-            if (_mainCandles.length > 500) _mainCandles = _mainCandles.slice(-500);
+            if (_mainCandles.length > 1000) _mainCandles = _mainCandles.slice(-1000);
           }
         }
         lastCandleTime = latest.time * 1000;

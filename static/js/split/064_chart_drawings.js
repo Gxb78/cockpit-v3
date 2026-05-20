@@ -198,13 +198,11 @@
     ).filter(function (c) {
       return c !== state.canvas && !c.classList.contains('draw-overlay');
     });
-    console.log('[draw] _getLwcPaneRect canvases found:', canvases.length, 'overlay:', !!state.canvas);
     if (!canvases.length) return null;
     var best = null, bestArea = 0;
     for (var i = 0; i < canvases.length; i++) {
       var r = canvases[i].getBoundingClientRect();
       var area = r.width * r.height;
-      console.log('[draw] canvas', i, 'size:', r.width, 'x', r.height, 'area:', area);
       if (r.width > 100 && r.height > 100 && area > bestArea) {
         best = r; bestArea = area;
       }
@@ -218,12 +216,23 @@
       absLeft: best.left,
       absTop: best.top,
     };
-    console.log('[draw] pane rect:', JSON.stringify(result), 'container rect:', JSON.stringify({left: containerRect.left, top: containerRect.top, w: containerRect.width, h: containerRect.height}));
     _cachedPaneRect = result;
     return result;
   }
 
   // ── COORDINATES ──
+
+  function _clientToPanePoint(clientX, clientY) {
+    if (!state.container) return null;
+    var pane = _getLwcPaneRect();
+    var rect = pane
+      ? { left: pane.absLeft, top: pane.absTop }
+      : state.container.getBoundingClientRect();
+    return {
+      x: clientX - rect.left,
+      y: clientY - rect.top,
+    };
+  }
 
   function _toPixel(time, price) {
     var x = state.chart.timeScale().timeToCoordinate(time);
@@ -248,12 +257,10 @@
   }
 
   function _toTimePrice(clientX, clientY) {
-    var pane = _getLwcPaneRect();
-    var rect = pane
-      ? { left: pane.absLeft, top: pane.absTop }
-      : state.container.getBoundingClientRect();
-    var x = clientX - rect.left;
-    var y = clientY - rect.top;
+    var point = _clientToPanePoint(clientX, clientY);
+    if (!point) return null;
+    var x = point.x;
+    var y = point.y;
     var tp = state.chart.timeScale().coordinateToTime(x);
     var pp = state.series.coordinateToPrice(y);
     if (pp == null) return null;
@@ -277,10 +284,12 @@
 
   // Snap un point {time, price} a la bougie la plus proche (OHLC)
   function _snapPoint(tp, clientX) {
+    if (!tp) return tp;
     if (state.snapEnabled || !state.chart || !state.series || !state.container) return tp;
     try {
-      var rect = state.container.getBoundingClientRect();
-      var x = clientX - rect.left;
+      var point = _clientToPanePoint(clientX, 0);
+      if (!point) return tp;
+      var x = point.x;
       var logical = state.chart.timeScale().coordinateToLogical(x);
       if (logical == null) return tp;
       var index = Math.round(logical);
@@ -698,10 +707,13 @@
               idx: hitIdx,
               startX: e.clientX,
               startY: e.clientY,
+              startTime: tp.time,
+              startPrice: tp.price,
               pointIdx: dragPointIdx,
               // Snapshot immuable des points originaux au mousedown
               origPoints: JSON.parse(JSON.stringify(d.points)),
             };
+            if (state.selectedIndex !== hitIdx) _selectDrawing(hitIdx);
             if (state.canvas) state.canvas.style.cursor = 'grabbing';
           }
         }, { capture: true });
@@ -763,17 +775,10 @@
         if (state._drag) {
           var d = state.drawings[state._drag.idx];
           if (d && d.points) {
-            // Delta en pixels depuis le mousedown (origine fixe, pas d'accumulation)
-            var dxPx = e.clientX - state._drag.startX;
-            var dyPx = e.clientY - state._drag.startY;
-            // Convertir dxPx en delta temps via l'axe temporel
-            var t0 = state.chart.timeScale().coordinateToTime(0);
-            var tDx = state.chart.timeScale().coordinateToTime(Math.abs(dxPx));
-            var dt = (t0 != null && tDx != null) ? (dxPx >= 0 ? tDx - t0 : t0 - tDx) : 0;
-            // Convertir dyPx en delta prix via la serie
-            var p0 = state.series.coordinateToPrice(0);
-            var pDy = state.series.coordinateToPrice(Math.abs(dyPx));
-            var dp = (p0 != null && pDy != null) ? (dyPx >= 0 ? p0 - pDy : pDy - p0) : 0;
+            var current = _toTimePrice(e.clientX, e.clientY);
+            if (!current) return;
+            var dt = current.time - state._drag.startTime;
+            var dp = current.price - state._drag.startPrice;
             // Appliquer sur le snapshot original (pas d'accumulation)
             if (state._drag.pointIdx >= 0) {
               var pi = state._drag.pointIdx;
@@ -1062,13 +1067,7 @@
     }
     // Stocker la position pour le crosshair canvas en mode dessin
     if (state.activeTool !== 'cursor') {
-      var rect = state.container ? state.container.getBoundingClientRect() : null;
-      if (rect) {
-        state._crosshairPos = {
-          x: e.clientX - rect.left,
-          y: e.clientY - rect.top,
-        };
-      }
+      state._crosshairPos = _clientToPanePoint(e.clientX, e.clientY);
     }
   }
 
@@ -1308,11 +1307,11 @@
   function _renderCrosshair(pos) {
     var ctx = state.ctx;
     if (!ctx || !state.canvas) return;
-    var w = state.canvas.width;
-    var h = state.canvas.height;
     var dpr = window.devicePixelRatio || 1;
-    var px = pos.x * dpr;
-    var py = pos.y * dpr;
+    var w = state.canvas.width / dpr;
+    var h = state.canvas.height / dpr;
+    var px = pos.x;
+    var py = pos.y;
 
     ctx.save();
     ctx.strokeStyle = 'rgba(6, 182, 212, 0.35)';

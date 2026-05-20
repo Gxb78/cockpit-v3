@@ -6,7 +6,7 @@
   //  CONFIG
   // ──────────────────────────────────────────────
   var BTC_WIDGET_VIEW = {
-    visibleBars: { '1m':180,'3m':120,'5m':84,'15m':56,'30m':40,'1h':32,'2h':26,'4h':22,'6h':18,'8h':16,'12h':14,'1d':70 },
+    visibleBars: { '1m':1000,'3m':1000,'5m':1000,'15m':1000,'30m':1000,'1h':1000,'2h':1000,'4h':1000,'6h':1000,'8h':1000,'12h':1000,'1d':1000 },
     futureBars:  { '1m':24,'3m':15,'5m':10,'15m':5,'30m':3,'1h':2,'2h':2,'4h':1,'6h':1,'8h':1,'12h':1,'1d':3 },
     barSpacing:  { '1m':6,'3m':8,'5m':8,'15m':9,'30m':10,'1h':11,'2h':12,'4h':13,'6h':14,'8h':14,'12h':15,'1d':10 },
   };
@@ -786,7 +786,7 @@
         } else if (latest.time > (last ? last.time : 0)) {
           // Nouvelle bougie — push
           S.candles.push(latest);
-          if (S.candles.length > 300) S.candles = S.candles.slice(-300);
+          if (S.candles.length > 1000) S.candles = S.candles.slice(-1000);
         }
         S.lastCandleTime = latest.time * 1000;
         _updateCountdownAnchor(latest, 'rest-fallback');
@@ -901,7 +901,7 @@
     }
     if (idx >= 0) { S.candles[idx] = candle; }
     else { S.candles.push(candle); }
-    if (S.candles.length > 300) S.candles = S.candles.slice(-300);
+    if (S.candles.length > 1000) S.candles = S.candles.slice(-1000);
     return true;
   }
 
@@ -923,6 +923,7 @@
     _updateCountdownAnchor(safeCandle, 'ws', Number.isFinite(eventMs) ? eventMs : undefined);
     if (S.candleSeries) { try { S.candleSeries.update(safeCandle); } catch(e) {} }
     if (S.countdownPriceLine) { try { S.countdownPriceLine.applyOptions({ price: safeCandle.close }); } catch(e) {} }
+    _drawMidnightForWidget(safeCandle, false);
     _withProgrammaticRange(function () { maybeFollowBtcWidgetPriceY(); });
   }
 
@@ -1023,7 +1024,7 @@
   // ──────────────────────────────────────────────
 
   async function _fetchWidgetCandles(tf, signal) {
-    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=300&soft=1';
+    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=1000&soft=1';
     var r = await fetch(url, { signal: signal });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return await r.json();
@@ -1066,6 +1067,16 @@
         console.warn('[BTC-WIDGET] VWAP async render failed', e);
       });
     }, 350);
+  }
+
+  function _drawMidnightForWidget(candle, force) {
+    if (!window.BtcMidnight || !S.candleSeries || !candle) return;
+    var ts = Number(candle.time);
+    if (!Number.isFinite(ts) || ts <= 0) return;
+    window.BtcMidnight.drawMidnightLines(S.candleSeries, 'BTCUSDT', ts * 1000, !!force, S.chart)
+      .catch(function (e) {
+        console.warn('[BTC-WIDGET] midnight draw failed', e);
+      });
   }
 
   function _cacheKey(tf) {
@@ -1123,7 +1134,7 @@
       var tf = tfs[i++];
       if (S.candleCache[_cacheKey(tf)]) { setTimeout(next, 250); return; }
 
-      fetch('/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=300&soft=1')
+      fetch('/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=1000&soft=1')
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (data) {
           if (data && data.candles) _writeWidgetCache(tf, data.candles);
@@ -1184,6 +1195,7 @@
 
         _startCountdown();
         _updateCountdownLabel();
+        _drawMidnightForWidget(lastCached, false);
       }
     }
 
@@ -1255,6 +1267,7 @@
       _startCountdown();
       _startAutoRefresh();
       _updateCountdownLabel();
+      _drawMidnightForWidget(last, false);
 
       if (token !== S.renderToken || tf !== S.timeframe) return;
 

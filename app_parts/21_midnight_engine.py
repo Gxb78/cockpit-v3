@@ -269,11 +269,17 @@ def extract_midnight_features(symbol, date_ny=None):
             "mid_high_first_or_low_first": _high_first_or_low_first(mid_klines),
         }
 
+        stdv_levels = {}
+        for mult in (1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0):
+            stdv_levels[f"+{mult:.1f}"] = round(mid_open + (mult * mid_range), 8)
+            stdv_levels[f"-{mult:.1f}"] = round(mid_open - (mult * mid_range), 8)
+
         mid_levels = {
             "midnight_open": mid_open,
             "midnight_high": mid_high,
             "midnight_low": mid_low,
             "midnight_mid": round((mid_high + mid_low) / 2, 1),
+            "stdv_levels": stdv_levels,
         }
 
     # ---------- Post-open features ----------

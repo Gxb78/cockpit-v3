@@ -2219,7 +2219,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   state.breakdownSortMode = loadBreakdownSortMode();
   // Restaurer la derniere page active (#55)
   var lastPage = localStorage.getItem("lastPage");
-  if (lastPage && ["today","journal","settings"].indexOf(lastPage) >= 0) {
+  if (lastPage && ["today","journal","insights","chart","orderflow","settings"].indexOf(lastPage) >= 0) {
     state.currentPage = lastPage;
   }
   bindNav();
@@ -9491,13 +9491,13 @@ document.addEventListener("DOMContentLoaded", function() {
 
   // ── CONFIGS ────────────────────────────────────────────
   var WIDGET_VIEW = {
-    visibleBars: { '1m':180,'3m':120,'5m':84,'15m':56,'30m':40,'1h':32,'2h':26,'4h':22,'6h':18,'8h':16,'12h':14,'1d':70 },
+    visibleBars: { '1m':1000,'3m':1000,'5m':1000,'15m':1000,'30m':1000,'1h':1000,'2h':1000,'4h':1000,'6h':1000,'8h':1000,'12h':1000,'1d':1000 },
     futureBars:  { '1m':24,'3m':15,'5m':10,'15m':5,'30m':3,'1h':2,'2h':2,'4h':1,'6h':1,'8h':1,'12h':1,'1d':3 },
     padding: { top: 0.08, bottom: 0.08, minRangeRatio: 0.002 },
   };
 
   var CHART_VIEW = {
-    visibleBars: { '1m':160,'3m':130,'5m':90,'15m':60,'30m':44,'1h':36,'2h':30,'4h':26,'6h':22,'8h':20,'12h':18,'1d':90 },
+    visibleBars: { '1m':1000,'3m':1000,'5m':1000,'15m':1000,'30m':1000,'1h':1000,'2h':1000,'4h':1000,'6h':1000,'8h':1000,'12h':1000,'1d':1000 },
     futureBars:  { '1m':22,'3m':20,'5m':12,'15m':6,'30m':4,'1h':3,'2h':2,'4h':2,'6h':2,'8h':1,'12h':1,'1d':3 },
     padding: { top: 0.10, bottom: 0.08, minRangeRatio: 0.0025 },
   };
@@ -10205,6 +10205,269 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
 
 })();
 
+// ---- 056_indicator_midnight_core.js ----
+// ---------- Midnight Core ----------
+// Shared helper for 060 (BTC widget) and 062 (chart page).
+
+(function () {
+  var _cache = {};
+  var _pending = {};
+
+  var MIDNIGHT_COLOR = '#00f5ff';
+  var POSITIVE_COLOR = '#ff73b9';
+  var NEGATIVE_COLOR = '#00e676';
+
+  function _toMs(ts) {
+    var n = Number(ts);
+    if (!Number.isFinite(n) || n <= 0) return Date.now();
+    return n > 1e12 ? n : n * 1000;
+  }
+
+  function getNyDateString(timestampMs) {
+    var ms = _toMs(timestampMs);
+    var parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date(ms));
+
+    var out = { year: '0000', month: '01', day: '01' };
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      if (p.type === 'year' || p.type === 'month' || p.type === 'day') {
+        out[p.type] = p.value;
+      }
+    }
+    return out.year + '-' + out.month + '-' + out.day;
+  }
+
+  function _cacheKey(symbol, dateNy) {
+    return (symbol || 'BTCUSDT').toUpperCase() + ':' + dateNy;
+  }
+
+  function _fetchDay(symbol, dateNy) {
+    var sym = (symbol || 'BTCUSDT').toUpperCase();
+    var key = _cacheKey(sym, dateNy);
+
+    if (_cache[key]) return Promise.resolve(_cache[key]);
+    if (_pending[key]) return _pending[key];
+
+    var url = '/api/models/midnight/day?symbol=' + encodeURIComponent(sym) + '&date=' + encodeURIComponent(dateNy);
+    var req = fetch(url)
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (data) {
+        _cache[key] = data || null;
+        return _cache[key];
+      })
+      .catch(function (e) {
+        console.warn('[MIDNIGHT] fetch failed', sym, dateNy, e);
+        return null;
+      })
+      .finally(function () {
+        delete _pending[key];
+      });
+
+    _pending[key] = req;
+    return req;
+  }
+
+  function _clearLines(series) {
+    var lines = series && series._midnightPriceLines;
+    if (!series || !Array.isArray(lines)) {
+      if (series) series._midnightPriceLines = [];
+      return;
+    }
+    for (var i = 0; i < lines.length; i++) {
+      try { series.removePriceLine(lines[i]); } catch(e) {}
+    }
+    series._midnightPriceLines = [];
+  }
+
+  function _addLineSeries(chart, opts) {
+    if (!chart) return null;
+    try {
+      if (typeof chart.addSeries === 'function' && window.LightweightCharts && window.LightweightCharts.LineSeries) {
+        return chart.addSeries(window.LightweightCharts.LineSeries, opts);
+      }
+      if (typeof chart.addLineSeries === 'function') {
+        return chart.addLineSeries(opts);
+      }
+    } catch(e) {}
+    return null;
+  }
+
+  function _clearOpenSegment(series) {
+    if (!series) return;
+    var chart = series._midnightChart;
+    var seg = series._midnightOpenSegmentSeries;
+    if (chart && seg && typeof chart.removeSeries === 'function') {
+      try { chart.removeSeries(seg); } catch(e) {}
+    }
+    series._midnightOpenSegmentSeries = null;
+    series._midnightOpenPrice = NaN;
+    series._midnightOpenStartSec = NaN;
+    series._midnightOpenEndSec = NaN;
+  }
+
+  function _resolveNowMs(timestampMs) {
+    var marketNow = window.BtcMarketClock && typeof window.BtcMarketClock.now === 'function'
+      ? Number(window.BtcMarketClock.now())
+      : NaN;
+    if (Number.isFinite(marketNow) && marketNow > 0) return marketNow;
+    return _toMs(timestampMs);
+  }
+
+  function _refreshOpenSegment(series, timestampMs) {
+    if (!series || !series._midnightOpenSegmentSeries) return;
+    var startSec = Number(series._midnightOpenStartSec);
+    var price = Number(series._midnightOpenPrice);
+    if (!Number.isFinite(startSec) || !Number.isFinite(price)) return;
+
+    var nowSec = Math.floor(_resolveNowMs(timestampMs) / 1000);
+    var endSec = Math.max(startSec + 1, nowSec);
+    if (series._midnightOpenEndSec === endSec) return;
+
+    series._midnightOpenEndSec = endSec;
+    try {
+      series._midnightOpenSegmentSeries.setData([
+        { time: startSec, value: price },
+        { time: endSec, value: price },
+      ]);
+    } catch(e) {}
+  }
+
+  function _parseStdvEntries(stdvLevels) {
+    var out = [];
+    if (!stdvLevels || typeof stdvLevels !== 'object') return out;
+
+    Object.keys(stdvLevels).forEach(function (key) {
+      var value = Number(stdvLevels[key]);
+      if (!Number.isFinite(value)) return;
+
+      var mult = Number(key);
+      var sign = key[0] === '-' ? '-' : '+';
+      if (!Number.isFinite(mult)) {
+        var absMatch = String(key).match(/(\d+(?:\.\d+)?)/);
+        if (absMatch) {
+          mult = Number(absMatch[1]);
+          if (sign === '-') mult = -mult;
+        }
+      }
+      if (!Number.isFinite(mult)) return;
+
+      out.push({
+        key: key,
+        multiplier: mult,
+        value: value,
+        label: (mult > 0 ? '+' : '-') + Math.abs(mult).toFixed(1) + ' SD',
+      });
+    });
+
+    out.sort(function (a, b) {
+      var aPos = a.multiplier > 0 ? 0 : 1;
+      var bPos = b.multiplier > 0 ? 0 : 1;
+      if (aPos !== bPos) return aPos - bPos;
+      return Math.abs(a.multiplier) - Math.abs(b.multiplier);
+    });
+    return out;
+  }
+
+  function _addLine(series, lines, opts) {
+    try {
+      var line = series.createPriceLine(opts);
+      if (line) lines.push(line);
+    } catch(e) {}
+  }
+
+  async function drawMidnightLines(series, symbol, timestampMs, force, chartApi) {
+    if (!series || typeof series.createPriceLine !== 'function' || typeof series.removePriceLine !== 'function') return;
+    if (chartApi) series._midnightChart = chartApi;
+
+    var sym = (symbol || 'BTCUSDT').toUpperCase();
+    var dateNy = getNyDateString(timestampMs);
+
+    if (!force && series._midnightDrawnDate === dateNy && series._midnightDrawnSymbol === sym) {
+      _refreshOpenSegment(series, timestampMs);
+      return;
+    }
+
+    series._midnightDrawSeq = (series._midnightDrawSeq || 0) + 1;
+    var drawSeq = series._midnightDrawSeq;
+
+    var payload = await _fetchDay(sym, dateNy);
+    if (drawSeq !== series._midnightDrawSeq) return;
+
+    _clearLines(series);
+    _clearOpenSegment(series);
+
+    var levels = payload && payload.levels ? payload.levels : null;
+    var midnightOpen = levels ? Number(levels.midnight_open) : NaN;
+    if (!Number.isFinite(midnightOpen)) {
+      series._midnightDrawnDate = dateNy;
+      series._midnightDrawnSymbol = sym;
+      return;
+    }
+
+    var midnightStartMs = payload && payload.windows && payload.windows.midnight
+      ? Number(payload.windows.midnight.start_utc)
+      : NaN;
+    if (Number.isFinite(midnightStartMs)) {
+      var startSec = Math.floor(midnightStartMs / 1000);
+      var chart = series._midnightChart;
+      var segSeries = _addLineSeries(chart, {
+        color: MIDNIGHT_COLOR,
+        lineWidth: 2,
+        lineStyle: 0,
+        priceLineVisible: false,
+        lastValueVisible: true,
+        crosshairMarkerVisible: false,
+        title: 'Midnight Open',
+        autoscaleInfoProvider: function () { return null; },
+      });
+      if (segSeries) {
+        series._midnightOpenSegmentSeries = segSeries;
+        series._midnightOpenPrice = midnightOpen;
+        series._midnightOpenStartSec = startSec;
+        series._midnightOpenEndSec = NaN;
+        _refreshOpenSegment(series, timestampMs);
+      }
+    }
+
+    var created = [];
+
+    var entries = _parseStdvEntries(levels.stdv_levels);
+    for (var i = 0; i < entries.length; i++) {
+      var item = entries[i];
+      _addLine(series, created, {
+        price: item.value,
+        color: item.multiplier > 0 ? POSITIVE_COLOR : NEGATIVE_COLOR,
+        lineWidth: 1,
+        lineStyle: 1,
+        axisLabelVisible: true,
+        title: item.label,
+      });
+    }
+
+    series._midnightPriceLines = created;
+    series._midnightDrawnDate = dateNy;
+    series._midnightDrawnSymbol = sym;
+  }
+
+  window.BtcMidnight = {
+    _cache: _cache,
+    getNyDateString: getNyDateString,
+    drawMidnightLines: drawMidnightLines,
+    clearSeriesLines: function (series) {
+      _clearLines(series);
+      _clearOpenSegment(series);
+    },
+  };
+})();
+
 // ---- 056_journal_day_trade_cards.js ----
 function journalTradeEditorHtml(day, trade) { return TradeEditorController.renderHtml(day, trade); }
 
@@ -10470,7 +10733,7 @@ function _bindJournalClick(wrap) {
     var eb = e.target.closest("[data-journal-trade-edit]");
     if (!eb && e.target.tagName === "BUTTON" && e.target.classList.contains("journal-back-edit")) eb = e.target;
     if (eb) { e.stopPropagation(); try { openJournalTradeEditor(eb.dataset.journalTradeEdit); } catch (_e) { console.error("[cockpit] Erreur ouverture editeur:", _e); } return; }
-    var ep = e.target.closest(".jedit-pill"); if (ep) { e.stopPropagation(); var eg = ep.closest(".jedit-pills"); if (eg) { eg.querySelectorAll(".jedit-pill").forEach(function (p) { p.classList.remove("is-active"); }); ep.classList.add("is-active"); var ed = ep.closest(".journal-trade-editor"); var et = ed && ed.dataset.tradeId; if (et) TradeEditorController.scheduleSave(et); } return; }
+    var ep = e.target.closest(".jedit-pill"); if (ep) { e.stopPropagation(); var eg = ep.closest(".jedit-pills"); if (eg) { eg.querySelectorAll(".jedit-pill").forEach(function (p) { p.classList.remove("is-active"); }); ep.classList.add("is-active"); var ed = ep.closest(".journal-trade-editor"); var et = ed && ed.dataset.tradeId; if (et) { TradeEditorController.scheduleSave(et); TradeEditorController.recalcLive(ed); } } return; }
     var est = e.target.closest(".jedit-star"); if (est) { e.stopPropagation(); var esw = est.closest(".jedit-stars"); if (esw) { var ev = Number(est.dataset.val); if (String(esw.dataset.value) === String(ev)) ev = 0; esw.dataset.value = String(ev); esw.querySelectorAll(".jedit-star").forEach(function (s) { s.classList.toggle("is-lit", Number(s.dataset.val) <= ev); }); var ed2 = esw.closest(".journal-trade-editor"); var et2 = ed2 && ed2.dataset.tradeId; if (et2) TradeEditorController.scheduleSave(et2); } return; }
     var pill = e.target.closest(".jcard-pill"); if (pill) { e.stopPropagation(); var g = pill.closest(".jcard-pills"); if (g) { g.querySelectorAll(".jcard-pill").forEach(function (p) { p.classList.remove("is-active"); }); pill.classList.add("is-active"); var s = pill.closest(".journal-flip-back-scroll"); var t = s && s.dataset.tradeId; if (t) _journalCardScheduleSave(t); } return; }
     var star = e.target.closest(".jcard-star"); if (star) { e.stopPropagation(); var sw = star.closest(".jcard-stars"); if (sw) { var v = Number(star.dataset.val); if (String(sw.dataset.value) === String(v)) v = 0; sw.dataset.value = String(v); sw.querySelectorAll(".jcard-star").forEach(function (s) { s.classList.toggle("is-lit", Number(s.dataset.val) <= v); }); var s2 = sw.closest(".journal-flip-back-scroll"); var t3 = s2 && s2.dataset.tradeId; if (t3) _journalCardScheduleSave(t3); } return; }
@@ -10506,10 +10769,13 @@ function _bindJournalFieldSaves(wrap) {
 function _bindJournalChangeSelect(wrap) {
   wrap.addEventListener("change", function (e) {
     var ef = e.target.closest(".jedit-field"); if (!ef) return;
+    var ed = ef.closest(".journal-trade-editor");
     if (ef.tagName === "SELECT" && ef.dataset.field === "strategy") {
-      var ed = ef.closest(".journal-trade-editor");
       var title = ed && ed.querySelector(".jedit-hero-copy h3");
       if (title) title.textContent = ef.options[ef.selectedIndex] ? ef.options[ef.selectedIndex].text : ef.value;
+    }
+    if (ed) {
+      TradeEditorController.recalcLive(ed);
     }
   });
 }
@@ -10532,21 +10798,113 @@ function _bindJournalKeydown(wrap) {
 
 function _bindJournalMarginInput(wrap) {
   wrap.addEventListener("input", function (e) {
-    var field = e.target.closest(".journal-flip-back-scroll .jcard-margin-input, .journal-flip-back-scroll .jcard-field[data-field=\"leverage\"], .journal-flip-back-scroll .jcard-field[data-field=\"entry_price\"]");
-    if (!field) return; var scroll = field.closest(".journal-flip-back-scroll"); if (!scroll) return; var tid = scroll.dataset.tradeId; if (!tid) return;
-    var mi = scroll.querySelector(".jcard-margin-input"); var li = scroll.querySelector(".jcard-field[data-field=\"leverage\"]");
-    var ei = scroll.querySelector(".jcard-field[data-field=\"entry_price\"]"); var pi = scroll.querySelector(".jcard-field[data-field=\"position_size\"]");
-    if (!mi || !li || !ei || !pi) return;
-    if (field === mi || field.dataset.field === "leverage") {
-      var m = Number(mi.value); var l = Number(li.value); var e = Number(ei.value);
-      if (m > 0 && l > 0 && e > 0) { var c = computePositionSize(m, l, e); if (c != null) { pi.value = String(c); _journalCardScheduleSave(tid); } }
+    // Sync TP -> Sortie for flip card
+    if (e.target.matches(".jcard-field[data-field='take_profit']")) {
+      var scroll = e.target.closest(".journal-flip-back-scroll");
+      var exitInput = scroll && scroll.querySelector(".jcard-field[data-field='exit_price']");
+      if (exitInput) exitInput.value = e.target.value;
     }
-    if (field === pi) {
-      var p = Number(pi.value); var l2 = Number(li.value); var e2 = Number(ei.value);
-      if (p > 0 && l2 > 0 && e2 > 0) { var cm = computeMarginUsd(p, l2, e2); if (cm != null) mi.value = String(cm); }
+    // Sync TP -> Sortie for sidebar editor
+    if (e.target.matches(".jedit-field[data-field='take_profit']")) {
+      var editor = e.target.closest(".journal-trade-editor");
+      var exitInput = editor && editor.querySelector(".jedit-field[data-field='exit_price']");
+      if (exitInput) exitInput.value = e.target.value;
+    }
+
+    var field = e.target.closest(".journal-flip-back-scroll .jcard-margin-input, .journal-flip-back-scroll .jcard-field[data-field=\"leverage\"], .journal-flip-back-scroll .jcard-field[data-field=\"entry_price\"]");
+    var scroll = e.target.closest(".journal-flip-back-scroll");
+    if (field && scroll) {
+      var tid = scroll.dataset.tradeId;
+      if (tid) {
+        var mi = scroll.querySelector(".jcard-margin-input"); var li = scroll.querySelector(".jcard-field[data-field=\"leverage\"]");
+        var ei = scroll.querySelector(".jcard-field[data-field=\"entry_price\"]"); var pi = scroll.querySelector(".jcard-field[data-field=\"position_size\"]");
+        if (mi && li && ei && pi) {
+          if (field === mi || field.dataset.field === "leverage") {
+            var m = Number(mi.value); var l = Number(li.value); var entryVal = Number(ei.value);
+            if (m > 0 && l > 0 && entryVal > 0) { var c = computePositionSize(m, l, entryVal); if (c != null) { pi.value = String(c); _journalCardScheduleSave(tid); } }
+          }
+          if (field === pi) {
+            var p = Number(pi.value); var l2 = Number(li.value); var entryVal2 = Number(ei.value);
+            if (p > 0 && l2 > 0 && entryVal2 > 0) { var cm = computeMarginUsd(p, l2, entryVal2); if (cm != null) mi.value = String(cm); }
+          }
+        }
+      }
+    }
+
+    if (scroll) {
+      _recalcCardMetrics(scroll);
+    }
+
+    var editor = e.target.closest(".journal-trade-editor");
+    if (editor) {
+      TradeEditorController.recalcLive(editor);
     }
   });
 }
+
+function _recalcCardMetrics(scroll) {
+  var tid = scroll.dataset.tradeId;
+  var trade = _journalDayTradeCache[String(tid)];
+  if (!trade) return;
+
+  var entryEl = scroll.querySelector('.jcard-field[data-field="entry_price"]');
+  var tpEl    = scroll.querySelector('.jcard-field[data-field="take_profit"]');
+  var slEl    = scroll.querySelector('.jcard-field[data-field="stop_loss"]');
+  var exitEl  = scroll.querySelector('.jcard-field[data-field="exit_price"]');
+  var qtyEl   = scroll.querySelector('.jcard-field[data-field="position_size"]');
+
+  var tempTrade = Object.assign({}, trade, {
+    entry_price: entryEl ? entryEl.value : null,
+    take_profit: tpEl ? tpEl.value : null,
+    stop_loss: slEl ? slEl.value : null,
+    exit_price: exitEl ? exitEl.value : null,
+    position_size: qtyEl ? qtyEl.value : null
+  });
+
+  var m = deriveTradeMetrics(tempTrade);
+  var pnl = Number(m.pnl || 0);
+  var pnlClass = pnl > 0 ? "pos" : pnl < 0 ? "neg" : "flat";
+  var resultClass = m.isWin === 1 ? "win" : m.isWin === 0 ? "loss" : "neutral";
+  var resultLabel = m.isWin === 1 ? "WIN" : m.isWin === 0 ? "LOSS" : "-";
+  var rrTxt = m.rr == null ? "-" : Number(m.rr).toFixed(2) + "R";
+  var pnlTxt = fmtMoney(pnl);
+
+  // Met a jour les elements de la carte
+  var pnlEl = scroll.querySelector('.jcard-pnl-display');
+  if (pnlEl) {
+    pnlEl.textContent = pnlTxt;
+    pnlEl.className = 'jcard-pnl-display ' + pnlClass;
+  }
+  var rrEl = scroll.querySelector('.jcard-rr-display');
+  if (rrEl) {
+    rrEl.textContent = rrTxt;
+  }
+  var resEl = scroll.querySelector('.jcard-result-display');
+  if (resEl) {
+    resEl.textContent = resultLabel;
+    resEl.className = 'jcard-result-display ' + resultClass;
+  }
+
+  // Met a jour le badge R:R visuel
+  var badgeEl = scroll.querySelector('.jcard-rr-visual-badge');
+  if (badgeEl) {
+    if (m.rr == null) {
+      badgeEl.textContent = 'Niveaux incomplets';
+      badgeEl.className = 'jcard-rr-visual-badge rr-neutral';
+    } else {
+      var rrVal = Number(m.rr);
+      badgeEl.textContent = rrVal.toFixed(2) + ' R:R';
+      if (rrVal < 1.0) {
+        badgeEl.className = 'jcard-rr-visual-badge rr-low';
+      } else if (rrVal < 2.0) {
+        badgeEl.className = 'jcard-rr-visual-badge rr-medium';
+      } else {
+        badgeEl.className = 'jcard-rr-visual-badge rr-high';
+      }
+    }
+  }
+}
+
 
 function _bindJournalScreenshotUpload(wrap) {
   wrap.addEventListener("click", function (e) { var se = e.target.closest(".journal-back-shot"); if (!se) return; var si = se.querySelector(".journal-shot-input"); if (!si) return; si.click(); });
@@ -10750,9 +11108,13 @@ function _flipCardBackInner(day, trade, m, pnl, pnlClass, resultClass, resultLab
       </div>
       <h5>Niveaux</h5>
       <div class="journal-trade-detail-grid">
-        <div style="grid-column:1/-1">
+        <div>
           <span>Entree</span>
           <input class="jcard-field" type="number" step="0.01" data-field="entry_price" value="${trade.entry_price != null ? escapeHtml(String(trade.entry_price)) : ''}" placeholder="&mdash;"/>
+        </div>
+        <div>
+          <span>TP</span>
+          <input class="jcard-field" type="number" step="0.01" data-field="take_profit" value="${trade.take_profit != null ? escapeHtml(String(trade.take_profit)) : ''}" placeholder="&mdash;"/>
         </div>
         <div>
           <span>SL</span>
@@ -10761,6 +11123,11 @@ function _flipCardBackInner(day, trade, m, pnl, pnlClass, resultClass, resultLab
         <div>
           <span>Sortie</span>
           <input class="jcard-field" type="number" step="0.01" data-field="exit_price" value="${trade.exit_price != null ? escapeHtml(String(trade.exit_price)) : ''}" placeholder="&mdash;"/>
+        </div>
+      </div>
+      <div class="jcard-rr-visual-container">
+        <div class="jcard-rr-visual-badge ${m.rr != null ? (m.rr < 1.0 ? 'rr-low' : m.rr < 2.0 ? 'rr-medium' : 'rr-high') : 'rr-neutral'}">
+          ${m.rr != null ? Number(m.rr).toFixed(2) + ' R:R' : 'Niveaux incomplets'}
         </div>
       </div>
       <h5>Capture</h5>
@@ -11184,6 +11551,82 @@ TradeEditorController.recalcMetrics = function (collected, originalTrade) {
   }
 };
 
+TradeEditorController.recalcLive = function (editor) {
+  var tid = editor.dataset.tradeId;
+  var trade = _journalDayTradeCache[String(tid)];
+  if (!trade) return;
+
+  var entryEl = editor.querySelector('.jedit-field[data-field="entry_price"]');
+  var tpEl    = editor.querySelector('.jedit-field[data-field="take_profit"]');
+  var slEl    = editor.querySelector('.jedit-field[data-field="stop_loss"]');
+  var exitEl  = editor.querySelector('.jedit-field[data-field="exit_price"]');
+  var qtyEl   = editor.querySelector('.jedit-field[data-field="position_size"]');
+  var levEl   = editor.querySelector('.jedit-field[data-field="leverage"]');
+
+  var tempTrade = Object.assign({}, trade, {
+    entry_price: entryEl ? entryEl.value : null,
+    take_profit: tpEl ? tpEl.value : null,
+    stop_loss: slEl ? slEl.value : null,
+    exit_price: exitEl ? exitEl.value : null,
+    position_size: qtyEl ? qtyEl.value : null,
+    leverage: levEl ? levEl.value : null
+  });
+
+  var m = deriveTradeMetrics(tempTrade);
+  var pnl = Number(m.pnl || 0);
+  var pnlClass = pnl > 0 ? "pos" : pnl < 0 ? "neg" : "flat";
+  var resultClass = m.isWin === 1 ? "win" : m.isWin === 0 ? "loss" : "neutral";
+  var resultLabel = m.isWin === 1 ? "WIN" : m.isWin === 0 ? "LOSS" : "-";
+  var rrTxt = m.rr == null ? "-" : Number(m.rr).toFixed(2) + "R";
+  var pnlTxt = fmtMoney(pnl);
+
+  // 1. Mettre a jour l'en-tete (jedit-metrics)
+  var headPnl = editor.querySelector('.jedit-metric-pnl strong');
+  if (headPnl) {
+    headPnl.textContent = pnlTxt;
+    headPnl.className = pnlClass;
+  }
+  var headRr = editor.querySelector('.jedit-metric-rr strong');
+  if (headRr) {
+    headRr.textContent = rrTxt;
+  }
+  var headRes = editor.querySelector('.jedit-metric-result strong');
+  if (headRes) {
+    headRes.textContent = resultLabel;
+    headRes.className = resultClass;
+  }
+
+  // 2. Mettre a jour les champs d'inputs de la grille (PnL et RR)
+  var inputPnl = editor.querySelector('.jedit-field[data-field="pnl"]');
+  if (inputPnl) {
+    inputPnl.value = m.pnl != null ? Number(m.pnl).toFixed(2) : "";
+  }
+  var inputRr = editor.querySelector('.jedit-field[data-field="rr"]');
+  if (inputRr) {
+    inputRr.value = m.rr != null ? Number(m.rr).toFixed(2) : "";
+  }
+
+  // 3. Mettre a jour le badge R:R visuel
+  var badgeEl = editor.querySelector('.jcard-rr-visual-badge');
+  if (badgeEl) {
+    if (m.rr == null) {
+      badgeEl.textContent = 'Niveaux incomplets';
+      badgeEl.className = 'jcard-rr-visual-badge rr-neutral';
+    } else {
+      var rrVal = Number(m.rr);
+      badgeEl.textContent = rrVal.toFixed(2) + ' R:R';
+      if (rrVal < 1.0) {
+        badgeEl.className = 'jcard-rr-visual-badge rr-low';
+      } else if (rrVal < 2.0) {
+        badgeEl.className = 'jcard-rr-visual-badge rr-medium';
+      } else {
+        badgeEl.className = 'jcard-rr-visual-badge rr-high';
+      }
+    }
+  }
+};
+
+
 // ---- UI refresh after save ----
 TradeEditorController.refreshUI = function (editor, trade) {
   if (!editor || !trade) return;
@@ -11557,7 +12000,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       }).join('')
     : '<div class="jedit-empty">Aucune capture pour ce trade.</div>';
 
-  return '\n    <aside class="journal-trade-editor" data-trade-id="' + tid + '" role="dialog" aria-label="Edition du trade">\n      <div class="jedit-panel">\n        <div class="jedit-hero">\n          <div class="jedit-hero-shot ' + shotClass + '"' + shotStyle + '>' + (shot ? '' : '<span>Aucune capture</span>') + '</div>\n          <div class="jedit-hero-copy">\n            <div class="jedit-topline">\n              <span>' + escapeHtml(dateLabel) + '</span>\n              <span>' + escapeHtml(day.instrument || '-') + '</span>\n              <span>' + escapeHtml((direction || '-').toUpperCase()) + '</span>\n            </div>\n            <h3>' + escapeHtml(strategy) + '</h3>\n            <p>' + escapeHtml(TradeEditorController.shortText(trade.why_trade, trade.scenario, trade.why_entry)) + '</p>\n            <div class="jedit-metrics">\n              <div class="jedit-metric-pnl"><strong class="' + pnlClass + '">' + fmtMoney(pnl) + '</strong><span>PnL</span></div>\n              <div class="jedit-metric-rr"><strong>' + escapeHtml(rr) + '</strong><span>R multiple</span></div>\n              <div class="jedit-metric-result"><strong class="' + resultClass + '">' + escapeHtml(resultLabel) + '</strong><span>Resultat</span></div>\n            </div>\n          </div>\n          <div class="jedit-actions">\n            <span class="jedit-status" data-state=""></span>\n            <button type="button" class="jedit-save" data-journal-editor-save="' + tid + '">Sauver</button>\n            <button type="button" class="jedit-close" data-journal-editor-close aria-label="Fermer">\n              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>\n            </button>\n          </div>\n        </div>\n\n        <div class="jedit-scroll">\n          <div class="jedit-sticky">\n            <button type="button" class="jedit-save" data-journal-editor-save="' + tid + '">Sauver</button>\n            <button type="button" class="jedit-close" data-journal-editor-close aria-label="Fermer">\n              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>\n            </button>\n          </div>\n          <section class="jedit-block jedit-identity">\n            <div class="jedit-block-title"><span>01</span><h4>Setup</h4></div>\n            <div class="jedit-grid">\n              <label class="jedit-field-wrap"><span>Strategie</span><select class="jedit-field" data-field="strategy">' + TradeEditorController.strategyOptions(trade.strategy || '') + '</select></label>\n              <label class="jedit-field-wrap"><span>Direction</span>' + TradeEditorController.pills('direction', direction, [{ value: 'long', label: 'Long' }, { value: 'short', label: 'Short' }, { value: '', label: '?' }]) + '</label>\n              <label class="jedit-field-wrap"><span>Session</span><select class="jedit-field" data-field="session">' + TradeEditorController.sessionOptions(trade.session || '') + '</select></label>\n              ' + TradeEditorController.field('Stdv', 'stdv_level', trade.stdv_level, 'number', { step: '0.5', placeholder: '1 - 5' }) + '\n              <label class="jedit-field-wrap"><span>Resultat</span><select class="jedit-field" data-field="is_win" data-type="bool">' + TradeEditorController.selectOption('', 'A qualifier', winValue) + TradeEditorController.selectOption('1', 'Win', winValue) + TradeEditorController.selectOption('0', 'Loss', winValue) + '</select></label>\n            </div>\n          </section>\n\n          <section class="jedit-block">\n            <div class="jedit-block-title"><span>02</span><h4>Niveaux</h4></div>\n            <div class="jedit-grid jedit-grid-5">\n              ' + TradeEditorController.field('Entree', 'entry_price', trade.entry_price, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('Stop', 'stop_loss', trade.stop_loss, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('TP', 'exit_price', trade.exit_price, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('Sortie', 'exit_price', trade.exit_price, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('Size', 'position_size', trade.position_size, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('Levier', 'leverage', trade.leverage, 'number', { step: '1', placeholder: '1x' }) + '\n              ' + TradeEditorController.field('PnL', 'pnl', trade.pnl, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('RR', 'rr', trade.rr, 'number', { step: '0.01' }) + '\n            </div>\n          </section>\n\n          <section class="jedit-block">\n            <div class="jedit-block-title"><span>03</span><h4>Scenario</h4></div>\n            <div class="jedit-notes">\n              ' + TradeEditorController.textarea('Pourquoi ce trade', 'why_trade', trade.why_trade, 3) + '\n              ' + TradeEditorController.textarea('Pourquoi cette entree', 'why_entry', trade.why_entry, 3) + '\n              ' + TradeEditorController.textarea('Scenario complet', 'scenario', trade.scenario, 4) + '\n              ' + TradeEditorController.textarea('Pourquoi ce stop', 'why_stop', trade.why_stop, 3) + '\n              ' + TradeEditorController.textarea('Pourquoi ce TP', 'why_tp', trade.why_tp, 3) + '\n            </div>\n          </section>\n\n          <section class="jedit-block">\n            <div class="jedit-block-title"><span>04</span><h4>Review</h4></div>\n            <div class="jedit-grid">\n              <label class="jedit-field-wrap"><span>These validee</span>' + TradeEditorController.pills('thesis_validated', trade.thesis_validated || '', [{ value: 'yes', label: 'Oui' }, { value: 'no', label: 'Non' }, { value: '', label: '?' }]) + '</label>\n              <label class="jedit-field-wrap"><span>Qualite execution</span><div class="jedit-stars" data-field="execution_quality" data-value="' + qualityRaw + '">' + starsHtml + '</div></label>\n              ' + TradeEditorController.field('Tags', 'tags', TradeEditorController.tagsValue(trade.tags), 'tags', { placeholder: 'tag1, tag2' }) + '\n              ' + TradeEditorController.textarea('Lecons apprises', 'lessons_learned', trade.lessons_learned, 4) + '\n            </div>\n          </section>\n\n          <section class="jedit-block">\n            <div class="jedit-block-title"><span>05</span><h4>Plan & captures</h4></div>\n            <div class="jedit-plan-grid">\n              <div><span>Plan model</span><strong>' + escapeHtml(trade.plan_model || '-') + '</strong></div>\n              <div><span>Direction plan</span><strong>' + escapeHtml(trade.plan_direction || '-') + '</strong></div>\n              <div><span>Alignement</span><strong>' + escapeHtml(trade.plan_alignment || 'unknown') + '</strong></div>\n              <div><span>Score</span><strong>' + (trade.plan_score == null ? '-' : escapeHtml(String(trade.plan_score))) + '</strong></div>\n            </div>\n            ' + TradeEditorController.textarea('Raison override plan', 'plan_override_reason', trade.plan_override_reason, 3) + '\n            <div class="jedit-shots">' + screenshotsHtml + '</div>\n          </section>\n        </div>\n      </div>\n    </aside>\n  ';
+  return '\n    <aside class="journal-trade-editor" data-trade-id="' + tid + '" role="dialog" aria-label="Edition du trade">\n      <div class="jedit-panel">\n        <div class="jedit-hero">\n          <div class="jedit-hero-shot ' + shotClass + '"' + shotStyle + '>' + (shot ? '' : '<span>Aucune capture</span>') + '</div>\n          <div class="jedit-hero-copy">\n            <div class="jedit-topline">\n              <span>' + escapeHtml(dateLabel) + '</span>\n              <span>' + escapeHtml(day.instrument || '-') + '</span>\n              <span>' + escapeHtml((direction || '-').toUpperCase()) + '</span>\n            </div>\n            <h3>' + escapeHtml(strategy) + '</h3>\n            <p>' + escapeHtml(TradeEditorController.shortText(trade.why_trade, trade.scenario, trade.why_entry)) + '</p>\n            <div class="jedit-metrics">\n              <div class="jedit-metric-pnl"><strong class="' + pnlClass + '">' + fmtMoney(pnl) + '</strong><span>PnL</span></div>\n              <div class="jedit-metric-rr"><strong>' + escapeHtml(rr) + '</strong><span>R multiple</span></div>\n              <div class="jedit-metric-result"><strong class="' + resultClass + '">' + escapeHtml(resultLabel) + '</strong><span>Resultat</span></div>\n            </div>\n          </div>\n          <div class="jedit-actions">\n            <span class="jedit-status" data-state=""></span>\n            <button type="button" class="jedit-save" data-journal-editor-save="' + tid + '">Sauver</button>\n            <button type="button" class="jedit-close" data-journal-editor-close aria-label="Fermer">\n              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>\n            </button>\n          </div>\n        </div>\n\n        <div class="jedit-scroll">\n          <div class="jedit-sticky">\n            <button type="button" class="jedit-save" data-journal-editor-save="' + tid + '">Sauver</button>\n            <button type="button" class="jedit-close" data-journal-editor-close aria-label="Fermer">\n              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>\n            </button>\n          </div>\n          <section class="jedit-block jedit-identity">\n            <div class="jedit-block-title"><span>01</span><h4>Setup</h4></div>\n            <div class="jedit-grid">\n              <label class="jedit-field-wrap"><span>Strategie</span><select class="jedit-field" data-field="strategy">' + TradeEditorController.strategyOptions(trade.strategy || '') + '</select></label>\n              <label class="jedit-field-wrap"><span>Direction</span>' + TradeEditorController.pills('direction', direction, [{ value: 'long', label: 'Long' }, { value: 'short', label: 'Short' }, { value: '', label: '?' }]) + '</label>\n              <label class="jedit-field-wrap"><span>Session</span><select class="jedit-field" data-field="session">' + TradeEditorController.sessionOptions(trade.session || '') + '</select></label>\n              ' + TradeEditorController.field('Stdv', 'stdv_level', trade.stdv_level, 'number', { step: '0.5', placeholder: '1 - 5' }) + '\n              <label class="jedit-field-wrap"><span>Resultat</span><select class="jedit-field" data-field="is_win" data-type="bool">' + TradeEditorController.selectOption('', 'A qualifier', winValue) + TradeEditorController.selectOption('1', 'Win', winValue) + TradeEditorController.selectOption('0', 'Loss', winValue) + '</select></label>\n            </div>\n          </section>\n\n          <section class="jedit-block">\n            <div class="jedit-block-title"><span>02</span><h4>Niveaux</h4></div>\n            <div class="jedit-grid jedit-grid-5">\n              ' + TradeEditorController.field('Entree', 'entry_price', trade.entry_price, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('Stop', 'stop_loss', trade.stop_loss, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('TP', 'take_profit', trade.take_profit, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('Sortie', 'exit_price', trade.exit_price, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('Size', 'position_size', trade.position_size, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('Levier', 'leverage', trade.leverage, 'number', { step: '1', placeholder: '1x' }) + '\n              ' + TradeEditorController.field('PnL', 'pnl', trade.pnl, 'number', { step: '0.01' }) + '\n              ' + TradeEditorController.field('RR', 'rr', trade.rr, 'number', { step: '0.01' }) + '\n            </div>\n            <div class="jcard-rr-visual-container">\n              <div class="jcard-rr-visual-badge ' + (m.rr != null ? (m.rr < 1.0 ? 'rr-low' : m.rr < 2.0 ? 'rr-medium' : 'rr-high') : 'rr-neutral') + '">\n                ' + (m.rr != null ? Number(m.rr).toFixed(2) + ' R:R' : 'Niveaux incomplets') + '\n              </div>\n            </div>\n          </section>\n\n          <section class="jedit-block">\n            <div class="jedit-block-title"><span>03</span><h4>Scenario</h4></div>\n            <div class="jedit-notes">\n              ' + TradeEditorController.textarea('Pourquoi ce trade', 'why_trade', trade.why_trade, 3) + '\n              ' + TradeEditorController.textarea('Pourquoi cette entree', 'why_entry', trade.why_entry, 3) + '\n              ' + TradeEditorController.textarea('Scenario complet', 'scenario', trade.scenario, 4) + '\n              ' + TradeEditorController.textarea('Pourquoi ce stop', 'why_stop', trade.why_stop, 3) + '\n              ' + TradeEditorController.textarea('Pourquoi ce TP', 'why_tp', trade.why_tp, 3) + '\n            </div>\n          </section>\n\n          <section class="jedit-block">\n            <div class="jedit-block-title"><span>04</span><h4>Review</h4></div>\n            <div class="jedit-grid">\n              <label class="jedit-field-wrap"><span>These validee</span>' + TradeEditorController.pills('thesis_validated', trade.thesis_validated || '', [{ value: 'yes', label: 'Oui' }, { value: 'no', label: 'Non' }, { value: '', label: '?' }]) + '</label>\n              <label class="jedit-field-wrap"><span>Qualite execution</span><div class="jedit-stars" data-field="execution_quality" data-value="' + qualityRaw + '">' + starsHtml + '</div></label>\n              ' + TradeEditorController.field('Tags', 'tags', TradeEditorController.tagsValue(trade.tags), 'tags', { placeholder: 'tag1, tag2' }) + '\n              ' + TradeEditorController.textarea('Lecons apprises', 'lessons_learned', trade.lessons_learned, 4) + '\n            </div>\n          </section>\n\n          <section class="jedit-block">\n            <div class="jedit-block-title"><span>05</span><h4>Plan & captures</h4></div>\n            <div class="jedit-plan-grid">\n              <div><span>Plan model</span><strong>' + escapeHtml(trade.plan_model || '-') + '</strong></div>\n              <div><span>Direction plan</span><strong>' + escapeHtml(trade.plan_direction || '-') + '</strong></div>\n              <div><span>Alignement</span><strong>' + escapeHtml(trade.plan_alignment || 'unknown') + '</strong></div>\n              <div><span>Score</span><strong>' + (trade.plan_score == null ? '-' : escapeHtml(String(trade.plan_score))) + '</strong></div>\n            </div>\n            ' + TradeEditorController.textarea('Raison override plan', 'plan_override_reason', trade.plan_override_reason, 3) + '\n            <div class="jedit-shots">' + screenshotsHtml + '</div>\n          </section>\n        </div>\n      </div>\n    </aside>\n  ';
 };
 
 // ---- 060_btc_chart_widget.js ----
@@ -11569,7 +12012,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   //  CONFIG
   // ──────────────────────────────────────────────
   var BTC_WIDGET_VIEW = {
-    visibleBars: { '1m':180,'3m':120,'5m':84,'15m':56,'30m':40,'1h':32,'2h':26,'4h':22,'6h':18,'8h':16,'12h':14,'1d':70 },
+    visibleBars: { '1m':1000,'3m':1000,'5m':1000,'15m':1000,'30m':1000,'1h':1000,'2h':1000,'4h':1000,'6h':1000,'8h':1000,'12h':1000,'1d':1000 },
     futureBars:  { '1m':24,'3m':15,'5m':10,'15m':5,'30m':3,'1h':2,'2h':2,'4h':1,'6h':1,'8h':1,'12h':1,'1d':3 },
     barSpacing:  { '1m':6,'3m':8,'5m':8,'15m':9,'30m':10,'1h':11,'2h':12,'4h':13,'6h':14,'8h':14,'12h':15,'1d':10 },
   };
@@ -12349,7 +12792,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         } else if (latest.time > (last ? last.time : 0)) {
           // Nouvelle bougie — push
           S.candles.push(latest);
-          if (S.candles.length > 300) S.candles = S.candles.slice(-300);
+          if (S.candles.length > 1000) S.candles = S.candles.slice(-1000);
         }
         S.lastCandleTime = latest.time * 1000;
         _updateCountdownAnchor(latest, 'rest-fallback');
@@ -12464,7 +12907,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
     if (idx >= 0) { S.candles[idx] = candle; }
     else { S.candles.push(candle); }
-    if (S.candles.length > 300) S.candles = S.candles.slice(-300);
+    if (S.candles.length > 1000) S.candles = S.candles.slice(-1000);
     return true;
   }
 
@@ -12486,6 +12929,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     _updateCountdownAnchor(safeCandle, 'ws', Number.isFinite(eventMs) ? eventMs : undefined);
     if (S.candleSeries) { try { S.candleSeries.update(safeCandle); } catch(e) {} }
     if (S.countdownPriceLine) { try { S.countdownPriceLine.applyOptions({ price: safeCandle.close }); } catch(e) {} }
+    _drawMidnightForWidget(safeCandle, false);
     _withProgrammaticRange(function () { maybeFollowBtcWidgetPriceY(); });
   }
 
@@ -12586,7 +13030,7 @@ TradeEditorController.renderHtml = function (day, trade) {
   // ──────────────────────────────────────────────
 
   async function _fetchWidgetCandles(tf, signal) {
-    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=300&soft=1';
+    var url = '/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=1000&soft=1';
     var r = await fetch(url, { signal: signal });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return await r.json();
@@ -12629,6 +13073,16 @@ TradeEditorController.renderHtml = function (day, trade) {
         console.warn('[BTC-WIDGET] VWAP async render failed', e);
       });
     }, 350);
+  }
+
+  function _drawMidnightForWidget(candle, force) {
+    if (!window.BtcMidnight || !S.candleSeries || !candle) return;
+    var ts = Number(candle.time);
+    if (!Number.isFinite(ts) || ts <= 0) return;
+    window.BtcMidnight.drawMidnightLines(S.candleSeries, 'BTCUSDT', ts * 1000, !!force, S.chart)
+      .catch(function (e) {
+        console.warn('[BTC-WIDGET] midnight draw failed', e);
+      });
   }
 
   function _cacheKey(tf) {
@@ -12686,7 +13140,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       var tf = tfs[i++];
       if (S.candleCache[_cacheKey(tf)]) { setTimeout(next, 250); return; }
 
-      fetch('/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=300&soft=1')
+      fetch('/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=1000&soft=1')
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (data) {
           if (data && data.candles) _writeWidgetCache(tf, data.candles);
@@ -12747,6 +13201,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 
         _startCountdown();
         _updateCountdownLabel();
+        _drawMidnightForWidget(lastCached, false);
       }
     }
 
@@ -12818,6 +13273,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       _startCountdown();
       _startAutoRefresh();
       _updateCountdownLabel();
+      _drawMidnightForWidget(last, false);
 
       if (token !== S.renderToken || tf !== S.timeframe) return;
 
@@ -13782,6 +14238,16 @@ TradeEditorController.renderHtml = function (day, trade) {
   // ── VWAP (multi-periode) — délègue à BtcVwap (055) ──
   var _mainCandles = [];  // Bougies principales (stockees pour alignment VWAP)
 
+  function _drawMidnightForChart(candle, force) {
+    if (!window.BtcMidnight || !candlestickSeries || !candle) return;
+    var ts = Number(candle.time);
+    if (!Number.isFinite(ts) || ts <= 0) return;
+    window.BtcMidnight.drawMidnightLines(candlestickSeries, currentSymbol, ts * 1000, !!force, chart)
+      .catch(function (e) {
+        console.warn('[chart] midnight draw failed', e);
+      });
+  }
+
   function _removeVwapSeries(key) {
     var s = vwapSeriesMap[key];
     if (s) {
@@ -14156,8 +14622,8 @@ TradeEditorController.renderHtml = function (day, trade) {
       try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
     }
 
-    var _chartLimitMap = { '1m': 260, '3m': 240, '5m': 220, '15m': 220, '30m': 180, '1h': 160, '2h': 140, '4h': 120, '1d': 120 };
-    var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=' + (_chartLimitMap[currentInterval] || 220);
+    var _chartLimitMap = { '1m': 1000, '3m': 1000, '5m': 1000, '15m': 1000, '30m': 1000, '1h': 1000, '2h': 1000, '4h': 1000, '6h': 1000, '8h': 1000, '12h': 1000, '1d': 1000 };
+    var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=' + (_chartLimitMap[currentInterval] || 1000);
     fetch(url)
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
@@ -14180,6 +14646,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         _startAutoRefresh();
         _updateStats(candles);
         _mainCandles = candles;
+        _drawMidnightForChart(last, false);
 
         // Point fantôme pour étendre le range autorisé par LWC
         var intervalSec = Math.floor(_getIntervalMs(currentInterval) / 1000);
@@ -14414,7 +14881,7 @@ TradeEditorController.renderHtml = function (day, trade) {
             _mainCandles[_mainCandles.length - 1] = latest;
           } else if (latest.time > (last ? last.time : 0)) {
             _mainCandles.push(latest);
-            if (_mainCandles.length > 500) _mainCandles = _mainCandles.slice(-500);
+            if (_mainCandles.length > 1000) _mainCandles = _mainCandles.slice(-1000);
           }
         }
         lastCandleTime = latest.time * 1000;
@@ -14952,13 +15419,11 @@ TradeEditorController.renderHtml = function (day, trade) {
     ).filter(function (c) {
       return c !== state.canvas && !c.classList.contains('draw-overlay');
     });
-    console.log('[draw] _getLwcPaneRect canvases found:', canvases.length, 'overlay:', !!state.canvas);
     if (!canvases.length) return null;
     var best = null, bestArea = 0;
     for (var i = 0; i < canvases.length; i++) {
       var r = canvases[i].getBoundingClientRect();
       var area = r.width * r.height;
-      console.log('[draw] canvas', i, 'size:', r.width, 'x', r.height, 'area:', area);
       if (r.width > 100 && r.height > 100 && area > bestArea) {
         best = r; bestArea = area;
       }
@@ -14972,12 +15437,23 @@ TradeEditorController.renderHtml = function (day, trade) {
       absLeft: best.left,
       absTop: best.top,
     };
-    console.log('[draw] pane rect:', JSON.stringify(result), 'container rect:', JSON.stringify({left: containerRect.left, top: containerRect.top, w: containerRect.width, h: containerRect.height}));
     _cachedPaneRect = result;
     return result;
   }
 
   // ── COORDINATES ──
+
+  function _clientToPanePoint(clientX, clientY) {
+    if (!state.container) return null;
+    var pane = _getLwcPaneRect();
+    var rect = pane
+      ? { left: pane.absLeft, top: pane.absTop }
+      : state.container.getBoundingClientRect();
+    return {
+      x: clientX - rect.left,
+      y: clientY - rect.top,
+    };
+  }
 
   function _toPixel(time, price) {
     var x = state.chart.timeScale().timeToCoordinate(time);
@@ -15002,12 +15478,10 @@ TradeEditorController.renderHtml = function (day, trade) {
   }
 
   function _toTimePrice(clientX, clientY) {
-    var pane = _getLwcPaneRect();
-    var rect = pane
-      ? { left: pane.absLeft, top: pane.absTop }
-      : state.container.getBoundingClientRect();
-    var x = clientX - rect.left;
-    var y = clientY - rect.top;
+    var point = _clientToPanePoint(clientX, clientY);
+    if (!point) return null;
+    var x = point.x;
+    var y = point.y;
     var tp = state.chart.timeScale().coordinateToTime(x);
     var pp = state.series.coordinateToPrice(y);
     if (pp == null) return null;
@@ -15031,10 +15505,12 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   // Snap un point {time, price} a la bougie la plus proche (OHLC)
   function _snapPoint(tp, clientX) {
+    if (!tp) return tp;
     if (state.snapEnabled || !state.chart || !state.series || !state.container) return tp;
     try {
-      var rect = state.container.getBoundingClientRect();
-      var x = clientX - rect.left;
+      var point = _clientToPanePoint(clientX, 0);
+      if (!point) return tp;
+      var x = point.x;
       var logical = state.chart.timeScale().coordinateToLogical(x);
       if (logical == null) return tp;
       var index = Math.round(logical);
@@ -15452,10 +15928,13 @@ TradeEditorController.renderHtml = function (day, trade) {
               idx: hitIdx,
               startX: e.clientX,
               startY: e.clientY,
+              startTime: tp.time,
+              startPrice: tp.price,
               pointIdx: dragPointIdx,
               // Snapshot immuable des points originaux au mousedown
               origPoints: JSON.parse(JSON.stringify(d.points)),
             };
+            if (state.selectedIndex !== hitIdx) _selectDrawing(hitIdx);
             if (state.canvas) state.canvas.style.cursor = 'grabbing';
           }
         }, { capture: true });
@@ -15517,17 +15996,10 @@ TradeEditorController.renderHtml = function (day, trade) {
         if (state._drag) {
           var d = state.drawings[state._drag.idx];
           if (d && d.points) {
-            // Delta en pixels depuis le mousedown (origine fixe, pas d'accumulation)
-            var dxPx = e.clientX - state._drag.startX;
-            var dyPx = e.clientY - state._drag.startY;
-            // Convertir dxPx en delta temps via l'axe temporel
-            var t0 = state.chart.timeScale().coordinateToTime(0);
-            var tDx = state.chart.timeScale().coordinateToTime(Math.abs(dxPx));
-            var dt = (t0 != null && tDx != null) ? (dxPx >= 0 ? tDx - t0 : t0 - tDx) : 0;
-            // Convertir dyPx en delta prix via la serie
-            var p0 = state.series.coordinateToPrice(0);
-            var pDy = state.series.coordinateToPrice(Math.abs(dyPx));
-            var dp = (p0 != null && pDy != null) ? (dyPx >= 0 ? p0 - pDy : pDy - p0) : 0;
+            var current = _toTimePrice(e.clientX, e.clientY);
+            if (!current) return;
+            var dt = current.time - state._drag.startTime;
+            var dp = current.price - state._drag.startPrice;
             // Appliquer sur le snapshot original (pas d'accumulation)
             if (state._drag.pointIdx >= 0) {
               var pi = state._drag.pointIdx;
@@ -15816,13 +16288,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
     // Stocker la position pour le crosshair canvas en mode dessin
     if (state.activeTool !== 'cursor') {
-      var rect = state.container ? state.container.getBoundingClientRect() : null;
-      if (rect) {
-        state._crosshairPos = {
-          x: e.clientX - rect.left,
-          y: e.clientY - rect.top,
-        };
-      }
+      state._crosshairPos = _clientToPanePoint(e.clientX, e.clientY);
     }
   }
 
@@ -16062,11 +16528,11 @@ TradeEditorController.renderHtml = function (day, trade) {
   function _renderCrosshair(pos) {
     var ctx = state.ctx;
     if (!ctx || !state.canvas) return;
-    var w = state.canvas.width;
-    var h = state.canvas.height;
     var dpr = window.devicePixelRatio || 1;
-    var px = pos.x * dpr;
-    var py = pos.y * dpr;
+    var w = state.canvas.width / dpr;
+    var h = state.canvas.height / dpr;
+    var px = pos.x;
+    var py = pos.y;
 
     ctx.save();
     ctx.strokeStyle = 'rgba(6, 182, 212, 0.35)';
@@ -17220,15 +17686,15 @@ TradeEditorController.renderHtml = function (day, trade) {
         return;
       }
 
-      // Dans la zone chart : wheel vertical = zoom temps uniquement
-      if (e.deltaY !== 0) {
-        self.viewport.zoomTime(e.deltaY < 0 ? 1.08 : 0.92, 'chart-wheel-time', e.offsetX);
+      // Wheel horizontal / trackpad lateral = scroll temps
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        self.viewport.scrollTime(e.deltaX > 0 ? 1 : -1, Math.abs(e.deltaX) * 0.8, 'wheel-h');
         return;
       }
 
-      // Wheel horizontal / trackpad lateral = scroll temps
-      if (e.deltaX !== 0) {
-        self.viewport.scrollTime(e.deltaX > 0 ? 1 : -1, Math.abs(e.deltaX) * 0.8, 'wheel-h');
+      // Dans la zone chart : wheel vertical = zoom temps uniquement
+      if (e.deltaY !== 0) {
+        self.viewport.zoomTime(e.deltaY < 0 ? 1.08 : 0.92, 'chart-wheel-time', e.offsetX);
       }
     }, { passive: false });
 
@@ -17300,7 +17766,9 @@ TradeEditorController.renderHtml = function (day, trade) {
     });
 
     c.addEventListener('pointerup', function (e) {
-      c.releasePointerCapture(e.pointerId);
+      try {
+        if (c.hasPointerCapture && c.hasPointerCapture(e.pointerId)) c.releasePointerCapture(e.pointerId);
+      } catch (_) {}
       self._isPointerDown = false;
       self._hasMoved = false;
       c.style.cursor = 'grab';
@@ -17318,6 +17786,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 
     c.addEventListener('pointerleave', function () {
       self.inCanvas = false;
+      if (self._isPointerDown) return;
       self._isPointerDown = false;
       self._hasMoved = false;
       c.style.cursor = 'default';
@@ -17519,7 +17988,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         this.classList.toggle('active', self._liveEnabled);
         this.textContent = self._liveEnabled ? 'Live' : 'Off';
         if (self._liveEnabled) {
-          self._connectLive();
+          if (self._isLiveData && !self._loading) self._connectLive();
         } else {
           self._disconnectLive();
         }
@@ -18086,7 +18555,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       if (!engine._isLiveData && !engine._loading && engine._rawTrades.length === 0) {
         engine.loadData(engine._symbol, engine._interval);
       }
-      if (engine._liveEnabled) {
+      if (engine._liveEnabled && engine._isLiveData && !engine._loading) {
         engine._connectLive();
       }
       engine.start();
@@ -18116,6 +18585,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     this._intervalMs = this._intervalToMs(this._interval);
     this._loading = true;
     this._error = null;
+    this._disconnectLive();
     this._setStatus('loading ' + this._symbol + ' ' + this._interval + '...');
 
     var now = Date.now();
@@ -18207,6 +18677,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     console.warn('[OF] API error, fallback mock:', err.message);
     this._disconnectLive();
     this._error = err.message;
+    this._loading = false;
     this._isLiveData = false;
     this._loadMockData();
     this._setStatus(this._buildStatus());
@@ -18237,6 +18708,9 @@ TradeEditorController.renderHtml = function (day, trade) {
     this._disconnectLive();
     OF.DataService.clearCache();
     this._loadRequestId++; // annuler tout fetch en cours
+    this._loading = true;
+    this._error = null;
+    this._setStatus('reloading ' + this._symbol + ' ' + this._interval + '...');
     var now = Date.now();
     var startTime = now - this._requestedRangeMs;
     var fpStartTime = now - this._footprintWindowMs;
@@ -18259,6 +18733,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   /** Connecter le stream live */
   OrderflowEngine.prototype._connectLive = function () {
+    if (!this._liveEnabled || this._loading || !this._isLiveData) return;
     if (this._liveStream) {
       this._liveStream.disconnect();
       this._liveStream = null;
@@ -18762,6 +19237,12 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   OrderflowEngine.prototype._loadMockData = function () {
     this._candles = OF._generateMockCandles(200);
+    this._rawTrades = [];
+    this._klinesCandles = [];
+    this._footprintMap = {};
+    this._marketState = null;
+    this._partialData = false;
+    this._liveTradesCount = 0;
 
     // Auto-fit scales
     this._fitToData();
@@ -18903,7 +19384,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         if (!Number.isFinite(y)) continue;
 
         // Skip levels outside candle range (high→low)
-        if (y > yHigh - 2 || y < yLow + 2) continue;
+        if (y < yHigh - 2 || y > yLow + 2) continue;
 
         var bidPx = (lv.bid / maxBid) * halfW;
         var askPx = (lv.ask / maxAsk) * halfW;

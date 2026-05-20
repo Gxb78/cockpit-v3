@@ -262,7 +262,7 @@ function _bindJournalClick(wrap) {
     var eb = e.target.closest("[data-journal-trade-edit]");
     if (!eb && e.target.tagName === "BUTTON" && e.target.classList.contains("journal-back-edit")) eb = e.target;
     if (eb) { e.stopPropagation(); try { openJournalTradeEditor(eb.dataset.journalTradeEdit); } catch (_e) { console.error("[cockpit] Erreur ouverture editeur:", _e); } return; }
-    var ep = e.target.closest(".jedit-pill"); if (ep) { e.stopPropagation(); var eg = ep.closest(".jedit-pills"); if (eg) { eg.querySelectorAll(".jedit-pill").forEach(function (p) { p.classList.remove("is-active"); }); ep.classList.add("is-active"); var ed = ep.closest(".journal-trade-editor"); var et = ed && ed.dataset.tradeId; if (et) TradeEditorController.scheduleSave(et); } return; }
+    var ep = e.target.closest(".jedit-pill"); if (ep) { e.stopPropagation(); var eg = ep.closest(".jedit-pills"); if (eg) { eg.querySelectorAll(".jedit-pill").forEach(function (p) { p.classList.remove("is-active"); }); ep.classList.add("is-active"); var ed = ep.closest(".journal-trade-editor"); var et = ed && ed.dataset.tradeId; if (et) { TradeEditorController.scheduleSave(et); TradeEditorController.recalcLive(ed); } } return; }
     var est = e.target.closest(".jedit-star"); if (est) { e.stopPropagation(); var esw = est.closest(".jedit-stars"); if (esw) { var ev = Number(est.dataset.val); if (String(esw.dataset.value) === String(ev)) ev = 0; esw.dataset.value = String(ev); esw.querySelectorAll(".jedit-star").forEach(function (s) { s.classList.toggle("is-lit", Number(s.dataset.val) <= ev); }); var ed2 = esw.closest(".journal-trade-editor"); var et2 = ed2 && ed2.dataset.tradeId; if (et2) TradeEditorController.scheduleSave(et2); } return; }
     var pill = e.target.closest(".jcard-pill"); if (pill) { e.stopPropagation(); var g = pill.closest(".jcard-pills"); if (g) { g.querySelectorAll(".jcard-pill").forEach(function (p) { p.classList.remove("is-active"); }); pill.classList.add("is-active"); var s = pill.closest(".journal-flip-back-scroll"); var t = s && s.dataset.tradeId; if (t) _journalCardScheduleSave(t); } return; }
     var star = e.target.closest(".jcard-star"); if (star) { e.stopPropagation(); var sw = star.closest(".jcard-stars"); if (sw) { var v = Number(star.dataset.val); if (String(sw.dataset.value) === String(v)) v = 0; sw.dataset.value = String(v); sw.querySelectorAll(".jcard-star").forEach(function (s) { s.classList.toggle("is-lit", Number(s.dataset.val) <= v); }); var s2 = sw.closest(".journal-flip-back-scroll"); var t3 = s2 && s2.dataset.tradeId; if (t3) _journalCardScheduleSave(t3); } return; }
@@ -298,10 +298,13 @@ function _bindJournalFieldSaves(wrap) {
 function _bindJournalChangeSelect(wrap) {
   wrap.addEventListener("change", function (e) {
     var ef = e.target.closest(".jedit-field"); if (!ef) return;
+    var ed = ef.closest(".journal-trade-editor");
     if (ef.tagName === "SELECT" && ef.dataset.field === "strategy") {
-      var ed = ef.closest(".journal-trade-editor");
       var title = ed && ed.querySelector(".jedit-hero-copy h3");
       if (title) title.textContent = ef.options[ef.selectedIndex] ? ef.options[ef.selectedIndex].text : ef.value;
+    }
+    if (ed) {
+      TradeEditorController.recalcLive(ed);
     }
   });
 }
@@ -324,21 +327,113 @@ function _bindJournalKeydown(wrap) {
 
 function _bindJournalMarginInput(wrap) {
   wrap.addEventListener("input", function (e) {
-    var field = e.target.closest(".journal-flip-back-scroll .jcard-margin-input, .journal-flip-back-scroll .jcard-field[data-field=\"leverage\"], .journal-flip-back-scroll .jcard-field[data-field=\"entry_price\"]");
-    if (!field) return; var scroll = field.closest(".journal-flip-back-scroll"); if (!scroll) return; var tid = scroll.dataset.tradeId; if (!tid) return;
-    var mi = scroll.querySelector(".jcard-margin-input"); var li = scroll.querySelector(".jcard-field[data-field=\"leverage\"]");
-    var ei = scroll.querySelector(".jcard-field[data-field=\"entry_price\"]"); var pi = scroll.querySelector(".jcard-field[data-field=\"position_size\"]");
-    if (!mi || !li || !ei || !pi) return;
-    if (field === mi || field.dataset.field === "leverage") {
-      var m = Number(mi.value); var l = Number(li.value); var e = Number(ei.value);
-      if (m > 0 && l > 0 && e > 0) { var c = computePositionSize(m, l, e); if (c != null) { pi.value = String(c); _journalCardScheduleSave(tid); } }
+    // Sync TP -> Sortie for flip card
+    if (e.target.matches(".jcard-field[data-field='take_profit']")) {
+      var scroll = e.target.closest(".journal-flip-back-scroll");
+      var exitInput = scroll && scroll.querySelector(".jcard-field[data-field='exit_price']");
+      if (exitInput) exitInput.value = e.target.value;
     }
-    if (field === pi) {
-      var p = Number(pi.value); var l2 = Number(li.value); var e2 = Number(ei.value);
-      if (p > 0 && l2 > 0 && e2 > 0) { var cm = computeMarginUsd(p, l2, e2); if (cm != null) mi.value = String(cm); }
+    // Sync TP -> Sortie for sidebar editor
+    if (e.target.matches(".jedit-field[data-field='take_profit']")) {
+      var editor = e.target.closest(".journal-trade-editor");
+      var exitInput = editor && editor.querySelector(".jedit-field[data-field='exit_price']");
+      if (exitInput) exitInput.value = e.target.value;
+    }
+
+    var field = e.target.closest(".journal-flip-back-scroll .jcard-margin-input, .journal-flip-back-scroll .jcard-field[data-field=\"leverage\"], .journal-flip-back-scroll .jcard-field[data-field=\"entry_price\"]");
+    var scroll = e.target.closest(".journal-flip-back-scroll");
+    if (field && scroll) {
+      var tid = scroll.dataset.tradeId;
+      if (tid) {
+        var mi = scroll.querySelector(".jcard-margin-input"); var li = scroll.querySelector(".jcard-field[data-field=\"leverage\"]");
+        var ei = scroll.querySelector(".jcard-field[data-field=\"entry_price\"]"); var pi = scroll.querySelector(".jcard-field[data-field=\"position_size\"]");
+        if (mi && li && ei && pi) {
+          if (field === mi || field.dataset.field === "leverage") {
+            var m = Number(mi.value); var l = Number(li.value); var entryVal = Number(ei.value);
+            if (m > 0 && l > 0 && entryVal > 0) { var c = computePositionSize(m, l, entryVal); if (c != null) { pi.value = String(c); _journalCardScheduleSave(tid); } }
+          }
+          if (field === pi) {
+            var p = Number(pi.value); var l2 = Number(li.value); var entryVal2 = Number(ei.value);
+            if (p > 0 && l2 > 0 && entryVal2 > 0) { var cm = computeMarginUsd(p, l2, entryVal2); if (cm != null) mi.value = String(cm); }
+          }
+        }
+      }
+    }
+
+    if (scroll) {
+      _recalcCardMetrics(scroll);
+    }
+
+    var editor = e.target.closest(".journal-trade-editor");
+    if (editor) {
+      TradeEditorController.recalcLive(editor);
     }
   });
 }
+
+function _recalcCardMetrics(scroll) {
+  var tid = scroll.dataset.tradeId;
+  var trade = _journalDayTradeCache[String(tid)];
+  if (!trade) return;
+
+  var entryEl = scroll.querySelector('.jcard-field[data-field="entry_price"]');
+  var tpEl    = scroll.querySelector('.jcard-field[data-field="take_profit"]');
+  var slEl    = scroll.querySelector('.jcard-field[data-field="stop_loss"]');
+  var exitEl  = scroll.querySelector('.jcard-field[data-field="exit_price"]');
+  var qtyEl   = scroll.querySelector('.jcard-field[data-field="position_size"]');
+
+  var tempTrade = Object.assign({}, trade, {
+    entry_price: entryEl ? entryEl.value : null,
+    take_profit: tpEl ? tpEl.value : null,
+    stop_loss: slEl ? slEl.value : null,
+    exit_price: exitEl ? exitEl.value : null,
+    position_size: qtyEl ? qtyEl.value : null
+  });
+
+  var m = deriveTradeMetrics(tempTrade);
+  var pnl = Number(m.pnl || 0);
+  var pnlClass = pnl > 0 ? "pos" : pnl < 0 ? "neg" : "flat";
+  var resultClass = m.isWin === 1 ? "win" : m.isWin === 0 ? "loss" : "neutral";
+  var resultLabel = m.isWin === 1 ? "WIN" : m.isWin === 0 ? "LOSS" : "-";
+  var rrTxt = m.rr == null ? "-" : Number(m.rr).toFixed(2) + "R";
+  var pnlTxt = fmtMoney(pnl);
+
+  // Met a jour les elements de la carte
+  var pnlEl = scroll.querySelector('.jcard-pnl-display');
+  if (pnlEl) {
+    pnlEl.textContent = pnlTxt;
+    pnlEl.className = 'jcard-pnl-display ' + pnlClass;
+  }
+  var rrEl = scroll.querySelector('.jcard-rr-display');
+  if (rrEl) {
+    rrEl.textContent = rrTxt;
+  }
+  var resEl = scroll.querySelector('.jcard-result-display');
+  if (resEl) {
+    resEl.textContent = resultLabel;
+    resEl.className = 'jcard-result-display ' + resultClass;
+  }
+
+  // Met a jour le badge R:R visuel
+  var badgeEl = scroll.querySelector('.jcard-rr-visual-badge');
+  if (badgeEl) {
+    if (m.rr == null) {
+      badgeEl.textContent = 'Niveaux incomplets';
+      badgeEl.className = 'jcard-rr-visual-badge rr-neutral';
+    } else {
+      var rrVal = Number(m.rr);
+      badgeEl.textContent = rrVal.toFixed(2) + ' R:R';
+      if (rrVal < 1.0) {
+        badgeEl.className = 'jcard-rr-visual-badge rr-low';
+      } else if (rrVal < 2.0) {
+        badgeEl.className = 'jcard-rr-visual-badge rr-medium';
+      } else {
+        badgeEl.className = 'jcard-rr-visual-badge rr-high';
+      }
+    }
+  }
+}
+
 
 function _bindJournalScreenshotUpload(wrap) {
   wrap.addEventListener("click", function (e) { var se = e.target.closest(".journal-back-shot"); if (!se) return; var si = se.querySelector(".journal-shot-input"); if (!si) return; si.click(); });
@@ -542,9 +637,13 @@ function _flipCardBackInner(day, trade, m, pnl, pnlClass, resultClass, resultLab
       </div>
       <h5>Niveaux</h5>
       <div class="journal-trade-detail-grid">
-        <div style="grid-column:1/-1">
+        <div>
           <span>Entree</span>
           <input class="jcard-field" type="number" step="0.01" data-field="entry_price" value="${trade.entry_price != null ? escapeHtml(String(trade.entry_price)) : ''}" placeholder="&mdash;"/>
+        </div>
+        <div>
+          <span>TP</span>
+          <input class="jcard-field" type="number" step="0.01" data-field="take_profit" value="${trade.take_profit != null ? escapeHtml(String(trade.take_profit)) : ''}" placeholder="&mdash;"/>
         </div>
         <div>
           <span>SL</span>
@@ -553,6 +652,11 @@ function _flipCardBackInner(day, trade, m, pnl, pnlClass, resultClass, resultLab
         <div>
           <span>Sortie</span>
           <input class="jcard-field" type="number" step="0.01" data-field="exit_price" value="${trade.exit_price != null ? escapeHtml(String(trade.exit_price)) : ''}" placeholder="&mdash;"/>
+        </div>
+      </div>
+      <div class="jcard-rr-visual-container">
+        <div class="jcard-rr-visual-badge ${m.rr != null ? (m.rr < 1.0 ? 'rr-low' : m.rr < 2.0 ? 'rr-medium' : 'rr-high') : 'rr-neutral'}">
+          ${m.rr != null ? Number(m.rr).toFixed(2) + ' R:R' : 'Niveaux incomplets'}
         </div>
       </div>
       <h5>Capture</h5>

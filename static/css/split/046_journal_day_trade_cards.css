@@ -1369,4 +1369,77 @@ body.light-mode .journal-day-context-empty .btn-primary {
   background: var(--accent-warm, #5d2a1a);
   color: #fff;
 }
+
+/* ---- R:R Dynamic Neon Visual Badge ---- */
+.jcard-rr-visual-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 16px 0 10px;
+  width: 100%;
 }
+
+.jcard-rr-visual-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 20px;
+  font-size: 0.94rem;
+  font-weight: 750;
+  border-radius: 99px;
+  font-family: "JetBrains Mono", monospace;
+  letter-spacing: -0.015em;
+  transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  user-select: none;
+}
+
+/* R:R Incomplet / Neutre */
+.jcard-rr-visual-badge.rr-neutral {
+  background: rgba(148, 163, 184, 0.08);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  text-shadow: 0 0 6px rgba(148, 163, 184, 0.12);
+}
+
+/* R:R Bas (< 1.0) */
+.jcard-rr-visual-badge.rr-low {
+  background: rgba(239, 68, 68, 0.07);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.24);
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.08);
+  text-shadow: 0 0 8px rgba(239, 68, 68, 0.22);
+}
+
+/* R:R Moyen (< 2.0) */
+.jcard-rr-visual-badge.rr-medium {
+  background: rgba(245, 158, 11, 0.07);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.26);
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.09);
+  text-shadow: 0 0 8px rgba(245, 158, 11, 0.25);
+}
+
+/* R:R Elevé (>= 2.0) - Glow Emeraude Premium + Pulsation */
+.jcard-rr-visual-badge.rr-high {
+  background: rgba(16, 185, 129, 0.09);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.32);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.14);
+  text-shadow: 0 0 10px rgba(16, 185, 129, 0.35);
+  animation: rrPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes rrPulse {
+  0%, 100% {
+    box-shadow: 0 0 14px rgba(16, 185, 129, 0.12), inset 0 0 4px rgba(16, 185, 129, 0.06);
+    border-color: rgba(16, 185, 129, 0.26);
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(16, 185, 129, 0.28), inset 0 0 8px rgba(16, 185, 129, 0.14);
+    border-color: rgba(16, 185, 129, 0.44);
+  }
+}
+}
+

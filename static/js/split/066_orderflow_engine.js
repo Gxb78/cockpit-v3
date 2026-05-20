@@ -222,15 +222,15 @@
         return;
       }
 
-      // Dans la zone chart : wheel vertical = zoom temps uniquement
-      if (e.deltaY !== 0) {
-        self.viewport.zoomTime(e.deltaY < 0 ? 1.08 : 0.92, 'chart-wheel-time', e.offsetX);
+      // Wheel horizontal / trackpad lateral = scroll temps
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        self.viewport.scrollTime(e.deltaX > 0 ? 1 : -1, Math.abs(e.deltaX) * 0.8, 'wheel-h');
         return;
       }
 
-      // Wheel horizontal / trackpad lateral = scroll temps
-      if (e.deltaX !== 0) {
-        self.viewport.scrollTime(e.deltaX > 0 ? 1 : -1, Math.abs(e.deltaX) * 0.8, 'wheel-h');
+      // Dans la zone chart : wheel vertical = zoom temps uniquement
+      if (e.deltaY !== 0) {
+        self.viewport.zoomTime(e.deltaY < 0 ? 1.08 : 0.92, 'chart-wheel-time', e.offsetX);
       }
     }, { passive: false });
 
@@ -302,7 +302,9 @@
     });
 
     c.addEventListener('pointerup', function (e) {
-      c.releasePointerCapture(e.pointerId);
+      try {
+        if (c.hasPointerCapture && c.hasPointerCapture(e.pointerId)) c.releasePointerCapture(e.pointerId);
+      } catch (_) {}
       self._isPointerDown = false;
       self._hasMoved = false;
       c.style.cursor = 'grab';
@@ -320,6 +322,7 @@
 
     c.addEventListener('pointerleave', function () {
       self.inCanvas = false;
+      if (self._isPointerDown) return;
       self._isPointerDown = false;
       self._hasMoved = false;
       c.style.cursor = 'default';
@@ -521,7 +524,7 @@
         this.classList.toggle('active', self._liveEnabled);
         this.textContent = self._liveEnabled ? 'Live' : 'Off';
         if (self._liveEnabled) {
-          self._connectLive();
+          if (self._isLiveData && !self._loading) self._connectLive();
         } else {
           self._disconnectLive();
         }
@@ -1088,7 +1091,7 @@
       if (!engine._isLiveData && !engine._loading && engine._rawTrades.length === 0) {
         engine.loadData(engine._symbol, engine._interval);
       }
-      if (engine._liveEnabled) {
+      if (engine._liveEnabled && engine._isLiveData && !engine._loading) {
         engine._connectLive();
       }
       engine.start();
@@ -1118,6 +1121,7 @@
     this._intervalMs = this._intervalToMs(this._interval);
     this._loading = true;
     this._error = null;
+    this._disconnectLive();
     this._setStatus('loading ' + this._symbol + ' ' + this._interval + '...');
 
     var now = Date.now();
@@ -1209,6 +1213,7 @@
     console.warn('[OF] API error, fallback mock:', err.message);
     this._disconnectLive();
     this._error = err.message;
+    this._loading = false;
     this._isLiveData = false;
     this._loadMockData();
     this._setStatus(this._buildStatus());
@@ -1239,6 +1244,9 @@
     this._disconnectLive();
     OF.DataService.clearCache();
     this._loadRequestId++; // annuler tout fetch en cours
+    this._loading = true;
+    this._error = null;
+    this._setStatus('reloading ' + this._symbol + ' ' + this._interval + '...');
     var now = Date.now();
     var startTime = now - this._requestedRangeMs;
     var fpStartTime = now - this._footprintWindowMs;
@@ -1261,6 +1269,7 @@
 
   /** Connecter le stream live */
   OrderflowEngine.prototype._connectLive = function () {
+    if (!this._liveEnabled || this._loading || !this._isLiveData) return;
     if (this._liveStream) {
       this._liveStream.disconnect();
       this._liveStream = null;
@@ -1764,6 +1773,12 @@
 
   OrderflowEngine.prototype._loadMockData = function () {
     this._candles = OF._generateMockCandles(200);
+    this._rawTrades = [];
+    this._klinesCandles = [];
+    this._footprintMap = {};
+    this._marketState = null;
+    this._partialData = false;
+    this._liveTradesCount = 0;
 
     // Auto-fit scales
     this._fitToData();
@@ -1905,7 +1920,7 @@
         if (!Number.isFinite(y)) continue;
 
         // Skip levels outside candle range (high→low)
-        if (y > yHigh - 2 || y < yLow + 2) continue;
+        if (y < yHigh - 2 || y > yLow + 2) continue;
 
         var bidPx = (lv.bid / maxBid) * halfW;
         var askPx = (lv.ask / maxAsk) * halfW;
