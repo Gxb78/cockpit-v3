@@ -17,11 +17,13 @@ var WIDGET_REGISTRY = {
   today_calendar:      { label: "Calendrier",        icon: "cal",   kind: "panel",  size: "md" },
   today_streak:        { label: "Streak",            icon: "bolt",  kind: "kpi",    size: "sm" },
   btc_chart:           { label: "BTC Chart",         icon: "chart", kind: "panel",  size: "xl" },
+  hyperliquid_markets: { label: "HL Markets",        icon: "exchange", kind: "panel", size: "xl" },
+  hyperliquid_wallets: { label: "HL Wallets",        icon: "wallet", kind: "panel", size: "xl" },
   favorites_carousel:  { label: "Favoris",           icon: "heart", kind: "panel",  size: "xl" },
 };
 
 var WIDGET_DEFAULTS = {
-  "today": ["kpi_total_pnl", "kpi_winrate", "kpi_average_rr", "kpi_trades", "kpi_profit_factor", "kpi_expectancy", "today_context", "today_log", "today_activity", "today_calendar", "today_streak", "btc_chart", "favorites_carousel"],
+  "today": ["kpi_total_pnl", "kpi_winrate", "kpi_average_rr", "kpi_trades", "kpi_profit_factor", "kpi_expectancy", "today_context", "today_log", "today_activity", "today_calendar", "today_streak", "btc_chart", "hyperliquid_markets", "hyperliquid_wallets", "favorites_carousel"],
 };
 
 function readWidgetOrder(boardKey) {
@@ -165,6 +167,8 @@ function widgetIconSvg(icon) {
     log: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
     bolt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>',
     cal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+    wallet: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V6a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6"/><path d="M16 13h.01"/></svg>',
+    exchange: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h11l-3-3"/><path d="M17 17H6l3 3"/><path d="M18 7l-4 4"/><path d="M6 17l4-4"/></svg>',
   };
   return svgs[icon] || svgs.list;
 }
@@ -175,6 +179,9 @@ function renderWidgetConfigItems() {
   var vis = readWidgetVisibility();
   var order = readWidgetOrder("today");
   if (!order.length) order = WIDGET_DEFAULTS["today"];
+  Object.keys(WIDGET_REGISTRY).forEach(function(key) {
+    if (order.indexOf(key) < 0) order.push(key);
+  });
   function renderItem(key) {
     var meta = WIDGET_REGISTRY[key];
     if (!meta) return "";

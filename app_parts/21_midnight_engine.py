@@ -196,6 +196,130 @@ def _high_first_or_low_first(klines):
     return None
 
 
+def _candle_direction_sign(kline):
+    if not kline:
+        return 0
+    open_price = kline.get("open", 0)
+    close_price = kline.get("close", 0)
+    if close_price > open_price:
+        return 1
+    if close_price < open_price:
+        return -1
+    return 0
+
+
+def _klines_direction_sign(klines):
+    if not klines:
+        return 0
+    open_price = klines[0].get("open", 0)
+    close_price = klines[-1].get("close", 0)
+    if close_price > open_price:
+        return 1
+    if close_price < open_price:
+        return -1
+    return 0
+
+
+def _range_from_klines(klines):
+    if not klines:
+        return None
+    _o, highs, lows, _c = _ohlc_from_klines(klines)
+    high = max(highs)
+    low = min(lows)
+    if high <= low:
+        return None
+    return high, low
+
+
+def _select_midnight_stdv_base(mid_5m_klines, mid_15m_klines, post_klines, fallback_mid_1m):
+    """Selectionne la base STDV.
+
+    Priorite:
+      1. derniere bougie 5m midnight opposee au move post-open
+      2. range des 15 premieres minutes en 5m
+      3. premiere bougie 15m
+      4. fallback 1m des 15 premieres minutes
+    """
+    post_probe = (post_klines or [])[:3]
+    post_sign = _klines_direction_sign(post_probe)
+
+    if post_sign and mid_5m_klines:
+        target_sign = -post_sign
+        open_rng = _range_from_klines([mid_5m_klines[0]])
+        for kline in reversed(mid_5m_klines):
+            if _candle_direction_sign(kline) != target_sign:
+                continue
+            rng = _range_from_klines([kline])
+            if not rng:
+                continue
+            high, low = rng
+            source = "midnight_5m_last_counter_move"
+            if open_rng and post_sign < 0 and open_rng[0] > low:
+                high = open_rng[0]
+                source = "midnight_5m_open_high_last_counter_low"
+            elif open_rng and post_sign > 0 and open_rng[1] < high:
+                low = open_rng[1]
+                source = "midnight_5m_open_low_last_counter_high"
+            return {
+                "high": high,
+                "low": low,
+                "source": source,
+                "base_direction": "bullish" if target_sign > 0 else "bearish",
+                "post_direction": "bullish" if post_sign > 0 else "bearish",
+            }
+
+    rng = _range_from_klines((mid_5m_klines or [])[:3])
+    if rng:
+        return {
+            "high": rng[0],
+            "low": rng[1],
+            "source": "midnight_5m_first_15m",
+            "base_direction": None,
+            "post_direction": "bullish" if post_sign > 0 else ("bearish" if post_sign < 0 else None),
+        }
+
+    if mid_15m_klines:
+        rng = _range_from_klines([mid_15m_klines[0]])
+        if rng:
+            return {
+                "high": rng[0],
+                "low": rng[1],
+                "source": "midnight_15m_first_candle",
+                "base_direction": None,
+                "post_direction": "bullish" if post_sign > 0 else ("bearish" if post_sign < 0 else None),
+            }
+
+    rng = _range_from_klines((fallback_mid_1m or [])[:15])
+    if rng:
+        return {
+            "high": rng[0],
+            "low": rng[1],
+            "source": "midnight_1m_first_15m",
+            "base_direction": None,
+            "post_direction": "bullish" if post_sign > 0 else ("bearish" if post_sign < 0 else None),
+        }
+
+    return None
+
+
+def _build_midnight_stdv_levels(mid_high, mid_low):
+    """Construit les STDV depuis la range d'accumulation midnight.
+
+    Convention:
+      +n part du high midnight et projette n ranges au-dessus.
+      -n part du low midnight et projette n ranges au-dessous.
+    """
+    mid_range = mid_high - mid_low
+    if mid_range <= 0:
+        return {}, 0
+
+    stdv_levels = {}
+    for mult in (1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0):
+        stdv_levels[f"+{mult:.1f}"] = round(mid_high + (mult * mid_range), 8)
+        stdv_levels[f"-{mult:.1f}"] = round(mid_low - (mult * mid_range), 8)
+    return stdv_levels, mid_range
+
+
 def extract_midnight_features(symbol, date_ny=None):
     """Extrait les features Midnight pour un jour donne.
 
@@ -217,6 +341,20 @@ def extract_midnight_features(symbol, date_ny=None):
         windows["midnight"]["start_utc"],
         windows["midnight"]["end_utc"],
         limit=35
+    )
+
+    mid_5m_klines = _fetch_klines_range(
+        symbol, "5m",
+        windows["midnight"]["start_utc"],
+        windows["midnight"]["end_utc"],
+        limit=8
+    )
+
+    mid_15m_klines = _fetch_klines_range(
+        symbol, "15m",
+        windows["midnight"]["start_utc"],
+        windows["midnight"]["end_utc"],
+        limit=3
     )
 
     post_klines = _fetch_klines_range(
@@ -269,16 +407,22 @@ def extract_midnight_features(symbol, date_ny=None):
             "mid_high_first_or_low_first": _high_first_or_low_first(mid_klines),
         }
 
-        stdv_levels = {}
-        for mult in (1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0):
-            stdv_levels[f"+{mult:.1f}"] = round(mid_open + (mult * mid_range), 8)
-            stdv_levels[f"-{mult:.1f}"] = round(mid_open - (mult * mid_range), 8)
+        stdv_base = _select_midnight_stdv_base(mid_5m_klines, mid_15m_klines, post_klines, mid_klines)
+        stdv_high = stdv_base["high"] if stdv_base else mid_high
+        stdv_low = stdv_base["low"] if stdv_base else mid_low
+        stdv_levels, stdv_range = _build_midnight_stdv_levels(stdv_high, stdv_low)
 
         mid_levels = {
             "midnight_open": mid_open,
-            "midnight_high": mid_high,
-            "midnight_low": mid_low,
-            "midnight_mid": round((mid_high + mid_low) / 2, 1),
+            "midnight_high": stdv_high,
+            "midnight_low": stdv_low,
+            "midnight_mid": round((stdv_high + stdv_low) / 2, 1),
+            "midnight_full_high": mid_high,
+            "midnight_full_low": mid_low,
+            "stdv_anchor": stdv_base["source"] if stdv_base else "midnight_1m_full_30m",
+            "stdv_base_direction": stdv_base["base_direction"] if stdv_base else None,
+            "stdv_post_direction": stdv_base["post_direction"] if stdv_base else None,
+            "stdv_range": round(stdv_range, 8),
             "stdv_levels": stdv_levels,
         }
 

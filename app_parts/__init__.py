@@ -48,6 +48,8 @@ _PART_FILES = [
     "23_routes_market.py",          # 23 — Routes API market data (Binance)
     "24_market_history_cache.py",   # 24 — Cache SQLite historique klines
     "21_midnight_engine.py",        # 25 — Midnight Engine (+ route API)
+    "25_routes_hyperliquid.py",     # 25 — Routes API market data (Hyperliquid read-only)
+    "26_routes_hyperliquid_wallets.py", # 26 — Routes API Hyperliquid wallet tracker (read-only)
 ]
 
 # Canonical shared namespace — ALL functions from ALL parts reference this dict

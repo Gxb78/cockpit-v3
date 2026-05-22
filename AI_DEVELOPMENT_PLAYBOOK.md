@@ -1213,3 +1213,58 @@ if end_time is not None:
   - module frontend partage `056_indicator_midnight_core.js` avec cache memoire, dedup des requetes en cours, conversion date NY, nettoyage strict des `priceLine`;
   - garde de redraw par `series._midnightDrawnDate` + `series._midnightDrawnSymbol` pour eviter les redraw inutiles.
 - Regle: tout indicateur horizontal partage entre plusieurs charts doit passer par un core unique (cache + clear + draw), pas par des impls dupliquees dans chaque page.
+
+### Lecon T-0013: Hyperliquid HIP-3 read-only data layer (22 mai 2026)
+
+- Probleme: les contrats Hyperliquid type ES/Nasdaq peuvent etre des perps HIP-3 et ne se resolvent pas toujours avec un simple ticker. Certains endpoints demandent le nom complet `deployer:ASSET`, sinon candles/trades/orderbook peuvent pointer vers rien ou vers le mauvais actif.
+- Solution:
+  - ne jamais hardcoder ES/NASDAQ;
+  - charger `meta`/`allPerpMetas`, construire un catalogue normalise, puis resoudre les alias BTC/ES/NASDAQ vers le vrai `coin`;
+  - accepter `coin=` en override manuel pour un perp HIP-3 specifique;
+  - garder la couche strictement read-only via l'Info API publique: candles, trades, L2 book, mids, funding, predicted funding, contexts, annotations, metadata.
+- Regle: toute nouvelle source market doit d'abord fournir un resolver + des endpoints normalises et testes sans reseau. Le frontend/chart/orderflow/backtest consomment ensuite cette couche; ils ne doivent pas connaitre les particularites exchange comme `deployer:ASSET`.
+
+### Lecon T-0014: Wallet tracker read-only avant UI live (22 mai 2026)
+
+- Probleme: suivre des traders Hyperliquid forts demande de reconstruire des evenements depuis plusieurs sources publiques (`clearinghouseState`, open orders, fills). Si le dashboard consomme directement l'API exchange, il va dupliquer la logique et mal classifier partiels/hedges/closes.
+- Solution:
+  - creer une watchlist SQLite dediee (`hyperliquid_wallets`) avec migration versionnee;
+  - exposer des endpoints backend normalises read-only pour state, orders, fills et events derives;
+  - accepter aussi un endpoint `address=` sans sauvegarde pour debug/verif rapide;
+  - tester les normalisations sans reseau avec des payloads Hyperliquid simules.
+- Regle: le widget dashboard et l'overlay chart ne doivent consommer que les endpoints normalises du backend. La detection fine hedge/partial/close doit evoluer dans le moteur d'events backend, pas dans plusieurs composants frontend.
+
+### Lecon T-0015: Wallet tracker tolerant au collage et aux pannes live (22 mai 2026)
+
+- Probleme: l'ajout d'un wallet Hyperliquid pouvait afficher `error` alors que l'adresse etait valide. Deux causes se melangeaient: validation trop stricte (`0x` exact, pas `0X`, pas d'URL explorer, pas d'espaces invisibles) et refresh live qui faisait passer une panne Hyperliquid pour un echec d'ajout.
+- Solution:
+  - extraire la premiere adresse `0x/0X` + 40 hex depuis le texte colle, cote frontend et backend;
+  - supprimer espaces et caracteres invisibles avant validation;
+  - separer l'erreur d'ajout DB de l'erreur de state live;
+  - si `/wallets/state` echoue, fallback sur `/wallets` pour afficher la watchlist sauvegardee avec un warning partiel.
+- Regle: une action de persistance locale ne doit pas etre marquee en echec a cause d'un refresh live externe effectue juste apres. Les widgets read-only doivent degrader en mode partiel au lieu de cacher les donnees deja sauvegardees.
+
+### Lecon T-0016: Alias Hyperliquid indices = mapping produit, pas recherche floue (22 mai 2026)
+
+- Probleme: le resolver Hyperliquid choisissait `ES` et `NASDAQ` par recherche floue dans les metas, alors que les bons contrats prioritaires sont `SP500` pour ES et `XYZ100` pour Nasdaq. Les donnees affichees etaient donc plausibles mais fausses.
+- Solution:
+  - definir des alias canoniques explicites: `ES -> SP500`, `NASDAQ -> XYZ100`;
+  - donner priorite absolue au nom canonique, meme si un asset `ES` ou `NASDAQ` existe;
+  - tester les deux cas avec des faux assets concurrents pour eviter une regression silencieuse;
+  - bump la cle de cache catalogue quand la logique de resolution change.
+- Regle: pour les indices/synths Hyperliquid, ne jamais faire confiance a un ticker visuellement proche. La resolution doit etre un mapping produit explicite, puis seulement un fallback meta.
+
+### Lecon T-0017: Wallet Hyperliquid = DEX principal + DEX HIP-3 (22 mai 2026)
+
+- Probleme: `clearinghouseState` sans champ `dex` ne couvre que le perp DEX principal. Un wallet pouvait donc afficher HYPE/LIT/TON mais oublier les positions HIP-3 comme `xyz:XYZ100` ou `xyz:TSLA`, avec un PnL et un nombre de positions faux.
+- Solution:
+  - recuperer `perpDexs`, puis appeler `clearinghouseState`, `frontendOpenOrders` et `userFills` pour chaque DEX;
+  - prefixer les coins HIP-3 par leur DEX (`xyz:XYZ100`) pour eviter toute collision avec les perps natifs;
+  - dedupliquer par coin/ordre/fill normalise et garder les erreurs DEX partielles non bloquantes.
+- Regle: toute feature wallet Hyperliquid doit verifier les positions natives ET les positions HIP-3 avec un wallet de reference avant d'etre consideree correcte.
+
+### Lecon T-0018: DEX xyz pour SP500/XYZ100 sur Hyperliquid (22 mai 2026)
+
+- Probleme: le mock de test utilisait des DEX bidons `builder` et `idx` pour SP500 et XYZ100, alors que le vrai DEX Hyperliquid est `xyz`. Les tests passaient en local mais l'API reelle resolvait mal ES/Nasdaq.
+- Solution: aligner les mocks sur la prod — DEX `xyz`, assets `SP500` et `XYZ100` directement, pas de doublons `ES`/`NASDAQ` qui faussaient le scoring.
+- Regle: les mocks de test doivent refleter la structure reelle de l'API upstream, pas des noms arbitraires.

@@ -377,6 +377,59 @@
   flex: 1;
 }
 
+.draw-fib-delete {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.draw-fib-delete:hover {
+  color: #fecaca;
+  border-color: rgba(239, 68, 68, 0.55);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.draw-fib-add {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0 0;
+}
+
+.draw-fib-add input {
+  min-width: 0;
+  width: 72px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  font: 10px "JetBrains Mono", monospace;
+}
+
+.draw-fib-add button {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text-muted);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.draw-fib-add button:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: rgba(255,255,255,0.07);
+}
+
 /* ── Templates ── */
 .draw-template-row {
   display: flex;
@@ -416,6 +469,37 @@
 }
 
 /* ── Light mode ── */
+.draw-action-btn {
+  min-width: 96px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.03);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.draw-action-btn:hover {
+  background: rgba(255,255,255,0.06);
+  border-color: var(--border-strong);
+}
+
+.draw-action-btn--danger {
+  color: #fca5a5;
+}
+
+.draw-action-btn--danger:hover {
+  color: #fecaca;
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+}
+
 body.light-mode .draw-options-panel {
   box-shadow: 0 8px 32px rgba(0,0,0,0.10);
 }

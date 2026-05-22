@@ -7222,11 +7222,13 @@ var WIDGET_REGISTRY = {
   today_calendar:      { label: "Calendrier",        icon: "cal",   kind: "panel",  size: "md" },
   today_streak:        { label: "Streak",            icon: "bolt",  kind: "kpi",    size: "sm" },
   btc_chart:           { label: "BTC Chart",         icon: "chart", kind: "panel",  size: "xl" },
+  hyperliquid_markets: { label: "HL Markets",        icon: "exchange", kind: "panel", size: "xl" },
+  hyperliquid_wallets: { label: "HL Wallets",        icon: "wallet", kind: "panel", size: "xl" },
   favorites_carousel:  { label: "Favoris",           icon: "heart", kind: "panel",  size: "xl" },
 };
 
 var WIDGET_DEFAULTS = {
-  "today": ["kpi_total_pnl", "kpi_winrate", "kpi_average_rr", "kpi_trades", "kpi_profit_factor", "kpi_expectancy", "today_context", "today_log", "today_activity", "today_calendar", "today_streak", "btc_chart", "favorites_carousel"],
+  "today": ["kpi_total_pnl", "kpi_winrate", "kpi_average_rr", "kpi_trades", "kpi_profit_factor", "kpi_expectancy", "today_context", "today_log", "today_activity", "today_calendar", "today_streak", "btc_chart", "hyperliquid_markets", "hyperliquid_wallets", "favorites_carousel"],
 };
 
 function readWidgetOrder(boardKey) {
@@ -7370,6 +7372,8 @@ function widgetIconSvg(icon) {
     log: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
     bolt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>',
     cal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+    wallet: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V6a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6"/><path d="M16 13h.01"/></svg>',
+    exchange: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h11l-3-3"/><path d="M17 17H6l3 3"/><path d="M18 7l-4 4"/><path d="M6 17l4-4"/></svg>',
   };
   return svgs[icon] || svgs.list;
 }
@@ -7380,6 +7384,9 @@ function renderWidgetConfigItems() {
   var vis = readWidgetVisibility();
   var order = readWidgetOrder("today");
   if (!order.length) order = WIDGET_DEFAULTS["today"];
+  Object.keys(WIDGET_REGISTRY).forEach(function(key) {
+    if (order.indexOf(key) < 0) order.push(key);
+  });
   function renderItem(key) {
     var meta = WIDGET_REGISTRY[key];
     if (!meta) return "";
@@ -9844,18 +9851,18 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
   // IndÃ©pendante du timeframe actif du chart.
   // Chaque pÃ©riode a une source stable, prÃ©visible, rapide.
   // Modes :
-  //   'rolling' â†’ fenÃªtre glissante de durationMs depuis endTime
-  //   'session' â†’ session calendaire (UTC_DAY, NY_DAY)
+  //   'rolling' → fenêtre glissante de durationMs depuis endTime
+  //   'session' → session calendaire (UTC_DAY)
   var VWAP_SOURCE_CONFIG = {
-    'D-NY': { mode: 'session', session: 'NY_DAY', interval: '15m', limit: 110, refreshMs: 60000 },
-    '24H':  { mode: 'rolling', durationMs: 24 * 60 * 60 * 1000, interval: '15m', limit: 110, refreshMs: 60000 },
+    '1D':   { mode: 'session', session: 'UTC_DAY', interval: '15m', limit: 110, refreshMs: 60000 },
     '7D':   { mode: 'rolling', durationMs: 7 * 24 * 60 * 60 * 1000, interval: '15m', limit: 682, refreshMs: 60000 },
     '30D':  { mode: 'rolling', durationMs: 30 * 24 * 60 * 60 * 1000, interval: '1h',  limit: 730, refreshMs: 300000 },
     '90D':  { mode: 'rolling', durationMs: 90 * 24 * 60 * 60 * 1000, interval: '4h',  limit: 550, refreshMs: 900000 },
+    '365D': { mode: 'rolling', durationMs: 365 * 24 * 60 * 60 * 1000, interval: '12h', limit: 750, refreshMs: 900000 },
   };
 
   var VWAP_COLORS = {
-    'D-NY': '#f59e0b', '24H': '#eab308', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6',
+    '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6', '365D': '#22c55e',
   };
 
   // â”€â”€ BORNES TEMPORELLES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -9876,26 +9883,6 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
       if (config.session === 'UTC_DAY') {
         var bounds = _getUtcDayBounds(nowMs);
         return { startTime: bounds.startTime, endTime: endTime };
-      }
-      if (config.session === 'NY_DAY') {
-        // NY day: 00:00 America/New_York
-        // En UTC, NY = UTC-5 (EST) ou UTC-4 (EDT, mars Ã  novembre)
-        // Approximation: on calcule via Date locale du navigateurâ€¦ pas idÃ©al
-        // Phase 1: on dÃ©lÃ¨gue le calcul au backend si possible, sinon frontend approximatif
-        var d = new Date(nowMs);
-        // EST/EDT simplifiÃ©: 2e dimanche de mars â†’ 1er dimanche de novembre = EDT (-4)
-        var year = d.getUTCFullYear();
-        var marStart = Date.UTC(year, 2, 8); // 8 mars
-        var marDst = marStart - ((new Date(marStart)).getUTCDay() * 86400000);
-        var novStart = Date.UTC(year, 10, 1); // 1er novembre
-        var novDst = novStart - ((new Date(novStart)).getUTCDay() * 86400000);
-        var isDst = nowMs >= marDst && nowMs < novDst;
-        var nyOffset = isDst ? -4 : -5;
-        var nyNowMs = nowMs + nyOffset * 3600000;
-        var nyNow = new Date(nyNowMs);
-        var nyMidnight = Date.UTC(nyNow.getUTCFullYear(), nyNow.getUTCMonth(), nyNow.getUTCDate(), 0, 0, 0, 0);
-        var utcStart = nyMidnight - nyOffset * 3600000;
-        return { startTime: utcStart, endTime: endTime };
       }
     }
     // Fallback: rolling 24h
@@ -10158,7 +10145,7 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
 
   // â”€â”€ EVENT BUS VWAP â€” normalisation + synchro cross-component â”€â”€
   function normalizeVwapPeriods(periods) {
-    var legacyMap = { '1D': 'D-NY' };
+    var legacyMap = { 'D-NY': '1D', '24H': null };
     var seen = {};
     var out = [];
     (periods || []).forEach(function (p) {
@@ -10214,8 +10201,6 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
   var _pending = {};
 
   var MIDNIGHT_COLOR = '#00f5ff';
-  var POSITIVE_COLOR = '#ff73b9';
-  var NEGATIVE_COLOR = '#00e676';
 
   function _toMs(ts) {
     var n = Number(ts);
@@ -10246,14 +10231,16 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
     return (symbol || 'BTCUSDT').toUpperCase() + ':' + dateNy;
   }
 
-  function _fetchDay(symbol, dateNy) {
+  function _fetchDay(symbol, dateNy, force) {
     var sym = (symbol || 'BTCUSDT').toUpperCase();
     var key = _cacheKey(sym, dateNy);
 
-    if (_cache[key]) return Promise.resolve(_cache[key]);
+    if (force) delete _cache[key];
+    if (!force && _cache[key]) return Promise.resolve(_cache[key]);
     if (_pending[key]) return _pending[key];
 
     var url = '/api/models/midnight/day?symbol=' + encodeURIComponent(sym) + '&date=' + encodeURIComponent(dateNy);
+    if (force) url += '&_=' + Date.now();
     var req = fetch(url)
       .then(function (r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -10273,6 +10260,40 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
 
     _pending[key] = req;
     return req;
+  }
+
+  function _getNyMinuteOfDay(timestampMs) {
+    var ms = _toMs(timestampMs);
+    try {
+      var parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).formatToParts(new Date(ms));
+      var out = { hour: '0', minute: '0' };
+      for (var i = 0; i < parts.length; i++) {
+        if (parts[i].type === 'hour' || parts[i].type === 'minute') out[parts[i].type] = parts[i].value;
+      }
+      var hour = parseInt(out.hour, 10);
+      var minute = parseInt(out.minute, 10);
+      if (!Number.isFinite(hour) || !Number.isFinite(minute)) return NaN;
+      if (hour === 24) hour = 0;
+      return hour * 60 + minute;
+    } catch(e) {
+      return NaN;
+    }
+  }
+
+  function _shouldRefreshMutableMidnight(series, sym, dateNy, timestampMs) {
+    var nowMs = _resolveNowMs(timestampMs);
+    if (getNyDateString(nowMs) !== dateNy) return false;
+    var nyMinute = _getNyMinuteOfDay(nowMs);
+    if (!Number.isFinite(nyMinute) || nyMinute > 125) return false;
+    if (series._midnightDrawnDate !== dateNy || series._midnightDrawnSymbol !== sym) return true;
+    var now = Date.now();
+    var last = Number(series._midnightLiveRefreshAt || 0);
+    return !Number.isFinite(last) || now - last > 60000;
   }
 
   function _clearLines(series) {
@@ -10340,65 +10361,24 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
     } catch(e) {}
   }
 
-  function _parseStdvEntries(stdvLevels) {
-    var out = [];
-    if (!stdvLevels || typeof stdvLevels !== 'object') return out;
-
-    Object.keys(stdvLevels).forEach(function (key) {
-      var value = Number(stdvLevels[key]);
-      if (!Number.isFinite(value)) return;
-
-      var mult = Number(key);
-      var sign = key[0] === '-' ? '-' : '+';
-      if (!Number.isFinite(mult)) {
-        var absMatch = String(key).match(/(\d+(?:\.\d+)?)/);
-        if (absMatch) {
-          mult = Number(absMatch[1]);
-          if (sign === '-') mult = -mult;
-        }
-      }
-      if (!Number.isFinite(mult)) return;
-
-      out.push({
-        key: key,
-        multiplier: mult,
-        value: value,
-        label: (mult > 0 ? '+' : '-') + Math.abs(mult).toFixed(1) + ' SD',
-      });
-    });
-
-    out.sort(function (a, b) {
-      var aPos = a.multiplier > 0 ? 0 : 1;
-      var bPos = b.multiplier > 0 ? 0 : 1;
-      if (aPos !== bPos) return aPos - bPos;
-      return Math.abs(a.multiplier) - Math.abs(b.multiplier);
-    });
-    return out;
-  }
-
-  function _addLine(series, lines, opts) {
-    try {
-      var line = series.createPriceLine(opts);
-      if (line) lines.push(line);
-    } catch(e) {}
-  }
-
   async function drawMidnightLines(series, symbol, timestampMs, force, chartApi) {
     if (!series || typeof series.createPriceLine !== 'function' || typeof series.removePriceLine !== 'function') return;
     if (chartApi) series._midnightChart = chartApi;
 
     var sym = (symbol || 'BTCUSDT').toUpperCase();
     var dateNy = getNyDateString(timestampMs);
+    var liveRefresh = !force && _shouldRefreshMutableMidnight(series, sym, dateNy, timestampMs);
 
-    if (!force && series._midnightDrawnDate === dateNy && series._midnightDrawnSymbol === sym) {
+    if (!force && !liveRefresh && series._midnightDrawnDate === dateNy && series._midnightDrawnSymbol === sym) {
       _refreshOpenSegment(series, timestampMs);
       return;
     }
 
     series._midnightDrawSeq = (series._midnightDrawSeq || 0) + 1;
     var drawSeq = series._midnightDrawSeq;
+    if (liveRefresh) series._midnightLiveRefreshAt = Date.now();
 
-    var payload = await _fetchDay(sym, dateNy);
+    var payload = await _fetchDay(sym, dateNy, !!force || liveRefresh);
     if (drawSeq !== series._midnightDrawSeq) return;
 
     _clearLines(series);
@@ -10437,22 +10417,7 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
       }
     }
 
-    var created = [];
-
-    var entries = _parseStdvEntries(levels.stdv_levels);
-    for (var i = 0; i < entries.length; i++) {
-      var item = entries[i];
-      _addLine(series, created, {
-        price: item.value,
-        color: item.multiplier > 0 ? POSITIVE_COLOR : NEGATIVE_COLOR,
-        lineWidth: 1,
-        lineStyle: 1,
-        axisLabelVisible: true,
-        title: item.label,
-      });
-    }
-
-    series._midnightPriceLines = created;
+    series._midnightPriceLines = [];
     series._midnightDrawnDate = dateNy;
     series._midnightDrawnSymbol = sym;
   }
@@ -12017,7 +11982,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     barSpacing:  { '1m':6,'3m':8,'5m':8,'15m':9,'30m':10,'1h':11,'2h':12,'4h':13,'6h':14,'8h':14,'12h':15,'1d':10 },
   };
 
-  var VWAP_COLORS = { 'D-NY': '#f59e0b', '24H': '#eab308', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
+  var VWAP_COLORS = { '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6', '365D': '#22c55e' };
   var INTERVAL_MS = {
     '1m': 60000, '3m': 180000, '5m': 300000, '15m': 900000,
     '30m': 1800000, '1h': 3600000, '2h': 7200000, '4h': 14400000,
@@ -12313,7 +12278,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       vwapSeriesMap: S.vwapSeriesMap,
     };
 
-    var vwapOrder = ['D-NY', '24H', '7D', '30D', '90D'];
+    var vwapOrder = ['1D', '7D', '30D', '90D', '365D'];
 
     for (var vi = 0; vi < vwapOrder.length; vi++) {
       var p = vwapOrder[vi];
@@ -12797,6 +12762,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         S.lastCandleTime = latest.time * 1000;
         _updateCountdownAnchor(latest, 'rest-fallback');
         S.candleSeries.update(latest);
+        _drawMidnightForWidget(latest, false);
         if (S.follow && !S.userDragging) {
           _withProgrammaticRange(function () { maybeFollowBtcWidgetPriceY(); });
         }
@@ -13346,6 +13312,737 @@ TradeEditorController.renderHtml = function (day, trade) {
   window.initBtcChart = loadLibrary;
 })();
 
+// ---- 061_hyperliquid_market_widget.js ----
+// ---------- Hyperliquid markets dashboard widget ----------
+
+(function () {
+  var POLL_MS = 12000;
+  var selectedMarket = localStorage.getItem("hlMarketWidget:selected") || "BTC";
+  var timer = null;
+  var loading = false;
+  var snapshot = null;
+
+  function $(id) { return document.getElementById(id); }
+
+  function esc(v) {
+    if (typeof escapeHtml === "function") return escapeHtml(v == null ? "" : String(v));
+    return String(v == null ? "" : v).replace(/[&<>"']/g, function (ch) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[ch];
+    });
+  }
+
+  function fmtNum(v, digits) {
+    var n = Number(v);
+    if (!Number.isFinite(n)) return "--";
+    return n.toLocaleString("en-US", { maximumFractionDigits: digits == null ? 4 : digits });
+  }
+
+  function fmtPct(v) {
+    var n = Number(v);
+    if (!Number.isFinite(n)) return "--";
+    return (n * 100).toFixed(4) + "%";
+  }
+
+  function setStatus(text, mode) {
+    var el = $("hlMarketStatus");
+    if (!el) return;
+    el.textContent = text;
+    el.dataset.mode = mode || "";
+  }
+
+  async function getJson(url) {
+    var r = await fetch(url);
+    var data = await r.json().catch(function () { return null; });
+    if (!r.ok || !data) throw new Error((data && data.error) || ("HTTP " + r.status));
+    return data;
+  }
+
+  async function load(force) {
+    if (loading) return;
+    loading = true;
+    setStatus("sync...", "loading");
+    var q = force ? "&force=1" : "";
+    try {
+      var base = "?market=" + encodeURIComponent(selectedMarket) + q;
+      var results = await Promise.allSettled([
+        getJson("/api/hyperliquid/catalog" + (force ? "?force=1" : "")),
+        getJson("/api/hyperliquid/resolve" + base),
+        getJson("/api/hyperliquid/contexts" + base),
+        getJson("/api/hyperliquid/orderbook" + base),
+        getJson("/api/hyperliquid/trades" + base),
+        getJson("/api/hyperliquid/funding" + base),
+        getJson("/api/hyperliquid/predicted-funding" + base),
+        getJson("/api/hyperliquid/mids" + (force ? "?force=1" : "")),
+        getJson("/api/hyperliquid/open-interest-caps" + (force ? "?force=1" : "")),
+        getJson("/api/hyperliquid/dexs" + (force ? "?force=1" : "")),
+        getJson("/api/hyperliquid/annotations" + (force ? "?force=1" : "")),
+      ]);
+      snapshot = {
+        catalog: value(results[0]),
+        resolve: value(results[1]),
+        contexts: value(results[2]),
+        book: value(results[3]),
+        trades: value(results[4]),
+        funding: value(results[5]),
+        predicted: value(results[6]),
+        mids: value(results[7]),
+        caps: value(results[8]),
+        dexs: value(results[9]),
+        annotations: value(results[10]),
+        errors: results.filter(function (x) { return x.status === "rejected"; }).map(function (x) { return x.reason && x.reason.message; }),
+        updatedAt: Date.now(),
+      };
+      render();
+      setStatus("live " + new Date(snapshot.updatedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }), "ok");
+    } catch (e) {
+      snapshot = { error: e.message || String(e) };
+      render();
+      setStatus("error", "error");
+    } finally {
+      loading = false;
+    }
+  }
+
+  function value(result) {
+    return result && result.status === "fulfilled" ? result.value : null;
+  }
+
+  function activeContext() {
+    var rows = snapshot && snapshot.contexts && Array.isArray(snapshot.contexts.contexts)
+      ? snapshot.contexts.contexts
+      : [];
+    return rows[0] || null;
+  }
+
+  function activeCoin() {
+    return (snapshot && snapshot.resolve && snapshot.resolve.coin)
+      || (activeContext() && activeContext().coin)
+      || selectedMarket;
+  }
+
+  function activeGlobalMid() {
+    var mids = snapshot && snapshot.mids && snapshot.mids.mids ? snapshot.mids.mids : null;
+    return mids ? mids[activeCoin()] : null;
+  }
+
+  function renderSummary() {
+    var coin = $("hlMarketCoin");
+    var mark = $("hlMarketMark");
+    var funding = $("hlMarketFunding");
+    var ctx = activeContext();
+    if (coin) coin.textContent = activeCoin();
+    if (mark) mark.textContent = fmtNum((ctx && (ctx.markPx || ctx.midPx || ctx.oraclePx)) || activeGlobalMid(), 2);
+    if (funding) funding.textContent = fmtPct(ctx && ctx.funding);
+  }
+
+  function kv(label, value) {
+    return '<div class="hl-market-kv"><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>';
+  }
+
+  function renderContext() {
+    var ctx = activeContext();
+    if (!ctx) return '<div class="hl-market-empty">No context for ' + esc(selectedMarket) + '.</div>';
+    return '<div class="hl-market-section"><h4>Context</h4>' +
+      '<div class="hl-market-kvgrid">' +
+        kv("Mark", fmtNum(ctx.markPx, 2)) +
+        kv("Mid", fmtNum(ctx.midPx, 2)) +
+        kv("All mids", fmtNum(activeGlobalMid(), 2)) +
+        kv("Oracle", fmtNum(ctx.oraclePx, 2)) +
+        kv("Funding", fmtPct(ctx.funding)) +
+        kv("Open interest", fmtNum(ctx.openInterest, 2)) +
+        kv("24h notional", fmtNum(ctx.dayNtlVlm, 0)) +
+      '</div></div>';
+  }
+
+  function renderBook() {
+    var book = snapshot && snapshot.book;
+    var bids = book && Array.isArray(book.bids) ? book.bids.slice(0, 5) : [];
+    var asks = book && Array.isArray(book.asks) ? book.asks.slice(0, 5) : [];
+    function sideRows(rows, side) {
+      return rows.map(function (r) {
+        return '<div class="hl-market-book-row ' + side + '"><span>' + fmtNum(r.price, 2) + '</span><span>' + fmtNum(r.size, 4) + '</span><span>' + fmtNum(r.n, 0) + '</span></div>';
+      }).join("");
+    }
+    return '<div class="hl-market-section"><h4>L2 Book</h4>' +
+      '<div class="hl-market-book-head"><span>Price</span><span>Size</span><span>N</span></div>' +
+      sideRows(asks.reverse(), "ask") +
+      sideRows(bids, "bid") +
+    '</div>';
+  }
+
+  function renderTrades() {
+    var data = snapshot && snapshot.trades;
+    var trades = data && Array.isArray(data.trades) ? data.trades.slice(-8).reverse() : [];
+    if (!trades.length) return '<div class="hl-market-section"><h4>Tape</h4><div class="hl-market-empty">No recent trade.</div></div>';
+    return '<div class="hl-market-section"><h4>Tape</h4>' + trades.map(function (t) {
+      var side = t.side === "buy" ? "buy" : "sell";
+      return '<div class="hl-market-trade ' + side + '"><span>' + esc(side.toUpperCase()) + '</span><span>' + fmtNum(t.price, 2) + '</span><span>' + fmtNum(t.size, 4) + '</span></div>';
+    }).join("") + '</div>';
+  }
+
+  function renderFunding() {
+    var funding = snapshot && snapshot.funding && Array.isArray(snapshot.funding.funding) ? snapshot.funding.funding.slice(-5).reverse() : [];
+    var predicted = snapshot && snapshot.predicted && Array.isArray(snapshot.predicted.predictedFunding) ? snapshot.predicted.predictedFunding : [];
+    var caps = snapshot && snapshot.caps && Array.isArray(snapshot.caps.markets) ? snapshot.caps.markets : [];
+    var rows = funding.map(function (f) {
+      return '<div class="hl-market-mini-row"><span>' + esc(f.time ? new Date(Number(f.time)).toLocaleString("fr-FR", { day: "2-digit", hour: "2-digit", minute: "2-digit" }) : f.coin || "") + '</span><strong>' + fmtPct(f.fundingRate) + '</strong></div>';
+    }).join("");
+    var predText = predicted.length ? predicted.map(function (p) { return Array.isArray(p) ? p[0] : ""; }).filter(Boolean).join(", ") : "--";
+    var capHit = caps.indexOf(activeCoin()) >= 0 ? "yes" : "no";
+    return '<div class="hl-market-section"><h4>Funding / Risk</h4>' +
+      '<div class="hl-market-kvgrid">' + kv("Predicted venues", predText) + kv("OI cap", capHit) + '</div>' +
+      (rows || '<div class="hl-market-empty">No funding history.</div>') +
+    '</div>';
+  }
+
+  function renderCatalog() {
+    var catalog = snapshot && snapshot.catalog;
+    var priority = catalog && catalog.priority ? catalog.priority : {};
+    var dexs = snapshot && snapshot.dexs && Array.isArray(snapshot.dexs.dexs) ? snapshot.dexs.dexs : [];
+    var annotations = snapshot && snapshot.annotations;
+    var annCount = annotations && annotations.annotations
+      ? (Array.isArray(annotations.annotations) ? annotations.annotations.length : Object.keys(annotations.annotations).length)
+      : 0;
+    return '<div class="hl-market-section"><h4>Catalog</h4>' +
+      '<div class="hl-market-kvgrid">' +
+        kv("Assets", catalog ? catalog.count : "--") +
+        kv("DEXs", dexs.length) +
+        kv("Annotations", annCount) +
+        kv("BTC", priority.BTC && priority.BTC.coin || "--") +
+        kv("ES", priority.ES && priority.ES.coin || "--") +
+        kv("NASDAQ", priority.NASDAQ && priority.NASDAQ.coin || "--") +
+      '</div></div>';
+  }
+
+  function render() {
+    var main = $("hlMarketMain");
+    var side = $("hlMarketSide");
+    if (!main || !side) return;
+    renderSummary();
+    if (!snapshot) {
+      main.innerHTML = '<div class="hl-market-empty">Loading Hyperliquid data.</div>';
+      side.innerHTML = "";
+      return;
+    }
+    if (snapshot.error) {
+      main.innerHTML = '<div class="hl-market-empty is-error">' + esc(snapshot.error) + '</div>';
+      side.innerHTML = "";
+      return;
+    }
+    main.innerHTML = renderContext() + renderBook();
+    side.innerHTML = renderTrades() + renderFunding() + renderCatalog();
+  }
+
+  function bind() {
+    document.querySelectorAll("[data-hl-market]").forEach(function (btn) {
+      if (btn._hlMarketBound) return;
+      btn._hlMarketBound = true;
+      btn.addEventListener("click", function () {
+        selectedMarket = btn.getAttribute("data-hl-market") || "BTC";
+        localStorage.setItem("hlMarketWidget:selected", selectedMarket);
+        document.querySelectorAll("[data-hl-market]").forEach(function (b) { b.classList.toggle("active", b === btn); });
+        load(true);
+      });
+      btn.classList.toggle("active", btn.getAttribute("data-hl-market") === selectedMarket);
+    });
+    var refresh = $("hlMarketRefreshBtn");
+    if (refresh && !refresh._hlMarketBound) {
+      refresh._hlMarketBound = true;
+      refresh.addEventListener("click", function () { load(true); });
+    }
+  }
+
+  function init() {
+    if (!document.querySelector(".hl-market-widget")) return;
+    bind();
+    render();
+    load(false);
+    if (!timer) {
+      timer = setInterval(function () {
+        if (document.body.getAttribute("data-current-page") === "today") load(false);
+      }, POLL_MS);
+    }
+  }
+
+  window.initHyperliquidMarketWidget = init;
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else setTimeout(init, 0);
+})();
+
+// ---- 061_hyperliquid_wallet_widget.js ----
+// ---------- Hyperliquid wallets dashboard widget ----------
+
+(function () {
+  var POLL_MS = 7000;
+  var state = {
+    initialized: false,
+    loading: false,
+    timer: null,
+    wallets: [],
+    rows: [],
+    eventsByWallet: {},
+    selectedWalletId: localStorage.getItem("hlWalletWidget:selectedId") || "",
+    editingWalletId: "",
+    lastError: "",
+    liveError: "",
+    lastUpdated: 0,
+  };
+
+  function $(id) { return document.getElementById(id); }
+
+  function fmtUsd(value) {
+    var n = Number(value);
+    if (!Number.isFinite(n)) return "--";
+    var sign = n > 0 ? "+" : "";
+    return sign + "$" + Math.abs(n).toLocaleString("en-US", {
+      minimumFractionDigits: Math.abs(n) >= 100 ? 0 : 2,
+      maximumFractionDigits: Math.abs(n) >= 100 ? 0 : 2,
+    });
+  }
+
+  function fmtNum(value, digits) {
+    var n = Number(value);
+    if (!Number.isFinite(n)) return "--";
+    return n.toLocaleString("en-US", { maximumFractionDigits: digits == null ? 4 : digits });
+  }
+
+  function shortAddr(address) {
+    address = String(address || "");
+    if (address.length <= 12) return address;
+    return address.slice(0, 6) + "..." + address.slice(-4);
+  }
+
+  function normalizeAddressInput(value) {
+    var compact = String(value || "").replace(/[\s\u200B-\u200D\uFEFF]/g, "");
+    var match = compact.match(/0[xX][a-fA-F0-9]{40}/);
+    return match ? match[0].toLowerCase() : "";
+  }
+
+  function escape(v) {
+    if (typeof escapeHtml === "function") return escapeHtml(v == null ? "" : String(v));
+    return String(v == null ? "" : v).replace(/[&<>"']/g, function (ch) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[ch];
+    });
+  }
+
+  function setStatus(text, mode) {
+    var el = $("hlWalletStatus");
+    if (!el) return;
+    el.textContent = text;
+    el.dataset.mode = mode || "";
+  }
+
+  async function readJson(url, opts) {
+    var res = await fetch(url, opts || {});
+    var data = await res.json().catch(function () { return null; });
+    if (!res.ok || !data) {
+      var detail = data && data.detail ? " - " + data.detail : "";
+      throw new Error(((data && (data.error || data.message)) || ("HTTP " + res.status)) + detail);
+    }
+    return data;
+  }
+
+  async function loadWallets(force) {
+    if (state.loading) return;
+    state.loading = true;
+    setStatus("sync...", "loading");
+    try {
+      var suffix = force ? "?force=1" : "";
+      var data = await readJson("/api/hyperliquid/wallets/state" + suffix);
+      state.rows = Array.isArray(data.wallets) ? data.wallets : [];
+      state.wallets = state.rows.map(function (r) { return r.wallet; }).filter(Boolean);
+      ensureSelectedWallet();
+      state.lastError = "";
+      state.liveError = Array.isArray(data.errors) && data.errors.length ? data.errors.length + " wallet live state unavailable" : "";
+      state.lastUpdated = Date.now();
+      await loadEvents(force);
+      render();
+      setStatus((state.liveError ? "partial " : "live ") + new Date(state.lastUpdated).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }), state.liveError ? "loading" : "ok");
+    } catch (e) {
+      await loadWalletListFallback(e);
+    } finally {
+      state.loading = false;
+    }
+  }
+
+  async function loadWalletListFallback(error) {
+    try {
+      var data = await readJson("/api/hyperliquid/wallets");
+      var wallets = Array.isArray(data.wallets) ? data.wallets : [];
+      state.rows = wallets.map(function (wallet) {
+        return { wallet: wallet, state: null, positions: [], openOrders: [] };
+      });
+      state.wallets = wallets;
+      ensureSelectedWallet();
+      state.eventsByWallet = {};
+      state.lastError = "";
+      state.liveError = "Live state unavailable: " + ((error && error.message) || String(error || "unknown error"));
+      state.lastUpdated = Date.now();
+      render();
+      setStatus("partial", "loading");
+    } catch (fallbackError) {
+      state.lastError = (fallbackError && fallbackError.message) || (error && error.message) || String(error || fallbackError);
+      state.liveError = "";
+      render();
+      setStatus("error", "error");
+    }
+  }
+
+  async function loadEvents(force) {
+    var active = state.wallets.filter(function (w) { return w && w.is_active; }).slice(0, 24);
+    var pairs = await Promise.all(active.map(function (wallet) {
+      var url = "/api/hyperliquid/wallets/" + wallet.id + "/events?limit=8" + (force ? "&force=1" : "");
+      return readJson(url).then(function (data) {
+        return [wallet.id, Array.isArray(data.events) ? data.events : []];
+      }).catch(function () { return [wallet.id, []]; });
+    }));
+    state.eventsByWallet = {};
+    pairs.forEach(function (pair) { state.eventsByWallet[pair[0]] = pair[1]; });
+  }
+
+  async function addWallet(address, label) {
+    await readJson("/api/hyperliquid/wallets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address: address, label: label }),
+    });
+    await loadWallets(true);
+  }
+
+  async function updateWallet(id, address, label) {
+    await readJson("/api/hyperliquid/wallets/" + id, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address: address, label: label }),
+    });
+    state.editingWalletId = "";
+    await loadWallets(true);
+  }
+
+  async function deleteWallet(id) {
+    await readJson("/api/hyperliquid/wallets/" + id, { method: "DELETE" });
+    if (String(state.selectedWalletId) === String(id)) {
+      state.selectedWalletId = "";
+      localStorage.removeItem("hlWalletWidget:selectedId");
+    }
+    await loadWallets(true);
+  }
+
+  function ensureSelectedWallet() {
+    var rows = state.rows || [];
+    if (!rows.length) {
+      state.selectedWalletId = "";
+      localStorage.removeItem("hlWalletWidget:selectedId");
+      return;
+    }
+    var found = rows.some(function (row) {
+      return row.wallet && String(row.wallet.id) === String(state.selectedWalletId);
+    });
+    if (!found) {
+      state.selectedWalletId = String(rows[0].wallet && rows[0].wallet.id || "");
+      if (state.selectedWalletId) localStorage.setItem("hlWalletWidget:selectedId", state.selectedWalletId);
+    }
+  }
+
+  function selectedRow() {
+    ensureSelectedWallet();
+    return (state.rows || []).find(function (row) {
+      return row.wallet && String(row.wallet.id) === String(state.selectedWalletId);
+    }) || null;
+  }
+
+  function positionHtml(pos) {
+    var side = pos.side || "flat";
+    var cls = side === "long" ? "is-long" : side === "short" ? "is-short" : "";
+    var pnl = Number(pos.unrealizedPnl);
+    var pnlCls = pnl > 0 ? "is-profit" : pnl < 0 ? "is-loss" : "";
+    return '<div class="hl-position ' + cls + '">' +
+      '<div class="hl-position-main">' +
+        '<span class="hl-coin">' + escape(pos.coin || "--") + '</span>' +
+        '<span class="hl-side">' + escape(side.toUpperCase()) + '</span>' +
+        '<span class="hl-size">' + fmtNum(pos.absSize, 5) + '</span>' +
+      '</div>' +
+      '<div class="hl-position-meta">' +
+        '<span>Entry ' + fmtNum(pos.entryPx, 2) + '</span>' +
+        '<span>Value ' + fmtUsd(pos.positionValue) + '</span>' +
+        '<span class="' + pnlCls + '">' + fmtUsd(pos.unrealizedPnl) + '</span>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function orderHtml(order) {
+    return '<div class="hl-order">' +
+      '<span>' + escape(order.coin || "--") + '</span>' +
+      '<span>' + escape((order.side || "").toUpperCase()) + '</span>' +
+      '<span>' + fmtNum(order.size, 5) + " @ " + fmtNum(order.limitPx, 2) + '</span>' +
+    '</div>';
+  }
+
+  function walletTabHtml(row) {
+    var wallet = row.wallet || {};
+    var positions = Array.isArray(row.positions) ? row.positions : [];
+    var orders = Array.isArray(row.openOrders) ? row.openOrders : [];
+    var label = wallet.label || shortAddr(wallet.address);
+    var upnl = positions.reduce(function (sum, pos) {
+      var n = Number(pos.unrealizedPnl);
+      return sum + (Number.isFinite(n) ? n : 0);
+    }, 0);
+    var pnlCls = upnl > 0 ? "is-profit" : upnl < 0 ? "is-loss" : "";
+    var selected = String(wallet.id) === String(state.selectedWalletId);
+    var editing = String(wallet.id) === String(state.editingWalletId);
+
+    return '<div class="hl-wallet-tab-wrap ' + (selected ? "active" : "") + (editing ? " is-editing" : "") + '">' +
+      '<button type="button" class="hl-wallet-tab" data-hl-select="' + wallet.id + '">' +
+        '<strong>' + escape(label) + '</strong>' +
+        '<span>' + positions.length + ' pos</span>' +
+        '<em class="' + pnlCls + '">' + (positions.length ? fmtUsd(upnl) : "--") + '</em>' +
+        (orders.length ? '<small>' + orders.length + ' orders</small>' : "") +
+      '</button>' +
+      '<button type="button" class="hl-wallet-edit-btn" data-hl-edit="' + wallet.id + '" title="Edit wallet">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>' +
+      '</button>' +
+    '</div>';
+  }
+
+  function renderWalletEditor() {
+    if (!state.editingWalletId) return "";
+    var row = (state.rows || []).find(function (r) {
+      return r.wallet && String(r.wallet.id) === String(state.editingWalletId);
+    });
+    if (!row || !row.wallet) return "";
+    var wallet = row.wallet;
+    return '<form class="hl-wallet-edit-panel" id="hlWalletEditForm" data-wallet-id="' + wallet.id + '">' +
+      '<input type="text" id="hlWalletEditLabel" value="' + escape(wallet.label || "") + '" placeholder="Label">' +
+      '<input type="text" id="hlWalletEditAddress" value="' + escape(wallet.address || "") + '" spellcheck="false" placeholder="0x wallet address">' +
+      '<button type="submit" class="btn-primary">Save</button>' +
+      '<button type="button" class="hl-wallet-delete-action" data-hl-delete="' + wallet.id + '">Delete</button>' +
+      '<button type="button" class="hl-wallet-cancel-action" data-hl-cancel-edit="1">Cancel</button>' +
+    '</form>';
+  }
+
+  function renderWalletDetail() {
+    var row = selectedRow();
+    if (!row) return '<div class="hl-empty-panel">Select a wallet.</div>';
+    var wallet = row.wallet || {};
+    var positions = Array.isArray(row.positions) ? row.positions : [];
+    var orders = Array.isArray(row.openOrders) ? row.openOrders : [];
+    var label = wallet.label || shortAddr(wallet.address);
+    var posHtml = positions.length
+      ? positions.map(positionHtml).join("")
+      : '<div class="hl-empty-line">No open position</div>';
+    var orderBlock = orders.length
+      ? '<div class="hl-orders"><h4>Open orders</h4>' + orders.map(orderHtml).join("") + '</div>'
+      : "";
+
+    return '<section class="hl-wallet-detail-card">' +
+      '<div class="hl-wallet-detail-head">' +
+        '<div class="hl-wallet-id">' +
+          '<strong>' + escape(label) + '</strong>' +
+          '<span>' + escape(wallet.address || "") + '</span>' +
+        '</div>' +
+        '<div class="hl-wallet-detail-actions">' +
+          '<strong>' + positions.length + ' positions</strong>' +
+          '<button type="button" class="hl-wallet-delete" data-hl-delete="' + wallet.id + '" title="Remove">&times;</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="hl-positions">' + posHtml + '</div>' +
+      orderBlock +
+    '</section>';
+  }
+
+  function eventHtml(event, wallet) {
+    var type = event.type || "event";
+    var cls = type.indexOf("close") >= 0 || type.indexOf("partial") >= 0 ? "is-close" : type.indexOf("open") >= 0 ? "is-open" : "";
+    var label = event.label || type;
+    var who = wallet ? (wallet.label || shortAddr(wallet.address)) : "";
+    return '<div class="hl-event ' + cls + '">' +
+      '<div><strong>' + escape(event.coin || "--") + '</strong><span>' + escape(label.replace(/_/g, " ")) + '</span></div>' +
+      '<div><span>' + escape(who) + '</span><span>' + fmtNum(event.size, 5) + (event.price ? " @ " + fmtNum(event.price, 2) : "") + '</span></div>' +
+    '</div>';
+  }
+
+  function renderEvents() {
+    var events = [];
+    var byId = {};
+    state.wallets.forEach(function (w) { byId[w.id] = w; });
+    var ids = state.selectedWalletId ? [String(state.selectedWalletId)] : Object.keys(state.eventsByWallet);
+    ids.forEach(function (id) {
+      (state.eventsByWallet[id] || []).forEach(function (event) {
+        events.push({ wallet: byId[id], event: event });
+      });
+    });
+    events.sort(function (a, b) { return Number(b.event.time || 0) - Number(a.event.time || 0); });
+    if (!events.length) return '<div class="hl-empty-panel">No recent wallet event.</div>';
+    return events.slice(0, 10).map(function (x) { return eventHtml(x.event, x.wallet); }).join("");
+  }
+
+  function render() {
+    var tabs = $("hlWalletTabs");
+    var detail = $("hlWalletDetail");
+    var events = $("hlWalletEvents");
+    var countEl = $("hlWalletCount");
+    var posCountEl = $("hlPositionCount");
+    var upnlEl = $("hlWalletUpnl");
+    if (!tabs || !detail || !events) return;
+
+    var rows = state.rows || [];
+    var allPositions = [];
+    rows.forEach(function (r) { allPositions = allPositions.concat(Array.isArray(r.positions) ? r.positions : []); });
+    var upnl = allPositions.reduce(function (sum, pos) {
+      var n = Number(pos.unrealizedPnl);
+      return sum + (Number.isFinite(n) ? n : 0);
+    }, 0);
+
+    if (countEl) countEl.textContent = String(rows.length);
+    if (posCountEl) posCountEl.textContent = String(allPositions.length);
+    if (upnlEl) {
+      upnlEl.textContent = allPositions.length ? fmtUsd(upnl) : "--";
+      upnlEl.className = upnl > 0 ? "is-profit" : upnl < 0 ? "is-loss" : "";
+    }
+
+    if (state.lastError) {
+      tabs.innerHTML = '<div class="hl-empty-panel is-error">' + escape(state.lastError) + '</div>';
+      detail.innerHTML = "";
+      events.innerHTML = "";
+      return;
+    }
+
+    var liveBanner = state.liveError ? '<div class="hl-empty-panel is-warning">' + escape(state.liveError) + '</div>' : "";
+    var editorSlot = $("hlWalletEditorSlot");
+    tabs.innerHTML = liveBanner + (rows.length ? rows.map(walletTabHtml).join("") : '<div class="hl-empty-panel">Add a wallet to start tracking positions.</div>');
+    if (editorSlot) editorSlot.innerHTML = rows.length ? renderWalletEditor() : "";
+    detail.innerHTML = rows.length ? renderWalletDetail() : "";
+    events.innerHTML = renderEvents();
+  }
+
+  function bind() {
+    var form = $("hlWalletForm");
+    var refresh = $("hlWalletRefreshBtn");
+    var tabs = $("hlWalletTabs");
+    var editorSlot = $("hlWalletEditorSlot");
+    var detail = $("hlWalletDetail");
+    if (form && !form._hlBound) {
+      form._hlBound = true;
+      form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        var address = $("hlWalletAddressInput");
+        var label = $("hlWalletLabelInput");
+        var normalized = normalizeAddressInput(address && address.value);
+        if (!address || !normalized) {
+          state.lastError = "Adresse Hyperliquid invalide";
+          state.liveError = "";
+          render();
+          setStatus("error", "error");
+          return;
+        }
+        try {
+          await addWallet(normalized, label ? label.value.trim() : "");
+          address.value = "";
+          if (label) label.value = "";
+        } catch (err) {
+          state.lastError = err.message || String(err);
+          state.liveError = "";
+          render();
+          setStatus("error", "error");
+        }
+      });
+    }
+    if (refresh && !refresh._hlBound) {
+      refresh._hlBound = true;
+      refresh.addEventListener("click", function () { loadWallets(true); });
+    }
+    if (tabs && !tabs._hlBound) {
+      tabs._hlBound = true;
+      tabs.addEventListener("click", function (e) {
+        var edit = e.target.closest("[data-hl-edit]");
+        if (edit) {
+          e.preventDefault();
+          state.editingWalletId = String(edit.getAttribute("data-hl-edit") || "");
+          state.selectedWalletId = state.editingWalletId;
+          if (state.selectedWalletId) localStorage.setItem("hlWalletWidget:selectedId", state.selectedWalletId);
+          render();
+          return;
+        }
+        var select = e.target.closest("[data-hl-select]");
+        if (!select) return;
+        e.preventDefault();
+        state.selectedWalletId = String(select.getAttribute("data-hl-select") || "");
+        if (state.selectedWalletId) localStorage.setItem("hlWalletWidget:selectedId", state.selectedWalletId);
+        render();
+      });
+    }
+    if (editorSlot && !editorSlot._hlBound) {
+      editorSlot._hlBound = true;
+      editorSlot.addEventListener("click", function (e) {
+        var cancel = e.target.closest("[data-hl-cancel-edit]");
+        if (!cancel) return;
+        e.preventDefault();
+        state.editingWalletId = "";
+        render();
+      });
+      editorSlot.addEventListener("submit", async function (e) {
+        var editForm = e.target.closest("#hlWalletEditForm");
+        if (!editForm) return;
+        e.preventDefault();
+        var address = $("hlWalletEditAddress");
+        var label = $("hlWalletEditLabel");
+        var normalized = normalizeAddressInput(address && address.value);
+        if (!normalized) {
+          state.lastError = "Adresse Hyperliquid invalide";
+          render();
+          setStatus("error", "error");
+          return;
+        }
+        try {
+          await updateWallet(editForm.getAttribute("data-wallet-id"), normalized, label ? label.value.trim() : "");
+        } catch (err) {
+          state.lastError = err.message || String(err);
+          render();
+          setStatus("error", "error");
+        }
+      });
+      editorSlot.addEventListener("click", async function (e) {
+        var btn = e.target.closest(".hl-wallet-delete-action[data-hl-delete]");
+        if (!btn) return;
+        e.preventDefault();
+        if (!confirm("Supprimer ce wallet Hyperliquid ?")) return;
+        await deleteWallet(btn.getAttribute("data-hl-delete"));
+      });
+    }
+    if (detail && !detail._hlBound) {
+      detail._hlBound = true;
+      detail.addEventListener("click", async function (e) {
+        var btn = e.target.closest("[data-hl-delete]");
+        if (!btn) return;
+        e.preventDefault();
+        await deleteWallet(btn.getAttribute("data-hl-delete"));
+      });
+    }
+  }
+
+  function init() {
+    var root = document.querySelector(".hl-wallet-widget");
+    if (!root) return;
+    bind();
+    if (!state.initialized) {
+      state.initialized = true;
+      loadWallets(false);
+      state.timer = setInterval(function () {
+        if (document.body.getAttribute("data-current-page") === "today") loadWallets(false);
+      }, POLL_MS);
+    } else {
+      render();
+    }
+  }
+
+  window.initHyperliquidWalletWidget = init;
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    setTimeout(init, 0);
+  }
+})();
+
 // ---- 062_chart_page.js ----
 // ---------- Chart page — TradingView Lightweight Charts XXL ----------
 // v2.0 — Indicators: SMA, EMA, Bollinger, RSI + Settings panel
@@ -13367,7 +14064,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     var savedVwap = JSON.parse(localStorage.getItem('chartVwapPeriods'));
     if (Array.isArray(savedVwap)) activeVwapPeriods = savedVwap.filter(function(p) { return window.BtcVwap && window.BtcVwap.VWAP_SOURCE_CONFIG && window.BtcVwap.VWAP_SOURCE_CONFIG[p]; });
   } catch(e) {}
-  var VWAP_COLORS = { 'D-NY': '#f59e0b', '24H': '#eab308', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
+  var VWAP_COLORS = { '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6', '365D': '#22c55e' };
 
   // State
   var countdownPriceLine = null;
@@ -14281,7 +14978,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         vwapSeriesMap: vwapSeriesMap,
       };
 
-      var vwapOrder = ['D-NY', '24H', '7D', '30D', '90D'];
+      var vwapOrder = ['1D', '7D', '30D', '90D', '365D'];
       for (var vi = 0; vi < vwapOrder.length; vi++) {
         var p = vwapOrder[vi];
         if (activeVwapPeriods.indexOf(p) < 0) continue;
@@ -14895,6 +15592,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         }
         var priceEl = document.getElementById('chartPrice');
         if (priceEl) priceEl.textContent = '$' + Number(latest.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
+        _drawMidnightForChart(latest, false);
       })
       .catch(function (e) { console.warn('[chart] REST fallback failed', e); });
   }
@@ -15264,6 +15962,54 @@ TradeEditorController.renderHtml = function (day, trade) {
   var DEFAULT_FIB_VISIBLE = {};
   FIB_LEVELS.forEach(function (l) { DEFAULT_FIB_VISIBLE[l.key] = true; });
 
+  function _formatFibLabel(key) {
+    var pct = key * 100;
+    var rounded = Math.round(pct * 1000) / 1000;
+    return String(rounded).replace(/\.?0+$/, '');
+  }
+
+  function _normalizeFibLevels(levels) {
+    var normalized;
+    if (Array.isArray(levels)) {
+      normalized = levels.map(function (l, idx) {
+        var key = Number(l.key);
+        if (!Number.isFinite(key)) return null;
+        return {
+          key: key,
+          label: String(l.label || _formatFibLabel(key)),
+          color: l.color || TOOL_COLORS[idx % TOOL_COLORS.length],
+          visible: l.visible !== false,
+        };
+      }).filter(Boolean);
+    } else {
+      var visible = levels && typeof levels === 'object' ? levels : DEFAULT_FIB_VISIBLE;
+      normalized = FIB_LEVELS.map(function (l) {
+        return {
+          key: Number(l.key),
+          label: l.label,
+          color: l.color,
+          visible: visible[l.key] !== false,
+        };
+      });
+    }
+    normalized.sort(function (a, b) { return a.key - b.key; });
+    return normalized;
+  }
+
+  function _cloneFibLevels(levels) {
+    return _normalizeFibLevels(levels).map(function (l) {
+      return { key: l.key, label: l.label, color: l.color, visible: l.visible !== false };
+    });
+  }
+
+  function _defaultFibLevels() { return _cloneFibLevels(FIB_LEVELS); }
+
+  function _fibLevelPrice(points, key) {
+    var price1 = points[0].price;
+    var price2 = points[1].price;
+    return price2 + (price1 - price2) * key;
+  }
+
   var STORAGE_KEY = 'chartDrawings';
   var TEMPLATE_KEY = 'chartDrawTemplates';
   var MAX_UNDO = 30;
@@ -15347,7 +16093,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       color: '#06b6d4', fillColor: '#06b6d4', opacity: 0.3,
       lineWidth: 1.5, lineStyle: 'solid',
       extendLeft: false, extendRight: true,
-      text: '', fibLevels: Object.assign({}, DEFAULT_FIB_VISIBLE),
+      text: '', fibLevels: _defaultFibLevels(),
     },
   };
 
@@ -15504,8 +16250,9 @@ TradeEditorController.renderHtml = function (day, trade) {
   }
 
   // Snap un point {time, price} a la bougie la plus proche (OHLC)
-  function _snapPoint(tp, clientX) {
+  function _snapPoint(tp, clientX, tool) {
     if (!tp) return tp;
+    if (tool === 'cursor' || tool === 'fibonacci') return tp;
     if (state.snapEnabled || !state.chart || !state.series || !state.container) return tp;
     try {
       var point = _clientToPanePoint(clientX, 0);
@@ -15540,7 +16287,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       opacity: o.opacity,
       extendLeft: o.extendLeft, extendRight: o.extendRight,
       text: o.text || '',
-      fibLevels: type === 'fibonacci' ? Object.assign({}, o.fibLevels) : null,
+      fibLevels: type === 'fibonacci' ? _cloneFibLevels(o.fibLevels) : null,
       locked: false,
       createdAt: Date.now(),
     };
@@ -15728,6 +16475,20 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   // ── / LOCK TOGGLE
 
+  function _deleteSelectedDrawing() {
+    if (state.selectedIndex < 0 || state.selectedIndex >= state.drawings.length) {
+      if (typeof toast === 'function') toast('Aucun dessin selectionne', 'info');
+      return;
+    }
+    _pushUndoState();
+    state.drawings.splice(state.selectedIndex, 1);
+    state.selectedIndex = -1;
+    _saveDrawings();
+    _syncOptionsUI();
+    _renderAll();
+    if (typeof toast === 'function') toast('Dessin supprime', 'success');
+  }
+
   function _syncOptionsUI() {
     ['drawOptionsPanel', 'drawOptionsPanelWidget'].forEach(function (id) {
       var panel = document.getElementById(id);
@@ -15791,25 +16552,82 @@ TradeEditorController.renderHtml = function (day, trade) {
     var fibList = document.getElementById('drawFibLevels');
     if (fibList) {
       fibList.innerHTML = '';
-      FIB_LEVELS.forEach(function (l) {
-        var vis = state.toolOptions.fibLevels[l.key] !== false;
-        var row = document.createElement('label');
+      state.toolOptions.fibLevels = _cloneFibLevels(state.toolOptions.fibLevels);
+      state.toolOptions.fibLevels.forEach(function (l, idx) {
+        var vis = l.visible !== false;
+        var levelColor = state.toolOptions.color || l.color;
+        var row = document.createElement('div');
         row.className = 'draw-fib-row';
         row.innerHTML =
-          '<input type="checkbox" ' + (vis ? 'checked' : '') + ' data-fib-key="' + l.key + '">' +
-          '<span class="draw-fib-dot" style="background:' + l.color + '"></span>' +
-          '<span class="draw-fib-label">' + l.label + '%</span>';
+          '<input type="checkbox" ' + (vis ? 'checked' : '') + ' data-fib-index="' + idx + '">' +
+          '<span class="draw-fib-dot" style="background:' + levelColor + '"></span>' +
+          '<span class="draw-fib-label">' + l.label + '%</span>' +
+          '<button type="button" class="draw-fib-delete" data-fib-index="' + idx + '" title="Supprimer ce niveau">×</button>';
         row.querySelector('input').addEventListener('change', function () {
-          state.toolOptions.fibLevels[parseFloat(this.dataset.fibKey)] = this.checked;
+          var level = state.toolOptions.fibLevels[parseInt(this.dataset.fibIndex, 10)];
+          if (level) level.visible = this.checked;
+          _readOptionsFromUI();
+        });
+        row.querySelector('.draw-fib-delete').addEventListener('click', function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          state.toolOptions.fibLevels.splice(parseInt(this.dataset.fibIndex, 10), 1);
+          _readOptionsFromUI();
+          _syncOptionsUI();
         });
         fibList.appendChild(row);
       });
+
+      var addRow = document.createElement('div');
+      addRow.className = 'draw-fib-add';
+      addRow.innerHTML =
+        '<input type="number" step="0.1" inputmode="decimal" placeholder="78.6" title="Niveau en pourcentage">' +
+        '<button type="button" title="Ajouter un niveau">Ajouter</button>';
+      var addInput = addRow.querySelector('input');
+      var addBtn = addRow.querySelector('button');
+      var addLevel = function () {
+        var pct = parseFloat(addInput.value);
+        if (!Number.isFinite(pct)) {
+          if (typeof toast === 'function') toast('Niveau fibo invalide', 'warning');
+          return;
+        }
+        var key = Math.round((pct / 100) * 1000000) / 1000000;
+        var exists = state.toolOptions.fibLevels.some(function (l) { return Math.abs(l.key - key) < 0.000001; });
+        if (exists) {
+          if (typeof toast === 'function') toast('Ce niveau fibo existe deja', 'info');
+          return;
+        }
+        state.toolOptions.fibLevels.push({
+          key: key,
+          label: _formatFibLabel(key),
+          color: TOOL_COLORS[state.toolOptions.fibLevels.length % TOOL_COLORS.length],
+          visible: true,
+        });
+        state.toolOptions.fibLevels.sort(function (a, b) { return a.key - b.key; });
+        addInput.value = '';
+        _readOptionsFromUI();
+        _syncOptionsUI();
+      };
+      addBtn.addEventListener('click', addLevel);
+      addInput.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter') {
+          ev.preventDefault();
+          addLevel();
+        }
+      });
+      fibList.appendChild(addRow);
     }
   }
 
   function _setVal(id, val) { var e = document.getElementById(id); if (e) e.value = val; }
   function _setChecked(id, val) { var e = document.getElementById(id); if (e) e.checked = !!val; }
-  function _showEl(id, show) { var e = document.getElementById(id); if (e) e.style.display = show ? '' : 'none'; }
+  function _showEl(id, show) {
+    var e = document.getElementById(id);
+    if (!e) return;
+    e.style.display = show ? '' : 'none';
+    e.classList.toggle('draw-opt-row--hidden', !show);
+    e.classList.toggle('draw-opt-section--hidden', !show);
+  }
 
   function _readOptionsFromUI() {
     function gv(id) { var e = document.getElementById(id); return e ? e.value : null; }
@@ -15818,7 +16636,8 @@ TradeEditorController.renderHtml = function (day, trade) {
     state.toolOptions.fillColor = gv('drawFillColor') || '#06b6d4';
     state.toolOptions.lineWidth = parseFloat(gv('drawLineWidth')) || 1.5;
     state.toolOptions.lineStyle = gv('drawLineStyle') || 'solid';
-    state.toolOptions.opacity = parseFloat(gv('drawOpacity')) || 0.3;
+    var opacity = parseFloat(gv('drawOpacity'));
+    state.toolOptions.opacity = Number.isFinite(opacity) ? opacity : 0.3;
     state.toolOptions.extendLeft = gc('drawExtLeft');
     state.toolOptions.extendRight = gc('drawExtRight');
     state.toolOptions.text = gv('drawText') || '';
@@ -15834,7 +16653,7 @@ TradeEditorController.renderHtml = function (day, trade) {
       d.extendLeft = state.toolOptions.extendLeft;
       d.extendRight = state.toolOptions.extendRight;
       d.text = state.toolOptions.text;
-      // Fib levels preserved — only sync top-level props
+      if (d.type === 'fibonacci') d.fibLevels = _cloneFibLevels(state.toolOptions.fibLevels);
       _saveDrawings();
       _renderAll();
     }
@@ -16034,12 +16853,23 @@ TradeEditorController.renderHtml = function (day, trade) {
     }
 
     document.addEventListener('change', function (e) {
-      if (e.target.closest('#drawOptionsPanel')) _readOptionsFromUI();
-      if (e.target.id === 'drawTemplateLoad') _onTemplateLoad();
+      if (e.target.id === 'drawTemplateLoad') {
+        _onTemplateLoad();
+        return;
+      }
+      if (e.target.closest('#drawOptionsPanel, #drawOptionsPanelWidget')) _readOptionsFromUI();
     });
 
-    // Live preview for range slider
+    // Live preview for drawing option controls.
     document.addEventListener('input', function (e) {
+      if (e.target.closest('#drawOptionsPanel, #drawOptionsPanelWidget')) {
+        if (e.target.id === 'drawOpacity') {
+          var valEl = document.getElementById('drawOpacityVal');
+          if (valEl) valEl.textContent = parseFloat(e.target.value).toFixed(2);
+        }
+        _readOptionsFromUI();
+        return;
+      }
       if (e.target.id === 'drawOpacity') {
         var valEl = document.getElementById('drawOpacityVal');
         if (valEl) valEl.textContent = parseFloat(e.target.value).toFixed(2);
@@ -16048,10 +16878,14 @@ TradeEditorController.renderHtml = function (day, trade) {
     });
 
     document.addEventListener('click', function (e) {
-      if (e.target.id === 'drawTemplateSave') _onTemplateSave();
-      if (e.target.id === 'drawTemplateDelete') _onTemplateDelete();
-      if (e.target.id === 'drawTypeBtn') _onDrawTypeBtn();
-      if (e.target.id === 'drawLockToggle') _toggleLock();
+      var action = e.target.closest('#drawTemplateSave, #drawTemplateDelete, #drawLockToggle, #drawDeleteSelected');
+      if (!action) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (action.id === 'drawTemplateSave') _onTemplateSave();
+      else if (action.id === 'drawTemplateDelete') _onTemplateDelete();
+      else if (action.id === 'drawLockToggle') _toggleLock();
+      else if (action.id === 'drawDeleteSelected') _deleteSelectedDrawing();
     });
 
     // Mouseup global pour finaliser le drag meme hors container
@@ -16114,10 +16948,14 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   function _onTemplateDelete() {
     var sel = document.getElementById('drawTemplateLoad');
-    if (!sel || !sel.value) return;
+    if (!sel || !sel.value) {
+      if (typeof toast === 'function') toast('Aucun template selectionne', 'info');
+      return;
+    }
     if (confirm('Supprimer le template "' + sel.value + '" ?')) {
       deleteTemplate(sel.value);
       _refreshTemplateList();
+      if (typeof toast === 'function') toast('Template supprime', 'success');
     }
   }
 
@@ -16139,17 +16977,18 @@ TradeEditorController.renderHtml = function (day, trade) {
   function _onCanvasClick(e) {
     if (state.activeTool === 'cursor') return;
     _readOptionsFromUI();
-    var tp = _snapPoint(_toTimePrice(e.clientX, e.clientY), e.clientX);
-    if (!tp) return;
+    var rawTp = _toTimePrice(e.clientX, e.clientY);
+    if (!rawTp) return;
 
     var tool = state.activeTool;
+    var tp = _snapPoint({ time: rawTp.time, price: rawTp.price }, e.clientX, tool);
     var isOnePoint = (tool === 'horizontal' || tool === 'horizontalray' || tool === 'vertical' || tool === 'text');
 
     // If editing an existing drawing, clicking elsewhere deselects
     if (state.selectedIndex >= 0 && state.selectedIndex < state.drawings.length) {
       _deselectDrawing();
       // If user clicked on a different drawing, select that one instead
-      var hitIdx = _hitTestIndex(tp.time, tp.price);
+      var hitIdx = _hitTestIndex(rawTp.time, rawTp.price);
       if (hitIdx >= 0 && hitIdx !== state.selectedIndex) {
         _selectDrawing(hitIdx);
         return;
@@ -16159,7 +16998,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 
     // Hit test: clicking on existing drawing enters edit mode
     if (!state.isDrawing) {
-      var hitIdx = _hitTestIndex(tp.time, tp.price);
+      var hitIdx = _hitTestIndex(rawTp.time, rawTp.price);
       if (hitIdx >= 0) {
         _selectDrawing(hitIdx);
         return;
@@ -16194,11 +17033,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     state.toolOptions.extendLeft = d.extendLeft || false;
     state.toolOptions.extendRight = d.extendRight !== false;
     state.toolOptions.text = d.text || '';
-    if (d.fibLevels) {
-      Object.keys(state.toolOptions.fibLevels).forEach(function (k) {
-        state.toolOptions.fibLevels[k] = d.fibLevels[k] !== false;
-      });
-    }
+    state.toolOptions.fibLevels = d.type === 'fibonacci' ? _cloneFibLevels(d.fibLevels) : _defaultFibLevels();
     _syncOptionsUI();
     // Forcer l'affichage du panneau d'options meme en mode curseur
     ['drawOptionsPanel', 'drawOptionsPanelWidget'].forEach(function (id) {
@@ -16279,11 +17114,11 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   function _onMouseMove(e) {
     if (state.isDrawing && state.dragStart) {
-      var tp = _snapPoint(_toTimePrice(e.clientX, e.clientY), e.clientX);
+      var tp = _snapPoint(_toTimePrice(e.clientX, e.clientY), e.clientX, state.activeTool);
       if (tp) { state.previewPoint = { time: tp.time, price: tp.price }; _renderAll(); }
     }
     if (state.activeTool === 'cursor') {
-      var tp = _snapPoint(_toTimePrice(e.clientX, e.clientY), e.clientX);
+      var tp = _toTimePrice(e.clientX, e.clientY);
       if (tp && state.canvas) state.canvas.style.cursor = _hitTest(tp.time, tp.price) ? 'pointer' : '';
     }
     // Stocker la position pour le crosshair canvas en mode dessin
@@ -16296,7 +17131,7 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   function _onDblClick(e) {
     if (state.activeTool !== 'cursor') return;
-    var tp = _snapPoint(_toTimePrice(e.clientX, e.clientY), e.clientX);
+    var tp = _toTimePrice(e.clientX, e.clientY);
     if (!tp) return;
     var idx = _hitTestIndex(tp.time, tp.price);
     if (idx !== -1) {
@@ -16310,7 +17145,8 @@ TradeEditorController.renderHtml = function (day, trade) {
   // ── HIT TEST ──
 
   function _hitTestIndex(time, price) {
-    var threshold = 10;
+    var pointThreshold = 7;
+    var lineThreshold = 5;
     var clickPx = _toPixel(time, price);
     if (!clickPx) return -1;
     var cx = clickPx.x, cy = clickPx.y;
@@ -16323,7 +17159,7 @@ TradeEditorController.renderHtml = function (day, trade) {
         var px = _toPixel(d.points[p].time, d.points[p].price);
         if (!px) continue;
         var dist = Math.sqrt((cx - px.x) * (cx - px.x) + (cy - px.y) * (cy - px.y));
-        if (dist < threshold) return i;
+        if (dist < pointThreshold) return i;
       }
 
       // Si locke : seulement les endpoints, pas les segments/aires
@@ -16339,8 +17175,11 @@ TradeEditorController.renderHtml = function (day, trade) {
             if (p1 && p2) {
               var bX1 = Math.min(p1.x, p2.x), bY1 = Math.min(p1.y, p2.y);
               var bX2 = Math.max(p1.x, p2.x), bY2 = Math.max(p1.y, p2.y);
-              // Marge 10px autour pour le confort
-              if (cx >= bX1 - 10 && cx <= bX2 + 10 && cy >= bY1 - 10 && cy <= bY2 + 10) return i;
+              var onHorizontal = cx >= bX1 - pointThreshold && cx <= bX2 + pointThreshold &&
+                (Math.abs(cy - bY1) < lineThreshold || Math.abs(cy - bY2) < lineThreshold);
+              var onVertical = cy >= bY1 - pointThreshold && cy <= bY2 + pointThreshold &&
+                (Math.abs(cx - bX1) < lineThreshold || Math.abs(cx - bX2) < lineThreshold);
+              if (onHorizontal || onVertical) return i;
             }
           }
           break;
@@ -16354,7 +17193,7 @@ TradeEditorController.renderHtml = function (day, trade) {
               var x1 = p1.x, y1 = p1.y, x2 = p2.x, y2 = p2.y;
               if (d.extendLeft) { var tL = (0 - x1) / (x2 - x1 || 1); x1 = 0; y1 = y1 + (y2 - y1) * tL; }
               if (d.extendRight) { var tR = (cw - x1) / (x2 - x1 || 1); x2 = cw; y2 = y1 + (y2 - y1) * tR; }
-              if (_distToSegment(cx, cy, x1, y1, x2, y2) < threshold) return i;
+              if (_distToSegment(cx, cy, x1, y1, x2, y2) < lineThreshold) return i;
             }
           }
           break;
@@ -16367,7 +17206,7 @@ TradeEditorController.renderHtml = function (day, trade) {
               var cw = state.canvas ? state.canvas.width / (window.devicePixelRatio || 1) : 0;
               var rx1 = d.type === 'horizontal' ? 0 : px.x;
               var rx2 = cw;
-              if (Math.abs(cy - px.y) < threshold && cx >= rx1 - threshold && cx <= rx2 + threshold) return i;
+              if (Math.abs(cy - px.y) < lineThreshold && cx >= rx1 - pointThreshold && cx <= rx2 + pointThreshold) return i;
             }
           }
           break;
@@ -16377,7 +17216,7 @@ TradeEditorController.renderHtml = function (day, trade) {
             var px = _toPixel(d.points[0].time, d.points[0].price);
             if (px) {
               var ch = state.canvas ? state.canvas.height / (window.devicePixelRatio || 1) : 0;
-              if (Math.abs(cx - px.x) < threshold && cy >= -threshold && cy <= ch + threshold) return i;
+              if (Math.abs(cx - px.x) < lineThreshold && cy >= -pointThreshold && cy <= ch + pointThreshold) return i;
             }
           }
           break;
@@ -16387,16 +17226,19 @@ TradeEditorController.renderHtml = function (day, trade) {
             var p1 = _toPixel(d.points[0].time, d.points[0].price);
             var p2 = _toPixel(d.points[1].time, d.points[1].price);
             if (p1 && p2) {
-              if (_distToSegment(cx, cy, p1.x, p1.y, p2.x, p2.y) < threshold) return i;
-              var price1 = d.points[0].price, price2 = d.points[1].price, diff = price2 - price1;
-              var fibKeys = d.fibLevels || {};
-              for (var f = 0; f < FIB_LEVELS.length; f++) {
-                var l = FIB_LEVELS[f];
-                if (fibKeys[l.key] === false) continue;
-                var fPrice = price1 + diff * l.key;
+              var fibThreshold = 5;
+              if (_distToSegment(cx, cy, p1.x, p1.y, p2.x, p2.y) < fibThreshold) return i;
+              var fibLevels = _normalizeFibLevels(d.fibLevels);
+              var cw = state.canvas ? state.canvas.width / (window.devicePixelRatio || 1) : 0;
+              var minX = Math.max(0, Math.min(p1.x, p2.x) - 30);
+              var maxX = Math.min(cw, Math.max(p1.x, p2.x) + 30);
+              for (var f = 0; f < fibLevels.length; f++) {
+                var l = fibLevels[f];
+                if (l.visible === false) continue;
+                var fPrice = _fibLevelPrice(d.points, l.key);
                 var fp = _toPixel(d.points[0].time, fPrice);
                 if (!fp) continue;
-                if (Math.abs(cy - fp.y) < threshold) return i;
+                if (cx >= minX - fibThreshold && cx <= maxX + fibThreshold && Math.abs(cy - fp.y) < fibThreshold) return i;
               }
             }
           }
@@ -16511,14 +17353,14 @@ TradeEditorController.renderHtml = function (day, trade) {
 
   function _renderPreview(tool, p1, p2) {
     var o = state.toolOptions;
-    var pd = { color: o.color, fillColor: o.fillColor, lineWidth: 1, lineStyle: 'dashed', opacity: o.opacity, text: o.text, fibLevels: o.fibLevels };
+    var pd = { color: o.color, fillColor: o.fillColor, lineWidth: 1, lineStyle: 'dashed', opacity: o.opacity, text: o.text, fibLevels: _cloneFibLevels(o.fibLevels) };
     switch (tool) {
       case 'box':          _drawBox([p1, p2], pd); break;
       case 'trendline':    _drawLine([p1, p2], pd); break;
       case 'horizontal':   _drawHorizLine(p1, pd); break;
       case 'horizontalray':_drawHorizRay(p1, pd); break;
       case 'vertical':     _drawVertLine(p1, pd); break;
-      case 'fibonacci':    _drawFibonacci({ points: [p1, p2], color: o.color, fibLevels: o.fibLevels }); break;
+      case 'fibonacci':    _drawFibonacci({ points: [p1, p2], color: o.color, fibLevels: _cloneFibLevels(o.fibLevels) }); break;
       case 'text':         _drawText(p1, pd); break;
     }
   }
@@ -16757,8 +17599,7 @@ TradeEditorController.renderHtml = function (day, trade) {
     var p2 = _toPixel(points[1].time, points[1].price);
     if (!p1 || !p2) return;
 
-    var price1 = points[0].price, price2 = points[1].price, diff = price2 - price1;
-    var vis = d.fibLevels || {};
+    var fibLevels = _normalizeFibLevels(d.fibLevels);
 
     ctx.save();
     ctx.globalAlpha = _getAlpha(d);
@@ -16770,16 +17611,17 @@ TradeEditorController.renderHtml = function (day, trade) {
     var minX = Math.max(0, Math.min(p1.x, p2.x) - 30);
     var maxX = Math.min(cw, Math.max(p1.x, p2.x) + 30);
 
-    for (var i = 0; i < FIB_LEVELS.length; i++) {
-      var l = FIB_LEVELS[i];
-      if (vis[l.key] === false) continue;
-      var price = price1 + diff * l.key;
+    for (var i = 0; i < fibLevels.length; i++) {
+      var l = fibLevels[i];
+      if (l.visible === false) continue;
+      var levelColor = d.color || l.color;
+      var price = _fibLevelPrice(points, l.key);
       var py = _toPixel(points[0].time, price);
       if (!py) continue;
       ctx.save();
-      ctx.strokeStyle = l.color; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = levelColor; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
       ctx.beginPath(); ctx.moveTo(minX, py.y); ctx.lineTo(maxX, py.y); ctx.stroke();
-      ctx.fillStyle = l.color; ctx.font = '9px "JetBrains Mono", monospace';
+      ctx.fillStyle = levelColor; ctx.font = '9px "JetBrains Mono", monospace';
       ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
       ctx.fillText(l.label + '% (' + price.toFixed(2) + ')', maxX - 2, py.y);
       ctx.restore();

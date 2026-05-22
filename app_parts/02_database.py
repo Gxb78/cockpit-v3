@@ -107,6 +107,18 @@ CREATE TABLE IF NOT EXISTS knowledge_cards (
         value TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS hyperliquid_wallets (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        address     TEXT NOT NULL UNIQUE,
+        label       TEXT,
+        notes       TEXT,
+        tags        TEXT,
+        color       TEXT,
+        is_active   INTEGER DEFAULT 1,
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_knowledge_cards_kind   ON knowledge_cards(kind);
     CREATE INDEX IF NOT EXISTS idx_knowledge_cards_tags   ON knowledge_cards(tags);
     CREATE INDEX IF NOT EXISTS idx_knowledge_cards_saved  ON knowledge_cards(is_user_saved);
@@ -171,6 +183,7 @@ def _run_migrations(con):
         7: _migrate_v6_to_v7,
         8: _migrate_v7_to_v8,
         9: _migrate_v8_to_v9,
+        10: _migrate_v9_to_v10,
     }
 
     for target in sorted(_MIGRATIONS):
@@ -186,7 +199,7 @@ def _run_migrations(con):
 
 
 # Whitelist des noms de tables et colonnes autorisées (Sécurité SQL)
-_VALID_TABLES = {"days", "trades", "screenshots", "settings", "knowledge_cards", "market_day_contexts", "market_events", "trade_market_contexts"}
+_VALID_TABLES = {"days", "trades", "screenshots", "settings", "knowledge_cards", "market_day_contexts", "market_events", "trade_market_contexts", "hyperliquid_wallets"}
 _VALID_DDL_TYPES = {"TEXT", "INTEGER", "REAL", "BLOB"}
 
 def _table_columns(con, table_name):
@@ -428,3 +441,24 @@ def _migrate_v8_to_v9(con):
     con.execute("CREATE INDEX IF NOT EXISTS idx_tmc_context    ON trade_market_contexts(context_id)")
 
     log.info("Migration v9 OK - tables Midnight Engine creees.")
+
+
+def _migrate_v9_to_v10(con):
+    """Migration v10: cree la watchlist de wallets Hyperliquid."""
+    con.executescript("""
+        CREATE TABLE IF NOT EXISTS hyperliquid_wallets (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            address     TEXT NOT NULL UNIQUE,
+            label       TEXT,
+            notes       TEXT,
+            tags        TEXT,
+            color       TEXT,
+            is_active   INTEGER DEFAULT 1,
+            created_at  TEXT NOT NULL,
+            updated_at  TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_hl_wallets_address ON hyperliquid_wallets(address);
+        CREATE INDEX IF NOT EXISTS idx_hl_wallets_active  ON hyperliquid_wallets(is_active);
+    """)
+    log.info("Migration v10 OK - watchlist Hyperliquid creee.")

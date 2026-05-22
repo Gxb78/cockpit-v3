@@ -1,0 +1,33 @@
+<section class="panel widget widget-panel hl-wallet-widget" data-widget-key="hyperliquid_wallets" data-widget-kind="panel" data-size="xl">
+  <div class="panel-h hl-wallet-head">
+    <div>
+      <h3>Hyperliquid Wallets</h3>
+      <span class="hl-wallet-sub" id="hlWalletStatus">read-only</span>
+    </div>
+    <div class="hl-wallet-actions">
+      <button type="button" class="btn-icon hl-wallet-refresh" id="hlWalletRefreshBtn" title="Refresh">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-15.5 6.3"/><path d="M3 12A9 9 0 0 1 18.5 5.7"/><path d="M18 2v4h-4"/><path d="M6 22v-4h4"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <form class="hl-wallet-form" id="hlWalletForm" autocomplete="off">
+    <input type="text" id="hlWalletAddressInput" placeholder="0x wallet address" spellcheck="false">
+    <input type="text" id="hlWalletLabelInput" placeholder="Label">
+    <button type="submit" class="btn-primary">Add</button>
+  </form>
+
+  <div class="hl-wallet-tabs" id="hlWalletTabs"></div>
+  <div class="hl-wallet-editor-slot" id="hlWalletEditorSlot"></div>
+
+  <div class="hl-wallet-summary" id="hlWalletSummary">
+    <div><span id="hlWalletCount">0</span><small>wallets</small></div>
+    <div><span id="hlPositionCount">0</span><small>positions</small></div>
+    <div><span id="hlWalletUpnl">--</span><small>uPnL</small></div>
+  </div>
+
+  <div class="hl-wallet-body">
+    <div class="hl-wallet-detail" id="hlWalletDetail"></div>
+    <div class="hl-wallet-events" id="hlWalletEvents"></div>
+  </div>
+</section>

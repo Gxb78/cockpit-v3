@@ -18,7 +18,7 @@
     var savedVwap = JSON.parse(localStorage.getItem('chartVwapPeriods'));
     if (Array.isArray(savedVwap)) activeVwapPeriods = savedVwap.filter(function(p) { return window.BtcVwap && window.BtcVwap.VWAP_SOURCE_CONFIG && window.BtcVwap.VWAP_SOURCE_CONFIG[p]; });
   } catch(e) {}
-  var VWAP_COLORS = { 'D-NY': '#f59e0b', '24H': '#eab308', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
+  var VWAP_COLORS = { '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6', '365D': '#22c55e' };
 
   // State
   var countdownPriceLine = null;
@@ -932,7 +932,7 @@
         vwapSeriesMap: vwapSeriesMap,
       };
 
-      var vwapOrder = ['D-NY', '24H', '7D', '30D', '90D'];
+      var vwapOrder = ['1D', '7D', '30D', '90D', '365D'];
       for (var vi = 0; vi < vwapOrder.length; vi++) {
         var p = vwapOrder[vi];
         if (activeVwapPeriods.indexOf(p) < 0) continue;
@@ -1546,6 +1546,7 @@
         }
         var priceEl = document.getElementById('chartPrice');
         if (priceEl) priceEl.textContent = '$' + Number(latest.close).toLocaleString('fr-FR', { minimumFractionDigits: 2 });
+        _drawMidnightForChart(latest, false);
       })
       .catch(function (e) { console.warn('[chart] REST fallback failed', e); });
   }

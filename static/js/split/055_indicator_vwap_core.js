@@ -38,18 +38,18 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
   // IndÃ©pendante du timeframe actif du chart.
   // Chaque pÃ©riode a une source stable, prÃ©visible, rapide.
   // Modes :
-  //   'rolling' â†’ fenÃªtre glissante de durationMs depuis endTime
-  //   'session' â†’ session calendaire (UTC_DAY, NY_DAY)
+  //   'rolling' → fenêtre glissante de durationMs depuis endTime
+  //   'session' → session calendaire (UTC_DAY)
   var VWAP_SOURCE_CONFIG = {
-    'D-NY': { mode: 'session', session: 'NY_DAY', interval: '15m', limit: 110, refreshMs: 60000 },
-    '24H':  { mode: 'rolling', durationMs: 24 * 60 * 60 * 1000, interval: '15m', limit: 110, refreshMs: 60000 },
+    '1D':   { mode: 'session', session: 'UTC_DAY', interval: '15m', limit: 110, refreshMs: 60000 },
     '7D':   { mode: 'rolling', durationMs: 7 * 24 * 60 * 60 * 1000, interval: '15m', limit: 682, refreshMs: 60000 },
     '30D':  { mode: 'rolling', durationMs: 30 * 24 * 60 * 60 * 1000, interval: '1h',  limit: 730, refreshMs: 300000 },
     '90D':  { mode: 'rolling', durationMs: 90 * 24 * 60 * 60 * 1000, interval: '4h',  limit: 550, refreshMs: 900000 },
+    '365D': { mode: 'rolling', durationMs: 365 * 24 * 60 * 60 * 1000, interval: '12h', limit: 750, refreshMs: 900000 },
   };
 
   var VWAP_COLORS = {
-    'D-NY': '#f59e0b', '24H': '#eab308', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6',
+    '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6', '365D': '#22c55e',
   };
 
   // â”€â”€ BORNES TEMPORELLES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -70,26 +70,6 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
       if (config.session === 'UTC_DAY') {
         var bounds = _getUtcDayBounds(nowMs);
         return { startTime: bounds.startTime, endTime: endTime };
-      }
-      if (config.session === 'NY_DAY') {
-        // NY day: 00:00 America/New_York
-        // En UTC, NY = UTC-5 (EST) ou UTC-4 (EDT, mars Ã  novembre)
-        // Approximation: on calcule via Date locale du navigateurâ€¦ pas idÃ©al
-        // Phase 1: on dÃ©lÃ¨gue le calcul au backend si possible, sinon frontend approximatif
-        var d = new Date(nowMs);
-        // EST/EDT simplifiÃ©: 2e dimanche de mars â†’ 1er dimanche de novembre = EDT (-4)
-        var year = d.getUTCFullYear();
-        var marStart = Date.UTC(year, 2, 8); // 8 mars
-        var marDst = marStart - ((new Date(marStart)).getUTCDay() * 86400000);
-        var novStart = Date.UTC(year, 10, 1); // 1er novembre
-        var novDst = novStart - ((new Date(novStart)).getUTCDay() * 86400000);
-        var isDst = nowMs >= marDst && nowMs < novDst;
-        var nyOffset = isDst ? -4 : -5;
-        var nyNowMs = nowMs + nyOffset * 3600000;
-        var nyNow = new Date(nyNowMs);
-        var nyMidnight = Date.UTC(nyNow.getUTCFullYear(), nyNow.getUTCMonth(), nyNow.getUTCDate(), 0, 0, 0, 0);
-        var utcStart = nyMidnight - nyOffset * 3600000;
-        return { startTime: utcStart, endTime: endTime };
       }
     }
     // Fallback: rolling 24h
@@ -352,7 +332,7 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
 
   // â”€â”€ EVENT BUS VWAP â€” normalisation + synchro cross-component â”€â”€
   function normalizeVwapPeriods(periods) {
-    var legacyMap = { '1D': 'D-NY' };
+    var legacyMap = { 'D-NY': '1D', '24H': null };
     var seen = {};
     var out = [];
     (periods || []).forEach(function (p) {

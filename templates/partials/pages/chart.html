@@ -13,11 +13,11 @@
         <div class="chart-indicators">
           <button type="button" class="chart-ind-toggle" id="vwapToggle">VWAP <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="2 3 4 5 6 3"/></svg></button>
           <div class="chart-ind-dropdown hidden" id="vwapDropdown">
-            <button type="button" class="chart-ind-opt" data-vwap="D-NY">Jour NY</button>
-            <button type="button" class="chart-ind-opt" data-vwap="24H">24h</button>
+            <button type="button" class="chart-ind-opt" data-vwap="1D">1 jour</button>
             <button type="button" class="chart-ind-opt" data-vwap="7D">7 jours</button>
             <button type="button" class="chart-ind-opt" data-vwap="30D">30 jours</button>
             <button type="button" class="chart-ind-opt" data-vwap="90D">90 jours</button>
+            <button type="button" class="chart-ind-opt" data-vwap="365D">365 jours</button>
           </div>
           <!-- Volume Profile toggle + dropdown -->
           <button type="button" class="chart-ind-toggle" id="vpToggle">VP <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="2 3 4 5 6 3"/></svg></button>
@@ -253,6 +253,10 @@
             <div class="draw-opt-row draw-opt-row--lock">
               <label class="draw-opt-label">Verrou</label>
               <button type="button" class="draw-lock-btn" id="drawLockToggle" title="Verrouiller le dessin (clic traverse vers le chart)">🔓</button>
+            </div>
+            <div class="draw-opt-row">
+              <label class="draw-opt-label">Dessin</label>
+              <button type="button" class="draw-action-btn draw-action-btn--danger" id="drawDeleteSelected" title="Supprimer le dessin selectionne">Supprimer</button>
             </div>
             <div class="draw-opt-row">
               <label class="draw-opt-label">Trait</label>

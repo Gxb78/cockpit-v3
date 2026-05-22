@@ -43,6 +43,54 @@
   var DEFAULT_FIB_VISIBLE = {};
   FIB_LEVELS.forEach(function (l) { DEFAULT_FIB_VISIBLE[l.key] = true; });
 
+  function _formatFibLabel(key) {
+    var pct = key * 100;
+    var rounded = Math.round(pct * 1000) / 1000;
+    return String(rounded).replace(/\.?0+$/, '');
+  }
+
+  function _normalizeFibLevels(levels) {
+    var normalized;
+    if (Array.isArray(levels)) {
+      normalized = levels.map(function (l, idx) {
+        var key = Number(l.key);
+        if (!Number.isFinite(key)) return null;
+        return {
+          key: key,
+          label: String(l.label || _formatFibLabel(key)),
+          color: l.color || TOOL_COLORS[idx % TOOL_COLORS.length],
+          visible: l.visible !== false,
+        };
+      }).filter(Boolean);
+    } else {
+      var visible = levels && typeof levels === 'object' ? levels : DEFAULT_FIB_VISIBLE;
+      normalized = FIB_LEVELS.map(function (l) {
+        return {
+          key: Number(l.key),
+          label: l.label,
+          color: l.color,
+          visible: visible[l.key] !== false,
+        };
+      });
+    }
+    normalized.sort(function (a, b) { return a.key - b.key; });
+    return normalized;
+  }
+
+  function _cloneFibLevels(levels) {
+    return _normalizeFibLevels(levels).map(function (l) {
+      return { key: l.key, label: l.label, color: l.color, visible: l.visible !== false };
+    });
+  }
+
+  function _defaultFibLevels() { return _cloneFibLevels(FIB_LEVELS); }
+
+  function _fibLevelPrice(points, key) {
+    var price1 = points[0].price;
+    var price2 = points[1].price;
+    return price2 + (price1 - price2) * key;
+  }
+
   var STORAGE_KEY = 'chartDrawings';
   var TEMPLATE_KEY = 'chartDrawTemplates';
   var MAX_UNDO = 30;
@@ -126,7 +174,7 @@
       color: '#06b6d4', fillColor: '#06b6d4', opacity: 0.3,
       lineWidth: 1.5, lineStyle: 'solid',
       extendLeft: false, extendRight: true,
-      text: '', fibLevels: Object.assign({}, DEFAULT_FIB_VISIBLE),
+      text: '', fibLevels: _defaultFibLevels(),
     },
   };
 
@@ -283,8 +331,9 @@
   }
 
   // Snap un point {time, price} a la bougie la plus proche (OHLC)
-  function _snapPoint(tp, clientX) {
+  function _snapPoint(tp, clientX, tool) {
     if (!tp) return tp;
+    if (tool === 'cursor' || tool === 'fibonacci') return tp;
     if (state.snapEnabled || !state.chart || !state.series || !state.container) return tp;
     try {
       var point = _clientToPanePoint(clientX, 0);
@@ -319,7 +368,7 @@
       opacity: o.opacity,
       extendLeft: o.extendLeft, extendRight: o.extendRight,
       text: o.text || '',
-      fibLevels: type === 'fibonacci' ? Object.assign({}, o.fibLevels) : null,
+      fibLevels: type === 'fibonacci' ? _cloneFibLevels(o.fibLevels) : null,
       locked: false,
       createdAt: Date.now(),
     };
@@ -507,6 +556,20 @@
 
   // ── / LOCK TOGGLE
 
+  function _deleteSelectedDrawing() {
+    if (state.selectedIndex < 0 || state.selectedIndex >= state.drawings.length) {
+      if (typeof toast === 'function') toast('Aucun dessin selectionne', 'info');
+      return;
+    }
+    _pushUndoState();
+    state.drawings.splice(state.selectedIndex, 1);
+    state.selectedIndex = -1;
+    _saveDrawings();
+    _syncOptionsUI();
+    _renderAll();
+    if (typeof toast === 'function') toast('Dessin supprime', 'success');
+  }
+
   function _syncOptionsUI() {
     ['drawOptionsPanel', 'drawOptionsPanelWidget'].forEach(function (id) {
       var panel = document.getElementById(id);
@@ -570,25 +633,82 @@
     var fibList = document.getElementById('drawFibLevels');
     if (fibList) {
       fibList.innerHTML = '';
-      FIB_LEVELS.forEach(function (l) {
-        var vis = state.toolOptions.fibLevels[l.key] !== false;
-        var row = document.createElement('label');
+      state.toolOptions.fibLevels = _cloneFibLevels(state.toolOptions.fibLevels);
+      state.toolOptions.fibLevels.forEach(function (l, idx) {
+        var vis = l.visible !== false;
+        var levelColor = state.toolOptions.color || l.color;
+        var row = document.createElement('div');
         row.className = 'draw-fib-row';
         row.innerHTML =
-          '<input type="checkbox" ' + (vis ? 'checked' : '') + ' data-fib-key="' + l.key + '">' +
-          '<span class="draw-fib-dot" style="background:' + l.color + '"></span>' +
-          '<span class="draw-fib-label">' + l.label + '%</span>';
+          '<input type="checkbox" ' + (vis ? 'checked' : '') + ' data-fib-index="' + idx + '">' +
+          '<span class="draw-fib-dot" style="background:' + levelColor + '"></span>' +
+          '<span class="draw-fib-label">' + l.label + '%</span>' +
+          '<button type="button" class="draw-fib-delete" data-fib-index="' + idx + '" title="Supprimer ce niveau">×</button>';
         row.querySelector('input').addEventListener('change', function () {
-          state.toolOptions.fibLevels[parseFloat(this.dataset.fibKey)] = this.checked;
+          var level = state.toolOptions.fibLevels[parseInt(this.dataset.fibIndex, 10)];
+          if (level) level.visible = this.checked;
+          _readOptionsFromUI();
+        });
+        row.querySelector('.draw-fib-delete').addEventListener('click', function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          state.toolOptions.fibLevels.splice(parseInt(this.dataset.fibIndex, 10), 1);
+          _readOptionsFromUI();
+          _syncOptionsUI();
         });
         fibList.appendChild(row);
       });
+
+      var addRow = document.createElement('div');
+      addRow.className = 'draw-fib-add';
+      addRow.innerHTML =
+        '<input type="number" step="0.1" inputmode="decimal" placeholder="78.6" title="Niveau en pourcentage">' +
+        '<button type="button" title="Ajouter un niveau">Ajouter</button>';
+      var addInput = addRow.querySelector('input');
+      var addBtn = addRow.querySelector('button');
+      var addLevel = function () {
+        var pct = parseFloat(addInput.value);
+        if (!Number.isFinite(pct)) {
+          if (typeof toast === 'function') toast('Niveau fibo invalide', 'warning');
+          return;
+        }
+        var key = Math.round((pct / 100) * 1000000) / 1000000;
+        var exists = state.toolOptions.fibLevels.some(function (l) { return Math.abs(l.key - key) < 0.000001; });
+        if (exists) {
+          if (typeof toast === 'function') toast('Ce niveau fibo existe deja', 'info');
+          return;
+        }
+        state.toolOptions.fibLevels.push({
+          key: key,
+          label: _formatFibLabel(key),
+          color: TOOL_COLORS[state.toolOptions.fibLevels.length % TOOL_COLORS.length],
+          visible: true,
+        });
+        state.toolOptions.fibLevels.sort(function (a, b) { return a.key - b.key; });
+        addInput.value = '';
+        _readOptionsFromUI();
+        _syncOptionsUI();
+      };
+      addBtn.addEventListener('click', addLevel);
+      addInput.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter') {
+          ev.preventDefault();
+          addLevel();
+        }
+      });
+      fibList.appendChild(addRow);
     }
   }
 
   function _setVal(id, val) { var e = document.getElementById(id); if (e) e.value = val; }
   function _setChecked(id, val) { var e = document.getElementById(id); if (e) e.checked = !!val; }
-  function _showEl(id, show) { var e = document.getElementById(id); if (e) e.style.display = show ? '' : 'none'; }
+  function _showEl(id, show) {
+    var e = document.getElementById(id);
+    if (!e) return;
+    e.style.display = show ? '' : 'none';
+    e.classList.toggle('draw-opt-row--hidden', !show);
+    e.classList.toggle('draw-opt-section--hidden', !show);
+  }
 
   function _readOptionsFromUI() {
     function gv(id) { var e = document.getElementById(id); return e ? e.value : null; }
@@ -597,7 +717,8 @@
     state.toolOptions.fillColor = gv('drawFillColor') || '#06b6d4';
     state.toolOptions.lineWidth = parseFloat(gv('drawLineWidth')) || 1.5;
     state.toolOptions.lineStyle = gv('drawLineStyle') || 'solid';
-    state.toolOptions.opacity = parseFloat(gv('drawOpacity')) || 0.3;
+    var opacity = parseFloat(gv('drawOpacity'));
+    state.toolOptions.opacity = Number.isFinite(opacity) ? opacity : 0.3;
     state.toolOptions.extendLeft = gc('drawExtLeft');
     state.toolOptions.extendRight = gc('drawExtRight');
     state.toolOptions.text = gv('drawText') || '';
@@ -613,7 +734,7 @@
       d.extendLeft = state.toolOptions.extendLeft;
       d.extendRight = state.toolOptions.extendRight;
       d.text = state.toolOptions.text;
-      // Fib levels preserved — only sync top-level props
+      if (d.type === 'fibonacci') d.fibLevels = _cloneFibLevels(state.toolOptions.fibLevels);
       _saveDrawings();
       _renderAll();
     }
@@ -813,12 +934,23 @@
     }
 
     document.addEventListener('change', function (e) {
-      if (e.target.closest('#drawOptionsPanel')) _readOptionsFromUI();
-      if (e.target.id === 'drawTemplateLoad') _onTemplateLoad();
+      if (e.target.id === 'drawTemplateLoad') {
+        _onTemplateLoad();
+        return;
+      }
+      if (e.target.closest('#drawOptionsPanel, #drawOptionsPanelWidget')) _readOptionsFromUI();
     });
 
-    // Live preview for range slider
+    // Live preview for drawing option controls.
     document.addEventListener('input', function (e) {
+      if (e.target.closest('#drawOptionsPanel, #drawOptionsPanelWidget')) {
+        if (e.target.id === 'drawOpacity') {
+          var valEl = document.getElementById('drawOpacityVal');
+          if (valEl) valEl.textContent = parseFloat(e.target.value).toFixed(2);
+        }
+        _readOptionsFromUI();
+        return;
+      }
       if (e.target.id === 'drawOpacity') {
         var valEl = document.getElementById('drawOpacityVal');
         if (valEl) valEl.textContent = parseFloat(e.target.value).toFixed(2);
@@ -827,10 +959,14 @@
     });
 
     document.addEventListener('click', function (e) {
-      if (e.target.id === 'drawTemplateSave') _onTemplateSave();
-      if (e.target.id === 'drawTemplateDelete') _onTemplateDelete();
-      if (e.target.id === 'drawTypeBtn') _onDrawTypeBtn();
-      if (e.target.id === 'drawLockToggle') _toggleLock();
+      var action = e.target.closest('#drawTemplateSave, #drawTemplateDelete, #drawLockToggle, #drawDeleteSelected');
+      if (!action) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (action.id === 'drawTemplateSave') _onTemplateSave();
+      else if (action.id === 'drawTemplateDelete') _onTemplateDelete();
+      else if (action.id === 'drawLockToggle') _toggleLock();
+      else if (action.id === 'drawDeleteSelected') _deleteSelectedDrawing();
     });
 
     // Mouseup global pour finaliser le drag meme hors container
@@ -893,10 +1029,14 @@
 
   function _onTemplateDelete() {
     var sel = document.getElementById('drawTemplateLoad');
-    if (!sel || !sel.value) return;
+    if (!sel || !sel.value) {
+      if (typeof toast === 'function') toast('Aucun template selectionne', 'info');
+      return;
+    }
     if (confirm('Supprimer le template "' + sel.value + '" ?')) {
       deleteTemplate(sel.value);
       _refreshTemplateList();
+      if (typeof toast === 'function') toast('Template supprime', 'success');
     }
   }
 
@@ -918,17 +1058,18 @@
   function _onCanvasClick(e) {
     if (state.activeTool === 'cursor') return;
     _readOptionsFromUI();
-    var tp = _snapPoint(_toTimePrice(e.clientX, e.clientY), e.clientX);
-    if (!tp) return;
+    var rawTp = _toTimePrice(e.clientX, e.clientY);
+    if (!rawTp) return;
 
     var tool = state.activeTool;
+    var tp = _snapPoint({ time: rawTp.time, price: rawTp.price }, e.clientX, tool);
     var isOnePoint = (tool === 'horizontal' || tool === 'horizontalray' || tool === 'vertical' || tool === 'text');
 
     // If editing an existing drawing, clicking elsewhere deselects
     if (state.selectedIndex >= 0 && state.selectedIndex < state.drawings.length) {
       _deselectDrawing();
       // If user clicked on a different drawing, select that one instead
-      var hitIdx = _hitTestIndex(tp.time, tp.price);
+      var hitIdx = _hitTestIndex(rawTp.time, rawTp.price);
       if (hitIdx >= 0 && hitIdx !== state.selectedIndex) {
         _selectDrawing(hitIdx);
         return;
@@ -938,7 +1079,7 @@
 
     // Hit test: clicking on existing drawing enters edit mode
     if (!state.isDrawing) {
-      var hitIdx = _hitTestIndex(tp.time, tp.price);
+      var hitIdx = _hitTestIndex(rawTp.time, rawTp.price);
       if (hitIdx >= 0) {
         _selectDrawing(hitIdx);
         return;
@@ -973,11 +1114,7 @@
     state.toolOptions.extendLeft = d.extendLeft || false;
     state.toolOptions.extendRight = d.extendRight !== false;
     state.toolOptions.text = d.text || '';
-    if (d.fibLevels) {
-      Object.keys(state.toolOptions.fibLevels).forEach(function (k) {
-        state.toolOptions.fibLevels[k] = d.fibLevels[k] !== false;
-      });
-    }
+    state.toolOptions.fibLevels = d.type === 'fibonacci' ? _cloneFibLevels(d.fibLevels) : _defaultFibLevels();
     _syncOptionsUI();
     // Forcer l'affichage du panneau d'options meme en mode curseur
     ['drawOptionsPanel', 'drawOptionsPanelWidget'].forEach(function (id) {
@@ -1058,11 +1195,11 @@
 
   function _onMouseMove(e) {
     if (state.isDrawing && state.dragStart) {
-      var tp = _snapPoint(_toTimePrice(e.clientX, e.clientY), e.clientX);
+      var tp = _snapPoint(_toTimePrice(e.clientX, e.clientY), e.clientX, state.activeTool);
       if (tp) { state.previewPoint = { time: tp.time, price: tp.price }; _renderAll(); }
     }
     if (state.activeTool === 'cursor') {
-      var tp = _snapPoint(_toTimePrice(e.clientX, e.clientY), e.clientX);
+      var tp = _toTimePrice(e.clientX, e.clientY);
       if (tp && state.canvas) state.canvas.style.cursor = _hitTest(tp.time, tp.price) ? 'pointer' : '';
     }
     // Stocker la position pour le crosshair canvas en mode dessin
@@ -1075,7 +1212,7 @@
 
   function _onDblClick(e) {
     if (state.activeTool !== 'cursor') return;
-    var tp = _snapPoint(_toTimePrice(e.clientX, e.clientY), e.clientX);
+    var tp = _toTimePrice(e.clientX, e.clientY);
     if (!tp) return;
     var idx = _hitTestIndex(tp.time, tp.price);
     if (idx !== -1) {
@@ -1089,7 +1226,8 @@
   // ── HIT TEST ──
 
   function _hitTestIndex(time, price) {
-    var threshold = 10;
+    var pointThreshold = 7;
+    var lineThreshold = 5;
     var clickPx = _toPixel(time, price);
     if (!clickPx) return -1;
     var cx = clickPx.x, cy = clickPx.y;
@@ -1102,7 +1240,7 @@
         var px = _toPixel(d.points[p].time, d.points[p].price);
         if (!px) continue;
         var dist = Math.sqrt((cx - px.x) * (cx - px.x) + (cy - px.y) * (cy - px.y));
-        if (dist < threshold) return i;
+        if (dist < pointThreshold) return i;
       }
 
       // Si locke : seulement les endpoints, pas les segments/aires
@@ -1118,8 +1256,11 @@
             if (p1 && p2) {
               var bX1 = Math.min(p1.x, p2.x), bY1 = Math.min(p1.y, p2.y);
               var bX2 = Math.max(p1.x, p2.x), bY2 = Math.max(p1.y, p2.y);
-              // Marge 10px autour pour le confort
-              if (cx >= bX1 - 10 && cx <= bX2 + 10 && cy >= bY1 - 10 && cy <= bY2 + 10) return i;
+              var onHorizontal = cx >= bX1 - pointThreshold && cx <= bX2 + pointThreshold &&
+                (Math.abs(cy - bY1) < lineThreshold || Math.abs(cy - bY2) < lineThreshold);
+              var onVertical = cy >= bY1 - pointThreshold && cy <= bY2 + pointThreshold &&
+                (Math.abs(cx - bX1) < lineThreshold || Math.abs(cx - bX2) < lineThreshold);
+              if (onHorizontal || onVertical) return i;
             }
           }
           break;
@@ -1133,7 +1274,7 @@
               var x1 = p1.x, y1 = p1.y, x2 = p2.x, y2 = p2.y;
               if (d.extendLeft) { var tL = (0 - x1) / (x2 - x1 || 1); x1 = 0; y1 = y1 + (y2 - y1) * tL; }
               if (d.extendRight) { var tR = (cw - x1) / (x2 - x1 || 1); x2 = cw; y2 = y1 + (y2 - y1) * tR; }
-              if (_distToSegment(cx, cy, x1, y1, x2, y2) < threshold) return i;
+              if (_distToSegment(cx, cy, x1, y1, x2, y2) < lineThreshold) return i;
             }
           }
           break;
@@ -1146,7 +1287,7 @@
               var cw = state.canvas ? state.canvas.width / (window.devicePixelRatio || 1) : 0;
               var rx1 = d.type === 'horizontal' ? 0 : px.x;
               var rx2 = cw;
-              if (Math.abs(cy - px.y) < threshold && cx >= rx1 - threshold && cx <= rx2 + threshold) return i;
+              if (Math.abs(cy - px.y) < lineThreshold && cx >= rx1 - pointThreshold && cx <= rx2 + pointThreshold) return i;
             }
           }
           break;
@@ -1156,7 +1297,7 @@
             var px = _toPixel(d.points[0].time, d.points[0].price);
             if (px) {
               var ch = state.canvas ? state.canvas.height / (window.devicePixelRatio || 1) : 0;
-              if (Math.abs(cx - px.x) < threshold && cy >= -threshold && cy <= ch + threshold) return i;
+              if (Math.abs(cx - px.x) < lineThreshold && cy >= -pointThreshold && cy <= ch + pointThreshold) return i;
             }
           }
           break;
@@ -1166,16 +1307,19 @@
             var p1 = _toPixel(d.points[0].time, d.points[0].price);
             var p2 = _toPixel(d.points[1].time, d.points[1].price);
             if (p1 && p2) {
-              if (_distToSegment(cx, cy, p1.x, p1.y, p2.x, p2.y) < threshold) return i;
-              var price1 = d.points[0].price, price2 = d.points[1].price, diff = price2 - price1;
-              var fibKeys = d.fibLevels || {};
-              for (var f = 0; f < FIB_LEVELS.length; f++) {
-                var l = FIB_LEVELS[f];
-                if (fibKeys[l.key] === false) continue;
-                var fPrice = price1 + diff * l.key;
+              var fibThreshold = 5;
+              if (_distToSegment(cx, cy, p1.x, p1.y, p2.x, p2.y) < fibThreshold) return i;
+              var fibLevels = _normalizeFibLevels(d.fibLevels);
+              var cw = state.canvas ? state.canvas.width / (window.devicePixelRatio || 1) : 0;
+              var minX = Math.max(0, Math.min(p1.x, p2.x) - 30);
+              var maxX = Math.min(cw, Math.max(p1.x, p2.x) + 30);
+              for (var f = 0; f < fibLevels.length; f++) {
+                var l = fibLevels[f];
+                if (l.visible === false) continue;
+                var fPrice = _fibLevelPrice(d.points, l.key);
                 var fp = _toPixel(d.points[0].time, fPrice);
                 if (!fp) continue;
-                if (Math.abs(cy - fp.y) < threshold) return i;
+                if (cx >= minX - fibThreshold && cx <= maxX + fibThreshold && Math.abs(cy - fp.y) < fibThreshold) return i;
               }
             }
           }
@@ -1290,14 +1434,14 @@
 
   function _renderPreview(tool, p1, p2) {
     var o = state.toolOptions;
-    var pd = { color: o.color, fillColor: o.fillColor, lineWidth: 1, lineStyle: 'dashed', opacity: o.opacity, text: o.text, fibLevels: o.fibLevels };
+    var pd = { color: o.color, fillColor: o.fillColor, lineWidth: 1, lineStyle: 'dashed', opacity: o.opacity, text: o.text, fibLevels: _cloneFibLevels(o.fibLevels) };
     switch (tool) {
       case 'box':          _drawBox([p1, p2], pd); break;
       case 'trendline':    _drawLine([p1, p2], pd); break;
       case 'horizontal':   _drawHorizLine(p1, pd); break;
       case 'horizontalray':_drawHorizRay(p1, pd); break;
       case 'vertical':     _drawVertLine(p1, pd); break;
-      case 'fibonacci':    _drawFibonacci({ points: [p1, p2], color: o.color, fibLevels: o.fibLevels }); break;
+      case 'fibonacci':    _drawFibonacci({ points: [p1, p2], color: o.color, fibLevels: _cloneFibLevels(o.fibLevels) }); break;
       case 'text':         _drawText(p1, pd); break;
     }
   }
@@ -1536,8 +1680,7 @@
     var p2 = _toPixel(points[1].time, points[1].price);
     if (!p1 || !p2) return;
 
-    var price1 = points[0].price, price2 = points[1].price, diff = price2 - price1;
-    var vis = d.fibLevels || {};
+    var fibLevels = _normalizeFibLevels(d.fibLevels);
 
     ctx.save();
     ctx.globalAlpha = _getAlpha(d);
@@ -1549,16 +1692,17 @@
     var minX = Math.max(0, Math.min(p1.x, p2.x) - 30);
     var maxX = Math.min(cw, Math.max(p1.x, p2.x) + 30);
 
-    for (var i = 0; i < FIB_LEVELS.length; i++) {
-      var l = FIB_LEVELS[i];
-      if (vis[l.key] === false) continue;
-      var price = price1 + diff * l.key;
+    for (var i = 0; i < fibLevels.length; i++) {
+      var l = fibLevels[i];
+      if (l.visible === false) continue;
+      var levelColor = d.color || l.color;
+      var price = _fibLevelPrice(points, l.key);
       var py = _toPixel(points[0].time, price);
       if (!py) continue;
       ctx.save();
-      ctx.strokeStyle = l.color; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = levelColor; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
       ctx.beginPath(); ctx.moveTo(minX, py.y); ctx.lineTo(maxX, py.y); ctx.stroke();
-      ctx.fillStyle = l.color; ctx.font = '9px "JetBrains Mono", monospace';
+      ctx.fillStyle = levelColor; ctx.font = '9px "JetBrains Mono", monospace';
       ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
       ctx.fillText(l.label + '% (' + price.toFixed(2) + ')', maxX - 2, py.y);
       ctx.restore();

@@ -11,7 +11,7 @@
     barSpacing:  { '1m':6,'3m':8,'5m':8,'15m':9,'30m':10,'1h':11,'2h':12,'4h':13,'6h':14,'8h':14,'12h':15,'1d':10 },
   };
 
-  var VWAP_COLORS = { 'D-NY': '#f59e0b', '24H': '#eab308', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6' };
+  var VWAP_COLORS = { '1D': '#f59e0b', '7D': '#06b6d4', '30D': '#a78bfa', '90D': '#f472b6', '365D': '#22c55e' };
   var INTERVAL_MS = {
     '1m': 60000, '3m': 180000, '5m': 300000, '15m': 900000,
     '30m': 1800000, '1h': 3600000, '2h': 7200000, '4h': 14400000,
@@ -307,7 +307,7 @@
       vwapSeriesMap: S.vwapSeriesMap,
     };
 
-    var vwapOrder = ['D-NY', '24H', '7D', '30D', '90D'];
+    var vwapOrder = ['1D', '7D', '30D', '90D', '365D'];
 
     for (var vi = 0; vi < vwapOrder.length; vi++) {
       var p = vwapOrder[vi];
@@ -791,6 +791,7 @@
         S.lastCandleTime = latest.time * 1000;
         _updateCountdownAnchor(latest, 'rest-fallback');
         S.candleSeries.update(latest);
+        _drawMidnightForWidget(latest, false);
         if (S.follow && !S.userDragging) {
           _withProgrammaticRange(function () { maybeFollowBtcWidgetPriceY(); });
         }

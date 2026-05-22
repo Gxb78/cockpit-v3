@@ -1,6 +1,6 @@
 # Inventaire des Routes Flask — Projet Journal (cockpit-v3)
 
-**Total : 49 routes uniques** (certaines partagent la même fonction via alias)
+**Total : 73 routes uniques** (certaines partagent la même fonction via alias)
 
 ---
 
@@ -145,14 +145,53 @@
 
 ---
 
+## 14. Fichier : `app_parts/25_routes_hyperliquid.py`
+
+Routes read-only via l'Info API publique Hyperliquid. Aucun endpoint de trading, aucune clé API.
+
+| # | Méthode | Path | Fonction | Paramètres | Body | Retour | Codes HTTP | Description |
+|---|---------|------|----------|------------|------|--------|------------|-------------|
+| 53 | GET | `/api/hyperliquid/catalog` | `hyperliquid_catalog()` | Query : `force`(0/1, opt.) | — | JSON : `{ok, assets, priority, infoApi, wsApi}` | 200, 502 | Catalogue tous les perps Hyperliquid connus, y compris les noms HIP-3 `deployer:ASSET`, et résout BTC/ES/NASDAQ en priorité. |
+| 54 | GET | `/api/hyperliquid/resolve` | `hyperliquid_resolve()` | Query : `market`(str, defaut BTC), `coin`(str, opt.), `force`(0/1, opt.) | — | JSON : `{ok, market, coin, candidates}` | 200, 404, 502 | Résout un alias marché vers le vrai `coin` Hyperliquid. `coin=` permet de forcer un nom complet HIP-3. |
+| 55 | GET | `/api/hyperliquid/klines` | `hyperliquid_klines()` | Query : `market`, `coin?`, `interval`, `limit`, `startTime`, `endTime`, `force` | — | JSON : `{ok, coin, interval, candles}` | 200, 400, 404, 502 | Candles Hyperliquid normalisées `{time, open, high, low, close, volume}` pour chart/backtest. |
+| 56 | GET | `/api/hyperliquid/trades` | `hyperliquid_trades()` | Query : `market`, `coin?`, `force` | — | JSON : `{ok, coin, trades}` | 200, 404, 502 | Trades récents normalisés pour tape/orderflow. |
+| 57 | GET | `/api/hyperliquid/orderbook` | `hyperliquid_orderbook()` | Query : `market`, `coin?`, `nSigFigs?`, `mantissa?`, `force` | — | JSON : `{ok, coin, bids, asks}` | 200, 400, 404, 502 | Carnet L2 normalisé pour orderflow. |
+| 58 | GET | `/api/hyperliquid/mids` | `hyperliquid_mids()` | Query : `force`(0/1, opt.) | — | JSON : `{ok, mids}` | 200, 502 | Tous les mid prices Hyperliquid. |
+| 59 | GET | `/api/hyperliquid/funding` | `hyperliquid_funding()` | Query : `market`, `coin?`, `startTime`, `endTime`, `force` | — | JSON : `{ok, coin, funding}` | 200, 404, 502 | Historique funding public pour analyse/backtest. |
+| 60 | GET | `/api/hyperliquid/open-interest-caps` | `hyperliquid_open_interest_caps()` | Query : `force`(0/1, opt.) | — | JSON : `{ok, markets}` | 200, 502 | Liste des perps à leur cap d'open interest quand l'Info API l'expose. |
+| 61 | GET | `/api/hyperliquid/dexs` | `hyperliquid_dexs()` | Query : `force`(0/1, opt.) | — | JSON : `{ok, dexs}` | 200, 502 | Liste des DEX/perp deployers HIP-3 connus par Hyperliquid. |
+| 62 | GET | `/api/hyperliquid/contexts` | `hyperliquid_contexts()` | Query : `market?`, `coin?`, `dex?`, `force` | — | JSON : `{ok, contexts}` | 200, 404, 502 | Contexts actifs normalisés: mark, mid, oracle, funding, open interest, volumes. |
+| 63 | GET | `/api/hyperliquid/annotations` | `hyperliquid_annotations()` | Query : `force`(0/1, opt.) | — | JSON : `{ok, annotations, categories}` | 200, 502 | Annotations et catégories publiques des perps. |
+| 64 | GET | `/api/hyperliquid/predicted-funding` | `hyperliquid_predicted_funding()` | Query : `market?`, `coin?`, `force` | — | JSON : `{ok, predictedFunding}` | 200, 404, 502 | Funding prédit par venue quand exposé par Hyperliquid. |
+
+---
+
+## 15. Fichier : `app_parts/26_routes_hyperliquid_wallets.py`
+
+Routes read-only pour suivre des wallets Hyperliquid publics. Aucune clé API, aucune signature, aucun trading.
+
+| # | Méthode | Path | Fonction | Paramètres | Body | Retour | Codes HTTP | Description |
+|---|---------|------|----------|------------|------|--------|------------|-------------|
+| 65 | GET | `/api/hyperliquid/wallets` | `hyperliquid_wallets_list()` | Query : `includeInactive`(0/1, opt.) | — | JSON : `{ok, wallets}` | 200 | Watchlist des wallets suivis. |
+| 66 | POST | `/api/hyperliquid/wallets` | `hyperliquid_wallets_create()` | — | `{address, label?, notes?, tags?, color?, is_active?}` | JSON : `{ok, wallet}` | 201, 400, 409 | Ajoute une adresse Hyperliquid à suivre. |
+| 67 | PUT | `/api/hyperliquid/wallets/<id>` | `hyperliquid_wallets_update()` | Path : `id` | `{label?, notes?, tags?, color?, is_active?}` | JSON : `{ok, wallet}` | 200, 400, 404 | Met à jour le profil local du wallet. |
+| 68 | DELETE | `/api/hyperliquid/wallets/<id>` | `hyperliquid_wallets_delete()` | Path : `id` | — | JSON : `{ok}` | 200, 404 | Supprime un wallet de la watchlist. |
+| 69 | GET | `/api/hyperliquid/wallets/state` | `hyperliquid_wallets_state_all()` | Query : `force`(0/1, opt.) | — | JSON : `{ok, wallets}` | 200, 502 | Snapshot state + open orders pour tous les wallets actifs. |
+| 70 | GET | `/api/hyperliquid/wallets/<id>/state` | `hyperliquid_wallet_state()` | Path : `id`, Query : `force` | — | JSON : `{ok, wallet, positions, openOrders}` | 200, 404, 502 | Positions et ordres ouverts d'un wallet suivi. |
+| 71 | GET | `/api/hyperliquid/wallet-state` | `hyperliquid_wallet_state_by_address()` | Query : `address`, `force` | — | JSON : `{ok, wallet, positions, openOrders}` | 200, 400, 502 | State read-only sans enregistrer l'adresse. |
+| 72 | GET | `/api/hyperliquid/wallets/<id>/fills` | `hyperliquid_wallet_fills()` | Path : `id`, Query : `startTime?`, `endTime?`, `limit?`, `force` | — | JSON : `{ok, wallet, fills}` | 200, 400, 404, 502 | Fills normalisés pour reconstruire les entrées, réductions et closes. |
+| 73 | GET | `/api/hyperliquid/wallets/<id>/events` | `hyperliquid_wallet_events()` | Path : `id`, Query : `startTime?`, `endTime?`, `limit?`, `force` | — | JSON : `{ok, wallet, events, positions}` | 200, 400, 404, 502 | Events dérivés: open, close/partial, position actuelle. |
+
+---
+
 ## Résumé par méthode HTTP
 
 | Méthode | Nombre | Routes |
 |---------|--------|--------|
-| GET | 26 | `/`, `/screenshots/<filename>`, `/api/debug/runtime`, `/api/settings`, `/api/config`, `/api/days`, `/api/days/lookup`, `/api/days/<int:day_id>`, `/api/days/<int:day_id>/trades`, `/api/trades/<int:trade_id>`, `/api/trades/favorites`, `/api/trades/instruments`, `/api/journal/search`, `/api/stats`, `/api/export`, `/api/db/info`, `/api/ai/chat`, `/api/ml/insights`, `/api/ml/patterns`, `/api/ml/profile`, `/api/ml/setups/similar`, `/api/ml/stats`, `/api/ml/knowledge`, `/api/user/settings`, `/api/market/klines` |
-| POST | 17 | `/api/settings/key`, `/api/days`, `/api/days/<int:day_id>/trades`, `/api/trades/batch-delete`, `/api/trades/<int:trade_id>/screenshots`, `/api/parse-trade`, `/api/data/reset`, `/api/dev/restart`, `/api/ai/chat/upload-image`, `/api/ai/chat`, `/api/ai/ping`, `/api/ml/analyze`, `/api/ml/invalidate`, `/api/ml/knowledge`, `/api/user/settings` |
-| PUT | 3 | `/api/days/<int:day_id>`, `/api/trades/<int:trade_id>`, `/api/screenshots/<int:shot_id>` |
-| DELETE | 5 | `/api/days/<int:day_id>`, `/api/trades/<int:trade_id>`, `/api/days/<int:day_id>/trades`, `/api/screenshots/<int:shot_id>`, `/api/ml/knowledge/<int:card_id>`, `/api/ml/knowledge` |
-| OPTIONS | 1 | `/api/ai/chat` |
+| GET | 46 | Voir sections ci-dessus, dont `/api/hyperliquid/*` pour les données market et wallets read-only. |
+| POST | 16 | Voir sections ci-dessus. |
+| PUT | 4 | Voir sections ci-dessus. |
+| DELETE | 7 | Voir sections ci-dessus. |
+| OPTIONS | 1 | Pre-flight implicite Flask et `/api/ai/chat` explicite. |
 
 **Note :** `@app.route("/api/ai/chat", methods=["GET", "OPTIONS"])` est un seul décorateur qui gère GET et OPTIONS, compté comme 2 verbes. `GET /api/ml/insights` et `GET /api/ml/patterns` partagent la même fonction `ml_insights()`.

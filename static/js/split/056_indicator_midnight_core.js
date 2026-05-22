@@ -6,8 +6,6 @@
   var _pending = {};
 
   var MIDNIGHT_COLOR = '#00f5ff';
-  var POSITIVE_COLOR = '#ff73b9';
-  var NEGATIVE_COLOR = '#00e676';
 
   function _toMs(ts) {
     var n = Number(ts);
@@ -38,14 +36,16 @@
     return (symbol || 'BTCUSDT').toUpperCase() + ':' + dateNy;
   }
 
-  function _fetchDay(symbol, dateNy) {
+  function _fetchDay(symbol, dateNy, force) {
     var sym = (symbol || 'BTCUSDT').toUpperCase();
     var key = _cacheKey(sym, dateNy);
 
-    if (_cache[key]) return Promise.resolve(_cache[key]);
+    if (force) delete _cache[key];
+    if (!force && _cache[key]) return Promise.resolve(_cache[key]);
     if (_pending[key]) return _pending[key];
 
     var url = '/api/models/midnight/day?symbol=' + encodeURIComponent(sym) + '&date=' + encodeURIComponent(dateNy);
+    if (force) url += '&_=' + Date.now();
     var req = fetch(url)
       .then(function (r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -65,6 +65,40 @@
 
     _pending[key] = req;
     return req;
+  }
+
+  function _getNyMinuteOfDay(timestampMs) {
+    var ms = _toMs(timestampMs);
+    try {
+      var parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).formatToParts(new Date(ms));
+      var out = { hour: '0', minute: '0' };
+      for (var i = 0; i < parts.length; i++) {
+        if (parts[i].type === 'hour' || parts[i].type === 'minute') out[parts[i].type] = parts[i].value;
+      }
+      var hour = parseInt(out.hour, 10);
+      var minute = parseInt(out.minute, 10);
+      if (!Number.isFinite(hour) || !Number.isFinite(minute)) return NaN;
+      if (hour === 24) hour = 0;
+      return hour * 60 + minute;
+    } catch(e) {
+      return NaN;
+    }
+  }
+
+  function _shouldRefreshMutableMidnight(series, sym, dateNy, timestampMs) {
+    var nowMs = _resolveNowMs(timestampMs);
+    if (getNyDateString(nowMs) !== dateNy) return false;
+    var nyMinute = _getNyMinuteOfDay(nowMs);
+    if (!Number.isFinite(nyMinute) || nyMinute > 125) return false;
+    if (series._midnightDrawnDate !== dateNy || series._midnightDrawnSymbol !== sym) return true;
+    var now = Date.now();
+    var last = Number(series._midnightLiveRefreshAt || 0);
+    return !Number.isFinite(last) || now - last > 60000;
   }
 
   function _clearLines(series) {
@@ -132,65 +166,24 @@
     } catch(e) {}
   }
 
-  function _parseStdvEntries(stdvLevels) {
-    var out = [];
-    if (!stdvLevels || typeof stdvLevels !== 'object') return out;
-
-    Object.keys(stdvLevels).forEach(function (key) {
-      var value = Number(stdvLevels[key]);
-      if (!Number.isFinite(value)) return;
-
-      var mult = Number(key);
-      var sign = key[0] === '-' ? '-' : '+';
-      if (!Number.isFinite(mult)) {
-        var absMatch = String(key).match(/(\d+(?:\.\d+)?)/);
-        if (absMatch) {
-          mult = Number(absMatch[1]);
-          if (sign === '-') mult = -mult;
-        }
-      }
-      if (!Number.isFinite(mult)) return;
-
-      out.push({
-        key: key,
-        multiplier: mult,
-        value: value,
-        label: (mult > 0 ? '+' : '-') + Math.abs(mult).toFixed(1) + ' SD',
-      });
-    });
-
-    out.sort(function (a, b) {
-      var aPos = a.multiplier > 0 ? 0 : 1;
-      var bPos = b.multiplier > 0 ? 0 : 1;
-      if (aPos !== bPos) return aPos - bPos;
-      return Math.abs(a.multiplier) - Math.abs(b.multiplier);
-    });
-    return out;
-  }
-
-  function _addLine(series, lines, opts) {
-    try {
-      var line = series.createPriceLine(opts);
-      if (line) lines.push(line);
-    } catch(e) {}
-  }
-
   async function drawMidnightLines(series, symbol, timestampMs, force, chartApi) {
     if (!series || typeof series.createPriceLine !== 'function' || typeof series.removePriceLine !== 'function') return;
     if (chartApi) series._midnightChart = chartApi;
 
     var sym = (symbol || 'BTCUSDT').toUpperCase();
     var dateNy = getNyDateString(timestampMs);
+    var liveRefresh = !force && _shouldRefreshMutableMidnight(series, sym, dateNy, timestampMs);
 
-    if (!force && series._midnightDrawnDate === dateNy && series._midnightDrawnSymbol === sym) {
+    if (!force && !liveRefresh && series._midnightDrawnDate === dateNy && series._midnightDrawnSymbol === sym) {
       _refreshOpenSegment(series, timestampMs);
       return;
     }
 
     series._midnightDrawSeq = (series._midnightDrawSeq || 0) + 1;
     var drawSeq = series._midnightDrawSeq;
+    if (liveRefresh) series._midnightLiveRefreshAt = Date.now();
 
-    var payload = await _fetchDay(sym, dateNy);
+    var payload = await _fetchDay(sym, dateNy, !!force || liveRefresh);
     if (drawSeq !== series._midnightDrawSeq) return;
 
     _clearLines(series);
@@ -229,22 +222,7 @@
       }
     }
 
-    var created = [];
-
-    var entries = _parseStdvEntries(levels.stdv_levels);
-    for (var i = 0; i < entries.length; i++) {
-      var item = entries[i];
-      _addLine(series, created, {
-        price: item.value,
-        color: item.multiplier > 0 ? POSITIVE_COLOR : NEGATIVE_COLOR,
-        lineWidth: 1,
-        lineStyle: 1,
-        axisLabelVisible: true,
-        title: item.label,
-      });
-    }
-
-    series._midnightPriceLines = created;
+    series._midnightPriceLines = [];
     series._midnightDrawnDate = dateNy;
     series._midnightDrawnSymbol = sym;
   }

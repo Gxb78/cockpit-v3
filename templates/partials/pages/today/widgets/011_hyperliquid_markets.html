@@ -1,0 +1,27 @@
+<section class="panel widget widget-panel hl-market-widget" data-widget-key="hyperliquid_markets" data-widget-kind="panel" data-size="xl">
+  <div class="panel-h hl-market-head">
+    <div>
+      <h3>Hyperliquid Markets</h3>
+      <span class="hl-market-sub" id="hlMarketStatus">read-only</span>
+    </div>
+    <div class="hl-market-actions">
+      <button type="button" class="hl-market-tab active" data-hl-market="BTC">BTC</button>
+      <button type="button" class="hl-market-tab" data-hl-market="ES">ES</button>
+      <button type="button" class="hl-market-tab" data-hl-market="NASDAQ">NASDAQ</button>
+      <button type="button" class="btn-icon hl-market-refresh" id="hlMarketRefreshBtn" title="Refresh">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-15.5 6.3"/><path d="M3 12A9 9 0 0 1 18.5 5.7"/><path d="M18 2v4h-4"/><path d="M6 22v-4h4"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="hl-market-summary" id="hlMarketSummary">
+    <div><span id="hlMarketCoin">--</span><small>coin</small></div>
+    <div><span id="hlMarketMark">--</span><small>mark</small></div>
+    <div><span id="hlMarketFunding">--</span><small>funding</small></div>
+  </div>
+
+  <div class="hl-market-body">
+    <div class="hl-market-main" id="hlMarketMain"></div>
+    <div class="hl-market-side" id="hlMarketSide"></div>
+  </div>
+</section>
