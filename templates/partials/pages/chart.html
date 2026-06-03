@@ -5,8 +5,14 @@
     <div class="chart-topbar">
       <div class="chart-topbar-left">
         <div class="chart-pair-selector" id="chartPair">
-          <button class="chart-pair-btn active" data-symbol="BTCUSDT">BTC/USDT</button>
-          <button class="chart-pair-btn" data-symbol="ETHUSDT">ETH/USDT</button>
+          <button class="chart-pair-btn active" data-symbol="BTCUSDT">BTC-PERP</button>
+          <button class="chart-pair-btn" data-symbol="ETHUSDT">ETH-PERP</button>
+        </div>
+        <span class="workspace-venue">HYPERLIQUID</span>
+        <div class="workspace-modes" id="workspaceModes" aria-label="Workspace mode">
+          <button type="button" class="workspace-mode active" data-workspace-mode="profile">Profile</button>
+          <button type="button" class="workspace-mode" data-workspace-mode="footprint">Footprint</button>
+          <button type="button" class="workspace-mode" data-workspace-mode="heatmap">Heatmap</button>
         </div>
       </div>
       <div class="chart-topbar-right">
@@ -20,36 +26,42 @@
             <button type="button" class="chart-ind-opt" data-vwap="365D">365 jours</button>
           </div>
           <!-- Volume Profile toggle + dropdown -->
-          <button type="button" class="chart-ind-toggle" id="vpToggle">VP <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="2 3 4 5 6 3"/></svg></button>
+          <button type="button" class="chart-ind-toggle active" id="vpToggle">Layers <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="2 3 4 5 6 3"/></svg></button>
           <div class="chart-ind-dropdown hidden" id="vpDropdown">
-            <label class="chart-ind-opt" class="vp-check-label">
-              <input type="checkbox" id="vpActive">
-              <span>Activer VP</span>
+            <label class="chart-ind-opt vp-check-label">
+              <input type="checkbox" id="vpActive" checked>
+              <span>Volume Profile integre</span>
             </label>
-            <div class="chart-ind-opt" class="vp-col">
+            <div class="chart-ind-opt vp-col">
+              <div class="vp-label">Metric</div>
+              <div class="vp-row">
+                <select class="vp-select" id="vpMetric">
+                  <option value="notional">USD Notional</option>
+                  <option value="base">Base Volume</option>
+                </select>
+              </div>
               <div class="vp-label">Bucket</div>
               <div class="vp-row">
-                <select class="chart-ind-opt" id="vpBucketSize" class="vp-select">
+                <select class="vp-select" id="vpBucketSize">
+                  <option value="auto">Auto Row</option>
+                  <option value="1">$1</option>
                   <option value="5">$5</option>
                   <option value="10">$10</option>
-                  <option value="20">$20</option>
-                  <option value="50">$50</option>
+                  <option value="25">$25</option>
                 </select>
               </div>
               <div class="vp-label">Période</div>
               <div class="vp-row">
-                <select class="chart-ind-opt" id="vpPeriod" class="vp-select">
-                  <option value="visible">Visible</option>
-                  <option value="5d">5 jours</option>
-                  <option value="7d">7 jours</option>
-                  <option value="30d">30 jours</option>
-                  <option value="90d">90 jours</option>
-                  <option value="366d">1 an</option>
+                <select class="vp-select" id="vpPeriod">
+                  <option value="session">Session UTC</option>
+                  <option value="visible">Visible Range</option>
+                  <option value="fixed">Fixed Range</option>
+                  <option value="composite">Composite</option>
                 </select>
               </div>
               <div class="vp-label">Value Area</div>
               <div class="vp-row">
-                <select class="chart-ind-opt" id="vpVaPercent" class="vp-select">
+                <select class="vp-select" id="vpVaPercent">
                   <option value="68">68%</option>
                   <option value="70">70%</option>
                   <option value="80">80%</option>
@@ -64,9 +76,40 @@
               <div class="vp-label">Couleurs</div>
               <div class="vp-row--wide">
                 <label class="vp-check-label--tight">POC <input type="color" class="chart-settings-color" id="vpColorPOC" value="#f59e0b" class="vp-color-input"></label>
-                <label class="vp-check-label--tight">VAH <input type="color" class="chart-settings-color" id="vpColorVAH" value="#22c55e" class="vp-color-input"></label>
-                <label class="vp-check-label--tight">VAL <input type="color" class="chart-settings-color" id="vpColorVAL" value="#ef4444" class="vp-color-input"></label>
+                <label class="vp-check-label--tight">VAH <input type="color" class="chart-settings-color" id="vpColorVAH" value="#38d3ee"></label>
+                <label class="vp-check-label--tight">VAL <input type="color" class="chart-settings-color" id="vpColorVAL" value="#fb7185"></label>
                 <label class="vp-check-label--tight">HVN <input type="color" class="chart-settings-color" id="vpColorHvn" value="#06b6d4" class="vp-color-input"></label>
+              </div>
+              <div class="vp-label">Noeuds LuxAlgo</div>
+              <div class="vp-row--wide" style="margin-bottom: 6px;">
+                <label class="vp-check-label"><input type="checkbox" id="vpShowNodes" checked> Activer HVN/LVN</label>
+              </div>
+              <div class="vp-label">Peak Lookback N</div>
+              <div class="vp-row" style="margin-bottom: 6px;">
+                <select class="vp-select" id="vpPeakN">
+                  <option value="5">5% (Serré)</option>
+                  <option value="9" selected>9% (Standard)</option>
+                  <option value="15">15% (Large)</option>
+                  <option value="20">20% (Macro)</option>
+                </select>
+              </div>
+              <div class="vp-label">Trough Lookback N</div>
+              <div class="vp-row" style="margin-bottom: 6px;">
+                <select class="vp-select" id="vpTroughN">
+                  <option value="5">5% (Serré)</option>
+                  <option value="7" selected>7% (Standard)</option>
+                  <option value="10">10% (Large)</option>
+                  <option value="15">15% (Macro)</option>
+                </select>
+              </div>
+              <div class="vp-label">Volume Seuil %</div>
+              <div class="vp-row">
+                <select class="vp-select" id="vpThreshold">
+                  <option value="5">5% (Très sensible)</option>
+                  <option value="10" selected>10% (Sensible)</option>
+                  <option value="20">20% (Moyen)</option>
+                  <option value="30">30% (Filtre fort)</option>
+                </select>
               </div>
             </div>
           </div>
@@ -331,6 +374,7 @@
       <span><strong>L</strong> <span id="chartLow">—</span></span>
       <span><strong>C</strong> <span id="chartClose">—</span></span>
       <span><strong>Vol</strong> <span id="chartVol">—</span></span>
+      <span id="chartDataStatus" class="workspace-data-status partial">Hyperliquid trades: coverage pending</span>
     </div>
   </div>
 </section>

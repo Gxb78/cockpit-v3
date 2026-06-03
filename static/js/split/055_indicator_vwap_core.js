@@ -172,7 +172,7 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
       .sort(function (a, b) { return a.time - b.time; });
   }
 
-  // â”€â”€ CALCUL VWAP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── CALCUL VWAP ──
   // Cumul strict : typicalPrice * volume, running average
   function computeVwapSeries(candles) {
     var cumPV = 0, cumVol = 0, out = [];
@@ -188,7 +188,57 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
     return out;
   }
 
-  // â”€â”€ FETCH KLINES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Calcule VWAP + bandes d'écart-type 1σ, 2σ, 3σ (haut et bas)
+  // Retourne { vwap: [...], u1, u2, u3, l1, l2, l3: [...] }
+  function computeVwapBands(candles) {
+    var cumPV = 0, cumVol = 0, cumSq = 0;
+    var out = { vwap: [], u1: [], u2: [], u3: [], l1: [], l2: [], l3: [] };
+    for (var i = 0; i < candles.length; i++) {
+      var c = candles[i];
+      var vol = Number(c.volume);
+      if (!Number.isFinite(vol) || vol <= 0) continue;
+      var tp = (c.high + c.low + c.close) / 3;
+      cumPV += tp * vol;
+      cumVol += vol;
+      var v = cumPV / cumVol;
+      var d = tp - v;
+      cumSq += vol * d * d;
+      var sig = Math.sqrt(cumSq / cumVol);
+      var t = c.time;
+      out.vwap.push({ time: t, value: v });
+      out.u1.push({ time: t, value: v + sig });
+      out.u2.push({ time: t, value: v + 2 * sig });
+      out.u3.push({ time: t, value: v + 3 * sig });
+      out.l1.push({ time: t, value: v - sig });
+      out.l2.push({ time: t, value: v - 2 * sig });
+      out.l3.push({ time: t, value: v - 3 * sig });
+    }
+    return out;
+  }
+
+  // Convertit #hex → rgba(r,g,b,alpha)
+  function _hexToRgba(hex, alpha) {
+    hex = hex.replace(/^#/, '');
+    if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+    var r = parseInt(hex.slice(0, 2), 16);
+    var g = parseInt(hex.slice(2, 4), 16);
+    var b = parseInt(hex.slice(4, 6), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+  }
+
+  var BAND_KEYS = ['u1', 'u2', 'u3', 'l1', 'l2', 'l3'];
+  // Opacité décroissante : +1/-1σ=75%, +2/-2σ=60%, +3/-3σ=45%
+  var BAND_OPACITIES = { u1: 0.75, l1: 0.75, u2: 0.60, l2: 0.60, u3: 0.45, l3: 0.45 };
+
+  // Durée d'une période en ms (pour le décalage du -1)
+  function _getPeriodDurationMs(period) {
+    var config = VWAP_SOURCE_CONFIG[period];
+    if (!config) return 86400000;
+    if (config.mode === 'rolling') return config.durationMs;
+    return 24 * 60 * 60 * 1000; // session = 1 jour
+  }
+
+  // ── FETCH KLINES ──
   function _fetchKlines(symbol, interval, startTime, endTime, limit) {
     var params = 'symbol=' + symbol + '&interval=' + interval + '&limit=' + limit + '&soft=1';
     if (startTime) params += '&startTime=' + startTime;
@@ -201,11 +251,13 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
       .then(function (data) { return data.candles || []; });
   }
 
-  async function _fetchAndComputeCanonicalVwap(symbol, period) {
+  async function _fetchAndComputeCanonicalVwap(symbol, period, shiftMs) {
     var config = VWAP_SOURCE_CONFIG[period];
     if (!config) throw new Error('Unknown VWAP period: ' + period);
 
-    var bounds = _getSessionBounds(config);
+    var nowMs = Date.now();
+    if (shiftMs) nowMs -= shiftMs;
+    var bounds = _getSessionBounds(config, nowMs);
     var startTime = bounds.startTime;
     var endTime = bounds.endTime;
 
@@ -231,25 +283,25 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
         return ms >= startTime && ms <= endTime && Number.isFinite(c.volume) && c.volume > 0;
       });
 
-    return computeVwapSeries(candles);
+    return computeVwapBands(candles);
   }
 
   // â”€â”€ CACHE GLOBAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   var _cache = {};
   var _pending = {};
 
-  function _cacheKey(symbol, period) { return symbol + ':' + period; }
+  function _cacheKey(symbol, period, previous) { return symbol + ':' + period + (previous ? ':prev' : ''); }
 
-  async function getCanonicalVwap(symbol, period) {
+  async function getCanonicalVwap(symbol, period, previous) {
     var config = VWAP_SOURCE_CONFIG[period];
     if (!config) throw new Error('Unknown VWAP period: ' + period);
 
-    var key = _cacheKey(symbol, period);
+    var key = _cacheKey(symbol, period, !!previous);
     var cached = _cache[key];
     var now = Date.now();
 
-    // Cache valide ?
-    if (cached && now - cached.createdAt < config.refreshMs) {
+    // Cache valide ? (v=2 = format bands, vwap+bands)
+    if (cached && cached.v === 2 && now - cached.createdAt < config.refreshMs) {
       return cached.data;
     }
 
@@ -258,9 +310,10 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
       return _pending[key];
     }
 
-    var promise = _fetchAndComputeCanonicalVwap(symbol, period)
+    var shiftMs = previous ? _getPeriodDurationMs(period) : 0;
+    var promise = _fetchAndComputeCanonicalVwap(symbol, period, shiftMs)
       .then(function (data) {
-        _cache[key] = { createdAt: Date.now(), data: data };
+        _cache[key] = { v: 2, createdAt: Date.now(), data: data };
         return data;
       })
       .catch(function (e) {
@@ -302,32 +355,70 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
     return out;
   }
 
-  // â”€â”€ DRAW HIGH-LEVEL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // Helper pour 060 et 062 â€” fetch le VWAP canonique, aligne, setData
-  async function drawVwapForChart(state, period, shouldAbort) {
+  // ── DRAW HIGH-LEVEL ──
+  // Helper pour 060 et 062 — fetch le VWAP canonique, aligne, setData
+  // previous=true → période décalée (-1), série dans vwapSeriesMap[period + '-1']
+  async function drawVwapForChart(state, period, previous, shouldAbort) {
     // state doit avoir: symbol, candles, vwapSeriesMap
-    var canonicalVwap = await getCanonicalVwap(state.symbol || 'BTCUSDT', period);
+    // previous peut être un booléen ; si function, c'est l'ancien shouldAbort
+    if (typeof previous === 'function') { shouldAbort = previous; previous = false; }
+    var isPrev = !!previous;
+
+    var result = await getCanonicalVwap(state.symbol || 'BTCUSDT', period, isPrev);
     if (shouldAbort && shouldAbort()) return;
     if (!state.candles || !state.candles.length) return;
 
-    var aligned = alignIndicatorToCandles(canonicalVwap, state.candles);
+    // Extraire les données VWAP (support ancien format tableau)
+    var vwapData = result;
+    var bands = null;
+    if (result && result.vwap) { vwapData = result.vwap; bands = result.bands || result; }
+
+    var aligned = alignIndicatorToCandles(vwapData, state.candles);
     if (shouldAbort && shouldAbort()) return;
     if (aligned.length < 2) return;
 
-    var s = state.vwapSeriesMap[period];
+    var seriesKey = period + (isPrev ? '-1' : '');
+    var s = state.vwapSeriesMap[seriesKey];
     if (!s) return;
     if (shouldAbort && shouldAbort()) return;
 
     s.applyOptions({
       visible: true,
       color: VWAP_COLORS[period] || '#f59e0b',
-      title: 'VWAP ' + period,
-      lastValueVisible: true,
+      lineStyle: isPrev ? 2 : 0,  // 2 = Dashed
+      lineWidth: isPrev ? 1 : 1.5,
+      title: 'VWAP ' + period + (isPrev ? '-1' : ''),
+      lastValueVisible: !isPrev,
       autoscaleInfoProvider: function () { return null; },
     });
     aligned = sanitizeLineData(aligned);
     if (aligned.length < 2) return;
     s.setData(aligned);
+
+    // Bandes d'écart-type (uniquement pour la VWAP actuelle, pas la -1)
+    if (!isPrev && bands) {
+      for (var bi = 0; bi < BAND_KEYS.length; bi++) {
+        var bk = BAND_KEYS[bi];
+        if (shouldAbort && shouldAbort()) return;
+        var bandData = bands[bk];
+        if (!bandData || !bandData.length) continue;
+        var alignedBand = alignIndicatorToCandles(bandData, state.candles);
+        if (alignedBand.length < 2) continue;
+        var bandSeries = state.vwapSeriesMap[period + '_' + bk];
+        if (!bandSeries) continue;
+        var alpha = BAND_OPACITIES[bk];
+        bandSeries.applyOptions({
+          visible: true,
+          color: _hexToRgba(VWAP_COLORS[period] || '#f59e0b', alpha),
+          lineWidth: 1,
+          lineStyle: 0,
+          title: period + ' ' + bk,
+          lastValueVisible: false,
+          autoscaleInfoProvider: function () { return null; },
+        });
+        bandSeries.setData(sanitizeLineData(alignedBand));
+      }
+    }
   }
 
   // â”€â”€ EVENT BUS VWAP â€” normalisation + synchro cross-component â”€â”€

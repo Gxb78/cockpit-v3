@@ -5,7 +5,9 @@
   display: flex;
   padding: 0 !important;
   overflow: hidden !important;
-/* VP dropdown layout — migrated from inline styles */
+}
+
+/* VP dropdown layout - migrated from inline styles */
 .vp-row     { display:flex; gap:4px; padding:2px 10px; }
 .vp-row--wide { display:flex; gap:8px; flex-wrap:wrap; padding:2px 10px; }
 .vp-label   { display:flex; justify-content:space-between; padding:2px 10px; font-size:10px; color:var(--text-faint); }
@@ -24,9 +26,7 @@
 .draw-opt-row--hidden { display:none; }
 .draw-opt-section--hidden { display:none; }
 
-/* Insights section separator — already has class, move inline styles to CSS */
 .insights-section-sep { grid-column:1/-1; border:0; border-top:1px solid var(--border-soft); margin:12px 0; }
-}
 
 .chart-layout {
   display: flex;
@@ -37,7 +37,21 @@
   position: relative;
 }
 
-/* ── Top bar ── */
+/* The analytics workspace stays immersive even when the journal uses light mode. */
+.page[data-page="chart"] {
+  --text: #e5edf3;
+  --text-muted: #9bb0be;
+  --text-soft: #7f94a3;
+  --text-faint: #607585;
+  --border: rgba(118, 144, 160, 0.16);
+  --border-strong: rgba(118, 144, 160, 0.25);
+  --surface-solid: #0b1218;
+  --surface-2: #101922;
+  --cyan: #22d3ee;
+  background: #070c11;
+  color: #e5edf3;
+}
+
 .chart-topbar {
   display: flex;
   align-items: center;
@@ -46,6 +60,7 @@
   flex-shrink: 0;
   border-bottom: 1px solid var(--border);
   gap: 16px;
+  background: #091017;
 }
 
 .chart-topbar-left {
@@ -108,7 +123,6 @@
   gap: 12px;
 }
 
-/* ── Indicators dropdown ── */
 .chart-indicators {
   position: relative;
   display: flex;
@@ -182,7 +196,6 @@
   background: rgba(245, 158, 11, 0.08);
 }
 
-/* ── Settings Button ── */
 .chart-settings-group {
   position: relative;
   display: flex;
@@ -208,7 +221,6 @@
   background: rgba(255,255,255,0.03);
 }
 
-/* ── Settings Panel ── */
 .chart-settings-panel {
   position: absolute;
   top: 48px;
@@ -307,7 +319,6 @@
   margin-bottom: 8px;
 }
 
-/* ── Settings Row ── */
 .chart-settings-row {
   display: flex;
   align-items: center;
@@ -332,7 +343,6 @@
   flex-shrink: 0;
 }
 
-/* ── Indicator Badge ── */
 .chart-ind-badge {
   display: inline-flex;
   align-items: center;
@@ -366,7 +376,6 @@
   color: #f472b6;
 }
 
-/* ── Session Zone Controls ── */
 .chart-session-dot {
   display: inline-block;
   width: 8px;
@@ -380,7 +389,6 @@
   opacity: 0.7;
 }
 
-/* ── Color picker ── */
 .chart-settings-color {
   width: 24px;
   height: 24px;
@@ -407,7 +415,6 @@
   border-radius: 3px;
 }
 
-/* ── Section note ── */
 .chart-settings-section-note {
   font-size: 10px;
   color: var(--text-faint);
@@ -417,7 +424,6 @@
   opacity: 0.7;
 }
 
-/* ── Number Input ── */
 .chart-settings-input {
   width: 52px;
   padding: 4px 6px;
@@ -445,7 +451,6 @@
   box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.12);
 }
 
-/* ── Toggle Switch ── */
 .chart-toggle {
   display: inline-flex;
   cursor: pointer;
@@ -493,7 +498,6 @@
   box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2);
 }
 
-/* ── Select ── */
 .chart-settings-select {
   padding: 4px 28px 4px 10px;
   border-radius: 5px;
@@ -518,7 +522,6 @@
   box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.12);
 }
 
-/* ── Footer buttons ── */
 .chart-settings-footer {
   display: flex;
   align-items: center;
@@ -567,13 +570,11 @@
   transform: translateY(0);
 }
 
-/* ── Settings Panel Position Override ── */
 /* Position the panel at the topbar-right level */
 .chart-topbar-right {
   position: relative;
 }
 
-/* ── Timeframes ── */
 .chart-timeframes {
   display: flex;
   gap: 2px;
@@ -602,7 +603,6 @@
   background: rgba(56, 211, 238, 0.06);
 }
 
-/* ── Main chart ── */
 .chart-main {
   flex: 1;
   min-height: 0;
@@ -620,7 +620,6 @@
   height: 100%;
 }
 
-/* ── Bottom bar ── */
 .chart-bottombar {
   display: flex;
   align-items: center;
@@ -631,6 +630,7 @@
   font-family: "JetBrains Mono", monospace;
   font-size: 11px;
   color: var(--text-faint);
+  background: #091017;
 }
 
 .chart-bottombar strong {
@@ -643,7 +643,6 @@
   color: var(--text-soft);
 }
 
-/* ── Light mode ── */
 body.light-mode .chart-pair-btn.active {
   color: #0ea5e9;
   border-color: rgba(14, 165, 233, 0.25);
@@ -678,6 +677,123 @@ body.light-mode .chart-settings-input,
 body.light-mode .chart-settings-select {
   background: rgba(0,0,0,0.02);
   border-color: #d1d5db;
+}
+
+/* Hyperliquid analytics workspace */
+.workspace-venue {
+  padding: 4px 8px;
+  border: 1px solid rgba(56, 211, 238, 0.20);
+  border-radius: 999px;
+  color: rgba(56, 211, 238, 0.72);
+  font: 700 9px/1 "JetBrains Mono", monospace;
+  letter-spacing: 0.12em;
+}
+
+.workspace-modes {
+  display: flex;
+  padding: 3px;
+  border: 1px solid rgba(94, 116, 134, 0.24);
+  border-radius: 9px;
+  background: rgba(4, 10, 15, 0.48);
+}
+
+.workspace-mode {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  font: 700 10px/1 "JetBrains Mono", monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.workspace-mode.active {
+  color: #9aebf7;
+  background: rgba(20, 157, 183, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(56, 211, 238, 0.28);
+}
+
+.chart-canvas-wrap {
+  background:
+    radial-gradient(circle at 74% 26%, rgba(21, 78, 92, 0.16), transparent 42%),
+    #070c11;
+}
+
+.vp-overlay,
+.hl-workspace-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.vp-overlay { z-index: 9; }
+.hl-workspace-overlay { z-index: 12; }
+
+.page[data-page="chart"] .draw-toolbar {
+  background: rgba(9, 16, 23, 0.94);
+  border-color: rgba(108, 132, 148, 0.22);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.34);
+}
+
+.page[data-page="chart"] .draw-toolbar-btn {
+  color: #6f8393;
+}
+
+.page[data-page="chart"] .draw-toolbar-btn:hover,
+.page[data-page="chart"] .draw-toolbar-btn[data-tool="cursor"].is-active {
+  color: #dbe7ed;
+  background: rgba(56, 211, 238, 0.08);
+}
+
+.page[data-page="chart"] .draw-toolbar-btn.is-active {
+  color: #22d3ee;
+  background: rgba(34, 211, 238, 0.12);
+}
+
+body.light-mode .page[data-page="chart"] .chart-pair-btn.active,
+body.light-mode .page[data-page="chart"] .chart-tf-btn.active {
+  color: #22d3ee;
+  border-color: rgba(34, 211, 238, 0.30);
+  background: rgba(34, 211, 238, 0.08);
+}
+
+body.light-mode .page[data-page="chart"] .draw-toolbar {
+  background: rgba(9, 16, 23, 0.94);
+}
+
+.workspace-data-status {
+  margin-left: auto;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 211, 238, 0.20);
+  color: rgba(132, 226, 244, 0.92) !important;
+  font-size: 10px;
+}
+
+.workspace-data-status.partial {
+  border-color: rgba(245, 158, 11, 0.30);
+  color: #f6c366 !important;
+}
+
+.workspace-data-status.gap {
+  border-color: rgba(251, 113, 133, 0.34);
+  color: #fb7185 !important;
+}
+
+.chart-ind-dropdown#vpDropdown {
+  min-width: 228px;
+  padding: 8px;
+  background: rgba(8, 14, 20, 0.98);
+  border-color: rgba(84, 109, 128, 0.34);
+}
+
+@media (max-width: 980px) {
+  .workspace-venue { display: none; }
+  .workspace-mode { padding: 6px 8px; }
+  .chart-topbar { padding: 8px; gap: 6px; flex-wrap: wrap; }
+  .chart-bottombar { gap: 10px; padding: 6px 8px; }
 }
 
 body.light-mode .chart-settings-color {
@@ -720,7 +836,6 @@ body.light-mode .chart-ind-badge.rsi {
   background: rgba(244, 114, 182, 0.12);
 }
 
-/* ── Responsive ── */
 @media (max-width: 760px) {
   .chart-topbar {
     flex-wrap: wrap;
@@ -740,7 +855,6 @@ body.light-mode .chart-ind-badge.rsi {
   }
 }
 
-/* ── Volume Profile ── */
 .chart-toggle-sm .chart-toggle-track { width: 28px; height: 16px; }
 .chart-toggle-sm .chart-toggle-thumb { width: 12px; height: 12px; }
 .chart-toggle-sm input:checked + .chart-toggle-track .chart-toggle-thumb { transform: translateX(12px); }
@@ -748,7 +862,6 @@ body.light-mode .chart-ind-badge.rsi {
 .chart-toggle-label { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); cursor: pointer; }
 .chart-toggle-label input[type="checkbox"] { margin: 0; accent-color: var(--accent); }
 
-/* VP overlay — sits beneath drawings canvas */
 .vp-overlay { z-index: 9; }
 }
 

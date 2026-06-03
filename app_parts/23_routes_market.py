@@ -654,3 +654,21 @@ def market_aggtrades():
     _purge_cache()
 
     return jsonify(response_data)
+
+
+# === Depth of Market REST (full book, up to 1000 levels) ===
+
+@app.get("/api/market/depth")
+def market_depth():
+    symbol = request.args.get("symbol", "BTCUSDT").strip().upper()
+    limit = min(int(request.args.get("limit", 100)), 5000)
+    try:
+        req = urllib.request.Request(
+            f"{BINANCE_API}/api/v3/depth?symbol={symbol}&limit={limit}",
+            headers={"Accept": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = _json.loads(resp.read().decode())
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502

@@ -10,6 +10,7 @@ data/journal.db
 data/screenshots/
 data/_pending/
 data/backups/
+data/market/
 
 # OS
 .DS_Store
@@ -43,3 +44,19 @@ _test_start.bat
 nul
 *.backup
 *.backup_clean
+
+# Compiled binaries (built, never committed)
+*.exe
+
+# Go engine / Wails desktop build output
+/dist/
+/build/
+/App
+apps/desktop/bin/
+apps/desktop/dist/
+apps/desktop/build/bin/
+
+# Logs & debug captures
+*.log
+/orderflow_audit.png
+/v6_orderflow_current.png

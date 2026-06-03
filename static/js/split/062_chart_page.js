@@ -165,7 +165,8 @@
         var focusBars = (window.ChartViewCore.CHART_VIEW.visibleBars || {})[tf] || 120;
         var nb = Math.min(focusBars, candles.length);
         var lastIdx = candles.length - 1;
-        var rightPad = Math.max(6, Math.min(18, Math.round(nb * 0.08)));
+        var vpState = window.VolumeProfile && window.VolumeProfile.getSettings ? window.VolumeProfile.getSettings() : { active: true };
+        var rightPad = vpState.active ? Math.max(42, Math.round(nb * 0.30)) : Math.max(6, Math.min(18, Math.round(nb * 0.08)));
         chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, lastIdx - nb + 1), to: lastIdx + rightPad });
       }
 
@@ -214,6 +215,9 @@
 
   var PAIR_NAMES = { 'BTCUSDT': 'BTC/USDT', 'ETHUSDT': 'ETH/USDT' };
   function getPairName(s) { return PAIR_NAMES[s] || s; }
+  function _hyperliquidCoin() {
+    return String(currentSymbol || 'BTCUSDT').replace(/USDT$/i, '').toUpperCase();
+  }
 
   // ── INDICATOR CALCULATIONS ──
 
@@ -576,7 +580,8 @@
     var wrap = document.getElementById('chartCanvasWrap');
     if (!wrap) return;
 
-    var isLight = document.body.classList.contains('light-mode');
+    // The analytics workspace is deliberately dark regardless of journal theme.
+    var isLight = false;
     var w = container.clientWidth || wrap.clientWidth || 900;
     var h = container.clientHeight || wrap.clientHeight || 500;
 
@@ -619,12 +624,12 @@
 
       // Candlestick series
       var seriesOpts = {
-        upColor: '#22c55e',
-        downColor: '#ef4444',
-        borderDownColor: '#ef4444',
-        borderUpColor: '#22c55e',
-        wickDownColor: '#ef4444',
-        wickUpColor: '#22c55e',
+        upColor: '#22d3ee',
+        downColor: '#fb7185',
+        borderDownColor: '#fb7185',
+        borderUpColor: '#22d3ee',
+        wickDownColor: '#fb7185',
+        wickUpColor: '#22d3ee',
         lastValueVisible: false,
         priceLineVisible: false,
         autoscaleInfoProvider: window.ChartViewCore
@@ -672,7 +677,7 @@
         scaleMargins: { top: 0.85, bottom: 0 },
       });
 
-      // Pré-créer les 4 séries VWAP — visibles dès le départ avec données vides
+      // Pré-créer les séries VWAP — visibles dès le départ avec données vides
       Object.keys(VWAP_COLORS).forEach(function (p) {
         vwapSeriesMap[p] = _addLineSeries(chart, {
           color: VWAP_COLORS[p], lineWidth: 1.5,
@@ -682,7 +687,30 @@
           visible: true,
           autoscaleInfoProvider: function () { return null; },
         });
-        vwapSeriesMap[p].setData([]); // données vides = pas de rendu, mais LWC sait que la série existe
+        vwapSeriesMap[p].setData([]);
+        vwapSeriesMap[p + '-1'] = _addLineSeries(chart, {
+          color: VWAP_COLORS[p], lineWidth: 1, lineStyle: 2,
+          priceLineVisible: false, lastValueVisible: false,
+          crosshairMarkerVisible: false,
+          title: 'VWAP ' + p + '-1',
+          visible: true,
+          autoscaleInfoProvider: function () { return null; },
+        });
+        vwapSeriesMap[p + '-1'].setData([]);
+        // Bandes d'écart-type (6 séries par période)
+        var _bandKeys = ['u1', 'u2', 'u3', 'l1', 'l2', 'l3'];
+        for (var _bi = 0; _bi < _bandKeys.length; _bi++) {
+          var _bk = _bandKeys[_bi];
+          vwapSeriesMap[p + '_' + _bk] = _addLineSeries(chart, {
+            color: VWAP_COLORS[p], lineWidth: 1, lineStyle: 0,
+            priceLineVisible: false, lastValueVisible: false,
+            crosshairMarkerVisible: false,
+            title: 'VWAP ' + p + ' ' + _bk,
+            visible: true,
+            autoscaleInfoProvider: function () { return null; },
+          });
+          vwapSeriesMap[p + '_' + _bk].setData([]);
+        }
       });
 
       // Resize
@@ -705,6 +733,7 @@
       _bindVwap();
       _bindTimeframes();
       _bindPairs();
+      _bindWorkspaceModes();
       _bindSettingsPanel();
 
       // ── DRAWING TOOLS ──
@@ -712,6 +741,9 @@
 
       // ── VOLUME PROFILE ──
       _initVolumeProfile();
+      if (window.HyperliquidWorkspace) {
+        window.HyperliquidWorkspace.init(chart, candlestickSeries, document.getElementById('chartCanvasWrap'));
+      }
 
       chartReady = true;
       _startCountdown();
@@ -784,8 +816,7 @@
     toolbar.appendChild(clearBtn);
 
     // Init drawing engine
-    var isLight = document.body.classList.contains('light-mode');
-    window.ChartDrawings.init(chart, candlestickSeries, wrap, isLight);
+    window.ChartDrawings.init(chart, candlestickSeries, wrap, false);
   }
 
   // ── VOLUME PROFILE ──
@@ -794,6 +825,18 @@
     var wrap = document.getElementById('chartCanvasWrap');
     if (!wrap || !window.VolumeProfile) return;
     window.VolumeProfile.init(chart, candlestickSeries, wrap);
+  }
+
+  function _bindWorkspaceModes() {
+    var buttons = document.querySelectorAll('.workspace-mode');
+    if (!buttons.length) return;
+    buttons.forEach(function (button) {
+      button.addEventListener('click', function () {
+        if (window.HyperliquidWorkspace) {
+          window.HyperliquidWorkspace.setMode(button.dataset.workspaceMode || 'profile');
+        }
+      });
+    });
   }
 
   // ── VWAP ──
@@ -817,6 +860,7 @@
           toggle.classList.toggle('active', !!s.active);
           document.getElementById('vpBucketSize').value = s.bucketSize;
           document.getElementById('vpPeriod').value = s.period;
+          if (document.getElementById('vpMetric')) document.getElementById('vpMetric').value = s.metric || 'notional';
           document.getElementById('vpVaPercent').value = s.vaPercent;
           document.getElementById('vpShowPOC').checked = !!s.showPOC;
           document.getElementById('vpShowVAH').checked = !!s.showVAH;
@@ -825,6 +869,10 @@
           if (document.getElementById('vpColorVAH')) document.getElementById('vpColorVAH').value = s.colorVAH;
           if (document.getElementById('vpColorVAL')) document.getElementById('vpColorVAL').value = s.colorVAL;
           if (document.getElementById('vpColorHvn')) document.getElementById('vpColorHvn').value = s.colorHvn;
+          if (document.getElementById('vpShowNodes')) document.getElementById('vpShowNodes').checked = !!s.showNodes;
+          if (document.getElementById('vpPeakN')) document.getElementById('vpPeakN').value = s.vpPeakN || 9;
+          if (document.getElementById('vpTroughN')) document.getElementById('vpTroughN').value = s.vpTroughN || 7;
+          if (document.getElementById('vpThreshold')) document.getElementById('vpThreshold').value = s.vpThreshold || 10;
         }
       }
     });
@@ -917,7 +965,8 @@
     var interval = currentInterval;
     var sym = currentSymbol;
     Object.keys(vwapSeriesMap).forEach(function (k) {
-      if (activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
+      var basePeriod = k.replace(/-1$/, '').replace(/_(u1|u2|u3|l1|l2|l3)$/, '');
+      if (activeVwapPeriods.indexOf(basePeriod) < 0) _removeVwapSeries(k);
     });
     if (!activeVwapPeriods.length) return;
     if (!window.BtcVwap) return;
@@ -937,7 +986,11 @@
         var p = vwapOrder[vi];
         if (activeVwapPeriods.indexOf(p) < 0) continue;
         if (interval !== currentInterval || sym !== currentSymbol) return;
-        await window.BtcVwap.drawVwapForChart(state, p, function () {
+        await window.BtcVwap.drawVwapForChart(state, p, false, function () {
+          return interval !== currentInterval || sym !== currentSymbol;
+        });
+        if (interval !== currentInterval || sym !== currentSymbol) return;
+        await window.BtcVwap.drawVwapForChart(state, p, true, function () {
           return interval !== currentInterval || sym !== currentSymbol;
         });
         if (interval !== currentInterval || sym !== currentSymbol) return;
@@ -1180,8 +1233,9 @@
     function gc(id) { var el = document.getElementById(id); return el ? el.checked : false; }
     function gv(id) { var el = document.getElementById(id); return el ? el.value : null; }
     s.active = gc('vpActive');
-    s.bucketSize = parseInt(gv('vpBucketSize')) || 10;
-    s.period = gv('vpPeriod') || 'visible';
+    s.rowSize = gv('vpBucketSize') || 'auto';
+    s.profileType = gv('vpPeriod') || 'session';
+    s.metric = gv('vpMetric') || 'notional';
     s.vaPercent = parseInt(gv('vpVaPercent')) || 70;
     s.showPOC = gc('vpShowPOC');
     s.showVAH = gc('vpShowVAH');
@@ -1190,7 +1244,16 @@
     s.colorVAH = gv('vpColorVAH') || '#22c55e';
     s.colorVAL = gv('vpColorVAL') || '#ef4444';
     s.colorHvn = gv('vpColorHvn') || '#06b6d4';
+    s.showNodes = gc('vpShowNodes');
+    s.vpPeakN = parseInt(gv('vpPeakN')) || 9;
+    s.vpTroughN = parseInt(gv('vpTroughN')) || 7;
+    s.vpThreshold = parseInt(gv('vpThreshold')) || 10;
     window.VolumeProfile.updateSettings(s);
+    if (window.HyperliquidWorkspace) {
+      window.HyperliquidWorkspace.updateSettings({
+        metric: s.metric, profileType: s.profileType, rowSize: s.rowSize, vaPercent: s.vaPercent,
+      });
+    }
   }
 
   function _syncVpSettingsUI() {
@@ -1201,6 +1264,7 @@
     sc('vpActive', s.active);
     sv('vpBucketSize', s.bucketSize);
     sv('vpPeriod', s.period);
+    sv('vpMetric', s.metric || 'notional');
     sv('vpVaPercent', s.vaPercent);
     sc('vpShowPOC', s.showPOC);
     sc('vpShowVAH', s.showVAH);
@@ -1209,6 +1273,10 @@
     sv('vpColorVAH', s.colorVAH);
     sv('vpColorVAL', s.colorVAL);
     sv('vpColorHvn', s.colorHvn);
+    sc('vpShowNodes', s.showNodes);
+    sv('vpPeakN', s.vpPeakN || 9);
+    sv('vpTroughN', s.vpTroughN || 7);
+    sv('vpThreshold', s.vpThreshold || 10);
   }
 
   function _saveSettings() {
@@ -1274,7 +1342,7 @@
     }
 
     var _chartLimitMap = { '1m': 1000, '3m': 1000, '5m': 1000, '15m': 1000, '30m': 1000, '1h': 1000, '2h': 1000, '4h': 1000, '6h': 1000, '8h': 1000, '12h': 1000, '1d': 1000 };
-    var url = '/api/market/klines?symbol=' + currentSymbol + '&interval=' + currentInterval + '&limit=' + (_chartLimitMap[currentInterval] || 1000);
+    var url = '/api/hyperliquid/klines?market=' + encodeURIComponent(_hyperliquidCoin()) + '&interval=' + currentInterval + '&limit=' + (_chartLimitMap[currentInterval] || 1000);
     fetch(url)
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
@@ -1325,7 +1393,10 @@
 
         // Volume Profile
         if (window.VolumeProfile) {
-          window.VolumeProfile.setCandles(candles);
+          window.VolumeProfile.setContext({ coin: _hyperliquidCoin(), interval: currentInterval, candles: candles });
+        }
+        if (window.HyperliquidWorkspace) {
+          window.HyperliquidWorkspace.setContext({ coin: _hyperliquidCoin(), interval: currentInterval, candles: candles });
         }
 
         // Indicators
@@ -1338,7 +1409,7 @@
         _updateCountdownLabel();
 
         volumeSeries.setData(candles.map(function (c) {
-          return { time: c.time, value: c.volume, color: c.close >= c.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)' };
+          return { time: c.time, value: c.volume, color: c.close >= c.open ? 'rgba(34,211,238,0.24)' : 'rgba(251,113,133,0.24)' };
         }));
       })
       .catch(function (err) {
@@ -1510,7 +1581,7 @@
     if (_isFetching) return Promise.resolve();
     var interval = currentInterval;
     var sym = currentSymbol;
-    var url = '/api/market/klines?symbol=' + sym + '&interval=' + interval + '&limit=3';
+    var url = '/api/hyperliquid/klines?market=' + encodeURIComponent(_hyperliquidCoin()) + '&interval=' + interval + '&limit=3';
     return fetch(url)
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
@@ -1586,10 +1657,16 @@
   var _origGoPage = window.goPage;
   if (_origGoPage) {
     window.goPage = function (pageName) {
+      var hasV6Orderflow = pageName === 'orderflow' && document.getElementById('v6-orderflow-root');
+      var requestedMode = pageName === 'orderflow' && !hasV6Orderflow ? 'footprint' : null;
+      if (requestedMode) pageName = 'chart';
       _origGoPage(pageName);
       if (pageName === 'chart') {
         _waitForContainer(function () {
           initChartPage();
+          if (requestedMode && window.HyperliquidWorkspace) {
+            window.HyperliquidWorkspace.setMode(requestedMode);
+          }
           _waitForContainer(function () {
             if (chart) {
               var wrap = document.getElementById('chartCanvasWrap');

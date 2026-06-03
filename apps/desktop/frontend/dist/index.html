@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cockpit V6</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #06080c; color: #9eadc2;
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .wrap { height: 100%; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 14px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #3ad7ee;
+      box-shadow: 0 0 16px #3ad7ee; animation: p 1s ease-in-out infinite; }
+    @keyframes p { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .error { color: #f87171; font-size: 13px; text-align: center; max-width: 360px; line-height: 1.6; }
+    a { color: #3ad7ee; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="dot"></div>
+    <div id="statusMsg">Starting Cockpit V6…</div>
+    <div id="errorMsg" class="error hidden"></div>
+  </div>
+  <script>
+    var TARGET = "http://127.0.0.1:5001/";
+    var MAX_RETRIES = 80;       // ~48s total (matches Go backend startup timeout)
+    var RETRY_MS = 600;
+    var attempts = 0;
+    var statusEl = document.getElementById("statusMsg");
+    var errorEl = document.getElementById("errorMsg");
+
+    function showError(msg) {
+      statusEl.style.display = "none";
+      errorEl.classList.remove("hidden");
+      errorEl.innerHTML = msg;
+    }
+
+    function go() {
+      attempts++;
+      // mode:'no-cors' — la racine "/" de Flask ne renvoie pas de header CORS
+      // (seul /api/ en a). Un fetch normal serait bloque par le navigateur meme
+      // si le serveur repond. En no-cors, la promesse se resout (reponse opaque)
+      // des que le serveur est joignable, sinon elle rejette (serveur down).
+      fetch(TARGET, { mode: "no-cors" })
+        .then(function () {
+          window.location.replace(TARGET);
+        })
+        .catch(function (err) {
+          if (attempts >= MAX_RETRIES) {
+            showError(
+              "Le serveur backend ne répond pas après " + (MAX_RETRIES * RETRY_MS / 1000) + "s.<br>" +
+              "Ouvre <a href=\"" + TARGET + "\">" + TARGET + "</a> manuellement, ou vérifie que<br>" +
+              "<code>journal-server.exe</code> tourne sur le port 5001."
+            );
+            return;
+          }
+          statusEl.textContent = "Starting Cockpit V6… (tentative " + attempts + "/" + MAX_RETRIES + ")";
+          setTimeout(go, RETRY_MS);
+        });
+    }
+
+    statusEl.textContent = "Starting Cockpit V6…";
+    go();
+  </script>
+</body>
+</html>

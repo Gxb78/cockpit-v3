@@ -5,7 +5,7 @@ def _inject_asset_version():
     """Hash du bundle pour cache-busting — change quand le fichier change."""
     import hashlib as _h
     _v = ""
-    for _f in (BASE_DIR / "static" / "app.js", BASE_DIR / "static" / "style.css"):
+    for _f in (RESOURCE_DIR / "static" / "app.js", RESOURCE_DIR / "static" / "style.css"):
         if _f.exists():
             _v += _h.md5(_f.read_bytes()).hexdigest()[:12]
     return dict(ASSET_VERSION=_v)
@@ -40,10 +40,10 @@ def _extract_asset_version(template_path: Path, pattern: str) -> str:
 def debug_runtime():
     import sys
 
-    scripts_tpl = BASE_DIR / "templates" / "partials" / "overlays" / "scripts.html"
-    css_tpl = BASE_DIR / "templates" / "partials" / "layout" / "head_assets_css.html"
-    app_js = BASE_DIR / "static" / "app.js"
-    style_css = BASE_DIR / "static" / "style.css"
+    scripts_tpl = RESOURCE_DIR / "templates" / "partials" / "overlays" / "scripts.html"
+    css_tpl = RESOURCE_DIR / "templates" / "partials" / "layout" / "head_assets_css.html"
+    app_js = RESOURCE_DIR / "static" / "app.js"
+    style_css = RESOURCE_DIR / "static" / "style.css"
 
     app_js_stat = app_js.stat() if app_js.exists() else None
     style_css_stat = style_css.stat() if style_css.exists() else None

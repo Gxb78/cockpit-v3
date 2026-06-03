@@ -1,0 +1,19 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Cockpit V6",
+  "outputfilename": "CockpitV6",
+  "frontend:install": "",
+  "frontend:build": "",
+  "frontend:dev:watcher": "",
+  "frontend:dev:serverUrl": "",
+  "author": {
+    "name": "CockpitV6"
+  },
+  "info": {
+    "productName": "Cockpit V6",
+    "productVersion": "0.1.0",
+    "companyName": "CockpitV6",
+    "copyright": "Copyright © 2026 CockpitV6",
+    "comments": "Professional Crypto Trading Terminal & Journal"
+  }
+}

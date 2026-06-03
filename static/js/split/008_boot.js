@@ -40,6 +40,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (lastPage && ["today","journal","insights","chart","orderflow","settings"].indexOf(lastPage) >= 0) {
     state.currentPage = lastPage;
   }
+  // Sync the DOM to the restored page. The template marks "today" active by
+  // default, so without this the JS state and the visible page desynchronise —
+  // clicking the restored page would early-return in goPage() and show nothing
+  // until you navigate away and back. Apply active classes + fire pageChange.
+  (function syncRestoredPage() {
+    var pageName = state.currentPage || "today";
+    var targetPage = document.querySelector('.page[data-page="' + pageName + '"]');
+    if (!targetPage) { pageName = "today"; targetPage = document.querySelector('.page[data-page="today"]'); }
+    if (!targetPage) return;
+    document.body.setAttribute("data-current-page", pageName);
+    $$(".page").forEach(function (p) { p.classList.toggle("active", p.dataset.page === pageName); });
+    $$(".nav-item").forEach(function (b) { b.classList.toggle("active", b.dataset.page === pageName); });
+    document.dispatchEvent(new CustomEvent('pageChange', { detail: { page: pageName } }));
+  })();
   bindNav();
   bindAiPanelToggle();
   bindCalendarNav();

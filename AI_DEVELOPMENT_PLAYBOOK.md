@@ -1327,3 +1327,21 @@ if end_time is not None:
 - Regle: Toute requête fetch répétée dans la même page doit passer par `V6OF.ApiCache.fetch(url, ttl)` pour éviter les appels dupliqués et réduire la latence réseau.
 - Fichiers a surveiller: `static/js/utilities/api-cache.js`, intégration dans les modules qui font des appels répétés.
 
+### BUG-20260603-10 - [RESOLU] Splash "backend ne repond pas" alors que Flask repond (fetch cross-origin bloque par CORS)
+
+- Symptome:
+  1. Au lancement de l'app desktop, le splash Wails affiche "Le serveur backend ne repond pas apres 12s" apres 20 tentatives.
+  2. Cliquer manuellement sur le lien http://127.0.0.1:5001/ charge l'app instantanement - donc Flask repondait bien.
+- Cause racine: Le health-check du splash (`apps/desktop/frontend/dist/index.html`) faisait `fetch("http://127.0.0.1:5001/")` depuis l'origine du webview Wails. La racine "/" de Flask ne renvoie d'en-tete CORS que pour les chemins `/api/` (voir `app_parts/01_flask_app.py` after_request), donc le navigateur bloquait le fetch cross-origin meme si le serveur renvoyait HTTP 200. Une navigation (clic sur le lien) n'est pas soumise au CORS, d'ou le contraste.
+- Regle de prevention: Un health-check par `fetch` vers un serveur local d'une autre origine doit utiliser `mode: "no-cors"` (la promesse se resout des que le serveur est joignable, reponse opaque) OU le serveur doit exposer un en-tete CORS sur le chemin sonde. Ne jamais deduire "serveur down" d'un fetch cross-origin rejete sans avoir ecarte le CORS.
+- Test de non-regression: Verifier que la racine Flask sans en-tete `Access-Control-Allow-Origin` (`curl -H "Origin: http://wails.localhost" http://127.0.0.1:5001/`) ne bloque plus le demarrage; le splash doit basculer sur l'app des que Flask repond.
+- Fichiers a surveiller: `apps/desktop/frontend/dist/index.html`, `app_parts/01_flask_app.py`, `app_parts/18_launcher.py`.
+
+### BUG-20260603-11 - [RESOLU] DOM Binance plafonne a 20 niveaux (stream partiel @depthN au lieu du diff @depth + snapshot REST)
+
+- Symptome: Le carnet d'ordres (DOM/heatmap) Binance ne montrait jamais que ~20 niveaux; les murs de liquidite loin du prix etaient absents ou clignotaient, jamais fiables en continu.
+- Cause racine: Le client s'abonnait au stream partiel `@depthN@100ms` (plafonne a 5/10/20 niveaux, snapshots jetables) au lieu de maintenir un carnet local complet. `MARKET_GO_BOOK_DEPTH=1000` et `HEATMAP_DEPTH=500` etaient donc fictifs - la donnee ne contenait jamais plus de 20 niveaux.
+- Regle de prevention: Pour un carnet fiable, suivre l'algorithme documente "manage a local order book": stream diff `@depth@100ms` + snapshot REST initial (`lastUpdateId`) + buffer et validation de sequence (spot: U == prev_u+1 ; futures: pu == prev_u), application des deltas (qty=0 supprime le niveau), resync sur gap. Ne jamais traiter les snapshots du stream partiel comme un carnet complet.
+- Test de non-regression: Tests unitaires de sequencage dans `services/market-go/internal/exchange/binance/book_test.go` (toutes les branches) + test d'integration live garde par `BINANCE_LIVE=1` (`live_test.go`) verifiant >= 100 niveaux/cote et un tri strict. Verifie live: spot 5006/5004, futures 1051/1024.
+- Fichiers a surveiller: `services/market-go/internal/exchange/binance/book.go`, `depth.go`, `client.go`, `services/market-go/internal/config/config.go`, `services/market-go/internal/ws/server.go`.
+

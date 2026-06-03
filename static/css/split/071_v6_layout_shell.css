@@ -1,0 +1,785 @@
+/* 071_v6_layout_shell.css — "Obsidian Tape" TradingView-like shell
+ * Built by MOVING Layout panels into regions (see 080_v6_layout_shell.js).
+ * Uses the design tokens scoped to .v6-orderflow-root (070).
+ * Layout: left tool rail | dominant center chart | tabbed right column.
+ */
+
+.v6-main-area {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  gap: 0;
+  background: var(--v6-bg);
+}
+
+/* ---- Left tool rail (compact) ---- */
+.v6-left-toolbar {
+  flex: 0 0 34px;
+  width: 34px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 2px;
+  border: none;
+  border-right: 1px solid var(--v6-hairline);
+  border-radius: 0;
+  background: var(--v6-bg-2);
+  box-shadow: none;
+}
+.v6-left-toolbar .v6-tool {
+  position: relative;
+  width: 28px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--v6-r-sm);
+  background: transparent;
+  color: var(--v6-text-mute);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--v6-fast) var(--v6-ease),
+              border-color var(--v6-fast) var(--v6-ease),
+              background var(--v6-fast) var(--v6-ease);
+}
+.v6-left-toolbar .v6-tool svg { width: 15px; height: 15px; display: block; pointer-events: none; }
+.v6-left-toolbar .v6-tool:hover {
+  color: #fff;
+  border-color: var(--v6-accent-line);
+  background: var(--v6-surface-3);
+}
+.v6-left-toolbar .v6-tool.is-active {
+  color: #bff0fb;
+  border-color: var(--v6-accent);
+  background: var(--v6-accent-soft);
+  box-shadow: 0 0 0 1px rgba(58, 215, 238, 0.16), 0 0 16px -4px var(--v6-accent-glow);
+}
+.v6-left-toolbar .v6-tool.is-active::before {
+  content: "";
+  position: absolute;
+  left: -6px; top: 50%;
+  width: 3px; height: 16px;
+  margin-top: -8px;
+  border-radius: 3px;
+  background: var(--v6-accent);
+  box-shadow: 0 0 10px var(--v6-accent-glow);
+}
+.v6-tool-sep {
+  width: 24px;
+  height: 1px;
+  margin: 3px 0;
+  background: var(--v6-hairline-strong);
+}
+
+/* ---- Center column: ONE panel — price chart + CVD indicator sub-pane ----
+ * The price chart and the CVD sub-pane live in a single bordered panel so the
+ * CVD reads as an integrated indicator (TradingView-style), not a floating box.
+ */
+.v6-center-col {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: none;
+  border-radius: 0;
+  background: var(--v6-bg);
+  box-shadow: none;
+  overflow: hidden;
+}
+.v6-center-chart {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+}
+
+/* CVD = integrated indicator sub-pane: no border/box, thin divider, compact. */
+.v6-cvd-strip {
+  flex: 0 0 150px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--v6-hairline);
+  background: transparent;
+  overflow: hidden;
+}
+.v6-cvd-strip.is-collapsed { flex-basis: 24px; }
+.v6-cvd-strip.is-collapsed .v6-cvd-canvas { display: none; }
+/* tiny indicator label, like a TV sub-pane legend (no heavy header bar) */
+.v6-cvd-strip-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 18px;
+  padding: 0 10px;
+  background: transparent;
+}
+.v6-cvd-strip-title {
+  color: var(--v6-text-mute);
+  font: 800 9px/1 var(--v6-font);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.v6-cvd-collapse {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--v6-text-faint);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: var(--v6-r-sm);
+}
+.v6-cvd-collapse:hover { color: var(--v6-text); background: rgba(255,255,255,0.04); }
+.v6-cvd-canvas { flex: 1 1 auto; width: 100%; height: auto; min-height: 0; display: block; }
+.v6-center-chart .v6-panel-chart {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.v6-center-chart .v6-panel-chart .v6-panel-head { flex: 0 0 auto; }
+.v6-center-chart .v6-chart-canvas {
+  flex: 1 1 auto;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  display: block;
+  border-radius: 0;
+  cursor: crosshair;
+}
+.v6-center-chart .v6-chart-canvas.v6-chart-dragging { cursor: grabbing; }
+
+/* ---- Right column: tabbed orderflow panels ---- */
+.v6-right-col {
+  flex: 0 0 320px;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: none;
+  border-left: 1px solid var(--v6-hairline);
+  border-radius: 0;
+  background: var(--v6-bg-2);
+  box-shadow: none;
+  overflow: hidden;
+}
+.v6-rtabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px 6px 0;
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--v6-hairline);
+}
+.v6-rtab {
+  appearance: none;
+  flex: 1 1 auto;
+  min-height: 30px;
+  padding: 0 6px;
+  border: none;
+  border-radius: var(--v6-r-sm) var(--v6-r-sm) 0 0;
+  background: transparent;
+  color: var(--v6-text-mute);
+  font: 800 10px/1 var(--v6-font);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color var(--v6-fast) var(--v6-ease), background var(--v6-fast) var(--v6-ease);
+}
+.v6-rtab.v6-rtab-icon { flex: 0 0 36px; font-size: 14px; }
+.v6-rtab:hover { color: var(--v6-text); background: rgba(255, 255, 255, 0.03); }
+.v6-rtab.is-active {
+  color: var(--v6-accent);
+  background: var(--v6-accent-soft);
+  box-shadow: inset 0 -2px 0 var(--v6-accent);
+}
+.v6-rbody { flex: 1 1 auto; min-height: 0; position: relative; display: flex; }
+/* Only the active tab's panel is shown; it fills the column. */
+.v6-rbody > .v6-panel {
+  display: none;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.v6-rbody.show-dom .v6-panel-dom,
+.v6-rbody.show-tape .v6-panel-tape,
+.v6-rbody.show-info .v6-panel-info,
+.v6-rbody.show-cvd .v6-panel-cvd,
+.v6-rbody.show-vwap .v6-panel-vwap,
+.v6-rbody.show-settings .v6-panel-settings { display: flex; }
+.v6-rbody > .v6-panel > .v6-panel-head { flex: 0 0 auto; }
+.v6-rbody > .v6-panel > .v6-panel-body,
+.v6-rbody > .v6-panel > .v6-settings { flex: 1 1 auto; min-height: 0; overflow: auto; }
+
+/* ---- Resizer Handles ---- */
+.v6-resize-h {
+  flex: 0 0 5px;
+  width: 5px;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: 50;
+  align-self: stretch;
+  transition: background var(--v6-fast) var(--v6-ease);
+}
+.v6-resize-h::after {
+  content: "";
+  position: absolute;
+  left: 2px; top: 0; bottom: 0;
+  width: 1px;
+  background: var(--v6-hairline);
+  transition: background var(--v6-fast) var(--v6-ease);
+}
+.v6-resize-h:hover::after,
+.v6-resize-h.is-dragging::after {
+  background: var(--v6-accent);
+}
+.v6-resize-h:hover,
+.v6-resize-h.is-dragging {
+  background: var(--v6-accent-soft);
+  box-shadow: inset 1px 0 0 rgba(58, 215, 238, 0.1), inset -1px 0 0 rgba(58, 215, 238, 0.1);
+}
+
+.v6-resize-v {
+  flex: 0 0 5px;
+  height: 5px;
+  cursor: row-resize;
+  background: transparent;
+  position: relative;
+  z-index: 50;
+  width: 100%;
+  transition: background var(--v6-fast) var(--v6-ease);
+}
+.v6-resize-v::after {
+  content: "";
+  position: absolute;
+  top: 2px; left: 0; right: 0;
+  height: 1px;
+  background: var(--v6-hairline);
+  transition: background var(--v6-fast) var(--v6-ease);
+}
+.v6-resize-v:hover::after,
+.v6-resize-v.is-dragging::after {
+  background: var(--v6-accent);
+}
+.v6-resize-v:hover,
+.v6-resize-v.is-dragging {
+  background: var(--v6-accent-soft);
+  box-shadow: inset 0 1px 0 rgba(58, 215, 238, 0.1), inset 0 -1px 0 rgba(58, 215, 238, 0.1);
+}
+
+/* Guard to disable cursor styles during resize drag */
+.v6-resizing-active * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+/* ---- Bottom Status Bar ---- */
+.v6-status-bar {
+  flex: 0 0 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0 15px;
+  background: linear-gradient(180deg, var(--v6-bg-2), #04060a);
+  border-top: 1px solid var(--v6-hairline);
+  font: 700 9px/1 var(--v6-mono);
+  color: var(--v6-text-mute);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.v6-sb-sec {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.v6-sb-lbl {
+  color: var(--v6-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.v6-sb-val {
+  color: var(--v6-text-dim);
+}
+.v6-sb-val strong {
+  color: var(--v6-text);
+}
+
+/* ---- Workspace Widget ---- */
+.v6-workspace-holder {
+  flex: 0 0 auto;
+}
+.v6-workspace-widget {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  background: rgba(13, 19, 31, 0.55);
+  border: 1px solid var(--v6-hairline);
+  border-radius: var(--v6-r-md);
+}
+.v6-workspace-lbl {
+  font: 800 9px var(--v6-font);
+  color: var(--v6-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.v6-workspace-select {
+  appearance: none;
+  background: var(--v6-bg-2);
+  border: 1px solid var(--v6-hairline);
+  border-radius: var(--v6-r-sm);
+  color: var(--v6-text);
+  font: 800 10px var(--v6-font);
+  padding: 2px 20px 2px 8px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='none' stroke='%233ad7ee' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  background-size: 10px;
+}
+.v6-workspace-select:hover {
+  border-color: var(--v6-accent-line);
+}
+.v6-workspace-btn {
+  appearance: none;
+  background: var(--v6-surface-3);
+  border: 1px solid var(--v6-hairline);
+  border-radius: var(--v6-r-sm);
+  color: var(--v6-text-dim);
+  font: 700 9px var(--v6-font);
+  padding: 3px 6px;
+  cursor: pointer;
+  transition: all var(--v6-fast) var(--v6-ease);
+}
+.v6-workspace-btn:hover {
+  color: #fff;
+  border-color: var(--v6-accent-line);
+  background: var(--v6-surface-2);
+}
+
+/* ---- Market Info Panel ---- */
+.v6-info-body {
+  padding: 10px;
+}
+.v6-info-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.v6-info-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(13, 19, 31, 0.45);
+  border: 1px solid var(--v6-hairline);
+  border-radius: var(--v6-r-sm);
+  font-variant-numeric: tabular-nums;
+}
+.v6-info-card em {
+  font: 800 9px var(--v6-font);
+  color: var(--v6-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-style: normal;
+}
+.v6-info-card strong {
+  font: 800 12px var(--v6-mono);
+  color: var(--v6-text);
+}
+
+@media (max-width: 1366px) {
+  .v6-right-col { flex-basis: 286px; width: 286px; }
+  .v6-left-toolbar { flex-basis: 36px; width: 36px; }
+  .v6-workspace-lbl { display: none; }
+}
+
+/* Sober V6 orderflow shell overrides. */
+.v6-left-toolbar,
+.v6-right-col,
+.v6-status-bar {
+  background: #080d12;
+}
+
+.v6-left-toolbar .v6-tool:hover,
+.v6-left-toolbar .v6-tool.is-active {
+  box-shadow: none;
+}
+
+.v6-left-toolbar .v6-tool.is-active::before {
+  box-shadow: none;
+}
+
+.v6-left-toolbar [data-v6-tool="follow"] + .v6-tool-sep,
+.v6-left-toolbar [data-v6-tool="horiz"],
+.v6-left-toolbar [data-v6-tool="trend"],
+.v6-left-toolbar [data-v6-tool="rect"] {
+  display: none;
+}
+
+.v6-rtabs {
+  gap: 0;
+  padding: 4px 4px 0;
+  background: #080d12;
+}
+
+.v6-rtab {
+  min-height: 28px;
+  border-radius: 4px 4px 0 0;
+  letter-spacing: 0.02em;
+}
+
+.v6-rtab.is-active {
+  color: #b7edf3;
+  background: rgba(56, 199, 216, 0.08);
+  box-shadow: inset 0 -1px 0 rgba(56, 199, 216, 0.65);
+}
+
+.v6-resize-h:hover,
+.v6-resize-h.is-dragging,
+.v6-resize-v:hover,
+.v6-resize-v.is-dragging {
+  background: rgba(56, 199, 216, 0.05);
+  box-shadow: none;
+}
+
+.v6-status-bar {
+  height: 22px;
+  flex-basis: 22px;
+  gap: 16px;
+  background: #06090d;
+}
+
+.v6-info-card {
+  background: #0a1016;
+  border-color: rgba(126, 145, 160, 0.12);
+}
+
+/* ======================= IMMERSIVE ORDERFLOW PASS ======================= */
+@media (min-width: 761px) {
+  body[data-current-page="orderflow"] .cockpit {
+    grid-template-columns: 72px minmax(0, 1fr) !important;
+  }
+
+  body[data-current-page="orderflow"] .rail {
+    width: 72px;
+    max-width: 72px;
+    padding: 12px 10px;
+    gap: 10px;
+    overflow-x: hidden;
+  }
+
+  body[data-current-page="orderflow"] .brand {
+    justify-content: center;
+    padding: 0;
+  }
+
+  body[data-current-page="orderflow"] .brand > div:not(.brand-mark),
+  body[data-current-page="orderflow"] .rail-new-trade span,
+  body[data-current-page="orderflow"] .nav-item span,
+  body[data-current-page="orderflow"] .nav-item .kbd,
+  body[data-current-page="orderflow"] .rail-label,
+  body[data-current-page="orderflow"] .instr-chip span:not(.dot),
+  body[data-current-page="orderflow"] .rail-foot,
+  body[data-current-page="orderflow"] .theme-toggle,
+  body[data-current-page="orderflow"] .dev-restart {
+    display: none !important;
+  }
+
+  body[data-current-page="orderflow"] .rail-new-trade,
+  body[data-current-page="orderflow"] .nav-item,
+  body[data-current-page="orderflow"] .instr-chip {
+    justify-content: center;
+    width: 48px;
+    min-height: 40px;
+    padding: 0;
+    border-radius: 8px;
+  }
+
+  body[data-current-page="orderflow"] .nav,
+  body[data-current-page="orderflow"] .instr-list {
+    align-items: center;
+  }
+}
+
+body[data-current-page="orderflow"] .v6-header {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+body[data-current-page="orderflow"] .v6-header-live,
+body[data-current-page="orderflow"] .v6-ticket {
+  display: none;
+}
+
+body[data-current-page="orderflow"] .v6-timeframes {
+  gap: 0;
+}
+
+body[data-current-page="orderflow"] .v6-tf-btn,
+body[data-current-page="orderflow"] .v6-seg-btn,
+body[data-current-page="orderflow"] .v6-source-btn {
+  min-height: 22px;
+  padding-inline: 7px;
+}
+
+body[data-current-page="orderflow"] .v6-center-chart .v6-panel-chart > .v6-panel-head {
+  display: none;
+}
+
+body[data-current-page="orderflow"] .v6-center-chart .v6-chart-canvas {
+  height: 100%;
+}
+
+body[data-current-page="orderflow"] .v6-cvd-strip {
+  flex-basis: 118px;
+}
+
+body[data-current-page="orderflow"] .v6-right-col {
+  flex-basis: 300px;
+  width: 300px;
+}
+
+body[data-current-page="orderflow"] .v6-dock-collapsed .v6-right-col,
+body[data-current-page="orderflow"] .v6-dock-collapsed .v6-resize-h {
+  display: none;
+}
+
+body[data-current-page="orderflow"] .v6-rbody.show-vwap .v6-panel-vwap,
+body[data-current-page="orderflow"] .v6-panel-vwap {
+  display: none !important;
+}
+
+body[data-current-page="orderflow"] .v6-rbody.show-cvd .v6-panel-cvd {
+  display: none !important;
+}
+
+body[data-current-page="orderflow"] .v6-dom-cols,
+body[data-current-page="orderflow"] .v6-dom-row {
+  display: grid;
+  grid-template-columns: minmax(72px, 1fr) 76px minmax(72px, 1fr) 54px 54px 54px;
+}
+
+body[data-current-page="orderflow"] .v6-dom-table-container {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+body[data-current-page="orderflow"] [data-v6-dom-footer] {
+  display: none !important;
+}
+
+body[data-current-page="orderflow"] .v6-dom-col,
+body[data-current-page="orderflow"] .v6-dom-cell {
+  width: auto;
+}
+
+body[data-current-page="orderflow"] .v6-dom-header {
+  min-height: 40px;
+  height: auto;
+  gap: 6px;
+  padding: 4px 7px;
+  flex-wrap: wrap;
+}
+
+body[data-current-page="orderflow"] .v6-dom-hleft,
+body[data-current-page="orderflow"] .v6-dom-hright {
+  gap: 5px;
+  min-width: 0;
+}
+
+body[data-current-page="orderflow"] .v6-dom-source {
+  min-width: 104px;
+}
+
+body[data-current-page="orderflow"] .v6-dom-source strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 130px;
+}
+
+body[data-current-page="orderflow"] .v6-dom-cols {
+  height: 20px;
+  background: #171925;
+  border-top: 1px solid rgba(126, 145, 160, 0.12);
+  border-bottom: 1px solid rgba(126, 145, 160, 0.16);
+}
+
+body[data-current-page="orderflow"] .v6-dom-col {
+  color: rgba(197, 210, 226, 0.58);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+}
+
+body[data-current-page="orderflow"] .v6-dom-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #1d1e2b;
+  scroll-padding-top: 45%;
+  scroll-padding-bottom: 45%;
+}
+
+body[data-current-page="orderflow"] .v6-dom-row {
+  min-height: 20px;
+  height: 20px;
+  background: #1d1e2b;
+  border-bottom: 1px solid rgba(130, 139, 158, 0.13);
+}
+
+body[data-current-page="orderflow"] .v6-dom-row:hover {
+  background: #242538;
+}
+
+body[data-current-page="orderflow"] .v6-dom-cell {
+  min-width: 0;
+  padding: 0 5px;
+  border-right: 1px solid rgba(130, 139, 158, 0.12);
+  font-size: 11px;
+  line-height: 20px;
+  font-weight: 800;
+}
+
+body[data-current-page="orderflow"] .v6-dom-cell-price {
+  justify-content: center;
+  color: #edf3ff;
+  font-weight: 900;
+  background: rgba(12, 13, 20, 0.18);
+}
+
+body[data-current-page="orderflow"] .v6-dom-bar.is-bid {
+  background: rgba(112, 196, 130, 0.54);
+}
+
+body[data-current-page="orderflow"] .v6-dom-bar.is-ask {
+  background: rgba(214, 98, 146, 0.56);
+}
+
+body[data-current-page="orderflow"] .v6-dom-row.is-mid {
+  background: rgba(112, 130, 124, 0.22) !important;
+  box-shadow: inset 0 1px 0 rgba(207, 232, 218, 0.12), inset 0 -1px 0 rgba(207, 232, 218, 0.10);
+}
+
+body[data-current-page="orderflow"] .v6-dom-row.is-live {
+  position: relative;
+  background: rgba(112, 160, 128, 0.38) !important;
+  box-shadow: inset 0 1px 0 rgba(205, 236, 214, 0.24), inset 0 -1px 0 rgba(205, 236, 214, 0.22);
+}
+
+body[data-current-page="orderflow"] .v6-dom-row.is-live::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #8fe2a5;
+}
+
+body[data-current-page="orderflow"] .v6-dom-row.is-live .v6-dom-cell-price {
+  color: #f5fff7;
+  background: rgba(120, 180, 140, 0.22);
+  font-weight: 900;
+}
+
+body[data-current-page="orderflow"] .v6-dom-marker {
+  margin-right: 4px;
+  color: #f5fff7;
+  font-weight: 900;
+}
+
+body[data-current-page="orderflow"] .v6-dom-live-pill {
+  margin-left: 5px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: #8fd69e;
+  color: #10170f;
+  font: 900 8px/1 var(--v6-font);
+  letter-spacing: 0.03em;
+}
+
+body[data-current-page="orderflow"] .v6-dom-row.is-best-bid .v6-dom-cell-price,
+body[data-current-page="orderflow"] .v6-dom-row.is-best-ask .v6-dom-cell-price {
+  color: #f2f5ff;
+}
+
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-bid .v6-dom-cell-bid,
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-ask .v6-dom-cell-ask {
+  color: #f4fff8;
+  font-weight: 800;
+}
+
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-bid .v6-dom-bar.is-bid {
+  background: rgba(137, 219, 148, 0.72);
+}
+
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-ask .v6-dom-bar.is-ask {
+  background: rgba(218, 105, 154, 0.72);
+}
+
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-8 .v6-dom-cell-price {
+  color: #fff4bc;
+}
+
+body[data-current-page="orderflow"] .v6-dom-wall-badge {
+  margin-left: 4px;
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: rgba(230, 196, 90, 0.12);
+  color: #e9c760;
+  font: 800 8px/1 var(--v6-font);
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+}
+
+body[data-current-page="orderflow"] .v6-dom-footer {
+  gap: 5px;
+  padding: 5px 7px;
+  background: #171925;
+}
+
+body[data-current-page="orderflow"] .v6-dom-glbl {
+  gap: 4px;
+}
+
+body[data-current-page="orderflow"] .v6-dom-glbl select,
+body[data-current-page="orderflow"] .v6-dom-walls-toggle,
+body[data-current-page="orderflow"] .v6-dom-recenter {
+  min-height: 22px;
+  border: 1px solid rgba(126, 145, 160, 0.18);
+  border-radius: 4px;
+  background: #202231;
+  color: #d7deef;
+  font: 800 10px/1 var(--v6-font);
+}
+
+body[data-current-page="orderflow"] .v6-dom-walls-toggle {
+  width: 26px;
+  padding: 0;
+  cursor: pointer;
+}
+
+body[data-current-page="orderflow"] .v6-dom-walls-toggle.is-active {
+  border-color: rgba(230, 196, 90, 0.45);
+  background: rgba(230, 196, 90, 0.14);
+  color: #f1d27b;
+}
