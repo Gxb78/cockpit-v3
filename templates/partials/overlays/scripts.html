@@ -1,4 +1,4 @@
-﻿<script>
+<script>
 // Global error handlers — actifs avant tout split file
 (function () {
   function _showError(msg, url, line, col, error) {
@@ -14,7 +14,7 @@
   }
   window.onerror = function (msg, url, line, col, error) {
     _showError(msg, url, line, col, error);
-    return true; // supprime le message console par defaut
+    return false; // permet au message console par defaut de s'afficher
   };
   window.addEventListener("unhandledrejection", function (e) {
     var reason = e.reason;

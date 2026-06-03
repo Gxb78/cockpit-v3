@@ -11,16 +11,38 @@
 
   // ── REST request cache (TTL per endpoint) ──
   var _restCache = {};
-  function _cachedFetch(url, ttlMs) {
+  function _cachedFetch(url, ttlMs, bypassCache) {
     var now = Date.now();
     var entry = _restCache[url];
-    if (entry && (now - entry.ts) < ttlMs) {
+    if (!bypassCache && entry && (now - entry.ts) < ttlMs) {
+      var age = now - entry.ts;
+      console.log("[fetch cache hit] endpoint: " + url + " | age: " + age + "ms | source: orderflow_layout");
       return Promise.resolve(entry.data);
     }
-    return fetch(url).then(function(r) { return r.json(); }).then(function(data) {
-      _restCache[url] = { data: data, ts: now };
-      return data;
-    });
+    console.log("[fetch network start] endpoint: " + url + " | source: orderflow_layout");
+    return fetch(url)
+      .then(function(r) {
+        var statusMsg = "HTTP " + r.status + " " + r.statusText;
+        console.log("[fetch network response] endpoint: " + url + " | status: " + statusMsg + " | source: orderflow_layout");
+        if (!r.ok) {
+          throw new Error("HTTP error " + r.status + " (" + url + ")");
+        }
+        return r.json();
+      })
+      .then(function(data) {
+        _restCache[url] = { data: data, ts: now };
+        return data;
+      })
+      .catch(function(err) {
+        console.error("[fetch network error] endpoint: " + url + " | error: " + err.message + " | source: orderflow_layout");
+        // Notifier selon gravité
+        try {
+          if (typeof toast === "function") {
+            toast("REST load failed: " + url + " (" + err.message + ")", "warning");
+          }
+        } catch (_) {}
+        throw err;
+      });
   }
 
   function shellHtml() {
@@ -30,9 +52,14 @@
           '<div class="v6-brand">',
             '<span class="v6-brand-mark" aria-hidden="true"></span>',
             '<div class="v6-symbol-pill">',
-              '<span class="v6-symbol-ticker" data-v6-symbol>BTC</span>',
+              '<select class="v6-symbol-select" data-v6-action="symbol-select" data-v6-symbol aria-label="Select instrument">',
+                '<option value="BTCUSDT">BTC</option>',
+                '<option value="ETHUSDT">ETH</option>',
+                '<option value="SOLUSDT">SOL</option>',
+              '</select>',
               '<span class="v6-symbol-meta" data-v6-interval>1m</span>',
             '</div>',
+            '<span class="v6-badge" data-v6-badge>Not available</span>',
           '</div>',
           '<div class="v6-timeframes" role="group" aria-label="Timeframe">',
             '<button type="button" class="v6-tf-btn active" data-v6-action="timeframe" data-interval="1m">1m</button>',
@@ -58,14 +85,19 @@
             '<button type="button" class="v6-source-btn" data-v6-action="source" data-source="hyperliquid">HL</button>',
             '<button type="button" class="v6-source-btn active" data-v6-action="source" data-source="binance">BN</button>',
           '</div>',
-          '<div class="v6-header-live">',
-            '<span class="v6-stat"><em>Last</em><strong data-v6-last>--</strong></span>',
-            '<span class="v6-stat"><em>CVD</em><strong data-v6-cvd>--</strong></span>',
+          '<div class="v6-header-disclosure-toggle">',
+            '<button type="button" class="v6-btn v6-btn-sm" data-v6-action="toggle-disclosure" aria-expanded="false" aria-controls="v6-header-disclosure-panel" title="Show/hide live metrics">Metrics ▾</button>',
           '</div>',
-          '<div class="v6-ticket" aria-label="Live quote">',
-            '<div class="v6-ticket-side is-sell"><em>BID</em><strong data-v6-ticket-bid>--</strong></div>',
-            '<div class="v6-ticket-mid"><em>SPR</em><span data-v6-ticket-spread>--</span></div>',
-            '<div class="v6-ticket-side is-buy"><em>ASK</em><strong data-v6-ticket-ask>--</strong></div>',
+          '<div class="v6-header-disclosure-panel" id="v6-header-disclosure-panel">',
+            '<div class="v6-header-live">',
+              '<span class="v6-stat"><em>Last</em><strong data-v6-last>--</strong></span>',
+              '<span class="v6-stat"><em>CVD</em><strong data-v6-cvd>--</strong></span>',
+            '</div>',
+            '<div class="v6-ticket" aria-label="Live quote">',
+              '<div class="v6-ticket-side is-sell"><em>BID</em><strong data-v6-ticket-bid>--</strong></div>',
+              '<div class="v6-ticket-mid"><em>SPR</em><span data-v6-ticket-spread>--</span></div>',
+              '<div class="v6-ticket-side is-buy"><em>ASK</em><strong data-v6-ticket-ask>--</strong></div>',
+            '</div>',
           '</div>',
           '<div class="v6-header-actions">',
             '<span class="v6-conn" data-v6-conn title="Local engine">',
@@ -222,7 +254,13 @@
 
   function setText(root, selector, value) {
     var el = root.querySelector(selector);
-    if (el) el.textContent = value;
+    if (el) {
+      if (el.tagName === 'SELECT') {
+        el.value = value;
+      } else {
+        el.textContent = value;
+      }
+    }
   }
 
   function syncInputs(root, state) {
@@ -309,10 +347,13 @@
     if (!store) return;
     var state = store.getState ? store.getState() : {};
     var source = state.dataSource || 'binance';
+    var symbol = state.symbol || 'BTCUSDT';
+    var baseAsset = symbol.replace('USDT', '');
     var url = source === 'hyperliquid'
-      ? '/api/hyperliquid/orderbook?market=BTC'
-      : '/api/market/depth?symbol=BTCUSDT&limit=5000';
-    _cachedFetch(url, 30000).then(function (data) {
+      ? '/api/hyperliquid/orderbook?market=' + baseAsset
+      : '/api/market/depth?symbol=' + symbol + '&limit=5000';
+    var bypass = (reason === 'refresh' || reason === 'symbol-change' || reason === 'reconnect' || reason === 'auto-connect');
+    _cachedFetch(url, 5000, bypass).then(function (data) {
       var book = normalizeRestDepthBook(data, source);
       if (!book || !V6OF.DomLadder) return;
       V6OF.DomLadder.feedOrderBook(book);
@@ -346,11 +387,12 @@
     // Status dot color
     var dot = root.querySelector('[data-v6-engine-dot]');
     if (dot) {
-      dot.className = 'v6-engine-dot v6-engine-' + status;
+      dot.className = 'v6-engine-dot v6-engine-' + ((state && state.source === 'mock') ? 'disconnected' : status);
     }
 
     // Status text (clean, no jargon)
-    var statusLabel = status === 'connected' ? 'Live'
+    var statusLabel = (state && state.source === 'mock') ? 'Mock'
+      : status === 'connected' ? 'Live'
       : status === 'connecting' ? 'Connecting…'
       : status === 'error' ? 'Reconnecting…'
       : 'Offline';
@@ -394,7 +436,11 @@
     // Badge update
     var badge = root.querySelector('[data-v6-badge]');
     if (badge) {
-      if (state && state.isStale && status === 'connected') {
+      if (state && state.source === 'mock') {
+        badge.textContent = 'V6 MOCK / No live data';
+        badge.classList.remove('v6-badge-live');
+        badge.classList.remove('v6-badge-error');
+      } else if (state && state.isStale && status === 'connected') {
         badge.textContent = 'V6 STALE / No data';
         badge.classList.remove('v6-badge-live');
         badge.classList.add('v6-badge-error');
@@ -428,6 +474,9 @@
     if (!root || !state) return;
     root.classList.toggle('v6-legacy-mode', !!(state.ui && state.ui.legacyMode));
 
+    if (state.symbol) {
+      document.title = state.symbol + ' - Cockpit V6';
+    }
 
     setText(root, '[data-v6-symbol]', state.symbol || '--');
     setText(root, '[data-v6-last]', V6OF.format.price(lastPrice(state)));
@@ -560,6 +609,13 @@
             engineClient.pause();
           }
         }
+      } else if (action === 'toggle-disclosure') {
+        var panel = root.querySelector('#v6-header-disclosure-panel');
+        if (panel) {
+          var expanded = panel.classList.toggle('v6-expanded');
+          btn.setAttribute('aria-expanded', String(expanded));
+          btn.innerHTML = 'Metrics ' + (expanded ? '▴' : '▾');
+        }
       } else if (action === 'legacy') {
         store.updateUi({ legacyMode: true });
         document.dispatchEvent(new CustomEvent('pageChange', { detail: { page: 'orderflow' } }));
@@ -591,8 +647,10 @@
           // Clear stale live overlays so old footprint doesn't mix across TFs.
           if (V6OF.CvdBuckets) V6OF.CvdBuckets.reset();
           // Fetch full depth via REST for deeper DOM ladder
+          var symbol = state.symbol || 'BTCUSDT';
+          var baseAsset = symbol.replace('USDT', '');
           if (source === 'hyperliquid') {
-            fetch('/api/hyperliquid/orderbook?market=BTC')
+            fetch('/api/hyperliquid/orderbook?market=' + baseAsset)
               .then(function(r) { return r.json(); })
               .then(function(data) {
                 if (data.ok && data.bids && data.asks && V6OF.DomLadder) {
@@ -610,7 +668,7 @@
               })
               .catch(function(e) { console.warn('[DOM] REST depth fetch failed', e); });
           } else if (source === 'binance') {
-            fetch('/api/market/depth?symbol=BTCUSDT&limit=5000')
+            fetch('/api/market/depth?symbol=' + symbol + '&limit=5000')
               .then(function(r) { return r.json(); })
               .then(function(data) {
                 if (data.bids && data.asks && V6OF.DomLadder) {
@@ -640,9 +698,23 @@
         }
       } else if (action === 'source') {
         var source = btn.getAttribute('data-source');
-        if (source && source !== state.dataSource) {
+        if (source && (source !== state.dataSource || state.source === 'mock')) {
           var oldSource = state.dataSource;
-          store.setState({ dataSource: source }, 'source-change');
+          var patch = { dataSource: source };
+          if (state.source === 'mock') {
+            patch.source = 'live';
+          }
+          store.setState(patch, 'source-change');
+
+          if (state.source === 'mock' && engineClient) {
+            renderEngineBar(root, {
+              status: 'connecting',
+              stats: engineClient.getStats(),
+              paused: false
+            }, store.getState());
+            engineClient.connect();
+            startDomDepthRefresh(root, store);
+          }
 
           // Cache current data before switching
           if (!V6OF._sourceCache) V6OF._sourceCache = {};
@@ -675,12 +747,14 @@
           // ── REST pre-fetch: depth + trades + klines in parallel ──
           var tf = state.timeframe || '1m';
           var isHL = source === 'hyperliquid';
+          var symbol = state.symbol || 'BTCUSDT';
+          var baseAsset = symbol.replace('USDT', '');
 
           // 1. Depth → DOM ladder
           var depthUrl = isHL
-            ? '/api/hyperliquid/orderbook?market=BTC'
-            : '/api/market/depth?symbol=BTCUSDT&limit=5000';
-          _cachedFetch(depthUrl, 30000).then(function(data) {
+            ? '/api/hyperliquid/orderbook?market=' + baseAsset
+            : '/api/market/depth?symbol=' + symbol + '&limit=5000';
+          _cachedFetch(depthUrl, 5000, true).then(function(data) {
             if (V6OF.DomLadder) {
               var book;
               if (isHL && data.ok) {
@@ -713,17 +787,17 @@
 
           // 2. Trades → fill the tape
           var tradesUrl = isHL
-            ? '/api/hyperliquid/trades?market=BTC'
-            : '/api/market/aggtrades?symbol=BTCUSDT&limit=500';
-          _cachedFetch(tradesUrl, 15000).then(function(data) {
+            ? '/api/hyperliquid/trades?market=' + baseAsset
+            : '/api/market/aggtrades?symbol=' + symbol + '&limit=500';
+          _cachedFetch(tradesUrl, 15000, true).then(function(data) {
             var trades;
             if (isHL && data.ok) {
               trades = (data.trades || []).map(function(t) {
-                return { price: t.px, qty: t.sz, time: t.time, side: t.side, symbol: 'BTC', source: 'hyperliquid_rest' };
+                return { price: t.px, qty: t.sz, time: t.time, side: t.side, symbol: baseAsset, source: 'hyperliquid_rest' };
               });
             } else if (!isHL && Array.isArray(data)) {
               trades = data.map(function(t) {
-                return { price: parseFloat(t.p), qty: parseFloat(t.q), time: t.T, side: t.m ? 'sell' : 'buy', symbol: 'BTCUSDT', source: 'binance_rest' };
+                return { price: parseFloat(t.p), qty: parseFloat(t.q), time: t.T, side: t.m ? 'sell' : 'buy', symbol: symbol, source: 'binance_rest' };
               });
             }
             if (trades && trades.length) {
@@ -734,9 +808,9 @@
 
           // 3. Klines → pre-fill the chart
           var klinesUrl = isHL
-            ? '/api/hyperliquid/klines?market=BTC&interval=' + tf + '&limit=500'
-            : '/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=500';
-          _cachedFetch(klinesUrl, 60000).then(function(data) {
+            ? '/api/hyperliquid/klines?market=' + baseAsset + '&interval=' + tf + '&limit=500'
+            : '/api/market/klines?symbol=' + symbol + '&interval=' + tf + '&limit=500';
+          _cachedFetch(klinesUrl, 60000, true).then(function(data) {
             var candles;
             if (isHL && data.ok) {
               candles = (data.candles || []).filter(function(c) { return c && c.openTime; }).map(function(c) {
@@ -795,13 +869,90 @@
     });
 
     root.addEventListener('change', function (event) {
+      var symbolSelect = event.target.closest('[data-v6-action="symbol-select"]');
+      if (symbolSelect) {
+        var symbol = symbolSelect.value;
+        var state = store.getState();
+        if (state.source === 'mock') {
+          var mockState = V6OF.Mock.createState({ symbol: symbol, timeframe: state.timeframe });
+          store.setState(mockState, 'symbol-change-mock');
+        } else {
+          store.setState({ symbol: symbol }, 'symbol-change');
+          if (engineClient) {
+            engineClient.clearTrades();
+            engineClient.clearHeatmap();
+            engineClient.clearFootprint();
+            if (engineClient.sendMessage) {
+              engineClient.sendMessage({ type: 'symbol_switch', symbol: symbol });
+            }
+          }
+          prefetchDomDepth(store, 'symbol-change');
+          var tf = state.timeframe || '1m';
+          var source = state.dataSource || 'binance';
+          var isHL = source === 'hyperliquid';
+          var baseAsset = symbol.replace('USDT', '');
+
+          var depthUrl = isHL
+            ? '/api/hyperliquid/orderbook?market=' + baseAsset
+            : '/api/market/depth?symbol=' + symbol + '&limit=5000';
+          _cachedFetch(depthUrl, 5000).then(function(data) {
+            var book = normalizeRestDepthBook(data, source);
+            if (book && V6OF.DomLadder) {
+              V6OF.DomLadder.feedOrderBook(book);
+              store.setState({
+                orderBook: book,
+                lastOrderBookTs: book.tsLocal,
+                restDepthTs: book.tsLocal
+              }, 'rest-depth');
+            }
+          }).catch(function(e) { console.warn('[DOM] REST depth failed', e); });
+
+          var tradesUrl = isHL
+            ? '/api/hyperliquid/trades?market=' + baseAsset
+            : '/api/market/aggtrades?symbol=' + symbol + '&limit=500';
+          _cachedFetch(tradesUrl, 15000).then(function(data) {
+            var trades;
+            if (isHL && data.ok) {
+              trades = (data.trades || []).map(function(t) {
+                return { price: t.px, qty: t.sz, time: t.time, side: t.side, symbol: baseAsset, source: 'hyperliquid_rest' };
+              });
+            } else if (!isHL && Array.isArray(data)) {
+              trades = data.map(function(t) {
+                return { price: parseFloat(t.p), qty: parseFloat(t.q), time: t.T, side: t.m ? 'sell' : 'buy', symbol: symbol, source: 'binance_rest' };
+              });
+            }
+            if (trades && trades.length) {
+              store.setState({ trades: trades.slice(-500) }, 'rest-trades');
+            }
+          }).catch(function(e) { console.warn('[TAPE] REST trades failed', e); });
+
+          var klinesUrl = isHL
+            ? '/api/hyperliquid/klines?market=' + baseAsset + '&interval=' + tf + '&limit=500'
+            : '/api/market/klines?symbol=' + symbol + '&interval=' + tf + '&limit=500';
+          _cachedFetch(klinesUrl, 60000).then(function(data) {
+            var candles;
+            if (isHL && data.ok) {
+              candles = (data.candles || []).filter(function(c) { return c && c.openTime; }).map(function(c) {
+                return { openTime: c.openTime, closeTime: c.closeTime, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume };
+              });
+            } else if (!isHL && Array.isArray(data.candles)) {
+              candles = data.candles.filter(function(c) { return c && c.openTime; });
+            }
+            if (candles && candles.length) {
+              store.setState({ chartCandles: candles }, 'rest-klines');
+              if (V6OF.chart && V6OF.chart.resetOnDataChange) V6OF.chart.resetOnDataChange();
+            }
+          }).catch(function(e) { console.warn('[CHART] REST klines failed', e); });
+        }
+        return;
+      }
+
       var input = event.target.closest('[data-v6-setting]');
       if (!input) return;
       var key = input.getAttribute('data-v6-setting');
       var state = store.getState();
 
       if (key === 'symbol') {
-        // Live-only: just record the requested symbol; the engine drives data.
         store.setState({ symbol: input.value }, 'symbol');
       } else if (key === 'chartMode') {
         store.updateSettings({ chartMode: input.value || 'both' });
@@ -880,11 +1031,16 @@
       root.innerHTML = shellHtml();
 
       // Load settings from localStorage. Start from an EMPTY live state — no
-      // mock/fake data is ever generated; panels show "not available" until the
-      // local engine streams real data.
+      // mock/fake data is ever generated unless data-v6-mode="mock" is set.
       var savedSettings = (V6OF.Settings && V6OF.Settings.load) ? V6OF.Settings.load() : {};
-      var initial = V6OF.Contract.createEmptyState();
-      initial.source = 'live';
+      var initial;
+      var isMockMode = root.getAttribute('data-v6-mode') === 'mock';
+      if (isMockMode && V6OF.Mock && typeof V6OF.Mock.createState === 'function') {
+        initial = V6OF.Mock.createState({ symbol: 'BTCUSDT' });
+      } else {
+        initial = V6OF.Contract.createEmptyState();
+        initial.source = 'live';
+      }
       if (savedSettings && Object.keys(savedSettings).length) {
         initial.settings = Object.assign({}, initial.settings, savedSettings);
       }
@@ -921,15 +1077,24 @@
 
       // Auto-connect to the local WS engine (required for live data).
       if (engineClient) {
-        renderEngineBar(root, {
-          status: 'connecting',
-          stats: engineClient.getStats(),
-          paused: false
-        }, store.getState());
-        store.setState({ source: 'live', trades: [] }, 'auto-connect');
-        engineClient.connect();
-        prefetchDomDepth(store, 'auto-connect');
-        startDomDepthRefresh(root, store);
+        if (store.getState().source === 'mock') {
+          // In mock mode, don't auto-connect or run REST refreshes, just render the initial mock status bar.
+          renderEngineBar(root, {
+            status: 'disconnected',
+            stats: engineClient.getStats(),
+            paused: false
+          }, store.getState());
+        } else {
+          renderEngineBar(root, {
+            status: 'connecting',
+            stats: engineClient.getStats(),
+            paused: false
+          }, store.getState());
+          store.setState({ source: 'live', trades: [] }, 'auto-connect');
+          engineClient.connect();
+          prefetchDomDepth(store, 'auto-connect');
+          startDomDepthRefresh(root, store);
+        }
       }
 
       // Mount the backtest/replay control in the header actions.

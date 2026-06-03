@@ -42,6 +42,31 @@
       var sellVol = meta.qty * (18 + rng() * 62);
       var delta = buyVol - sellVol;
 
+      // Generate mock levels for footprint cells
+      var levels = [];
+      var startPrice = Math.floor(low / meta.tick) * meta.tick;
+      var endPrice = Math.ceil(high / meta.tick) * meta.tick;
+      var steps = Math.min(30, Math.round((endPrice - startPrice) / meta.tick));
+      var pocPrice = startPrice;
+      var maxVol = 0;
+      for (var j = 0; j <= steps; j++) {
+        var p = startPrice + j * meta.tick;
+        var pVol = meta.qty * (1 + rng() * 10);
+        var pDelta = pVol * (rng() - 0.5) * 0.6;
+        if (pVol > maxVol) {
+          maxVol = pVol;
+          pocPrice = p;
+        }
+        levels.push({
+          price: round(p, 4),
+          buyVol: round(Math.max(0, (pVol + pDelta) / 2), 3),
+          sellVol: round(Math.max(0, (pVol - pDelta) / 2), 3),
+          totalVol: round(pVol, 3),
+          delta: round(pDelta, 3),
+          trades: 1 + Math.floor(rng() * 12)
+        });
+      }
+
       candles.push({
         symbol: symbol,
         timeframe: timeframe,
@@ -52,7 +77,9 @@
         low: round(Math.max(meta.tick, low), 4),
         close: round(close, 4),
         volume: round(buyVol + sellVol, 3),
-        delta: round(delta, 3)
+        delta: round(delta, 3),
+        poc: round(pocPrice, 4),
+        levels: levels
       });
 
       price = close;
@@ -170,6 +197,33 @@
     };
   }
 
+  function createHeatmapFrames(symbol, candles, rng, meta) {
+    var frames = [];
+    candles.forEach(function (c) {
+      var levels = [];
+      var mid = (c.open + c.close) / 2;
+      var levelsCount = 15;
+      for (var i = -levelsCount; i <= levelsCount; i++) {
+        var p = Math.round((mid + i * meta.tick * 3) / meta.tick) * meta.tick;
+        var dist = Math.abs(p - mid);
+        var baseIntensity = Math.max(0.05, 1 - (dist / (meta.tick * 35)));
+        if (rng() > 0.92) baseIntensity = 1.0;
+        levels.push({
+          price: round(p, 4),
+          intensity: round(baseIntensity * (0.3 + rng() * 0.7), 2)
+        });
+      }
+      frames.push({
+        symbol: symbol,
+        tsExchange: c.openTime,
+        tsLocal: c.openTime + 10,
+        tickSize: meta.tick,
+        levels: levels
+      });
+    });
+    return frames;
+  }
+
   V6OF.Mock = {
     createState: function (opts) {
       opts = opts || {};
@@ -182,6 +236,7 @@
       var candles = createCandles(symbol, timeframe, now, rng, meta);
       var trades = createTrades(symbol, now, rng, candles, meta);
       var last = candles[candles.length - 1] ? candles[candles.length - 1].close : meta.price;
+      var heatmapFrames = createHeatmapFrames(symbol, candles, rng, meta);
 
       return Object.assign(V6OF.Contract.createEmptyState(), {
         source: 'mock',
@@ -190,15 +245,30 @@
         trades: trades,
         orderBook: createOrderBook(symbol, now, rng, last, meta),
         candles: candles,
+        chartCandles: candles,
+        footprintCandles: candles,
+        heatmapFrames: heatmapFrames,
+        lastHeatmapFrame: heatmapFrames.length ? heatmapFrames[heatmapFrames.length - 1] : null,
         deltaBuckets: createDeltaBuckets(symbol, candles),
         vwap: createVwap(symbol, now, trades),
         settings: {
           minQty: 0,
           maxRows: 42,
+          showTape: true,
+          showDOM: true,
+          showCVD: true,
           showVwap: true,
+          showCandles: true,
+          showBubbles: true,
           showHeatmap: true,
           showFootprint: true,
+          showLastPrice: true,
+          showGrid: true,
+          bgColor: '#080b12',
+          upColor: '#3ddc97',
+          downColor: '#ff5f73',
           chartMode: 'both',
+          maxTrades: 500,
           heatmapMaxFrames: 360,
           footprintMaxCandles: 160,
           tickSize: meta.tick

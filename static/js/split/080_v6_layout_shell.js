@@ -72,11 +72,11 @@
         '</div>',
         '<div class="v6-resize-h" title="Drag to resize right dock width"></div>',
         '<div class="v6-right-col" data-v6-right-col>',
-          '<div class="v6-rtabs" data-v6-rtabs>',
-            '<button type="button" class="v6-rtab is-active" data-v6-rtab="dom">DOM</button>',
-            '<button type="button" class="v6-rtab" data-v6-rtab="tape">Tape</button>',
-            '<button type="button" class="v6-rtab v6-rtab-icon" data-v6-dock-toggle title="Collapse dock">&#10094;</button>',
-            '<button type="button" class="v6-rtab v6-rtab-icon" data-v6-rtab="settings" title="Settings">⚙</button>',
+          '<div class="v6-rtabs" data-v6-rtabs role="tablist" aria-label="Orderflow tabs">',
+            '<button type="button" class="v6-rtab is-active" id="v6-tab-dom" role="tab" aria-selected="true" aria-controls="v6-panel-dom" data-v6-rtab="dom">DOM</button>',
+            '<button type="button" class="v6-rtab" id="v6-tab-tape" role="tab" aria-selected="false" aria-controls="v6-panel-tape" data-v6-rtab="tape">Tape</button>',
+            '<button type="button" class="v6-rtab v6-rtab-icon" data-v6-dock-toggle title="Collapse dock" aria-label="Collapse dock">&#10094;</button>',
+            '<button type="button" class="v6-rtab v6-rtab-icon" id="v6-tab-settings" role="tab" aria-selected="false" aria-controls="v6-panel-settings" data-v6-rtab="settings" title="Settings" aria-label="Settings">⚙</button>',
           '</div>',
           '<div class="v6-rbody show-dom" data-v6-rbody>',
             // Custom info panel inside right dock
@@ -150,6 +150,24 @@
       // Re-home panels (nodes are MOVED, listeners + identity preserved).
       // Chart dominates; the orderflow panels live in a tabbed right column.
       move(center, pChart);
+      
+      // Set accessibility attributes for tabpanels
+      if (pDom) {
+        pDom.setAttribute('role', 'tabpanel');
+        pDom.setAttribute('id', 'v6-panel-dom');
+        pDom.setAttribute('aria-labelledby', 'v6-tab-dom');
+      }
+      if (pTape) {
+        pTape.setAttribute('role', 'tabpanel');
+        pTape.setAttribute('id', 'v6-panel-tape');
+        pTape.setAttribute('aria-labelledby', 'v6-tab-tape');
+      }
+      if (pSettings) {
+        pSettings.setAttribute('role', 'tabpanel');
+        pSettings.setAttribute('id', 'v6-panel-settings');
+        pSettings.setAttribute('aria-labelledby', 'v6-tab-settings');
+      }
+
       [pDom, pTape, pSettings].forEach(function (p) { move(rbody, p); });
       if (pCvd) pCvd.classList.add('v6-panel-hidden');
       if (pVwap) pVwap.classList.add('v6-panel-hidden');
@@ -166,7 +184,9 @@
         var name = tab.getAttribute('data-v6-rtab');
         rbody.className = 'v6-rbody show-' + name;
         Array.prototype.forEach.call(main.querySelectorAll('[data-v6-rtab]'), function (b) {
-          b.classList.toggle('is-active', b === tab);
+          var active = b === tab;
+          b.classList.toggle('is-active', active);
+          b.setAttribute('aria-selected', String(active));
         });
         var cv = root.querySelector('[data-v6-chart]');
         if (cv && V6OF.CanvasChart && V6OF.store) {

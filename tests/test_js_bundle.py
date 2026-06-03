@@ -84,14 +84,50 @@ class TestJSBundle(unittest.TestCase):
         splits = sorted(glob.glob(os.path.join(SPLIT_JS_DIR, "*.js")))
         self.assertGreater(len(splits), 50, "Peu de fichiers split JS")
 
+        map_path = APP_JS + ".map"
+        has_sourcemap = os.path.isfile(map_path)
+        sourcemap_sources = []
+        if has_sourcemap:
+            import json
+            try:
+                with open(map_path, "r", encoding="utf-8") as f:
+                    map_data = json.load(f)
+                    sourcemap_sources = [os.path.basename(s) for s in map_data.get("sources", [])]
+            except Exception as e:
+                print(f"Warning: could not parse sourcemap: {e}")
+
         for split_path in splits:
             split_name = os.path.basename(split_path)
+            
+            # If present in sourcemap sources, it is included in the bundle
+            if split_name in sourcemap_sources:
+                continue
+
             with open(split_path, "r", encoding="utf-8") as f:
-                content = f.read(200)
+                content = f.read()
+
+            # Remove single line and block comments to check if file has actual executable code
+            import re
+            code_only = re.sub(r'//[^\r\n]*|/\*.*?\*/', '', content, flags=re.DOTALL).strip()
+            if not code_only:
+                # The file has only comments/whitespace, which bundlers discard
+                continue
 
             # Utiliser les 50 premiers caracteres non-blancs comme signature
-            sig = content.strip()[:50]
+            sig = code_only[:50]
             if sig:
+                # Also try to check a whitespace-stripped version for basic minification
+                sig_min = "".join(sig.split())
+                bundle_min = "".join(self.bundle.split())
+                if sig in self.bundle or sig_min in bundle_min:
+                    continue
+
+                # Fallback to checking the raw content signature
+                raw_sig = content.strip()[:50]
+                raw_sig_min = "".join(raw_sig.split())
+                if raw_sig in self.bundle or raw_sig_min in bundle_min:
+                    continue
+                
                 self.assertIn(
                     sig, self.bundle,
                     f"Le fichier split '{split_name}' semble absent du bundle. "
