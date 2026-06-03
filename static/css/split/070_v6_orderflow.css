@@ -116,7 +116,6 @@
   border-bottom: 1px solid var(--v6-hairline);
   background: var(--v6-bg-2);
   flex-wrap: nowrap;
-  overflow: hidden;
 }
 /* thin vertical separators between header groups */
 .v6-header > .v6-timeframes::before,
