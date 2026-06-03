@@ -1,6 +1,6 @@
 # Inventaire des Routes Flask — Projet Journal (cockpit-v3)
 
-**Total : 73 routes uniques** (certaines partagent la même fonction via alias)
+**Total : 81 routes uniques** (certaines partagent la même fonction via alias)
 
 ---
 
@@ -184,12 +184,29 @@ Routes read-only pour suivre des wallets Hyperliquid publics. Aucune clé API, a
 
 ---
 
+## 16. Fichier : `app_parts/27_routes_hyperliquid_analytics.py`
+
+Routes analytiques read-only et import confirme pour le workspace Hyperliquid. Les reponses incluent toujours `source`, `coverage`, `gaps` et `partial` pour ne jamais presenter une couverture incomplete comme complete.
+
+| # | Méthode | Path | Fonction | Paramètres | Body | Retour | Codes HTTP | Description |
+|---|---------|------|----------|------------|------|--------|------------|-------------|
+| 74 | GET | `/api/hyperliquid/analytics/markets` | `hyperliquid_analytics_markets()` | - | - | JSON : `{source, coverage, gaps, partial, markets, collector}` | 200 | Marches suivis, couverture trades/L2, heartbeat collector et imports actifs. |
+| 75 | POST | `/api/hyperliquid/analytics/import/preview` | `hyperliquid_analytics_import_preview()` | - | `{coin, datasets, from, to}` | JSON : `{token, files, period, bytesEstimated, requesterPaysWarning}` | 202, 400 | Preflight d'import requester-pays. Retourne un token temporaire; la liste S3 complete reste a confirmer par worker. |
+| 76 | POST | `/api/hyperliquid/analytics/import/jobs` | `hyperliquid_analytics_import_jobs()` | - | `{token, confirmed: true}` | JSON : `{job}` | 202, 400 | Enfile un import confirme. Le worker dedie execute le job, aucun serveur Flask ne demarre de collector implicite. |
+| 77 | GET | `/api/hyperliquid/analytics/import/jobs/<id>` | `hyperliquid_analytics_import_job(job_id)` | Path : `id` | - | JSON : `{job}` | 200, 404 | Etat d'un job d'import: progression, erreurs, partitions validees et gaps. |
+| 78 | GET | `/api/hyperliquid/analytics/candles` | `hyperliquid_analytics_candles()` | Query : `coin`, `startTime`, `endTime`, `interval` | - | JSON : `{candles, coverage, gaps, partial}` | 200, 400 | Candles agregees depuis trades persistants, avec fallback recentTrades explicitement partiel. |
+| 79 | GET | `/api/hyperliquid/analytics/volume-profile` | `hyperliquid_analytics_volume_profile()` | Query : `coin`, `startTime`, `endTime`, `metric`, `rowSize`, `vaPercent`, `profileType` | - | JSON : `{levels, poc, vah, val, developing, previousLevels, hvn, lvn, coverage}` | 200, 400 | Volume Profile trade-backed: buy/sell agressifs, delta, Value Area contigue, developing levels et couverture. |
+| 80 | GET | `/api/hyperliquid/analytics/footprint` | `hyperliquid_analytics_footprint()` | Query : `coin`, `startTime`, `endTime`, `interval`, `metric`, `rowSize`, `imbalanceRatio`, `stack` | - | JSON : `{candles, levels, buyVolume, sellVolume, delta, cvd, signalsEnabled}` | 200, 400 | Footprint exact depuis executions disponibles; signaux desactives si couverture partielle ou side inconnu. |
+| 81 | GET | `/api/hyperliquid/analytics/heatmap` | `hyperliquid_analytics_heatmap()` | Query : `coin`, `startTime`, `endTime`, `resolution`, `rowSize` | - | JSON : `{tiles, coverage, gaps, partial, signalsEnabled}` | 200, 400 | Tuiles L2 observees. Les trous sont explicites et aucune liquidite n'est interpolee. |
+
+---
+
 ## Résumé par méthode HTTP
 
 | Méthode | Nombre | Routes |
 |---------|--------|--------|
-| GET | 46 | Voir sections ci-dessus, dont `/api/hyperliquid/*` pour les données market et wallets read-only. |
-| POST | 16 | Voir sections ci-dessus. |
+| GET | 52 | Voir sections ci-dessus, dont `/api/hyperliquid/*` pour les données market, wallets et analytics read-only. |
+| POST | 18 | Voir sections ci-dessus. |
 | PUT | 4 | Voir sections ci-dessus. |
 | DELETE | 7 | Voir sections ci-dessus. |
 | OPTIONS | 1 | Pre-flight implicite Flask et `/api/ai/chat` explicite. |

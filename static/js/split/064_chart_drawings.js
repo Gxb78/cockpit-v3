@@ -1518,8 +1518,9 @@
         var x2 = state.chart.timeScale().timeToCoordinate(clipEnd);
         if (x1 == null || x2 == null || x2 - x1 < 2) continue;
 
-        // Draw fill
-        ctx.globalAlpha = parseFloat(session.opacity) || 0.12;
+        // Draw fill: keep sessions as context, not as the main visual layer.
+        var sessionAlpha = Math.min(parseFloat(session.opacity) || 0.12, 0.045);
+        ctx.globalAlpha = sessionAlpha;
         ctx.fillStyle = session.color;
         ctx.fillRect(x1, 0, x2 - x1, ch);
         ctx.globalAlpha = 1;
@@ -1532,7 +1533,7 @@
         // Thin line at session start
         ctx.strokeStyle = session.color;
         ctx.lineWidth = 0.5;
-        ctx.globalAlpha = 0.25;
+        ctx.globalAlpha = Math.min(0.18, sessionAlpha * 3);
         ctx.beginPath(); ctx.moveTo(x1, 0); ctx.lineTo(x1, ch); ctx.stroke();
 
         // Thin line at session end

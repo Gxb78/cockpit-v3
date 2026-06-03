@@ -123,6 +123,38 @@ Deux serveurs Flask coexistent :
 Le navigateur Windows utilise le serveur Windows. Les curl WSL utilisent Linux.
 Après modif Python, tuer les DEUX. `pkill -f 'python app.py'` ne tue que le Linux.
 
+## Desktop vs Web — Workflow dev synchro
+
+Quand tu modifies du JS/CSS/templates, pas besoin de rebuild le desktop à chaque fois :
+1. Lance le serveur Flask dev sur le port 5001 :
+   ```
+   .venv/Scripts/python.exe app.py
+   ```
+   (par défaut sur 5000, mais le desktop détecte aussi le port 5000)
+
+2. Ouvre CockpitV6.exe (le raccourci bureau). Le desktop détecte que le port 5001
+   (ou 5000) est déjà occupé par ton serveur dev → **saute le lancement de
+   `journal-server.exe`** et utilise ton serveur dev en direct. Les modifs JS/CSS
+   sont instantanées sans rebuild.
+
+3. Pour rebuild complet (avant release) :
+   ```
+   powershell -File apps/desktop/scripts/build_portable.ps1
+   ```
+   Ça lance : build.py → tests → PyInstaller → Wails build → copie dans
+   `dist/CockpitV6_Portable/`.
+
+### Changements récents (juin 2026)
+
+Les CMD windows des sidecars (journal-server.exe + marketd.exe) sont désormais
+cachées — plus de fenêtres console intempestives au lancement.
+
+Le `unhandledrejection` handler ne toaste plus les erreurs génériques "Failed to
+fetch" — uniquement les vraies erreurs applicatives.
+
+Le redirecteur Wails (`frontend/dist/index.html`) a un timeout de 12s avec message
+d'erreur lisible si le backend ne démarre pas. Plus de boucle infinie silencieuse.
+
 ## Repo
 
 Public sur `github.com/Gxb78/cockpit-v3`. Ne jamais commiter secrets, clés API, tokens,

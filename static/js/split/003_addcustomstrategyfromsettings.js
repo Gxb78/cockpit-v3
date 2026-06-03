@@ -119,6 +119,54 @@ function bindSettings() {
     if (e.key === "Enter") { e.preventDefault(); saveProfileSettings(); }
   });
 
+  // Bouton "Ouvrir dans le navigateur"
+  var browserBtn = $("#settingsOpenBrowserBtn");
+  if (browserBtn) {
+    browserBtn.addEventListener("click", function () {
+      var url = window.location.protocol + "//" + window.location.host + "/";
+      window.open(url, "_blank");
+    });
+  }
+
+  // Bouton "Rebuild + Redemarrer" (dans Settings > App)
+  var restartBtn = $("#settingsRestartBtn");
+  if (restartBtn) {
+    restartBtn.addEventListener("click", async function () {
+      var btn = this;
+      btn.disabled = true;
+      btn.textContent = "Rebuild...";
+      // 1. Envoyer la demande de redémarrage
+      try { await api("/api/dev/restart", { method: "POST" }); } catch (_) {}
+      // 2. Polling : attendre que le serveur MEURE, puis qu'il REVIENNE
+      var url = window.location.href;
+      var base = url.split("?")[0].replace(/\/$/, "");
+      var retries = 0;
+      var maxRetries = 30;
+      var wasDown = false;
+      function poll() {
+        retries++;
+        fetch(base, { method: "HEAD", cache: "no-store" })
+          .then(function (r) {
+            if (wasDown) { window.location.reload(); return; }
+            if (retries < maxRetries) setTimeout(poll, 1000);
+            else { btn.textContent = "Rebuild + Redemarrer"; btn.disabled = false; }
+          })
+          .catch(function () {
+            if (!wasDown) wasDown = true;
+            if (retries < maxRetries) setTimeout(poll, 1000);
+            else { btn.textContent = "Rebuild + Redemarrer"; btn.disabled = false; }
+          });
+      }
+      setTimeout(poll, 500);
+    });
+  }
+
+  // Afficher l'URL du serveur
+  var serverDisplay = $("#appServerDisplay");
+  if (serverDisplay) {
+    serverDisplay.textContent = window.location.host || "—";
+  }
+
   // Quick theme toggle in rail
   $("#themeToggle")?.addEventListener("click", function () {
     if (!state.settings) return;

@@ -16,7 +16,10 @@ from pathlib import Path
 
 log = logging.getLogger("journal")
 
-_PARTS_DIR = Path(__file__).resolve().parent
+if getattr(sys, 'frozen', False):
+    _PARTS_DIR = Path(sys._MEIPASS).resolve() / "app_parts"
+else:
+    _PARTS_DIR = Path(__file__).resolve().parent
 _PART_FILES = [
     "00_paths_constants.py",        # 00 — chemins, constantes, app
     "01_flask_app.py",              # 01 — configuration Flask
@@ -50,6 +53,7 @@ _PART_FILES = [
     "21_midnight_engine.py",        # 25 — Midnight Engine (+ route API)
     "25_routes_hyperliquid.py",     # 25 — Routes API market data (Hyperliquid read-only)
     "26_routes_hyperliquid_wallets.py", # 26 — Routes API Hyperliquid wallet tracker (read-only)
+    "27_routes_hyperliquid_analytics.py", # 27 - Hyperliquid trade/L2 analytics workspace
 ]
 
 # Canonical shared namespace — ALL functions from ALL parts reference this dict

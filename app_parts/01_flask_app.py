@@ -1,6 +1,7 @@
 # ---------- Logging ----------
 
 import logging as _logging
+from flask import Flask, render_template, request, jsonify
 
 _logging.basicConfig(
     level=_logging.INFO,
@@ -13,21 +14,20 @@ log = _logging.getLogger("journal")
 
 try:
     from dotenv import load_dotenv
-    load_dotenv()  # charge .env depuis la racine du projet
+    # Charge explicitement le fichier .env situe dans le dossier de données utilisateur (AppData ou Portable)
+    load_dotenv(dotenv_path=str(USER_DATA_DIR / ".env"))
 except ImportError:
     log.warning("python-dotenv absent. Lance: pip install python-dotenv")
     log.warning("Sans .env, la cle ANTHROPIC_API_KEY doit etre dans l environnement.")
 
 app = Flask(__name__,
-    template_folder=str(BASE_DIR / "templates"),
-    static_folder=str(BASE_DIR / "static"),
+    template_folder=str(RESOURCE_DIR / "templates"),
+    static_folder=str(RESOURCE_DIR / "static"),
     static_url_path="/static",
 )
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 app.config["TEMPLATES_AUTO_RELOAD"] = True
-
-
 @app.after_request
 def add_no_cache_headers(response):
     ct = response.content_type or ""

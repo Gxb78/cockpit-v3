@@ -3,3 +3,8 @@ Werkzeug==3.0.3
 python-dotenv==1.1.0
 Pillow>=10.0.0
 tzdata
+duckdb>=1.1.0
+boto3>=1.35.0
+lz4>=4.3.3
+websocket-client>=1.8.0
+requests>=2.31.0

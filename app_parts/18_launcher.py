@@ -26,6 +26,14 @@ def dev_restart():
         import time as _t_mod
         import subprocess as _sp
         import os as _os
+
+        # Lancer le helper de relance desktop en arrière-plan (tue CockpitV6.exe,
+        # attend le reboot Flask, relance l'app)
+        _helper = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+                                "apps", "desktop", "scripts", "restart_helper.bat")
+        if _os.path.exists(_helper):
+            _sp.Popen(_helper, shell=True)
+
         # Rebuild le bundle avant de redémarrer
         _build_script = _os.path.join(_os.path.dirname(__file__), "..", "build.py")
         _build_script = _os.path.abspath(_build_script)
@@ -48,6 +56,8 @@ def dev_restart():
 def launch():
     """Point d'entree du serveur. Appele par app.py quand le module est __main__."""
     import sys
+    import requests
+    import time as time_module
 
     backup_db()
     init_db()
@@ -62,9 +72,25 @@ def launch():
     browser_url = os.environ.get("APP_URL", f"http://127.0.0.1:{port}/")
     is_reloader_child = os.environ.get("WERKZEUG_RUN_MAIN") == "true"
 
+    # Attend que le serveur soit prêt avant d'ouvrir le navigateur
+    def wait_and_open_browser():
+        if not open_browser_enabled:
+            return
+        max_wait = 30
+        start = time_module.time()
+        while time_module.time() - start < max_wait:
+            try:
+                requests.get(browser_url, timeout=2)
+                open_browser(browser_url)
+                return
+            except Exception:
+                time_module.sleep(0.3)
+        log.warning("Timeout waiting for server to be ready after %ds — opening browser anyway", max_wait)
+        open_browser(browser_url)
+
     # Avoid opening duplicate tabs when Flask reloader is active.
     if open_browser_enabled and (not debug_mode or is_reloader_child):
-        Timer(0.8, open_browser, args=(browser_url,)).start()
+        Timer(0.1, wait_and_open_browser).start()
 
     log.info(
         "Serveur run_id=%s pid=%s cwd=%s exe=%s host=%s port=%s debug=%s open_browser=%s app_url=%s",

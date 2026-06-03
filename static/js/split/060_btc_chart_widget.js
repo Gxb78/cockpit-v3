@@ -290,7 +290,8 @@
     } catch(e) {}
 
     Object.keys(S.vwapSeriesMap).forEach(function (k) {
-      if (S.activeVwapPeriods.indexOf(k) < 0) _removeVwapSeries(k);
+      var basePeriod = k.replace(/-1$/, '').replace(/_(u1|u2|u3|l1|l2|l3)$/, '');
+      if (S.activeVwapPeriods.indexOf(basePeriod) < 0) _removeVwapSeries(k);
     });
 
     if (!S.activeVwapPeriods.length) return;
@@ -316,7 +317,10 @@
       if (token !== S.renderToken || tf !== S.timeframe) return;
 
       try {
-        await window.BtcVwap.drawVwapForChart(state, p, function () {
+        await window.BtcVwap.drawVwapForChart(state, p, false, function () {
+          return token !== S.renderToken || tf !== S.timeframe;
+        });
+        await window.BtcVwap.drawVwapForChart(state, p, true, function () {
           return token !== S.renderToken || tf !== S.timeframe;
         });
       } catch (e) {
@@ -979,7 +983,24 @@
         crosshairMarkerVisible: false, title: 'VWAP ' + p, visible: true,
         autoscaleInfoProvider: function () { return null; },
       });
+      S.vwapSeriesMap[p + '-1'] = _addLineSeries(S.chart, {
+        color: VWAP_COLORS[p], lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false,
+        crosshairMarkerVisible: false, title: 'VWAP ' + p + '-1', visible: true,
+        autoscaleInfoProvider: function () { return null; },
+      });
       S.vwapSeriesMap[p].setData([]);
+      S.vwapSeriesMap[p + '-1'].setData([]);
+      // Bandes d'écart-type (6 séries par période)
+      var BAND_KEYS = ['u1', 'u2', 'u3', 'l1', 'l2', 'l3'];
+      for (var bi = 0; bi < BAND_KEYS.length; bi++) {
+        var bk = BAND_KEYS[bi];
+        S.vwapSeriesMap[p + '_' + bk] = _addLineSeries(S.chart, {
+          color: VWAP_COLORS[p], lineWidth: 1, lineStyle: 0, priceLineVisible: false, lastValueVisible: false,
+          crosshairMarkerVisible: false, title: 'VWAP ' + p + ' ' + bk, visible: true,
+          autoscaleInfoProvider: function () { return null; },
+        });
+        S.vwapSeriesMap[p + '_' + bk].setData([]);
+      }
     });
 
     // Resize observer

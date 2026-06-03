@@ -312,6 +312,20 @@ def _hl_resolve_coin(market=None, force=False):
             "candidates": [],
         }, None
 
+    # Marchés prioritaires: canonical direct, pas de fuzzy matching
+    # Les metas Hyperliquid peuvent avoir des noms proches (SPX au lieu de SP500)
+    # qui faussent la résolution. On utilise le mapping produit explicite.
+    market_key = (market or "BTC").strip().upper()
+    if market_key in _HL_CANONICAL_MARKET_ASSETS:
+        canonical = _HL_CANONICAL_MARKET_ASSETS[market_key]
+        return {
+            "market": market,
+            "coin": canonical,
+            "resolved": True,
+            "source": "canonical-direct",
+            "candidates": [],
+        }, None
+
     catalog, err = _hl_get_meta_catalog(force=force)
     if err:
         return None, err

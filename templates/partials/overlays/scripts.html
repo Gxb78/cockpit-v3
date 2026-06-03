@@ -18,7 +18,14 @@
   };
   window.addEventListener("unhandledrejection", function (e) {
     var reason = e.reason;
-    var msg = reason && reason.message ? reason.message : String(reason || "Promise rejetee");
+    var msg = reason && reason.message ? reason.message : String(reason || "Promise rejected");
+    // "Failed to fetch" is a generic network-level rejection from fetch().
+    // It floods the UI on every transient network issue during startup and
+    // auto-refresh — log it silently, don't toast.
+    if (msg === "Failed to fetch" || msg.indexOf("fetch") !== -1) {
+      console.warn("[cockpit] suppressed unhandled fetch rejection:", msg, reason);
+      return;
+    }
     _showError(msg);
   });
 })();
