@@ -11,7 +11,7 @@
    * @typedef {Object} CacheEntry
    * @property {*} data - Cached response data
    * @property {number} timestamp - When cached (ms since epoch)
-   * @property {Promise} pending - In-flight fetch promise (if any)
+   * @property {Promise|null} pending - In-flight fetch promise (if any)
    */
 
   /**
@@ -27,6 +27,9 @@
     // Default TTL: 5 seconds
     _defaultTtl: 5000,
 
+    // Per-URL custom TTLs
+    _ttls: {},
+
     /**
      * Fetch with caching. Returns cached response if valid, else fetches.
      * @param {string} url - API endpoint URL
@@ -34,9 +37,38 @@
      * @returns {Promise<*>} Parsed JSON response
      */
     fetch: function (url, ttl) {
-      ttl = ttl || this._defaultTtl;
+      // Validate URL parameter
+      if (!url || typeof url !== 'string') {
+        console.error('[V6 ApiCache] Invalid URL:', url);
+        return Promise.reject(new Error('Invalid URL'));
+      }
+
+      // Use per-URL TTL if set, otherwise use passed ttl or default
+      ttl = this._ttls[url] || ttl || this._defaultTtl;
       var cached = this._memory[url];
       var now = Date.now();
+
+      // Try to restore from localStorage if not in memory
+      if (!cached && localStorage) {
+        try {
+          var storedKey = 'v6-cache:' + encodeURIComponent(url);
+          var stored = localStorage.getItem(storedKey);
+          if (stored) {
+            var parsed = JSON.parse(stored);
+            if (parsed && parsed.data && parsed.timestamp && parsed.ttl) {
+              if ((now - parsed.timestamp) < parsed.ttl) {
+                cached = this._memory[url] = {
+                  data: parsed.data,
+                  timestamp: parsed.timestamp,
+                  pending: null
+                };
+              }
+            }
+          }
+        } catch (e) {
+          // Silently skip corrupt entries
+        }
+      }
 
       // Return if cache is fresh and not in-flight
       if (cached && !cached.pending && (now - cached.timestamp) < ttl) {
@@ -48,7 +80,7 @@
         return cached.pending;
       }
 
-      // Fetch and cache
+      // Create the fetch promise FIRST
       var self = this;
       var promise = window.fetch(url)
         .then(function (response) {
@@ -71,27 +103,23 @@
               timestamp: Date.now(),
               ttl: ttl
             });
-            localStorage.setItem('v6-cache:' + url, serialized);
+            localStorage.setItem('v6-cache:' + encodeURIComponent(url), serialized);
           } catch (e) {
-            // Quota exceeded or disabled—silently skip localStorage
+            if (e.name === 'QuotaExceededError') {
+              console.warn('[V6 ApiCache] localStorage quota exceeded for', url);
+            }
           }
           return data;
         })
         .catch(function (error) {
-          // Clear pending flag on error
-          if (self._memory[url]) {
-            self._memory[url].pending = null;
-          }
+          // CRITICAL FIX: Clear entire entry on error, not just pending flag
+          delete self._memory[url];
           console.error('[V6 ApiCache] fetch failed for ' + url, error);
           throw error;
         });
 
-      // Mark as pending
-      if (!this._memory[url]) {
-        this._memory[url] = { data: null, timestamp: 0, pending: promise };
-      } else {
-        this._memory[url].pending = promise;
-      }
+      // Mark as pending BEFORE returning
+      this._memory[url] = { data: null, timestamp: 0, pending: promise };
 
       return promise;
     },
@@ -123,10 +151,38 @@
     },
 
     /**
-     * Set custom TTL for a URL pattern (e.g., /api/hyperliquid/*)
+     * Restore cache from localStorage (call on init)
+     */
+    _restore: function () {
+      var self = this;
+      for (var i = 0; i < localStorage.length; i++) {
+        var key = localStorage.key(i);
+        if (key && key.indexOf('v6-cache:') === 0) {
+          try {
+            var stored = JSON.parse(localStorage.getItem(key));
+            if (stored && stored.data && stored.timestamp && stored.ttl) {
+              var now = Date.now();
+              if ((now - stored.timestamp) < stored.ttl) {
+                var url = decodeURIComponent(key.substring(9)); // Remove 'v6-cache:' prefix
+                self._memory[url] = {
+                  data: stored.data,
+                  timestamp: stored.timestamp,
+                  pending: null
+                };
+              }
+            }
+          } catch (e) {
+            // Silently skip corrupt entries
+          }
+        }
+      }
+    },
+
+    /**
+     * Set custom TTL for a specific URL
      */
     setTtl: function (url, ttl) {
-      this._defaultTtl = ttl;
+      this._ttls[url] = ttl;
     }
   };
 })();
