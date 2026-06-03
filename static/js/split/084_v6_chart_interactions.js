@@ -67,7 +67,7 @@
     });
   }
 
-  var drag = { active: false, mode: 'pan', startX: 0, startY: 0, endX: 0, endY: 0, startViewport: null };
+  var drag = { active: false, mode: 'pan', startX: 0, startY: 0, clickX: 0, clickY: 0, endX: 0, endY: 0, startViewport: null };
   var wheelState = { zoomMode: 'time' };
 
   // ── Touch / pinch state ──
@@ -215,6 +215,8 @@
       if (!vp) return;
 
       var pt = localPoint(canvas, event);
+      drag.clickX = pt.x;
+      drag.clickY = pt.y;
 
       // Detect axis click — zoom the corresponding axis.
       if (isOnPriceAxis(pt.x, pt.y, vp)) {
@@ -272,34 +274,62 @@
 
       if (drag.mode === 'price') {
         vp.panByPixels(0, dy);
+        drag.startY = pt.y;
       } else if (drag.mode === 'pan') {
         vp.panByPixels(dx, dy);
-      } else if (drag.mode === 'price-zoom') {
-        var factor = 1 + dy / 100;
-        if (factor < 0.1) factor = 0.1;
-        vp.zoomPrice(factor, pt.y);
-        drag.startY = pt.y;
-      } else if (drag.mode === 'price-zoom-out') {
-        var factor = 1 - dy / 100;
-        if (factor < 0.1) factor = 0.1;
-        vp.zoomPrice(factor, pt.y);
-        drag.startY = pt.y;
-      } else if (drag.mode === 'time-zoom') {
-        var factor = 1 + dx / 100;
-        if (factor < 0.1) factor = 0.1;
-        vp.zoomTime(factor, pt.x);
         drag.startX = pt.x;
-      } else if (drag.mode === 'time-zoom-out') {
-        var factor = 1 - dx / 100;
-        if (factor < 0.1) factor = 0.1;
-        vp.zoomTime(factor, pt.x);
-        drag.startX = pt.x;
-      } else {
-        vp.panByPixels(dx, dy);
-      }
+        drag.startY = pt.y;
+      } else if (drag.mode === 'price-zoom' || drag.mode === 'price-zoom-out') {
+        var totalDy = pt.y - drag.clickY;
+        var baseMin = drag.startViewport.priceMin;
+        var baseMax = drag.startViewport.priceMax;
+        var baseRange = baseMax - baseMin;
 
-      drag.startX = pt.x;
-      drag.startY = pt.y;
+        var plot = vp.plot;
+        var anchorY = drag.clickY;
+        if (anchorY < plot.top) anchorY = plot.top;
+        if (anchorY > plot.top + plot.height) anchorY = plot.top + plot.height;
+        var centerPrice = baseMax - ((anchorY - plot.top) / plot.height) * baseRange;
+
+        var zoomFactor = 1 - totalDy * 0.002;
+        if (drag.mode === 'price-zoom-out') {
+          zoomFactor = 1 + totalDy * 0.002;
+        }
+        if (zoomFactor < 0.1) zoomFactor = 0.1;
+        if (zoomFactor > 10) zoomFactor = 10;
+
+        var newRange = baseRange * (1 / zoomFactor);
+        var ratio = newRange / baseRange;
+        var nextMin = centerPrice - (centerPrice - baseMin) * ratio;
+        var nextMax = nextMin + newRange;
+
+        vp.setPriceRange(nextMin, nextMax);
+      } else if (drag.mode === 'time-zoom' || drag.mode === 'time-zoom-out') {
+        var totalDx = pt.x - drag.clickX;
+        var baseStart = drag.startViewport.timeStart;
+        var baseEnd = drag.startViewport.timeEnd;
+        var baseSpan = baseEnd - baseStart;
+
+        var plot = vp.plot;
+        var anchorX = drag.clickX;
+        if (anchorX < plot.left) anchorX = plot.left;
+        if (anchorX > plot.left + plot.width) anchorX = plot.left + plot.width;
+        var centerTime = baseStart + ((anchorX - plot.left) / plot.width) * baseSpan;
+
+        var zoomFactor = 1 + totalDx * 0.002;
+        if (drag.mode === 'time-zoom-out') {
+          zoomFactor = 1 - totalDx * 0.002;
+        }
+        if (zoomFactor < 0.1) zoomFactor = 0.1;
+        if (zoomFactor > 10) zoomFactor = 10;
+
+        var newSpan = baseSpan * (1 / zoomFactor);
+        var ratio = newSpan / baseSpan;
+        var nextStart = centerTime - (centerTime - baseStart) * ratio;
+        var nextEnd = nextStart + newSpan;
+
+        vp.setTimeRange(nextStart, nextEnd);
+      }
 
       cross.x = pt.x;
       if (cross.hoveringSource === 'chart') {

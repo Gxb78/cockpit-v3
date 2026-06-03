@@ -13,7 +13,12 @@
   }
 
   function sourceText(state) {
-    return state && state.source === 'live' ? 'Live' : 'Offline';
+    if (!state) return 'Offline';
+    if (state.source === 'mock') return 'Mock';
+    if (state.dataFreshness === 'live') return 'Live';
+    if (state.dataFreshness === 'rest-fallback') return 'REST Fallback';
+    if (state.transportStatus === 'connecting') return 'Connecting';
+    return 'Offline';
   }
 
   // Format signed value with +/-

@@ -38,6 +38,50 @@
       '" aria-label="' + title + '">' + ICONS[name] + '</button>';
   }
 
+  // ── Declarative layout schema (single source of truth) ──
+  // Reordering panels = edit these arrays. The right-dock tab buttons are
+  // generated in `right.tabs` order, and panels are re-homed into their region
+  // by matching `data-v6-panel="<id>"` (id === the `.v6-panel-<id>` CSS class,
+  // so the existing `show-<id>` visibility rules keep working untouched).
+  //   center : Layout panel ids stacked in the center column (chart slot).
+  //   right  : tabbed right dock. Each tab { id, label, icon?, glyph? }.
+  var DEFAULT_SCHEMA = {
+    center: ['chart'],
+    right: {
+      tabs: [
+        { id: 'dom', label: 'DOM' },
+        { id: 'tape', label: 'Tape' },
+        { id: 'settings', label: 'Settings', icon: true, glyph: '⚙' }
+      ],
+      'default': 'dom'
+    }
+  };
+  V6OF.LayoutSchema = V6OF.LayoutSchema || DEFAULT_SCHEMA;
+
+  function rtabHtml(spec, isDefault) {
+    var sel = isDefault ? 'true' : 'false';
+    var activeCls = isDefault ? ' is-active' : '';
+    var iconCls = spec.icon ? ' v6-rtab-icon' : '';
+    var extra = spec.icon ? ' title="' + spec.label + '" aria-label="' + spec.label + '"' : '';
+    var content = spec.icon ? (spec.glyph || spec.label) : spec.label;
+    return '<button type="button" class="v6-rtab' + iconCls + activeCls + '" id="v6-tab-' + spec.id +
+      '" role="tab" aria-selected="' + sel + '" aria-controls="v6-panel-' + spec.id +
+      '" data-v6-rtab="' + spec.id + '"' + extra + '>' + content + '</button>';
+  }
+
+  // Generate the tablist from the schema. Text tabs render first, then the dock
+  // collapse toggle (fixed control), then icon tabs — preserving the original
+  // DOM / Tape / [collapse] / Settings arrangement for the default schema.
+  function rtabsHtml(schema) {
+    var def = schema.right['default'];
+    var parts = ['<div class="v6-rtabs" data-v6-rtabs role="tablist" aria-label="Orderflow tabs">'];
+    schema.right.tabs.forEach(function (t) { if (!t.icon) parts.push(rtabHtml(t, t.id === def)); });
+    parts.push('<button type="button" class="v6-rtab v6-rtab-icon" data-v6-dock-toggle title="Collapse dock" aria-label="Collapse dock">&#10094;</button>');
+    schema.right.tabs.forEach(function (t) { if (t.icon) parts.push(rtabHtml(t, t.id === def)); });
+    parts.push('</div>');
+    return parts.join('');
+  }
+
   function leftToolbarHtml() {
     return [
       '<div class="v6-left-toolbar">',
@@ -47,15 +91,17 @@
         tool('fit', 'Fit view'),
         tool('reset', 'Reset view'),
         tool('follow', 'Follow live'),
+        /* Hiding drawing placeholders until implementation
         '<div class="v6-tool-sep"></div>',
         tool('horiz', 'Horizontal Line (Drawing Placeholder)'),
         tool('trend', 'Trendline (Drawing Placeholder)'),
         tool('rect', 'Rectangle (Drawing Placeholder)'),
+        */
       '</div>'
     ].join('');
   }
 
-  function mainAreaHtml() {
+  function mainAreaHtml(schema) {
     return [
       '<div class="v6-main-area">',
         leftToolbarHtml(),
@@ -65,20 +111,15 @@
           '<div class="v6-cvd-strip" data-v6-cvd-strip>',
             '<div class="v6-cvd-strip-head">',
               '<span class="v6-cvd-strip-title">CVD · Delta</span>',
-              '<button type="button" class="v6-cvd-collapse" data-v6-cvd-collapse aria-label="Toggle CVD">▾</button>',
+              '<button type="button" class="v6-cvd-collapse" data-v6-cvd-collapse aria-label="Toggle CVD" title="Collapse CVD">▾</button>',
             '</div>',
             '<canvas class="v6-cvd-canvas" data-v6-cvd-canvas></canvas>',
           '</div>',
         '</div>',
         '<div class="v6-resize-h" title="Drag to resize right dock width"></div>',
         '<div class="v6-right-col" data-v6-right-col>',
-          '<div class="v6-rtabs" data-v6-rtabs role="tablist" aria-label="Orderflow tabs">',
-            '<button type="button" class="v6-rtab is-active" id="v6-tab-dom" role="tab" aria-selected="true" aria-controls="v6-panel-dom" data-v6-rtab="dom">DOM</button>',
-            '<button type="button" class="v6-rtab" id="v6-tab-tape" role="tab" aria-selected="false" aria-controls="v6-panel-tape" data-v6-rtab="tape">Tape</button>',
-            '<button type="button" class="v6-rtab v6-rtab-icon" data-v6-dock-toggle title="Collapse dock" aria-label="Collapse dock">&#10094;</button>',
-            '<button type="button" class="v6-rtab v6-rtab-icon" id="v6-tab-settings" role="tab" aria-selected="false" aria-controls="v6-panel-settings" data-v6-rtab="settings" title="Settings" aria-label="Settings">⚙</button>',
-          '</div>',
-          '<div class="v6-rbody show-dom" data-v6-rbody>',
+          rtabsHtml(schema),
+          '<div class="v6-rbody show-' + schema.right['default'] + '" data-v6-rbody>',
             // Custom info panel inside right dock
             '<section class="v6-panel v6-panel-info" data-v6-panel="info" aria-label="V6 Info">',
               '<div class="v6-panel-head"><span>Info</span><small>Market metrics</small></div>',
@@ -121,85 +162,179 @@
     if (target && node) target.appendChild(node);
   }
 
+  var storeUnsub = null;
+
   V6OF.Shell = {
+    dispose: function () {
+      if (storeUnsub) {
+        try { storeUnsub(); } catch (_) {}
+        storeUnsub = null;
+      }
+      if (V6OF.Backtest && typeof V6OF.Backtest.dispose === 'function') {
+        try { V6OF.Backtest.dispose(); } catch (_) {}
+      }
+      var root = document.getElementById('v6-orderflow-root');
+      if (root) {
+        delete root.dataset.v6ShellMounted;
+        root.removeAttribute('data-v6-shell-mounted');
+      }
+    },
     init: function (root) {
       if (!root) return;
       var shell = root.querySelector('.v6-shell');
       var grid = root.querySelector('.v6-grid');
       if (!shell || !grid) return;            // Layout not mounted yet
       if (root.dataset.v6ShellMounted === '1') return;
+
+      this.dispose();
       root.dataset.v6ShellMounted = '1';
 
-      // Grab existing Layout panels (these contain the live render targets).
-      var pTape = root.querySelector('.v6-panel-tape');
-      var pChart = root.querySelector('.v6-panel-chart');
-      var pDom = root.querySelector('.v6-panel-dom');
-      var pSettings = root.querySelector('.v6-panel-settings');
-      var pCvd = root.querySelector('.v6-panel-cvd');
-      var pVwap = root.querySelector('.v6-panel-vwap');
+      var schema = V6OF.LayoutSchema;
 
-      // Build the TradingView main area as a detached subtree.
+      // Snapshot the live Layout panels before re-homing (these hold the render
+      // targets). Lookup is by stable id; falls back to the legacy class.
+      var layoutPanels = Array.prototype.slice.call(grid.querySelectorAll('[data-v6-panel]'));
+      function panelById(id) {
+        return root.querySelector('[data-v6-panel="' + id + '"]') || root.querySelector('.v6-panel-' + id);
+      }
+
+      // Build the TradingView main area as a detached subtree. Tabs + regions
+      // are generated from `schema`, so reordering panels is a one-array edit.
       var holder = document.createElement('div');
-      holder.innerHTML = mainAreaHtml();
+      holder.innerHTML = mainAreaHtml(schema);
       var main = holder.querySelector('.v6-main-area');
       var statusBar = holder.querySelector('.v6-status-bar');
 
       var center = main.querySelector('[data-v6-center-chart]');
       var rbody = main.querySelector('[data-v6-rbody]');
+      var cvdStrip = main.querySelector('[data-v6-cvd-strip]');
 
-      // Re-home panels (nodes are MOVED, listeners + identity preserved).
-      // Chart dominates; the orderflow panels live in a tabbed right column.
-      move(center, pChart);
-      
-      // Set accessibility attributes for tabpanels
-      if (pDom) {
-        pDom.setAttribute('role', 'tabpanel');
-        pDom.setAttribute('id', 'v6-panel-dom');
-        pDom.setAttribute('aria-labelledby', 'v6-tab-dom');
-      }
-      if (pTape) {
-        pTape.setAttribute('role', 'tabpanel');
-        pTape.setAttribute('id', 'v6-panel-tape');
-        pTape.setAttribute('aria-labelledby', 'v6-tab-tape');
-      }
-      if (pSettings) {
-        pSettings.setAttribute('role', 'tabpanel');
-        pSettings.setAttribute('id', 'v6-panel-settings');
-        pSettings.setAttribute('aria-labelledby', 'v6-tab-settings');
-      }
+      // Re-home panels declaratively (nodes are MOVED, listeners + identity
+      // preserved). `placed` tracks which Layout panels the schema claimed.
+      var placed = {};
 
-      [pDom, pTape, pSettings].forEach(function (p) { move(rbody, p); });
-      if (pCvd) pCvd.classList.add('v6-panel-hidden');
-      if (pVwap) pVwap.classList.add('v6-panel-hidden');
+      // Center column: the chart slot (and any other stacked center panels).
+      schema.center.forEach(function (id) {
+        var p = panelById(id);
+        if (p) { move(center, p); placed[id] = 1; }
+      });
+
+      // Right dock: place each tab's panel in schema order, wiring a11y to the
+      // matching generated tab button.
+      schema.right.tabs.forEach(function (spec) {
+        var p = panelById(spec.id);
+        if (!p) return;
+        placed[spec.id] = 1;
+        p.setAttribute('role', 'tabpanel');
+        p.setAttribute('id', 'v6-panel-' + spec.id);
+        p.setAttribute('aria-labelledby', 'v6-tab-' + spec.id);
+        move(rbody, p);
+      });
+
+      // Any Layout panel the schema didn't claim stays hidden (e.g. cvd/vwap —
+      // the center CVD strip is its own chrome, not the re-homed cvd panel).
+      layoutPanels.forEach(function (p) {
+        if (!placed[p.getAttribute('data-v6-panel')]) p.classList.add('v6-panel-hidden');
+      });
 
       // Swap .v6-grid -> .v6-main-area inside the shell.
       shell.replaceChild(main, grid);
       shell.appendChild(statusBar);
       root.classList.add('v6-shell-tv');
 
+      var dockToggle = main.querySelector('[data-v6-dock-toggle]');
+
+      // --- Saved State Restore ---
+      var savedState = V6OF.store ? V6OF.store.getState() : {};
+      var settings = savedState.settings || {};
+
+      // 1. Active Tab
+      var activeTab = settings.activeTab || 'dom';
+      rbody.className = 'v6-rbody show-' + activeTab;
+      Array.prototype.forEach.call(main.querySelectorAll('[data-v6-rtab]'), function (b) {
+        var active = b.getAttribute('data-v6-rtab') === activeTab;
+        b.classList.toggle('is-active', active);
+        b.setAttribute('aria-selected', String(active));
+      });
+
+      // 2. Right Dock Collapsed Status
+      var dockCollapsed = !!settings.dockCollapsed;
+      if (dockCollapsed) {
+        root.classList.add('v6-dock-collapsed');
+        if (dockToggle) {
+          dockToggle.innerHTML = '&#10095;';
+          dockToggle.title = 'Expand dock';
+        }
+      } else {
+        root.classList.remove('v6-dock-collapsed');
+        if (dockToggle) {
+          dockToggle.innerHTML = '&#10094;';
+          dockToggle.title = 'Collapse dock';
+        }
+      }
+
+      // 3. CVD Collapsed Status
+      var cvdCollapsed = !!settings.cvdCollapsed;
+      if (cvdCollapsed && cvdStrip) {
+        cvdStrip.classList.add('is-collapsed');
+        var collapseBtn = cvdStrip.querySelector('[data-v6-cvd-collapse]');
+        if (collapseBtn) {
+          collapseBtn.textContent = '▸';
+          collapseBtn.title = 'Expand CVD';
+        }
+      } else if (cvdStrip) {
+        cvdStrip.classList.remove('is-collapsed');
+        var collapseBtn = cvdStrip.querySelector('[data-v6-cvd-collapse]');
+        if (collapseBtn) {
+          collapseBtn.textContent = '▾';
+          collapseBtn.title = 'Collapse CVD';
+        }
+      }
+
       // Right-column tab switching (DOM / Tape / Settings).
       main.addEventListener('click', function (e) {
         var tab = e.target.closest('[data-v6-rtab]');
         if (!tab || !main.contains(tab)) return;
         var name = tab.getAttribute('data-v6-rtab');
+
+        // Expand the dock if tab is clicked while collapsed
+        if (root.classList.contains('v6-dock-collapsed')) {
+          root.classList.remove('v6-dock-collapsed');
+          if (dockToggle) {
+            dockToggle.innerHTML = '&#10094;';
+            dockToggle.title = 'Collapse dock';
+          }
+          if (V6OF.store && V6OF.store.updateSettings) {
+            V6OF.store.updateSettings({ dockCollapsed: false });
+          }
+        }
+
         rbody.className = 'v6-rbody show-' + name;
         Array.prototype.forEach.call(main.querySelectorAll('[data-v6-rtab]'), function (b) {
           var active = b === tab;
           b.classList.toggle('is-active', active);
           b.setAttribute('aria-selected', String(active));
         });
+
+        if (V6OF.store && V6OF.store.updateSettings) {
+          V6OF.store.updateSettings({ activeTab: name });
+        }
+
         var cv = root.querySelector('[data-v6-chart]');
         if (cv && V6OF.CanvasChart && V6OF.store) {
           requestAnimationFrame(function () { V6OF.CanvasChart.draw(cv, V6OF.store.getState()); });
         }
       });
 
-      var dockToggle = main.querySelector('[data-v6-dock-toggle]');
       if (dockToggle) {
         dockToggle.addEventListener('click', function () {
           root.classList.toggle('v6-dock-collapsed');
-          dockToggle.innerHTML = root.classList.contains('v6-dock-collapsed') ? '&#10095;' : '&#10094;';
-          dockToggle.title = root.classList.contains('v6-dock-collapsed') ? 'Expand dock' : 'Collapse dock';
+          var isCollapsed = root.classList.contains('v6-dock-collapsed');
+          dockToggle.innerHTML = isCollapsed ? '&#10095;' : '&#10094;';
+          dockToggle.title = isCollapsed ? 'Expand dock' : 'Collapse dock';
+          if (V6OF.store && V6OF.store.updateSettings) {
+            V6OF.store.updateSettings({ dockCollapsed: isCollapsed });
+          }
           requestAnimationFrame(function () {
             var cv = root.querySelector('[data-v6-chart]');
             if (cv && V6OF.CanvasChart && V6OF.store) V6OF.CanvasChart.draw(cv, V6OF.store.getState());
@@ -236,23 +371,28 @@
       }
 
       // CVD strip: render on store updates + collapse toggle.
-      var cvdStrip = root.querySelector('[data-v6-cvd-strip]');
+      cvdStrip = root.querySelector('[data-v6-cvd-strip]') || cvdStrip;
       if (cvdCanvas && V6OF.CvdPanel && V6OF.store) {
         var drawCvd = function () {
           if (cvdStrip && cvdStrip.classList.contains('is-collapsed')) return;
           V6OF.CvdPanel.draw(cvdCanvas, V6OF.store.getState());
         };
-        V6OF.store.subscribe(drawCvd);
+        storeUnsub = V6OF.store.subscribe(drawCvd);
         requestAnimationFrame(drawCvd);
       }
       if (cvdStrip) {
         var collapseBtn = cvdStrip.querySelector('[data-v6-cvd-collapse]');
         if (collapseBtn) collapseBtn.addEventListener('click', function () {
           cvdStrip.classList.toggle('is-collapsed');
-          collapseBtn.textContent = cvdStrip.classList.contains('is-collapsed') ? '▸' : '▾';
+          var isCollapsed = cvdStrip.classList.contains('is-collapsed');
+          collapseBtn.textContent = isCollapsed ? '▸' : '▾';
+          collapseBtn.title = isCollapsed ? 'Expand CVD' : 'Collapse CVD';
+          if (V6OF.store && V6OF.store.updateSettings) {
+            V6OF.store.updateSettings({ cvdCollapsed: isCollapsed });
+          }
           requestAnimationFrame(function () {
             if (canvas && V6OF.CanvasChart && V6OF.store) V6OF.CanvasChart.draw(canvas, V6OF.store.getState());
-            if (cvdCanvas && V6OF.CvdPanel && V6OF.store && !cvdStrip.classList.contains('is-collapsed')) V6OF.CvdPanel.draw(cvdCanvas, V6OF.store.getState());
+            if (cvdCanvas && V6OF.CvdPanel && V6OF.store && !isCollapsed) V6OF.CvdPanel.draw(cvdCanvas, V6OF.store.getState());
           });
         });
       }
@@ -273,6 +413,12 @@
       });
     }
   };
+
+  document.addEventListener('pageChange', function (event) {
+    if (event.detail && event.detail.page !== 'orderflow') {
+      V6OF.Shell.dispose();
+    }
+  });
 
   function tryAutoInit() {
     var root = document.getElementById('v6-orderflow-root');

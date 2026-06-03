@@ -11,6 +11,30 @@
 
   // ── REST request cache (TTL per endpoint) ──
   var _restCache = {};
+  function fetchJson(url) {
+    return fetch(url).then(function (r) {
+      var statusMsg = "HTTP " + r.status + " " + r.statusText;
+      console.log("[fetch network response] endpoint: " + url + " | status: " + statusMsg + " | source: orderflow_layout");
+      if (!r.ok) {
+        throw new Error("HTTP error " + r.status + " (" + url + ")");
+      }
+      return r.json();
+    });
+  }
+
+  function normalizeSymbol(symbol, source) {
+    if (!symbol) symbol = 'BTCUSDT';
+    symbol = symbol.toUpperCase();
+    if (source === 'hyperliquid') {
+      return symbol.replace(/USDT$/, '');
+    } else {
+      if (!symbol.endsWith('USDT')) {
+        return symbol + 'USDT';
+      }
+      return symbol;
+    }
+  }
+
   function _cachedFetch(url, ttlMs, bypassCache) {
     var now = Date.now();
     var entry = _restCache[url];
@@ -20,15 +44,7 @@
       return Promise.resolve(entry.data);
     }
     console.log("[fetch network start] endpoint: " + url + " | source: orderflow_layout");
-    return fetch(url)
-      .then(function(r) {
-        var statusMsg = "HTTP " + r.status + " " + r.statusText;
-        console.log("[fetch network response] endpoint: " + url + " | status: " + statusMsg + " | source: orderflow_layout");
-        if (!r.ok) {
-          throw new Error("HTTP error " + r.status + " (" + url + ")");
-        }
-        return r.json();
-      })
+    return fetchJson(url)
       .then(function(data) {
         _restCache[url] = { data: data, ts: now };
         return data;
@@ -48,6 +64,9 @@
   function shellHtml() {
     return [
       '<div class="v6-shell">',
+        '<div class="v6-demo-banner" data-v6-demo-banner style="display: none;">',
+          '<span>⚠️ Live Engine Offline — Running in Demo Mode (Mock Data)</span>',
+        '</div>',
         '<header class="v6-header">',
           '<div class="v6-brand">',
             '<span class="v6-brand-mark" aria-hidden="true"></span>',
@@ -100,10 +119,10 @@
             '</div>',
           '</div>',
           '<div class="v6-header-actions">',
-            '<span class="v6-conn" data-v6-conn title="Local engine">',
+            '<button type="button" class="v6-conn" data-v6-action="toggle-connection" title="Toggle local engine connection">',
               '<span class="v6-engine-dot" data-v6-engine-dot></span>',
-              '<span class="v6-conn-text" data-v6-engine-status-text>Connecting…</span>',
-            '</span>',
+              '<span class="v6-conn-text" data-v6-engine-status-text>Offline</span>',
+            '</button>',
           '</div>',
         '</header>',
         '<div class="v6-grid">',
@@ -121,7 +140,7 @@
               '</div>',
             '</div>',
           '</section>',
-          '<section class="v6-panel v6-panel-chart" aria-label="V6 chart">',
+          '<section class="v6-panel v6-panel-chart" data-v6-panel="chart" aria-label="V6 chart">',
             '<div class="v6-panel-head"><span>Chart</span><small></small></div>',
             '<canvas class="v6-chart-canvas" data-v6-chart></canvas>',
           '</section>',
@@ -140,7 +159,7 @@
               '</div>',
             '</div>',
           '</section>',
-          '<section class="v6-panel v6-panel-settings" aria-label="V6 settings">',
+          '<section class="v6-panel v6-panel-settings" data-v6-panel="settings" aria-label="V6 settings">',
             '<div class="v6-panel-head"><span>Settings</span><small>Controls</small></div>',
             '<div class="v6-settings" data-v6-settings-body>',
               // -- Chart Mode --
@@ -256,9 +275,14 @@
     var el = root.querySelector(selector);
     if (el) {
       if (el.tagName === 'SELECT') {
-        el.value = value;
+        if (el.value !== String(value)) {
+          el.value = value;
+        }
       } else {
-        el.textContent = value;
+        var str = String(value);
+        if (el.textContent !== str) {
+          el.textContent = str;
+        }
       }
     }
   }
@@ -347,21 +371,26 @@
     if (!store) return;
     var state = store.getState ? store.getState() : {};
     var source = state.dataSource || 'binance';
-    var symbol = state.symbol || 'BTCUSDT';
-    var baseAsset = symbol.replace('USDT', '');
+    var symbol = normalizeSymbol(state.symbol, source);
     var url = source === 'hyperliquid'
-      ? '/api/hyperliquid/orderbook?market=' + baseAsset
+      ? '/api/hyperliquid/orderbook?market=' + symbol
       : '/api/market/depth?symbol=' + symbol + '&limit=5000';
     var bypass = (reason === 'refresh' || reason === 'symbol-change' || reason === 'reconnect' || reason === 'auto-connect');
     _cachedFetch(url, 5000, bypass).then(function (data) {
       var book = normalizeRestDepthBook(data, source);
       if (!book || !V6OF.DomLadder) return;
       V6OF.DomLadder.feedOrderBook(book);
-      store.setState({
-        orderBook: book,
-        lastOrderBookTs: book.tsLocal,
-        restDepthTs: book.tsLocal,
-        restDepthCount: Math.min(book.bids ? book.bids.length : 0, book.asks ? book.asks.length : 0)
+      store.setState(function (prev) {
+        var patch = {
+          orderBook: book,
+          lastOrderBookTs: book.tsLocal,
+          restDepthTs: book.tsLocal,
+          restDepthCount: Math.min(book.bids ? book.bids.length : 0, book.asks ? book.asks.length : 0)
+        };
+        if (prev.transportStatus !== 'connected') {
+          patch.dataFreshness = 'rest-fallback';
+        }
+        return patch;
       }, 'rest-depth-' + (reason || 'prefetch'));
       console.log('[DOM] REST depth prefetch (' + source + '): bids=' + book.bids.length + ' asks=' + book.asks.length + ' reason=' + (reason || ''));
     }).catch(function (e) {
@@ -390,11 +419,12 @@
       dot.className = 'v6-engine-dot v6-engine-' + ((state && state.source === 'mock') ? 'disconnected' : status);
     }
 
-    // Status text (clean, no jargon)
+    var freshness = state && state.dataFreshness;
     var statusLabel = (state && state.source === 'mock') ? 'Mock'
       : status === 'connected' ? 'Live'
       : status === 'connecting' ? 'Connecting…'
       : status === 'error' ? 'Reconnecting…'
+      : freshness === 'rest-fallback' ? 'Offline (REST Fallback)'
       : 'Offline';
     setText(root, '[data-v6-engine-status-text]', statusLabel);
 
@@ -438,28 +468,27 @@
     if (badge) {
       if (state && state.source === 'mock') {
         badge.textContent = 'V6 MOCK / No live data';
-        badge.classList.remove('v6-badge-live');
-        badge.classList.remove('v6-badge-error');
-      } else if (state && state.isStale && status === 'connected') {
-        badge.textContent = 'V6 STALE / No data';
-        badge.classList.remove('v6-badge-live');
-        badge.classList.add('v6-badge-error');
+        badge.className = 'v6-badge';
       } else if (status === 'connected') {
-        badge.textContent = 'V6 LIVE / Go Engine';
-        badge.classList.add('v6-badge-live');
-        badge.classList.remove('v6-badge-error');
-      } else if (status === 'error') {
-        badge.textContent = 'V6 ERROR / Disconnected';
-        badge.classList.remove('v6-badge-live');
-        badge.classList.add('v6-badge-error');
+        if (state && state.isStale) {
+          badge.textContent = 'V6 STALE / No data';
+          badge.className = 'v6-badge v6-badge-error';
+        } else {
+          badge.textContent = 'V6 LIVE / Go Engine';
+          badge.className = 'v6-badge v6-badge-live';
+        }
       } else if (status === 'connecting') {
         badge.textContent = 'V6 CONNECTING...';
-        badge.classList.remove('v6-badge-live');
-        badge.classList.remove('v6-badge-error');
+        badge.className = 'v6-badge';
+      } else if (status === 'error') {
+        badge.textContent = 'V6 ERROR / Disconnected';
+        badge.className = 'v6-badge v6-badge-error';
+      } else if (state && state.dataFreshness === 'rest-fallback') {
+        badge.textContent = 'V6 REST FALLBACK / Offline';
+        badge.className = 'v6-badge v6-badge-error';
       } else {
-        badge.textContent = 'Not available';
-        badge.classList.remove('v6-badge-live');
-        badge.classList.remove('v6-badge-error');
+        badge.textContent = 'Offline';
+        badge.className = 'v6-badge';
       }
     }
 
@@ -470,12 +499,46 @@
     }
   }
 
-  function render(root, state) {
+  function shouldRender(root, panelName, slice, force) {
+    if (force) {
+      if (!root._v6Cache) root._v6Cache = {};
+      root._v6Cache[panelName] = slice;
+      return true;
+    }
+    if (!root._v6Cache) root._v6Cache = {};
+    var last = root._v6Cache[panelName];
+    if (last === undefined) {
+      root._v6Cache[panelName] = slice;
+      return true;
+    }
+    var storeEqual = V6OF.shallowEqual;
+    if (storeEqual && storeEqual(last, slice)) {
+      return false;
+    }
+    root._v6Cache[panelName] = slice;
+    return true;
+  }
+
+  function render(root, state, force) {
     if (!root || !state) return;
     root.classList.toggle('v6-legacy-mode', !!(state.ui && state.ui.legacyMode));
 
+    var engineClient = root._v6EngineClient;
+    if (engineClient) {
+      renderEngineBar(root, {
+        status: engineClient.getStatus(),
+        stats: engineClient.getStats(),
+        paused: engineClient.isPaused()
+      }, state);
+    }
+
     if (state.symbol) {
       document.title = state.symbol + ' - Cockpit V6';
+    }
+
+    var banner = root.querySelector('[data-v6-demo-banner]');
+    if (banner) {
+      banner.style.display = (state.source === 'mock') ? 'block' : 'none';
     }
 
     setText(root, '[data-v6-symbol]', state.symbol || '--');
@@ -536,15 +599,59 @@
     var tapeList = root.querySelector('[data-v6-tape-list]');
     var domList = root.querySelector('[data-v6-dom-list]');
     var cvd = root.querySelector('[data-v6-cvd-panel]');
+
+    var tapeSlice = {
+      trades: state.trades,
+      showTape: settings.showTape,
+      tapeFontSize: settings.tapeFontSize,
+      minQty: settings.minQty,
+      maxRows: settings.maxRows
+    };
+
+    var domSlice = {
+      orderBookCount: state.orderBookCount,
+      lastOrderBookTs: state.lastOrderBookTs,
+      showDOM: settings.showDOM,
+      domRangeLevels: settings.domRangeLevels,
+      domWallsOnly: settings.domWallsOnly,
+      selectedDomSymbol: state.selectedDomSymbol,
+      symbol: state.symbol
+    };
+
+    var cvdSlice = {
+      deltaIntervalMs: settings.deltaIntervalMs,
+      deltaBuckets: state.deltaBuckets,
+      latestDeltaByInterval: state.latestDeltaByInterval,
+      source: state.source,
+      dataFreshness: state.dataFreshness,
+      transportStatus: state.transportStatus,
+      showCVD: settings.showCVD
+    };
+
+    var chartSlice = {
+      chartCandles: state.chartCandles,
+      trades: state.trades,
+      heatmapFrames: state.heatmapFrames,
+      footprintCandles: state.footprintCandles,
+      showCandles: settings.showCandles !== false,
+      showBubbles: settings.showBubbles === true,
+      showHeatmap: settings.showHeatmap === true,
+      showFootprint: settings.showFootprint === true
+    };
+
     if (tapeList && V6OF.Panels && V6OF.Panels.renderTape && settings.showTape !== false) {
-      tapeList.innerHTML = V6OF.Panels.renderTape(state.trades, state.settings);
-      var tapeTable = tapeList.querySelector('.v6-tape-table');
-      if (tapeTable) {
-        tapeTable.style.fontSize = (settings.tapeFontSize || 10) + 'px';
+      if (shouldRender(root, 'tape', tapeSlice, force)) {
+        tapeList.innerHTML = V6OF.Panels.renderTape(state.trades, state.settings);
+        var tapeTable = tapeList.querySelector('.v6-tape-table');
+        if (tapeTable) {
+          tapeTable.style.fontSize = (settings.tapeFontSize || 10) + 'px';
+        }
       }
     }
     if (domList && V6OF.DomPanel && settings.showDOM !== false) {
-      V6OF.DomPanel.render(domList, V6OF.DomLadder ? V6OF.DomLadder.snapshot() : null, state);
+      if (shouldRender(root, 'dom', domSlice, force)) {
+        V6OF.DomPanel.render(domList, V6OF.DomLadder ? V6OF.DomLadder.snapshot() : null, state);
+      }
       // Wire controls on first render
       V6OF.DomPanel.bindControls(domList, function (group) {
         if (V6OF.DomLadder) {
@@ -562,16 +669,17 @@
       // Wire drag-and-drop on the column headers
       if (V6OF.Panels.wireDomDragDrop) V6OF.Panels.wireDomDragDrop(root, V6OF.store);
     }
-    // Old DOM footer — désactivé, les stats sont maintenant dans le header du panel.
-    // Keep DOM area clean.
-    // Clean — Depth History removed
     if (cvd && V6OF.Panels && V6OF.Panels.renderCvd && settings.showCVD !== false) {
-      cvd.innerHTML = V6OF.Panels.renderCvd(state);
+      if (shouldRender(root, 'cvd', cvdSlice, force)) {
+        cvd.innerHTML = V6OF.Panels.renderCvd(state);
+      }
     }
     syncInputs(root, state);
 
     if (V6OF.CanvasChart && V6OF.CanvasChart.draw) {
-      V6OF.CanvasChart.draw(root.querySelector('[data-v6-chart]'), state);
+      if (shouldRender(root, 'chart', chartSlice, force)) {
+        V6OF.CanvasChart.draw(root.querySelector('[data-v6-chart]'), state);
+      }
     }
   }
 
@@ -607,6 +715,16 @@
             engineClient.resume();
           } else {
             engineClient.pause();
+          }
+        }
+      } else if (action === 'toggle-connection') {
+        if (engineClient) {
+          var currentStatus = engineClient.getStatus();
+          if (currentStatus === 'connected' || currentStatus === 'connecting' || currentStatus === 'error') {
+            engineClient.disconnect();
+          } else {
+              store.setState({ source: 'live', dataFreshness: 'offline', transportStatus: 'connecting', trades: [] }, 'manual-connect');
+            engineClient.connect();
           }
         }
       } else if (action === 'toggle-disclosure') {
@@ -647,11 +765,10 @@
           // Clear stale live overlays so old footprint doesn't mix across TFs.
           if (V6OF.CvdBuckets) V6OF.CvdBuckets.reset();
           // Fetch full depth via REST for deeper DOM ladder
-          var symbol = state.symbol || 'BTCUSDT';
-          var baseAsset = symbol.replace('USDT', '');
+          var source = state.dataSource || 'binance';
+          var normSymbol = normalizeSymbol(state.symbol, source);
           if (source === 'hyperliquid') {
-            fetch('/api/hyperliquid/orderbook?market=' + baseAsset)
-              .then(function(r) { return r.json(); })
+            fetchJson('/api/hyperliquid/orderbook?market=' + normSymbol)
               .then(function(data) {
                 if (data.ok && data.bids && data.asks && V6OF.DomLadder) {
                   var book = {
@@ -668,8 +785,7 @@
               })
               .catch(function(e) { console.warn('[DOM] REST depth fetch failed', e); });
           } else if (source === 'binance') {
-            fetch('/api/market/depth?symbol=' + symbol + '&limit=5000')
-              .then(function(r) { return r.json(); })
+            fetchJson('/api/market/depth?symbol=' + normSymbol + '&limit=5000')
               .then(function(data) {
                 if (data.bids && data.asks && V6OF.DomLadder) {
                   var book = {
@@ -703,16 +819,17 @@
           var patch = { dataSource: source };
           if (state.source === 'mock') {
             patch.source = 'live';
+            patch.dataFreshness = 'offline';
+            patch.transportStatus = 'disconnected';
           }
           store.setState(patch, 'source-change');
 
           if (state.source === 'mock' && engineClient) {
             renderEngineBar(root, {
-              status: 'connecting',
+              status: 'disconnected',
               stats: engineClient.getStats(),
               paused: false
             }, store.getState());
-            engineClient.connect();
             startDomDepthRefresh(root, store);
           }
 
@@ -747,13 +864,12 @@
           // ── REST pre-fetch: depth + trades + klines in parallel ──
           var tf = state.timeframe || '1m';
           var isHL = source === 'hyperliquid';
-          var symbol = state.symbol || 'BTCUSDT';
-          var baseAsset = symbol.replace('USDT', '');
+          var normSymbol = normalizeSymbol(state.symbol, source);
 
           // 1. Depth → DOM ladder
           var depthUrl = isHL
-            ? '/api/hyperliquid/orderbook?market=' + baseAsset
-            : '/api/market/depth?symbol=' + symbol + '&limit=5000';
+            ? '/api/hyperliquid/orderbook?market=' + normSymbol
+            : '/api/market/depth?symbol=' + normSymbol + '&limit=5000';
           _cachedFetch(depthUrl, 5000, true).then(function(data) {
             if (V6OF.DomLadder) {
               var book;
@@ -774,11 +890,17 @@
                 book.spread = book.bestAsk - book.bestBid;
                 book.mid = (book.bestBid + book.bestAsk) / 2;
                 V6OF.DomLadder.feedOrderBook(book);
-                store.setState({
-                  orderBook: book,
-                  lastOrderBookTs: book.tsLocal,
-                  restDepthTs: book.tsLocal,
-                  restDepthCount: Math.min(book.bids ? book.bids.length : 0, book.asks ? book.asks.length : 0)
+                store.setState(function (prev) {
+                  var patch = {
+                    orderBook: book,
+                    lastOrderBookTs: book.tsLocal,
+                    restDepthTs: book.tsLocal,
+                    restDepthCount: Math.min(book.bids ? book.bids.length : 0, book.asks ? book.asks.length : 0)
+                  };
+                  if (prev.transportStatus !== 'connected') {
+                    patch.dataFreshness = 'rest-fallback';
+                  }
+                  return patch;
                 }, 'rest-depth');
                 console.log('[DOM] REST depth: bids=' + book.bids.length + ' asks=' + book.asks.length);
               }
@@ -787,29 +909,35 @@
 
           // 2. Trades → fill the tape
           var tradesUrl = isHL
-            ? '/api/hyperliquid/trades?market=' + baseAsset
-            : '/api/market/aggtrades?symbol=' + symbol + '&limit=500';
+            ? '/api/hyperliquid/trades?market=' + normSymbol
+            : '/api/market/aggtrades?symbol=' + normSymbol + '&limit=500';
           _cachedFetch(tradesUrl, 15000, true).then(function(data) {
             var trades;
             if (isHL && data.ok) {
               trades = (data.trades || []).map(function(t) {
-                return { price: t.px, qty: t.sz, time: t.time, side: t.side, symbol: baseAsset, source: 'hyperliquid_rest' };
+                return { price: t.px, qty: t.sz, time: t.time, side: t.side, symbol: normSymbol, source: 'hyperliquid_rest' };
               });
             } else if (!isHL && Array.isArray(data)) {
               trades = data.map(function(t) {
-                return { price: parseFloat(t.p), qty: parseFloat(t.q), time: t.T, side: t.m ? 'sell' : 'buy', symbol: symbol, source: 'binance_rest' };
+                return { price: parseFloat(t.p), qty: parseFloat(t.q), time: t.T, side: t.m ? 'sell' : 'buy', symbol: normSymbol, source: 'binance_rest' };
               });
             }
             if (trades && trades.length) {
-              store.setState({ trades: trades.slice(-500) }, 'rest-trades');
+              store.setState(function (prev) {
+                var patch = { trades: trades.slice(-500) };
+                if (prev.transportStatus !== 'connected') {
+                  patch.dataFreshness = 'rest-fallback';
+                }
+                return patch;
+              }, 'rest-trades');
               console.log('[TAPE] REST trades loaded: ' + trades.length);
             }
           }).catch(function(e) { console.warn('[TAPE] REST trades failed', e); });
 
           // 3. Klines → pre-fill the chart
           var klinesUrl = isHL
-            ? '/api/hyperliquid/klines?market=' + baseAsset + '&interval=' + tf + '&limit=500'
-            : '/api/market/klines?symbol=' + symbol + '&interval=' + tf + '&limit=500';
+            ? '/api/hyperliquid/klines?market=' + normSymbol + '&interval=' + tf + '&limit=500'
+            : '/api/market/klines?symbol=' + normSymbol + '&interval=' + tf + '&limit=500';
           _cachedFetch(klinesUrl, 60000, true).then(function(data) {
             var candles;
             if (isHL && data.ok) {
@@ -820,7 +948,13 @@
               candles = data.candles.filter(function(c) { return c && c.openTime; });
             }
             if (candles && candles.length) {
-              store.setState({ chartCandles: candles }, 'rest-klines');
+              store.setState(function (prev) {
+                var patch = { chartCandles: candles };
+                if (prev.transportStatus !== 'connected') {
+                  patch.dataFreshness = 'rest-fallback';
+                }
+                return patch;
+              }, 'rest-klines');
               if (V6OF.chart && V6OF.chart.resetOnDataChange) V6OF.chart.resetOnDataChange();
               console.log('[CHART] REST klines loaded: ' + candles.length);
             }
@@ -899,10 +1033,16 @@
             var book = normalizeRestDepthBook(data, source);
             if (book && V6OF.DomLadder) {
               V6OF.DomLadder.feedOrderBook(book);
-              store.setState({
-                orderBook: book,
-                lastOrderBookTs: book.tsLocal,
-                restDepthTs: book.tsLocal
+              store.setState(function (prev) {
+                var patch = {
+                  orderBook: book,
+                  lastOrderBookTs: book.tsLocal,
+                  restDepthTs: book.tsLocal
+                };
+                if (prev.transportStatus !== 'connected') {
+                  patch.dataFreshness = 'rest-fallback';
+                }
+                return patch;
               }, 'rest-depth');
             }
           }).catch(function(e) { console.warn('[DOM] REST depth failed', e); });
@@ -922,7 +1062,13 @@
               });
             }
             if (trades && trades.length) {
-              store.setState({ trades: trades.slice(-500) }, 'rest-trades');
+              store.setState(function (prev) {
+                var patch = { trades: trades.slice(-500) };
+                if (prev.transportStatus !== 'connected') {
+                  patch.dataFreshness = 'rest-fallback';
+                }
+                return patch;
+              }, 'rest-trades');
             }
           }).catch(function(e) { console.warn('[TAPE] REST trades failed', e); });
 
@@ -939,7 +1085,13 @@
               candles = data.candles.filter(function(c) { return c && c.openTime; });
             }
             if (candles && candles.length) {
-              store.setState({ chartCandles: candles }, 'rest-klines');
+              store.setState(function (prev) {
+                var patch = { chartCandles: candles };
+                if (prev.transportStatus !== 'connected') {
+                  patch.dataFreshness = 'rest-fallback';
+                }
+                return patch;
+              }, 'rest-klines');
               if (V6OF.chart && V6OF.chart.resetOnDataChange) V6OF.chart.resetOnDataChange();
             }
           }).catch(function(e) { console.warn('[CHART] REST klines failed', e); });
@@ -1040,6 +1192,8 @@
       } else {
         initial = V6OF.Contract.createEmptyState();
         initial.source = 'live';
+        initial.dataFreshness = 'offline';
+        initial.transportStatus = 'disconnected';
       }
       if (savedSettings && Object.keys(savedSettings).length) {
         initial.settings = Object.assign({}, initial.settings, savedSettings);
@@ -1053,8 +1207,9 @@
       }
 
       var engineClient = bind(root, store);
+      root._v6EngineClient = engineClient;
       store.subscribe(function (state) { render(root, state); });
-      render(root, store.getState());
+      render(root, store.getState(), true);
 
       // Wire chart interactions after the first render so the canvas exists.
       // Try synchronously first (canvas is in the innerHTML); fall back to rAF.
@@ -1075,24 +1230,16 @@
         if (!wired) requestAnimationFrame(tryWire);
       }
 
-      // Auto-connect to the local WS engine (required for live data).
+      // Initialize the connection status bar as offline (manual connect required)
       if (engineClient) {
-        if (store.getState().source === 'mock') {
-          // In mock mode, don't auto-connect or run REST refreshes, just render the initial mock status bar.
-          renderEngineBar(root, {
-            status: 'disconnected',
-            stats: engineClient.getStats(),
-            paused: false
-          }, store.getState());
-        } else {
-          renderEngineBar(root, {
-            status: 'connecting',
-            stats: engineClient.getStats(),
-            paused: false
-          }, store.getState());
-          store.setState({ source: 'live', trades: [] }, 'auto-connect');
-          engineClient.connect();
-          prefetchDomDepth(store, 'auto-connect');
+        renderEngineBar(root, {
+          status: 'disconnected',
+          stats: engineClient.getStats(),
+          paused: false
+        }, store.getState());
+        if (store.getState().source !== 'mock') {
+          store.setState({ source: 'live', dataFreshness: 'offline', transportStatus: 'disconnected', trades: [] }, 'init-offline');
+          prefetchDomDepth(store, 'init-offline');
           startDomDepthRefresh(root, store);
         }
       }
@@ -1104,12 +1251,12 @@
       }
 
       window.addEventListener('resize', function () {
-        render(root, store.getState());
+        render(root, store.getState(), true);
       });
       document.addEventListener('pageChange', function (event) {
         if (event.detail && event.detail.page === 'orderflow') {
           requestAnimationFrame(function () {
-            render(root, store.getState());
+            render(root, store.getState(), true);
             // Re-wire interactions after page change (canvas may have been replaced).
             if (V6OF.ChartInteractions) {
               var canvas = root.querySelector('[data-v6-chart]');

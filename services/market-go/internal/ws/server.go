@@ -11,12 +11,14 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"cockpit-v6-market-go/internal/calc"
 	"cockpit-v6-market-go/internal/config"
 	"cockpit-v6-market-go/internal/engine"
 	"cockpit-v6-market-go/internal/exchange/binance"
@@ -24,6 +26,7 @@ import (
 	"cockpit-v6-market-go/internal/logx"
 	"cockpit-v6-market-go/internal/marketdata"
 	"cockpit-v6-market-go/internal/replay"
+	"cockpit-v6-market-go/internal/storage"
 )
 
 const websocketGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -43,6 +46,15 @@ type Server struct {
 	tradesMu sync.RWMutex
 	trades   []marketdata.Trade
 
+	klineCache *KlineCache // file-based kline persistence
+
+	tradeCache *TradeCache // file-based trade persistence
+
+	sqlDB  *storage.DB    // SQLite for trades + footprints
+
+	cvdMu     sync.Mutex
+	cvdBySymbol map[string]float64 // last CVD per symbol
+
 	// Exchange switching
 	exchangeCancel context.CancelFunc
 	exchangeMu     sync.Mutex
@@ -50,12 +62,32 @@ type Server struct {
 }
 
 func NewServer(cfg config.Config, marketEngine *engine.Engine, logger *logx.Logger) *Server {
+	dataDir := cfg.DataDir
+	if dataDir == "" {
+		dataDir = "data"
+	}
 	s := &Server{
 		cfg:    cfg,
 		engine: marketEngine,
 		hub:    NewHub(),
 		log:    logger,
+		klineCache: NewKlineCache(dataDir),
+		tradeCache: NewTradeCache(dataDir, cfg.TradeRetainDays),
+		cvdBySymbol: make(map[string]float64),
 	}
+
+	// Initialize SQLite for trade + footprint persistence
+	if dataDir != "" {
+		dbPath := filepath.Join(dataDir, "journal.db")
+		sqlDB, err := storage.NewDB(dbPath)
+		if err != nil {
+			logger.Errorf("failed to open SQLite at %s: %v", dbPath, err)
+		} else {
+			s.sqlDB = sqlDB
+			logger.Infof("SQLite storage ready at %s", dbPath)
+		}
+	}
+
 	s.player = replay.NewPlayer(replay.NewBinanceSource(), s.replayEmit, s.replayStatus)
 	return s
 }
@@ -81,6 +113,13 @@ func (s *Server) replayEmit(trade marketdata.Trade) {
 		if raw, err := env.MarshalJSONBytes(); err == nil {
 			s.hub.Broadcast(raw)
 		}
+
+		// Persist closed footprint candles to SQLite
+		if s.sqlDB != nil {
+			if fpCandle, ok := env.Payload.(marketdata.FootprintCandle); ok && fpCandle.Closed {
+				go s.persistFootprintCandle(fpCandle)
+			}
+		}
 	}
 }
 
@@ -97,6 +136,17 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/metrics", s.handleMetrics)
 	mux.HandleFunc("/stream", s.handleStream)
 	mux.HandleFunc("/replay", s.handleReplay)
+	// Footprint UI
+	mux.HandleFunc("/footprint", s.handleFootprintUI)
+	mux.HandleFunc("/footprint.html", s.handleFootprintUI)
+	// Footprint API v1
+	mux.HandleFunc("/api/v1/footprint/1m", s.handleGetFootprint1m)
+	mux.HandleFunc("/api/v1/footprint/tf", s.handleGetFootprintTF)
+	mux.HandleFunc("/api/v1/footprint/profile", s.handleGetFootprintProfile)
+	mux.HandleFunc("/api/v1/footprint/latest", s.handleGetFootprintLatest)
+	mux.HandleFunc("/api/v1/footprint/stats", s.handleGetFootprintStats)
+	// Archive rotation
+	mux.HandleFunc("/api/v1/archive/rotate", s.handleArchiveRotate)
 	return mux
 }
 
@@ -120,6 +170,29 @@ func (s *Server) Run(ctx context.Context) error {
 		s.startExchange(ctx)
 	}
 
+	// Periodic cache cleanup (every hour)
+	go s.periodicPurge(ctx)
+
+	// Auto-heal: detect gaps and rebuild footprints on startup
+	if s.sqlDB != nil {
+		symbols := s.cfg.Symbols
+		if len(symbols) == 0 {
+			symbols = []string{"BTCUSDT"}
+		}
+		healer := engine.NewHealer(s.sqlDB, s.log, symbols)
+		go healer.Run()
+
+		// Retention service
+		retCfg := engine.RetentionConfig{
+			TradesDays:       s.cfg.TradeRetainDays,
+			Footprint1mDays:  s.cfg.Footprint1mRetainDays,
+			FootprintTFDays:  s.cfg.FootprintTFRetainDays,
+			PurgeIntervalMin: 60,
+		}
+		retSvc := engine.NewRetentionService(retCfg, s.sqlDB, s.log, symbols)
+		go retSvc.Run(ctx.Done())
+	}
+
 	errCh := make(chan error, 1)
 	go func() {
 		s.log.Infof("listening on http://%s exchange=%s mockMode=%t symbols=%s", s.cfg.Addr(), s.cfg.Exchange, s.cfg.MockMode, strings.Join(s.cfg.Symbols, ","))
@@ -131,17 +204,23 @@ func (s *Server) Run(ctx context.Context) error {
 		errCh <- nil
 	}()
 
-	select {
-	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := server.Shutdown(shutdownCtx); err != nil {
+		select {
+		case <-ctx.Done():
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := server.Shutdown(shutdownCtx); err != nil {
+				return err
+			}
+			if s.sqlDB != nil {
+				s.sqlDB.Close()
+			}
+			return <-errCh
+		case err := <-errCh:
+			if s.sqlDB != nil {
+				s.sqlDB.Close()
+			}
 			return err
 		}
-		return <-errCh
-	case err := <-errCh:
-		return err
-	}
 }
 
 func (s *Server) startHyperliquid(ctx context.Context) {
@@ -310,6 +389,20 @@ func (s *Server) startExchange(parent context.Context) {
 	s.exchangeCancel = cancel
 	s.exchangeMu.Unlock()
 
+	// Load persisted trades from cache to restore CVD history
+	s.loadPersistedTrades()
+
+	// Purge old trade cache files (async, fire and forget)
+	if s.tradeCache != nil {
+		syms := s.cfg.Symbols
+		if len(syms) == 0 {
+			syms = []string{"BTCUSDT"}
+		}
+		for _, sym := range syms {
+			go s.tradeCache.PurgeOlderThan(s.cfg.Exchange, sym)
+		}
+	}
+
 	switch s.cfg.Exchange {
 	case config.ExchangeHyperliquid:
 		go s.backfillTrades(ctx)
@@ -386,25 +479,17 @@ func (s *Server) tryBroadcastCvdInit() {
 
 // runBinanceBackfill fetches REST klines for all configured intervals, caching
 // and broadcasting one candle_history envelope per interval.
+// Uses file-based kline cache for persistence across restarts.
 func (s *Server) runBinanceBackfill(ctx context.Context, symbol string) {
 	intervals := s.cfg.BackfillIntervals
 	if len(intervals) == 0 {
 		intervals = []string{"1m"}
 	}
-	bars := s.cfg.BackfillBars
-	if bars <= 0 {
-		bars = 1000
-	}
 	for _, interval := range intervals {
 		if ctx.Err() != nil {
 			return
 		}
-		candles, err := binance.FetchKlines(ctx, s.cfg.BinanceRESTURL, symbol, interval, bars)
-		if err != nil {
-			s.engine.RecordError("binance backfill: " + err.Error())
-			s.log.Errorf("binance backfill failed symbol=%s interval=%s err=%v", symbol, interval, err)
-			continue
-		}
+		candles := s.backfillIntervalWithCache(ctx, symbol, interval, "binance")
 		if len(candles) == 0 {
 			continue
 		}
@@ -423,6 +508,196 @@ func (s *Server) runBinanceBackfill(ctx context.Context, symbol string) {
 			s.tryBroadcastCvdInit()
 		}
 	}
+}
+
+// backfillIntervalWithCache returns candles for one symbol+interval, using
+// the file cache to minimize Binance API calls.
+//  1. Load cached candles from disk (or derive from 1m for higher TFs)
+//  2. Determine what's missing (newest cached → now)
+//  3. Fetch only the missing range from Binance
+//  4. Merge, deduplicate by openTime, sort, save to cache
+func (s *Server) backfillIntervalWithCache(ctx context.Context, symbol, interval, source string) []marketdata.Candle {
+	// For non-1m intervals: try to derive from 1m data first
+	if interval != "1m" {
+		candles := s.deriveFromOneMin(ctx, symbol, interval)
+		if candles != nil {
+			return candles
+		}
+		// Derivation failed (1m cache insufficient) — fall through to direct fetch
+	}
+
+	// Below this point: 1m interval or derivation failed — do direct cache+fetch
+	intervalMs := intervalMs(interval)
+	now := time.Now().UnixMilli()
+
+	// Calculate how many candles we need
+	needed := s.cfg.BackfillBars
+	if needed <= 0 {
+		needed = 1000
+	}
+	if interval == "1m" {
+		days := s.cfg.BackfillDays
+		if days <= 0 {
+			days = 30
+		}
+		needed = days * 24 * 60
+	}
+
+	// Load cached candles first
+	cached, newestCached := s.klineCache.Load(symbol, interval)
+	oldestNeeded := now - int64(needed)*intervalMs
+
+	// If cache covers everything we need, return cached data
+	if newestCached > 0 && len(cached) > 0 && cached[0].OpenTime <= oldestNeeded {
+		if newestCached >= now-int64(2)*intervalMs {
+			s.log.Infof("kline cache hit symbol=%s interval=%s cached=%d range=%d→%d",
+				symbol, interval, len(cached), cached[0].OpenTime, newestCached)
+			return cached
+		}
+		// Cache has old data but missing recent candles — fetch incremental
+		fresh, err := binance.FetchKlines(ctx, s.cfg.BinanceRESTURL, symbol, interval, needed)
+		if err != nil {
+			s.log.Infof("backfill inc fetch failed, using cached: %v", err)
+			return cached
+		}
+		merged := mergeCandleLists(cached, fresh)
+		merged = s.trimKlinesByAge(symbol, interval, merged)
+		s.klineCache.Save(symbol, interval, merged)
+		s.log.Infof("kline cache incremental symbol=%s interval=%s cached=%d fresh=%d merged=%d",
+			symbol, interval, len(cached), len(fresh), len(merged))
+		return merged
+	}
+
+	// Cache miss or insufficient — fetch full from Binance
+	s.log.Infof("kline cache miss symbol=%s interval=%s fetching %d candles",
+		symbol, interval, needed)
+
+	fresh, err := binance.FetchKlines(ctx, s.cfg.BinanceRESTURL, symbol, interval, needed)
+	if err != nil {
+		s.log.Errorf("binance backfill failed symbol=%s interval=%s err=%v", symbol, interval, err)
+		if len(cached) > 0 {
+			return cached
+		}
+		return nil
+	}
+	if len(fresh) == 0 {
+		return cached
+	}
+
+	merged := mergeCandleLists(cached, fresh)
+	merged = s.trimKlinesByAge(symbol, interval, merged)
+	s.klineCache.Save(symbol, interval, merged)
+	s.log.Infof("kline cache saved symbol=%s interval=%s candles=%d", symbol, interval, len(merged))
+	return merged
+}
+
+// deriveFromOneMin tries to build `targetInterval` candles by aggregating
+// from the 1m cache. Returns nil if 1m cache doesn't cover enough range.
+func (s *Server) deriveFromOneMin(ctx context.Context, symbol, targetInterval string) []marketdata.Candle {
+	// First, make sure 1m is loaded/available
+	oneMin := s.backfillIntervalWithCache(ctx, symbol, "1m", "binance")
+	if len(oneMin) < 2 {
+		return nil
+	}
+
+	targetMs := intervalMs(targetInterval)
+	daysNeeded := (s.cfg.BackfillBars * int(targetMs/60000)) / 1440
+	if daysNeeded < 1 {
+		daysNeeded = 1
+	}
+	if daysNeeded > s.cfg.BackfillDays {
+		daysNeeded = s.cfg.BackfillDays
+	}
+
+	// Check if 1m cache goes back far enough for the target interval
+	oneMinOldest := oneMin[0].OpenTime
+	oneMinNewest := oneMin[len(oneMin)-1].OpenTime
+	now := time.Now().UnixMilli()
+	neededOldest := now - int64(daysNeeded)*86400000
+
+	if oneMinOldest > neededOldest {
+		// 1m doesn't go back far enough for this interval
+		return nil
+	}
+
+	// Check 1m is recent enough (within 2 intervals)
+	if oneMinNewest < now-int64(2)*targetMs {
+		// 1m data is stale — would need refresh, but this is handled by
+		// the recursive call to backfillIntervalWithCache above
+		return nil
+	}
+
+	// Derive by aggregating 1m candles
+	candles := AggregateCandles(oneMin, targetMs, false)
+	if len(candles) == 0 {
+		return nil
+	}
+
+	// Set Timeframe on each aggregated candle
+	for i := range candles {
+		candles[i].Timeframe = targetInterval
+	}
+
+	// Save derived candles to cache so subsequent loads are instant
+	candles = s.trimKlinesByAge(symbol, targetInterval, candles)
+	s.klineCache.Save(symbol, targetInterval, candles)
+	s.log.Infof("derived %s %s from 1m: %d candles (1m source: %d candles, range %d→%d)",
+		symbol, targetInterval, len(candles), len(oneMin), oneMinOldest, oneMinNewest)
+	return candles
+}
+
+// mergeCandleLists merges two candle slices, deduplicating by OpenTime.
+// Returns a single sorted slice.
+func mergeCandleLists(a, b []marketdata.Candle) []marketdata.Candle {
+	byOpenTime := make(map[int64]marketdata.Candle)
+	for _, c := range a {
+		if c.OpenTime > 0 {
+			byOpenTime[c.OpenTime] = c
+		}
+	}
+	for _, c := range b {
+		if c.OpenTime > 0 {
+			byOpenTime[c.OpenTime] = c
+		}
+	}
+	out := make([]marketdata.Candle, 0, len(byOpenTime))
+	for _, c := range byOpenTime {
+		out = append(out, c)
+	}
+	// Sort by OpenTime
+	for i := 0; i < len(out); i++ {
+		for j := i + 1; j < len(out); j++ {
+			if out[j].OpenTime < out[i].OpenTime {
+				out[i], out[j] = out[j], out[i]
+			}
+		}
+	}
+	return out
+}
+
+// trimKlinesByAge removes candles older than KlineRetainDays from the slice.
+// The input should be sorted by OpenTime ascending.
+func (s *Server) trimKlinesByAge(symbol, interval string, candles []marketdata.Candle) []marketdata.Candle {
+	retainDays := s.cfg.KlineRetainDays
+	if retainDays <= 0 {
+		return candles
+	}
+	cutoff := time.Now().UnixMilli() - int64(retainDays)*86400000
+
+	// Find first candle within cutoff
+	cutIdx := 0
+	for cutIdx < len(candles) && candles[cutIdx].OpenTime < cutoff {
+		cutIdx++
+	}
+
+	if cutIdx == 0 {
+		return candles // nothing to trim
+	}
+
+	trimmed := candles[cutIdx:]
+	s.log.Infof("kline retain: trimmed %d old candles for %s/%s (retainDays=%d, kept=%d)",
+		cutIdx, symbol, interval, retainDays, len(trimmed))
+	return trimmed
 }
 
 // intervalMs converts a kline interval label (1m, 1h, 1d…) to milliseconds.
@@ -926,6 +1201,29 @@ func encodeTextFrame(payload []byte) []byte {
 }
 
 func (s *Server) recordTrade(trade marketdata.Trade) {
+	// Persist to file cache (fire and forget)
+	if s.tradeCache != nil {
+		go s.tradeCache.Append(trade)
+	}
+
+	// Persist to SQLite (fire and forget)
+	if s.sqlDB != nil {
+		go func(t marketdata.Trade) {
+			side := strings.ToLower(strings.TrimSpace(t.Side))
+			rec := storage.TradeRecord{
+				Symbol:          t.Symbol,
+				ExchangeTradeID: t.TradeID,
+				TimestampMs:     t.TsExchange,
+				Price:           t.Price,
+				Qty:             t.Qty,
+				IsBuy:           side == "buy",
+			}
+			if err := s.sqlDB.InsertTrade(rec); err != nil {
+				s.log.Infof("sqlite insert trade: %v", err)
+			}
+		}(trade)
+	}
+
 	s.tradesMu.Lock()
 	defer s.tradesMu.Unlock()
 	s.trades = append(s.trades, trade)
@@ -938,6 +1236,9 @@ type clientMsg struct {
 	Type      string `json:"type"`
 	Timeframe string `json:"timeframe"`
 	Source    string `json:"source"`
+	Symbol    string `json:"symbol"`
+	FromTs    int64  `json:"fromTs"`
+	ToTs      int64  `json:"toTs"`
 }
 
 type CvdPoint struct {
@@ -1130,6 +1431,53 @@ func (s *Server) handleClientMessage(client *wsClient, payload []byte) {
 		} else {
 			s.log.Infof("unknown source in source_switch: %s", src)
 		}
+	} else if msg.Type == "rebuild_footprint" && s.sqlDB != nil {
+		symbol := strings.ToUpper(strings.TrimSpace(msg.Symbol))
+		if symbol == "" {
+			symbol = "BTCUSDT"
+		}
+		fromTs := msg.FromTs
+		toTs := msg.ToTs
+		if fromTs <= 0 || toTs <= 0 || toTs <= fromTs {
+			_ = client.Send(s.rebuildReply("error", "fromTs and toTs required, toTs > fromTs"))
+			return
+		}
+		go func() {
+			_ = client.Send(s.rebuildReply("rebuild_started", "rebuilding footprint 1m"))
+			count, err := s.RebuildFootprint1m(symbol, fromTs, toTs)
+			if err != nil {
+				_ = client.Send(s.rebuildReply("rebuild_error", err.Error()))
+				return
+			}
+			_ = client.Send(s.rebuildReply("rebuild_complete", fmt.Sprintf("%d footprints created", count)))
+		}()
+	} else if msg.Type == "aggregate_tf" && s.sqlDB != nil {
+		symbol := strings.ToUpper(strings.TrimSpace(msg.Symbol))
+		if symbol == "" {
+			symbol = "BTCUSDT"
+		}
+		tf := strings.TrimSpace(msg.Timeframe)
+		if tf == "" {
+			_ = client.Send(s.rebuildReply("error", "timeframe required (e.g. 5m, 15m, 1h)"))
+			return
+		}
+		fromTs := msg.FromTs
+		toTs := msg.ToTs
+		if fromTs <= 0 || toTs <= 0 {
+			// Default: aggregate all 1m footprints we have
+			fromTs = 0
+			toTs = storage.NowMs()
+		}
+		targetMs := intervalMs(tf)
+		go func() {
+			_ = client.Send(s.rebuildReply("aggregate_started", fmt.Sprintf("aggregating %s footprints", tf)))
+			count, err := s.AggregateFootprintTF(symbol, tf, targetMs, fromTs, toTs)
+			if err != nil {
+				_ = client.Send(s.rebuildReply("aggregate_error", err.Error()))
+				return
+			}
+			_ = client.Send(s.rebuildReply("aggregate_complete", fmt.Sprintf("%d %s candles created", count, tf)))
+		}()
 	}
 }
 
@@ -1298,6 +1646,8 @@ func (s *Server) backfillTrades(ctx context.Context) {
 			continue
 		}
 		s.log.Infof("backfilled %d historical trades for symbol=%s", len(fetched), symbol)
+
+		// Merge with existing (persisted) trades, sort, cap
 		s.tradesMu.Lock()
 		s.trades = append(s.trades, fetched...)
 		sort.Slice(s.trades, func(i, j int) bool {
@@ -1307,10 +1657,267 @@ func (s *Server) backfillTrades(ctx context.Context) {
 			s.trades = s.trades[len(s.trades)-50000:]
 		}
 		s.tradesMu.Unlock()
+
+		// Persist the newly backfilled trades to cache
+		if s.tradeCache != nil {
+			s.tradeCache.AppendBatch(fetched)
+		}
 	}
 
 	// Broadcast a fresh cvd_init after trade backfill, if enough data exists.
-	// A second broadcast will fire when 1m candle backfill completes (which
-	// provides OHLCV estimation for periods without real trades).
 	s.tryBroadcastCvdInit()
+}
+
+// loadPersistedTrades loads recent trades from the file cache into s.trades.
+// Called at the start of startExchange so CVD history survives restarts.
+func (s *Server) loadPersistedTrades() {
+	if s.tradeCache == nil {
+		return
+	}
+	symbols := s.cfg.Symbols
+	if len(symbols) == 0 {
+		if s.cfg.Exchange == config.ExchangeHyperliquid {
+			symbols = []string{"BTC"}
+		} else {
+			symbols = []string{"BTCUSDT"}
+		}
+	}
+
+	exchange := s.cfg.Exchange
+	if exchange == config.ExchangeMock {
+		return
+	}
+
+	var totalLoaded int
+	for _, symbol := range symbols {
+		cached := s.tradeCache.LoadRecent(exchange, symbol)
+		if len(cached) == 0 {
+			continue
+		}
+
+		s.tradesMu.Lock()
+		// Merge with any existing trades (e.g., from switchExchange replay)
+		existing := s.trades
+		s.trades = append(existing, cached...)
+		sort.Slice(s.trades, func(i, j int) bool {
+			return s.trades[i].TsExchange < s.trades[j].TsExchange
+		})
+		if len(s.trades) > 50000 {
+			s.trades = s.trades[len(s.trades)-50000:]
+		}
+		s.tradesMu.Unlock()
+
+		totalLoaded += len(cached)
+		s.log.Infof("loaded %d persisted trades for %s/%s", len(cached), exchange, symbol)
+	}
+
+	if totalLoaded > 0 {
+		s.tryBroadcastCvdInit()
+	}
+}
+
+// RebuildFootprint1m deletes existing footprints in [fromTs, toTs] and
+// regenerates them from market_trades using the footprint calculator.
+// Returns the number of footprints created.
+// Runs synchronously — call in a goroutine for async usage.
+func (s *Server) RebuildFootprint1m(symbol string, fromTs, toTs int64) (int, error) {
+	if s.sqlDB == nil {
+		return 0, fmt.Errorf("sqlite not available")
+	}
+
+	// Delete existing footprints in range
+	if err := s.sqlDB.DeleteFootprint1mRange(symbol, fromTs, toTs); err != nil {
+		return 0, fmt.Errorf("delete footprints: %w", err)
+	}
+
+	// Load trades
+	trades, err := s.sqlDB.GetTrades(symbol, fromTs, toTs)
+	if err != nil {
+		return 0, fmt.Errorf("get trades: %w", err)
+	}
+	if len(trades) == 0 {
+		s.log.Infof("rebuild footprint: no trades for %s [%d, %d]", symbol, fromTs, toTs)
+		return 0, nil
+	}
+
+	// Use the engine's footprint calculator config
+	fpCfg := calc.FootprintConfig{
+		Enabled:    true,
+		IntervalMs: s.cfg.FootprintIntervalMs, // should be 60000 for 1m
+		TickSize:   s.cfg.FootprintTickSize,
+		EmitEvery:  0, // emit every trade during rebuild (no throttle)
+		MaxLevels:  s.cfg.FootprintMaxLevels,
+	}
+	if fpCfg.IntervalMs <= 0 {
+		fpCfg.IntervalMs = 60000
+	}
+	builder := calc.NewFootprintCalculator(fpCfg)
+
+	var closedCount int
+	for _, t := range trades {
+		// Convert storage.TradeRecord to marketdata.Trade
+		side := "sell"
+		if t.IsBuy {
+			side = "buy"
+		}
+		mt := marketdata.Trade{
+			Symbol:     t.Symbol,
+			TsExchange: t.TimestampMs,
+			TsLocal:    t.TimestampMs,
+			Price:      t.Price,
+			Qty:        t.Qty,
+			Side:       side,
+		}
+		candles := builder.UpdateTradeAt(mt, t.TimestampMs)
+		for _, c := range candles {
+			if c.Closed {
+				s.persistFootprintCandle(c)
+				closedCount++
+			}
+		}
+	}
+
+	s.log.Infof("rebuild footprint: created %d footprints for %s [%d, %d]", closedCount, symbol, fromTs, toTs)
+	return closedCount, nil
+}
+
+// AggregateFootprintTF reads 1m footprints, aggregates them to targetMs, and
+// persists to market_footprint_tf. Returns the number of TF candles created.
+func (s *Server) AggregateFootprintTF(symbol, timeframe string, targetMs int64, fromTs, toTs int64) (int, error) {
+	if s.sqlDB == nil {
+		return 0, fmt.Errorf("sqlite not available")
+	}
+
+	// Delete existing TF footprints in range
+	if err := s.sqlDB.DeleteFootprintTFRange(symbol, timeframe, fromTs, toTs); err != nil {
+		return 0, fmt.Errorf("delete tf footprints: %w", err)
+	}
+
+	// Load 1m footprints
+	oneMinFps, err := s.sqlDB.GetFootprint1m(symbol, fromTs, toTs)
+	if err != nil {
+		return 0, fmt.Errorf("get 1m footprints: %w", err)
+	}
+	if len(oneMinFps) == 0 {
+		s.log.Infof("aggregate tf: no 1m footprints for %s [%d, %d]", symbol, fromTs, toTs)
+		return 0, nil
+	}
+
+	// Aggregate
+	aggregated := calc.AggregateFootprints(oneMinFps, targetMs)
+	if len(aggregated) == 0 {
+		return 0, nil
+	}
+
+	// Persist
+	for _, fp := range aggregated {
+		if err := s.sqlDB.InsertFootprintTF(fp, timeframe); err != nil {
+			return 0, fmt.Errorf("insert tf footprint: %w", err)
+		}
+	}
+
+	s.log.Infof("aggregate tf: created %d %s candles for %s [%d, %d]",
+		len(aggregated), timeframe, symbol, fromTs, toTs)
+	return len(aggregated), nil
+}
+
+// persistFootprintCandle writes a closed footprint candle to SQLite.
+// Computes delta from buy/sell volume and accumulates CVD.
+func (s *Server) persistFootprintCandle(candle marketdata.FootprintCandle) {
+	// Compute delta if not already set
+	delta := candle.Delta
+	if delta == 0 && (candle.BuyVol > 0 || candle.SellVol > 0) {
+		delta = candle.BuyVol - candle.SellVol
+	}
+
+	// Accumulate CVD per symbol
+	s.cvdMu.Lock()
+	lastCVD := s.cvdBySymbol[candle.Symbol]
+	cvd := lastCVD + delta
+	s.cvdBySymbol[candle.Symbol] = cvd
+	s.cvdMu.Unlock()
+
+	// Build price levels
+	levels := make([]storage.PriceLevel, len(candle.Levels))
+	for i, l := range candle.Levels {
+		levels[i] = storage.PriceLevel{
+			Price:      l.Price,
+			BuyVolume:  l.BuyVol,
+			SellVolume: l.SellVol,
+		}
+	}
+
+	// Compute derived metrics
+	metrics := calc.ComputeMetrics(levels, calc.OHLCData{
+		Open:  candle.Open,
+		High:  candle.High,
+		Low:   candle.Low,
+		Close: candle.Close,
+	}, delta)
+
+	rec := storage.FootprintRecord{
+		Symbol:     candle.Symbol,
+		MinuteTs:   candle.OpenTime,
+		Open:       candle.Open,
+		High:       candle.High,
+		Low:        candle.Low,
+		Close:      candle.Close,
+		Volume:     candle.Volume,
+		BuyVolume:  candle.BuyVol,
+		SellVolume: candle.SellVol,
+		Delta:      delta,
+		CVD:        cvd,
+		Profile:    storage.FootprintProfile{Levels: levels},
+		MaxImbalanceRatio:        metrics.MaxImbalanceRatio,
+		BuyImbalanceCount:        metrics.BuyImbalanceCount,
+		SellImbalanceCount:       metrics.SellImbalanceCount,
+		StackedBuyImbalanceCount:  metrics.StackedBuyImbalanceCount,
+		StackedSellImbalanceCount: metrics.StackedSellImbalanceCount,
+		HasBuyAbsorption:         metrics.HasBuyAbsorption,
+		HasSellAbsorption:        metrics.HasSellAbsorption,
+		AbsorptionPriceBuy:       metrics.AbsorptionPriceBuy,
+		AbsorptionPriceSell:      metrics.AbsorptionPriceSell,
+		IsExhaustionHigh:         metrics.IsExhaustionHigh,
+		IsExhaustionLow:          metrics.IsExhaustionLow,
+		IsUnfinishedHigh:         metrics.IsUnfinishedHigh,
+		IsUnfinishedLow:          metrics.IsUnfinishedLow,
+	}
+
+	if err := s.sqlDB.InsertFootprint1m(rec); err != nil {
+		s.log.Infof("sqlite insert footprint: %v", err)
+	}
+}
+
+// purgeSQLiteRetention deletes old data from SQLite based on retention config.
+// periodicPurge runs cache cleanup every hour. Stops when ctx is cancelled.
+func (s *Server) periodicPurge(ctx context.Context) {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if s.tradeCache != nil {
+				syms := s.cfg.Symbols
+				if len(syms) == 0 {
+					syms = []string{"BTCUSDT"}
+				}
+				for _, sym := range syms {
+					s.tradeCache.PurgeOlderThan(s.cfg.Exchange, sym)
+				}
+				s.log.Infof("periodic purge complete for %d symbols", len(syms))
+			}
+		}
+	}
+}
+
+// rebuildReply builds a JSON reply for footprint rebuild/aggregate commands.
+func (s *Server) rebuildReply(event, message string) []byte {
+	raw, _ := json.Marshal(map[string]string{
+		"type":    event,
+		"payload": message,
+	})
+	return raw
 }

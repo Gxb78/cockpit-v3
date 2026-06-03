@@ -121,6 +121,18 @@
       } else if (next === 'connected' || next === 'disconnected') {
         stats.lastError = '';
       }
+      if (store) {
+        var patch = { transportStatus: next };
+        if (next === 'connected') {
+          patch.dataFreshness = 'live';
+        } else if (next === 'disconnected' || next === 'error') {
+          var prev = store.getState();
+          if (prev.source !== 'mock') {
+            patch.dataFreshness = (prev.dataFreshness === 'rest-fallback') ? 'rest-fallback' : 'offline';
+          }
+        }
+        store.setState(patch, 'transport-status-change');
+      }
       notify();
     }
 
@@ -875,6 +887,7 @@
           var patch = {
             _candlesByInterval: byIv,
             source: 'live',
+            dataFreshness: (status === 'connected') ? 'live' : 'rest-fallback',
             isStale: false,
             lastMessageAt: Date.now()
           };

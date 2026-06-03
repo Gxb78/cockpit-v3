@@ -51,11 +51,42 @@
     next.isStale = !!next.isStale;
     next.contractVersion = next.contractVersion || empty.contractVersion;
     next.source = next.source || empty.source;
+    next.dataFreshness = next.dataFreshness || empty.dataFreshness;
+    next.transportStatus = next.transportStatus || empty.transportStatus;
     next.symbol = next.symbol || empty.symbol;
     next.timeframe = next.timeframe || empty.timeframe;
     next.depthHistory = Array.isArray(next.depthHistory) ? next.depthHistory : [];
     return next;
   }
+
+  function shallowEqual(a, b) {
+    if (a === b) return true;
+    if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) {
+      return false;
+    }
+    var isArrayA = Array.isArray(a);
+    var isArrayB = Array.isArray(b);
+    if (isArrayA !== isArrayB) return false;
+    if (isArrayA) {
+      if (a.length !== b.length) return false;
+      for (var i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) return false;
+      }
+      return true;
+    }
+    var keysA = Object.keys(a);
+    var keysB = Object.keys(b);
+    if (keysA.length !== keysB.length) return false;
+    for (var j = 0; j < keysA.length; j++) {
+      var key = keysA[j];
+      if (!Object.prototype.hasOwnProperty.call(b, key) || a[key] !== b[key]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  V6OF.shallowEqual = shallowEqual;
 
   V6OF.createStore = function (initialState) {
     var state = normalizeState(initialState || V6OF.Contract.createEmptyState());
@@ -110,11 +141,31 @@
           lastFootprintTs: 0
         }, 'clear-all-buffers');
       },
-      subscribe: function (fn) {
+      subscribe: function (fn, selector) {
         if (typeof fn !== 'function') return function () {};
-        listeners.push(fn);
+        var listenerFn = fn;
+        if (typeof selector === 'function') {
+          var lastSelectedState;
+          var hasLast = false;
+          listenerFn = function (state) {
+            var selected;
+            try {
+              selected = selector(state);
+            } catch (err) {
+              console.error('[V6OF] selector failed', err);
+              return;
+            }
+            if (hasLast && shallowEqual(lastSelectedState, selected)) {
+              return;
+            }
+            lastSelectedState = selected;
+            hasLast = true;
+            fn(state);
+          };
+        }
+        listeners.push(listenerFn);
         return function () {
-          listeners = listeners.filter(function (item) { return item !== fn; });
+          listeners = listeners.filter(function (item) { return item !== listenerFn; });
         };
       }
     };

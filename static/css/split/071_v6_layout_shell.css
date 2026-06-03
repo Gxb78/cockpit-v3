@@ -1,4 +1,4 @@
-/* 071_v6_layout_shell.css — "Obsidian Tape" TradingView-like shell
+/* 071_v6_layout_shell.css — Light shell
  * Built by MOVING Layout panels into regions (see 080_v6_layout_shell.js).
  * Uses the design tokens scoped to .v6-orderflow-root (070).
  * Layout: left tool rail | dominant center chart | tabbed right column.
@@ -409,11 +409,11 @@
   .v6-workspace-lbl { display: none; }
 }
 
-/* Sober V6 orderflow shell overrides. */
+/* Light V6 orderflow shell overrides. */
 .v6-left-toolbar,
 .v6-right-col,
 .v6-status-bar {
-  background: #080d12;
+  background: #f0f1f3;
 }
 
 .v6-left-toolbar .v6-tool:hover,
@@ -435,7 +435,7 @@
 .v6-rtabs {
   gap: 0;
   padding: 4px 4px 0;
-  background: #080d12;
+  background: #f0f1f3;
 }
 
 .v6-rtab {
@@ -445,16 +445,16 @@
 }
 
 .v6-rtab.is-active {
-  color: #b7edf3;
-  background: rgba(56, 199, 216, 0.08);
-  box-shadow: inset 0 -1px 0 rgba(56, 199, 216, 0.65);
+  color: #0891b2;
+  background: rgba(8, 145, 178, 0.06);
+  box-shadow: inset 0 -1px 0 rgba(8, 145, 178, 0.65);
 }
 
 .v6-resize-h:hover,
 .v6-resize-h.is-dragging,
 .v6-resize-v:hover,
 .v6-resize-v.is-dragging {
-  background: rgba(56, 199, 216, 0.05);
+  background: rgba(8, 145, 178, 0.04);
   box-shadow: none;
 }
 
@@ -462,12 +462,12 @@
   height: 22px;
   flex-basis: 22px;
   gap: 16px;
-  background: #06090d;
+  background: #e8eaed;
 }
 
 .v6-info-card {
-  background: #0a1016;
-  border-color: rgba(126, 145, 160, 0.12);
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
 }
 
 /* ======================= IMMERSIVE ORDERFLOW PASS ======================= */
@@ -556,9 +556,52 @@ body[data-current-page="orderflow"] .v6-right-col {
   width: 300px;
 }
 
-body[data-current-page="orderflow"] .v6-dock-collapsed .v6-right-col,
 body[data-current-page="orderflow"] .v6-dock-collapsed .v6-resize-h {
   display: none;
+}
+
+body[data-current-page="orderflow"] .v6-dock-collapsed .v6-right-col {
+  flex-basis: 36px;
+  width: 36px;
+}
+
+body[data-current-page="orderflow"] .v6-dock-collapsed .v6-rbody {
+  display: none !important;
+}
+
+body[data-current-page="orderflow"] .v6-dock-collapsed .v6-rtabs {
+  flex-direction: column;
+  height: 100%;
+  padding: 6px 2px;
+  gap: 6px;
+  border-bottom: none;
+  background: var(--v6-bg-2);
+}
+
+body[data-current-page="orderflow"] .v6-dock-collapsed .v6-rtab {
+  min-height: 28px;
+  width: 100%;
+  padding: 0;
+  border-radius: var(--v6-r-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+body[data-current-page="orderflow"] .v6-dock-collapsed .v6-rtab:not(.v6-rtab-icon) {
+  font-size: 0;
+}
+
+body[data-current-page="orderflow"] .v6-dock-collapsed #v6-tab-dom::before {
+  content: "D";
+  font-size: 10px;
+  font-weight: 800;
+}
+
+body[data-current-page="orderflow"] .v6-dock-collapsed #v6-tab-tape::before {
+  content: "T";
+  font-size: 10px;
+  font-weight: 800;
 }
 
 body[data-current-page="orderflow"] .v6-rbody.show-vwap .v6-panel-vwap,

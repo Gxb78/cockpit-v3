@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Footprint / CVD Viewer</title>
+<style>
+  * { box-sizing:border-box; }
+  body { background:#0d1117; color:#c9d1d9; font-family:system-ui,sans-serif; margin:0; display:flex; flex-direction:column; height:100vh; font-size:13px; }
+  #top { padding:8px 12px; background:#161b22; display:flex; gap:8px; align-items:center; border-bottom:1px solid #30363d; flex-wrap:wrap; }
+  #top input, #top select, #top button { background:#21262d; color:#c9d1d9; border:1px solid #30363d; padding:5px 10px; border-radius:4px; cursor:pointer; }
+  #top button:hover { background:#30363d; }
+  #top label { color:#8b949e; font-size:12px; }
+  #status { margin-left:auto; color:#8b949e; font-size:12px; font-family:monospace; }
+  #charts { display:flex; flex:1; min-height:0; gap:0; }
+  #charts canvas { flex:1; min-width:0; display:block; }
+  #footprint { border-right:1px solid #30363d; }
+</style>
+</head>
+<body>
+<div id="top">
+  <label>Symbol:</label>
+  <input id="symbol" value="BTCUSDT" />
+  <button id="load">Load (1h)</button>
+  <button id="replay">Replay</button>
+  <button id="pause">Pause</button>
+  <button id="step">Step</button>
+  <label>Speed:</label>
+  <select id="speed">
+    <option value="1000">1x</option>
+    <option value="500">2x</option>
+    <option value="200">5x</option>
+    <option value="100" selected>10x</option>
+    <option value="50">20x</option>
+  </select>
+  <span id="status">ready</span>
+</div>
+<div id="charts">
+  <canvas id="footprint"></canvas>
+  <canvas id="cvd"></canvas>
+</div>
+
+<script>
+const fpCanvas = document.getElementById('footprint');
+const cvdCanvas = document.getElementById('cvd');
+const fpCtx = fpCanvas.getContext('2d');
+const cvdCtx = cvdCanvas.getContext('2d');
+const statusEl = document.getElementById('status');
+
+let replayCandles = [];
+let replayIndex = 0;
+let replayTimer = null;
+
+function resize() {
+  fpCanvas.width = fpCanvas.clientWidth;
+  fpCanvas.height = fpCanvas.clientHeight;
+  cvdCanvas.width = cvdCanvas.clientWidth;
+  cvdCanvas.height = cvdCanvas.clientHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function setStatus(msg) { statusEl.textContent = msg; }
+
+async function fetchFootprint(symbol, hours) {
+  hours = hours || 1;
+  const now = Date.now();
+  const from = now - hours * 3600 * 1000;
+  const url = `/api/v1/footprint/1m?symbol=${symbol}&from=${from}&to=${now}`;
+  setStatus('fetching...');
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const data = await res.json();
+  return data.candles || [];
+}
+
+// ── Footprint canvas ──
+function drawFootprint(candles) {
+  const W = fpCanvas.width, H = fpCanvas.height;
+  fpCtx.clearRect(0, 0, W, H);
+
+  if (!candles.length) {
+    fpCtx.fillStyle = '#484f58';
+    fpCtx.font = '14px sans-serif';
+    fpCtx.textAlign = 'center';
+    fpCtx.fillText('no data', W/2, H/2);
+    return;
+  }
+
+  const m = { top:30, bottom:20, left:60, right:10 };
+  const pw = W - m.left - m.right;
+  const ph = H - m.top - m.bottom;
+
+  // Price range from all levels
+  let minP = Infinity, maxP = -Infinity;
+  candles.forEach(c => (c.profile||[]).forEach(l => {
+    if (l.p < minP) minP = l.p;
+    if (l.p > maxP) maxP = l.p;
+  }));
+  if (minP === Infinity) return;
+  const pad = (maxP - minP) * 0.05 || 1;
+  minP -= pad; maxP += pad;
+  const pRange = maxP - minP;
+
+  // Max volume across all levels for scaling
+  let maxVol = 0;
+  candles.forEach(c => (c.profile||[]).forEach(l => { maxVol = Math.max(maxVol, l.b||0, l.s||0); }));
+  if (maxVol === 0) maxVol = 1;
+
+  const colW = pw / candles.length;
+
+  // Draw each candle's profile
+  candles.forEach((c, ci) => {
+    const cx = m.left + ci * colW;
+    const levels = c.profile || [];
+    const halfW = Math.max(2, colW / 2 - 1);
+
+    levels.forEach(l => {
+      const py = m.top + (1 - (l.p - minP) / pRange) * ph;
+      const hh = Math.max(2, ph / (pRange / (maxP - minP + pad*2)) * 0.6);
+
+      const buy = l.b || 0;
+      const sell = l.s || 0;
+
+      // Sell (left, red)
+      const sW = halfW * (sell / maxVol);
+      fpCtx.fillStyle = 'rgba(248,81,73,0.85)';
+      fpCtx.fillRect(cx + halfW - sW, py - hh/2, sW, hh);
+
+      // Buy (right, green)
+      const bW = halfW * (buy / maxVol);
+      fpCtx.fillStyle = 'rgba(63,185,80,0.85)';
+      fpCtx.fillRect(cx + halfW, py - hh/2, bW, hh);
+    });
+
+    // Candle open/close line (thin OHLC)
+    fpCtx.strokeStyle = c.close >= c.open ? '#3fb950' : '#f85149';
+    fpCtx.lineWidth = 1;
+    fpCtx.beginPath();
+    const oy = m.top + (1 - (c.open - minP) / pRange) * ph;
+    const cy = m.top + (1 - (c.close - minP) / pRange) * ph;
+    const hy = m.top + (1 - (c.high - minP) / pRange) * ph;
+    const ly = m.top + (1 - (c.low - minP) / pRange) * ph;
+    // wick
+    fpCtx.moveTo(cx + halfW, hy);
+    fpCtx.lineTo(cx + halfW, ly);
+    fpCtx.stroke();
+    // body
+    fpCtx.fillRect(cx + halfW - 1, Math.min(oy, cy), 3, Math.abs(cy - oy) || 1);
+  });
+
+  // Price axis labels
+  fpCtx.fillStyle = '#8b949e';
+  fpCtx.font = '10px monospace';
+  fpCtx.textAlign = 'right';
+  const steps = 5;
+  for (let i = 0; i <= steps; i++) {
+    const p = minP + (pRange * i) / steps;
+    const y = m.top + (1 - i/steps) * ph;
+    fpCtx.fillText(p.toFixed(1), m.left - 6, y + 3);
+    fpCtx.strokeStyle = 'rgba(48,54,61,0.5)';
+    fpCtx.lineWidth = 1;
+    fpCtx.beginPath();
+    fpCtx.moveTo(m.left, y);
+    fpCtx.lineTo(m.left + pw, y);
+    fpCtx.stroke();
+  }
+}
+
+// ── CVD canvas ──
+function drawCVD(candles) {
+  const W = cvdCanvas.width, H = cvdCanvas.height;
+  cvdCtx.clearRect(0, 0, W, H);
+
+  if (!candles.length) {
+    cvdCtx.fillStyle = '#484f58';
+    cvdCtx.font = '14px sans-serif';
+    cvdCtx.textAlign = 'center';
+    cvdCtx.fillText('no data', W/2, H/2);
+    return;
+  }
+
+  const m = { top:20, bottom:20, left:50, right:10 };
+  const pw = W - m.left - m.right;
+  const ph = H - m.top - m.bottom;
+
+  const cvds = candles.map(c => c.cvd ?? 0);
+  const minC = Math.min(...cvds);
+  const maxC = Math.max(...cvds);
+  const range = maxC - minC || 1;
+  const padC = range * 0.1;
+  const cMin = minC - padC;
+  const cMax = maxC + padC;
+  const cRange = cMax - cMin;
+
+  // Zero line
+  if (cMin < 0 && cMax > 0) {
+    const zy = m.top + (1 - (0 - cMin) / cRange) * ph;
+    cvdCtx.strokeStyle = 'rgba(48,54,61,0.8)';
+    cvdCtx.lineWidth = 1;
+    cvdCtx.beginPath();
+    cvdCtx.moveTo(m.left, zy);
+    cvdCtx.lineTo(m.left + pw, zy);
+    cvdCtx.stroke();
+  }
+
+  // CVD line
+  cvdCtx.strokeStyle = '#58a6ff';
+  cvdCtx.lineWidth = 2;
+  cvdCtx.beginPath();
+  candles.forEach((c, i) => {
+    const x = m.left + (i / (candles.length - 1 || 1)) * pw;
+    const y = m.top + (1 - ((c.cvd ?? 0) - cMin) / cRange) * ph;
+    if (i === 0) cvdCtx.moveTo(x, y);
+    else cvdCtx.lineTo(x, y);
+  });
+  cvdCtx.stroke();
+
+  // Fill under line
+  const lastX = m.left + pw;
+  const firstX = m.left;
+  const lastY = m.top + (1 - ((cvds[cvds.length-1] ?? 0) - cMin) / cRange) * ph;
+  const firstY = m.top + (1 - ((cvds[0] ?? 0) - cMin) / cRange) * ph;
+  const zeroY = m.top + (1 - (0 - cMin) / cRange) * ph;
+  cvdCtx.lineTo(lastX, zeroY);
+  cvdCtx.lineTo(firstX, zeroY);
+  cvdCtx.closePath();
+  cvdCtx.fillStyle = 'rgba(88,166,255,0.08)';
+  cvdCtx.fill();
+
+  // Axis labels
+  cvdCtx.fillStyle = '#8b949e';
+  cvdCtx.font = '10px monospace';
+  cvdCtx.textAlign = 'right';
+  const steps = 3;
+  for (let i = 0; i <= steps; i++) {
+    const v = cMin + (cRange * i) / steps;
+    const y = m.top + (1 - i/steps) * ph;
+    const label = Math.abs(v) >= 1000000 ? (v/1e6).toFixed(1)+'M' : Math.abs(v) >= 1000 ? (v/1e3).toFixed(1)+'K' : v.toFixed(0);
+    cvdCtx.fillText(label, m.left - 6, y + 3);
+  }
+
+  // Label
+  cvdCtx.fillStyle = '#58a6ff';
+  cvdCtx.font = '11px sans-serif';
+  cvdCtx.textAlign = 'left';
+  cvdCtx.fillText('CVD', m.left + 6, 14);
+}
+
+// ── Replay controls ──
+function startReplay() {
+  if (!replayCandles.length) return;
+  pauseReplay();
+  replayIndex = 0;
+  const speed = parseInt(document.getElementById('speed').value, 10);
+  setStatus('replaying ' + replayCandles.length + ' candles');
+  replayTimer = setInterval(() => {
+    if (replayIndex >= replayCandles.length) {
+      pauseReplay();
+      setStatus('replay done');
+      return;
+    }
+    const slice = replayCandles.slice(0, replayIndex + 1);
+    drawFootprint(slice);
+    drawCVD(slice);
+    replayIndex++;
+  }, speed);
+}
+
+function pauseReplay() {
+  if (replayTimer) {
+    clearInterval(replayTimer);
+    replayTimer = null;
+    setStatus('paused at candle ' + replayIndex + '/' + replayCandles.length);
+  }
+}
+
+function stepReplay() {
+  if (!replayCandles.length) return;
+  pauseReplay();
+  replayIndex = Math.min(replayIndex + 1, replayCandles.length);
+  if (replayIndex >= replayCandles.length) { setStatus('end'); return; }
+  const slice = replayCandles.slice(0, replayIndex + 1);
+  drawFootprint(slice);
+  drawCVD(slice);
+  setStatus('candle ' + (replayIndex + 1) + '/' + replayCandles.length);
+}
+
+// ── Load ──
+async function loadOnce() {
+  const symbol = document.getElementById('symbol').value.trim();
+  pauseReplay();
+  try {
+    const candles = await fetchFootprint(symbol);
+    replayCandles = candles;
+    replayIndex = 0;
+    drawFootprint(candles);
+    drawCVD(candles);
+    setStatus(candles.length + ' candles loaded');
+  } catch (e) {
+    setStatus('error: ' + e.message);
+  }
+}
+
+// ── Wire buttons ──
+document.getElementById('load').onclick = loadOnce;
+document.getElementById('replay').onclick = startReplay;
+document.getElementById('pause').onclick = pauseReplay;
+document.getElementById('step').onclick = stepReplay;
+
+document.getElementById('symbol').addEventListener('keydown', e => { if (e.key === 'Enter') loadOnce(); });
+
+// Auto-load on page load
+loadOnce();
+</script>
+</body>
+</html>

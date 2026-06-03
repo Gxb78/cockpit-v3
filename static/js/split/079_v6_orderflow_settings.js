@@ -40,7 +40,10 @@
     showGrid: true,
     bgColor: '#080b12',
     upColor: '#3ddc97',
-    downColor: '#ff5f73'
+    downColor: '#ff5f73',
+    activeTab: 'dom',
+    dockCollapsed: false,
+    cvdCollapsed: false
   };
 
   var VALID_CHART_MODES = { heatmap: 1, footprint: 1, both: 1, none: 1 };
@@ -99,6 +102,9 @@
     out.tapeFontSize = clampInt(raw.tapeFontSize, 8, 20, DEFAULTS.tapeFontSize);
     out.deltaIntervalMs = Number(raw.deltaIntervalMs) || DEFAULTS.deltaIntervalMs;
     out.tickSize = Math.max(0.01, Number(raw.tickSize) || DEFAULTS.tickSize);
+    out.activeTab = typeof raw.activeTab === 'string' ? raw.activeTab : DEFAULTS.activeTab;
+    out.dockCollapsed = typeof raw.dockCollapsed === 'boolean' ? raw.dockCollapsed : DEFAULTS.dockCollapsed;
+    out.cvdCollapsed = typeof raw.cvdCollapsed === 'boolean' ? raw.cvdCollapsed : DEFAULTS.cvdCollapsed;
     return out;
   }
 

@@ -8,40 +8,40 @@
  * ========================================================================== */
 
 .v6-orderflow-root {
-  /* — surfaces (aligned with chart page palette) — */
-  --v6-bg:        #070c11;
-  --v6-bg-2:      #091017;
-  --v6-surface:   #0b1218;
-  --v6-surface-2: #101922;
-  --v6-surface-3: #16212c;
-  --v6-hairline:        rgba(118, 144, 160, 0.16);
-  --v6-hairline-strong: rgba(118, 144, 160, 0.25);
-  --v6-edge:      rgba(255, 255, 255, 0.035);
+  /* — surfaces (light theme) — */
+  --v6-bg:        #f8f9fa;
+  --v6-bg-2:      #f0f1f3;
+  --v6-surface:   #e8eaed;
+  --v6-surface-2: #dee0e3;
+  --v6-surface-3: #d1d4d8;
+  --v6-hairline:        rgba(0, 0, 0, 0.10);
+  --v6-hairline-strong: rgba(0, 0, 0, 0.18);
+  --v6-edge:      rgba(0, 0, 0, 0.04);
 
-  /* — text (audited — brighter) — */
-  --v6-text:       #f0f4f8;
-  --v6-text-dim:   #a8c0d0;
-  --v6-text-mute:  #8da3b3;
-  --v6-text-faint: #6a7d8e;
+  /* — text — */
+  --v6-text:       #1a1d23;
+  --v6-text-dim:   #4a5568;
+  --v6-text-mute:  #718096;
+  --v6-text-faint: #a0aec0;
 
   /* — accent: cyan — */
-  --v6-accent:      #22d3ee;
-  --v6-accent-2:    #0fb6d4;
-  --v6-accent-soft: rgba(56, 211, 238, 0.06);
-  --v6-accent-line: rgba(56, 211, 238, 0.25);
-  --v6-accent-glow: rgba(56, 211, 238, 0.30);
+  --v6-accent:      #0891b2;
+  --v6-accent-2:    #0e7490;
+  --v6-accent-soft: rgba(8, 145, 178, 0.06);
+  --v6-accent-line: rgba(8, 145, 178, 0.20);
+  --v6-accent-glow: rgba(8, 145, 178, 0.25);
 
-  /* — semantic (audited — +15% saturation) — */
-  --v6-buy:       #4ae8a0;
-  --v6-buy-soft:  rgba(74, 232, 160, 0.12);
-  --v6-sell:      #ff6b80;
-  --v6-sell-soft: rgba(255, 107, 128, 0.12);
-  --v6-gold:      #f59e0b;
-  --v6-gold-soft: rgba(245, 158, 11, 0.10);
+  /* — semantic — */
+  --v6-buy:       #059669;
+  --v6-buy-soft:  rgba(5, 150, 105, 0.10);
+  --v6-sell:      #dc2626;
+  --v6-sell-soft: rgba(220, 38, 38, 0.10);
+  --v6-gold:      #b45309;
+  --v6-gold-soft: rgba(180, 83, 9, 0.08);
 
-  /* — depth (flatter, chart-page style) — */
-  --v6-shadow:     0 8px 24px -18px rgba(0, 0, 0, 0.7);
-  --v6-shadow-sm:  none;
+  /* — depth — */
+  --v6-shadow:     0 8px 24px -18px rgba(0, 0, 0, 0.15);
+  --v6-shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.06);
   --v6-glow-accent: 0 0 0 1px var(--v6-accent-line);
 
   /* — geometry (tighter, less rounded) — */
@@ -60,15 +60,30 @@
 
   position: absolute;
   inset: 0;
-  z-index: 35;
   color: var(--v6-text);
   font-family: var(--v6-font);
+  pointer-events: none;
+}
+
+.page.active .v6-orderflow-root {
+  z-index: 35;
   pointer-events: auto;
 }
 
 .v6-orderflow-root *,
 .v6-orderflow-root *::before,
 .v6-orderflow-root *::after { box-sizing: border-box; }
+
+.v6-demo-banner {
+  background: #7c2d12;
+  color: #ffedd5;
+  text-align: center;
+  padding: 6px 12px;
+  font: 700 12px/1.4 var(--v6-font);
+  border-bottom: 1px solid #9a3412;
+  letter-spacing: 0.03em;
+  z-index: 100;
+}
 
 /* ---- Shell: flat chart-page surface ---- */
 .v6-shell {
@@ -346,7 +361,7 @@
 .v6-btn-ghost { background: transparent; border-color: var(--v6-hairline); color: var(--v6-text-mute); }
 .v6-btn-ghost:hover { color: var(--v6-text); }
 
-/* Connection status pill (auto-connect; no manual button) */
+/* Connection status pill (interactive button) */
 .v6-conn {
   display: inline-flex;
   align-items: center;
@@ -359,6 +374,14 @@
   font: 800 11px/1 var(--v6-font);
   letter-spacing: 0.02em;
   white-space: nowrap;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease;
+}
+.v6-conn:hover {
+  background: var(--v6-surface-4);
+  border-color: var(--v6-text-mute);
+  color: var(--v6-text);
 }
 .v6-conn-text { text-transform: capitalize; }
 
@@ -1464,27 +1487,10 @@
 }
 .v6-bt-note { color: var(--v6-text-faint); font: 9px/1 var(--v6-font); letter-spacing: 0.04em; text-transform: uppercase; }
 
-/* ========================== SOBER PRO PASS ==========================
- * Keep the V6 layout intact, but remove the constant glow/motion that made the
- * orderflow page feel busy. State is communicated through contrast and color,
- * not decorative effects.
- */
+/* ========================== LIGHT THEME SOBER ========================== */
 .v6-orderflow-root {
-  --v6-bg: #06090d;
-  --v6-bg-2: #080d12;
-  --v6-surface: #0a1016;
-  --v6-surface-2: #0d151d;
-  --v6-surface-3: #111a23;
-  --v6-hairline: rgba(126, 145, 160, 0.14);
-  --v6-hairline-strong: rgba(126, 145, 160, 0.22);
-  --v6-accent: #38c7d8;
-  --v6-accent-2: #25aabb;
-  --v6-accent-soft: rgba(56, 199, 216, 0.08);
-  --v6-accent-line: rgba(56, 199, 216, 0.24);
-  --v6-accent-glow: rgba(56, 199, 216, 0.18);
-  --v6-buy: #45d18f;
-  --v6-sell: #ef6375;
   --v6-shadow: none;
+  --v6-shadow-sm: none;
 }
 
 .v6-header {
@@ -1492,12 +1498,15 @@
   min-height: 38px;
   gap: 7px;
   padding: 0 12px;
-  background: #080d12;
+  background: #f0f1f3;
 }
 
 .v6-brand-mark {
-  background: #10202a;
+  background: #d1d4d8;
   box-shadow: none;
+}
+.v6-brand-mark::after {
+  color: #f8f9fa;
 }
 
 .v6-seg,
@@ -1505,7 +1514,7 @@
 .v6-ticket,
 .v6-conn,
 .v6-workspace-widget {
-  background: #090f15;
+  background: #ffffff;
   box-shadow: none;
 }
 
@@ -1518,22 +1527,22 @@
 
 .v6-seg-btn.is-active,
 .v6-source-btn.active {
-  background: #1c6d79;
-  color: #e8fbff;
+  background: #0891b2;
+  color: #ffffff;
   box-shadow: none;
 }
 
 .v6-tf-btn.active {
-  background: rgba(56, 199, 216, 0.10);
-  border-color: rgba(56, 199, 216, 0.22);
-  color: #9ee7ef;
+  background: rgba(8, 145, 178, 0.08);
+  border-color: rgba(8, 145, 178, 0.20);
+  color: #0891b2;
 }
 
 .v6-btn,
 .v6-btn-engine,
 .v6-btn-danger,
 .v6-btn-warn {
-  background: #111a23;
+  background: #ffffff;
   box-shadow: none;
   animation: none;
 }
@@ -1544,7 +1553,7 @@
 .v6-btn-warn:hover {
   transform: none;
   box-shadow: none;
-  background: #15212c;
+  background: #e8eaed;
 }
 
 .v6-badge,
@@ -1575,17 +1584,17 @@
 .v6-tape-table,
 .v6-tape-head,
 .v6-lad-foot {
-  background: #070b10;
+  background: #ffffff;
 }
 
 .v6-panel:hover {
-  border-color: rgba(255, 255, 255, 0.06);
+  border-color: rgba(0, 0, 0, 0.08);
 }
 
 .v6-dom-row.is-mid {
-  background: rgba(56, 199, 216, 0.08) !important;
-  border-top-color: rgba(56, 199, 216, 0.16);
-  border-bottom-color: rgba(56, 199, 216, 0.16);
+  background: rgba(8, 145, 178, 0.06) !important;
+  border-top-color: rgba(8, 145, 178, 0.12);
+  border-bottom-color: rgba(8, 145, 178, 0.12);
 }
 
 .v6-lad-bid.is-best-bid,
@@ -1593,8 +1602,8 @@
   box-shadow: none;
 }
 
-@keyframes v6-flash-up { from { background: rgba(69, 209, 143, 0.18); } to { background: transparent; } }
-@keyframes v6-flash-down { from { background: rgba(239, 99, 117, 0.18); } to { background: transparent; } }
+@keyframes v6-flash-up { from { background: rgba(5, 150, 105, 0.14); } to { background: transparent; } }
+@keyframes v6-flash-down { from { background: rgba(220, 38, 38, 0.14); } to { background: transparent; } }
 .v6-lad-cell.is-flash-up,
 .v6-lad-cell.is-flash-down {
   animation-duration: 0.22s;
@@ -1604,7 +1613,7 @@
   appearance: none;
   border: none;
   background: transparent;
-  color: #f6fafe;
+  color: #1a1d23;
   font-family: var(--v6-font);
   font-size: 14px;
   font-weight: 800;
@@ -1633,14 +1642,14 @@
     position: absolute;
     top: 40px;
     right: 14px;
-    background: #0b1218;
+    background: #ffffff;
     border: 1px solid var(--v6-hairline-strong);
     border-radius: var(--v6-r-md);
     padding: 8px 12px;
     z-index: 100;
     flex-direction: column;
     align-items: stretch;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.15);
   }
   .v6-header-disclosure-panel.v6-expanded {
     display: flex;

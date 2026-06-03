@@ -79,9 +79,18 @@
     }
   }
 
+  var activeCleanups = [];
+
   V6OF.Backtest = {
+    dispose: function () {
+      activeCleanups.forEach(function (cleanup) {
+        try { cleanup(); } catch (_) {}
+      });
+      activeCleanups = [];
+    },
     mount: function (anchorContainer, store) {
       if (!anchorContainer || anchorContainer.dataset.v6BtMounted === '1') return;
+      this.dispose();
       anchorContainer.dataset.v6BtMounted = '1';
 
       var wrap = document.createElement('div');
@@ -96,8 +105,16 @@
       var toggle = wrap.querySelector('[data-v6-bt-toggle]');
 
       toggle.addEventListener('click', function () { pop.hidden = !pop.hidden; });
-      document.addEventListener('click', function (e) {
+      var onDocClick = function (e) {
         if (!wrap.contains(e.target)) pop.hidden = true;
+      };
+      document.addEventListener('click', onDocClick);
+      activeCleanups.push(function () {
+        document.removeEventListener('click', onDocClick);
+      });
+      activeCleanups.push(function () {
+        delete anchorContainer.dataset.v6BtMounted;
+        anchorContainer.removeAttribute('data-v6-bt-mounted');
       });
 
       function val(sel) { var el = wrap.querySelector(sel); return el ? el.value : ''; }
@@ -133,9 +150,10 @@
 
       // Reflect replay_status pushed via the stream.
       if (store) {
-        store.subscribe(function (state) {
+        var unsub = store.subscribe(function (state) {
           if (state && state.replay) renderStatus(wrap, state.replay);
         });
+        activeCleanups.push(unsub);
       }
     }
   };

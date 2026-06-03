@@ -150,6 +150,8 @@
       return {
         contractVersion: 'v6.orderflow.v1',
         source: 'mock',
+        dataFreshness: 'mock',
+        transportStatus: 'disconnected',
         symbol: 'BTCUSDT',
         timeframe: '1m',
         dataSource: 'binance',

@@ -443,8 +443,8 @@
     var emit = emitGuess(frames);
     var scaleY = plot.height / vp.priceSpan();
 
-    // Dark base so the field reads like a true heatmap, not floating blocks.
-    ctx.fillStyle = '#05060b';
+    // Light base
+    ctx.fillStyle = '#e8eaed';
     ctx.fillRect(plot.left, plot.top, plot.width, plot.height);
 
     frames.forEach(function (frame, index) {
