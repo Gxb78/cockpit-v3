@@ -1,4 +1,4 @@
-﻿# AI Development Playbook - Journal Cockpit v3
+# AI Development Playbook - Journal Cockpit v3
 
 Ce fichier est la source de verite pour toute IA qui modifie ce repo.
 But: avancer vite sans casser l'UX metier, sans casser le flow Midnight, sans reintroduire de bugs d'encodage.
@@ -1263,8 +1263,67 @@ if end_time is not None:
   - dedupliquer par coin/ordre/fill normalise et garder les erreurs DEX partielles non bloquantes.
 - Regle: toute feature wallet Hyperliquid doit verifier les positions natives ET les positions HIP-3 avec un wallet de reference avant d'etre consideree correcte.
 
+### Lecon T-0018: Hyperliquid indices XYZ = canonical direct, pas resolver meta (22 mai 2026)
+
+- Probleme: ES/Nasdaq etaient encore resolus via catalogue/metas, ce qui pouvait choisir un asset plausible mais faux ou un DEX de test. Pour les indices XYZ, le bon `coin` Info API est le nom complet prefixe: `xyz:SP500` pour ES et `xyz:XYZ100` pour Nasdaq.
+- Solution:
+  - court-circuiter `_hl_resolve_coin` pour les marches prioritaires avec un mapping produit explicite;
+  - garder `BTC` en resolution native, mais forcer ES/NASDAQ vers leur coin complet `xyz:*`;
+  - tester klines/trades/contexts/funding avec les coins complets, pas seulement avec les labels visibles.
+- Regle: quand un marche Hyperliquid est un produit synthetique/indice, la source de verite est le `coin` complet attendu par l'Info API, pas le ticker utilisateur ni le meilleur match dans `allPerpMetas`.
+
 ### Lecon T-0018: DEX xyz pour SP500/XYZ100 sur Hyperliquid (22 mai 2026)
 
 - Probleme: le mock de test utilisait des DEX bidons `builder` et `idx` pour SP500 et XYZ100, alors que le vrai DEX Hyperliquid est `xyz`. Les tests passaient en local mais l'API reelle resolvait mal ES/Nasdaq.
 - Solution: aligner les mocks sur la prod — DEX `xyz`, assets `SP500` et `XYZ100` directement, pas de doublons `ES`/`NASDAQ` qui faussaient le scoring.
 - Regle: les mocks de test doivent refleter la structure reelle de l'API upstream, pas des noms arbitraires.
+
+### BUG-20260527-01 - Volume Profile calcule depuis OHLCV au lieu des executions
+
+- Symptome: Le Volume Profile pouvait afficher POC, VA et delta plausibles mais faux, car chaque bougie repartissait son volume uniformement entre low et high; l'ancien orderflow utilisait en plus des libelles bid/ask inverses pour l'agression.
+- Cause racine: La chart et l'orderflow n'avaient pas de contrat analytique commun fonde sur les trades executes Hyperliquid, ni de couverture explicite pour les archives absentes.
+- Regle de prevention: Un profil ou delta market data doit etre calcule uniquement depuis des executions normalisees `buyVolume`/`sellVolume`; un side non certifie compte dans le volume total mais jamais dans le delta, et toute lacune doit retourner `partial/gaps`.
+- Test de non-regression: Tester deduplication du fill `crossed`, agresseur inconnu, POC tie-break au prix inferieur, Value Area contigue, metriques Base/USD Notional, developing POC/niveaux de session precedente et reponses API partielles quand L2 manque.
+- Fichiers a surveiller: `app_parts/27_routes_hyperliquid_analytics.py`, `workers/hyperliquid_market_worker.py`, `static/js/split/065_volume_profile.js`, `static/js/split/063a_hyperliquid_workspace.js`, `tests/test_hyperliquid_analytics.py`.
+
+
+### BUG-20260601-22 - [RESOLU] Erreur de chargement zoneinfo et perte de donnees SQLite dans l'executable PyInstaller
+
+- Symptome: 
+  1. `ModuleNotFoundError: No module named 'zoneinfo'` au lancement du serveur package.
+  2. Risque critique d'effacement complet des captures d'ecran et de la base de donnees SQLite `journal.db` a chaque fermeture de l'application.
+- Cause racine:
+  1. L'importation dynamique (`exec()`) des modules de `app_parts/` empechait l'analyseur statique de PyInstaller de detecter la dependance standard `zoneinfo`.
+  2. L'application utilisait `sys._MEIPASS` (repertoire temporaire PyInstaller) comme base d'ecriture (`BASE_DIR`), qui est automatiquement purge par l'OS apres fermeture du processus.
+- Regle de prevention:
+  1. Toujours specifier explicitement les modules importes dynamiquement dans la directive `hiddenimports` du fichier `.spec` (ex: `zoneinfo`).
+  2. Scinder strictement la gestion des repertoires : `RESOURCE_DIR` pour les ressources en lecture seule (templates/static decompresses dans `sys._MEIPASS`) et `BASE_DIR` pour l'ecriture utilisateur persistance (SQLite `journal.db`, screenshots, backups resolus via le dossier parent de l'executable `Path(sys.executable).parent`).
+- Test de non-regression: Tests unitaires de `apps/desktop` validant la signature de `FlaskSpec`, et verification manuelle du demarrage et de l'ecriture en base via le sidecar `journal-server.exe`.
+- Fichiers a surveiller: `app_parts/00_paths_constants.py`, `app_parts/01_flask_app.py`, `app_parts/07_routes_pages.py`, `app_parts/__init__.py`, `apps/desktop/pyinstaller/journal-server.spec`.
+
+### BUG-20260602-01 - Sous-processus PyInstaller orphelins et acces ecriture restreint sous Windows Program Files
+
+- Symptome: 
+  1. Apres fermeture de la fenetre desktop, le sidecar `journal-server.exe` reste actif en arriere-plan et continue d'occuper le port 5001.
+  2. Crash SQLite et erreurs de permissions d'ecriture lors de l'execution du binaire installe dans le repertoire par defaut Program Files.
+- Cause racine: 
+  1. Go standard `cmd.Process.Kill()` n'arrete que le bootloader PyInstaller parent sur Windows, laissant le processus Python sous-jacent orphelin sans mecanisme de terminaison automatique.
+  2. L'application resolvait la racine d'ecriture `BASE_DIR` localement a l'emplacement de l'executable, qui possede des permissions restreintes en lecture seule lorsqu'il est installe via NSIS dans Program Files.
+- Regle de prevention: 
+  1. Toujours utiliser une terminaison d'arbre de processus (`taskkill /F /T /PID <pid>`) sur Windows lors de l'arret des sidecars pour forcer la fermeture propre de PyInstaller et de ses descendants.
+  2. Separer strictement le mode portable (ecriture a cote des executables si `portable.mode` est detecte) et le mode installe (ecriture dynamique dans le repertoire specifique de l'utilisateur `%APPDATA%\CockpitV6\`).
+- Test de non-regression: Lancer `build_portable.ps1`, verifier la presence de `portable.mode`, verifier la creation dynamique d'AppData et s'assurer qu'un CloseMainWindow ferme l'ensemble des PIDs enfants en liberant completement les ports 5001 et 8765.
+- Fichiers a surveiller: `app_parts/00_paths_constants.py`, `app_parts/01_flask_app.py`, `apps/desktop/internal/launcher/process.go`, `apps/desktop/server_entry.py`.
+
+### TASK-V6-001 - API Request Cache Utility (3 juin 2026)
+
+- Objectif: Créer une utility de cache pour les requêtes API côté frontend, deduplicating les appels en-vol et cachant les réponses par URL.
+- Problème adressé: 6x appels dupliqués aux endpoints `hyperliquid/*` lors du chargement simultané de plusieurs composants (orderflow, charts, wallet).
+- Solution: `static/js/utilities/api-cache.js` avec:
+  - Cache mémoire en-session (url -> { data, timestamp, pending })
+  - Cache localStorage persistant entre reloads
+  - Deduplication des promesses en-vol (retour du même Promise si requête en cours)
+  - TTL configurable par requête (défaut: 5 secondes)
+- Regle: Toute requête fetch répétée dans la même page doit passer par `V6OF.ApiCache.fetch(url, ttl)` pour éviter les appels dupliqués et réduire la latence réseau.
+- Fichiers a surveiller: `static/js/utilities/api-cache.js`, intégration dans les modules qui font des appels répétés.
+
