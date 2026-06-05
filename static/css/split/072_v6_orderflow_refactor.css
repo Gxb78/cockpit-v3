@@ -34,6 +34,356 @@ body[data-current-page="orderflow"] .v6-orderflow-root {
   background: var(--v6-bg);
 }
 
+body[data-current-page="orderflow"] .v6-initial-skeleton {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: 36px minmax(0, 1fr) 23px;
+  overflow: hidden;
+  background: var(--v6-bg);
+  color: var(--v6-text-faint);
+  pointer-events: none;
+}
+
+body[data-current-page="orderflow"] .v6-skel-header,
+body[data-current-page="orderflow"] .v6-skel-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-color: var(--v6-hairline);
+  background: var(--v6-bg-2);
+}
+
+body[data-current-page="orderflow"] .v6-skel-header {
+  padding: 0 8px;
+  border-bottom: 1px solid var(--v6-hairline);
+}
+
+body[data-current-page="orderflow"] .v6-skel-status {
+  border-top: 1px solid var(--v6-hairline);
+}
+
+body[data-current-page="orderflow"] .v6-skel-brand,
+body[data-current-page="orderflow"] .v6-skel-pill,
+body[data-current-page="orderflow"] .v6-skel-tabs span,
+body[data-current-page="orderflow"] .v6-skel-live,
+body[data-current-page="orderflow"] .v6-skel-tools span,
+body[data-current-page="orderflow"] .v6-skel-panel,
+body[data-current-page="orderflow"] .v6-skel-status::before {
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(134, 137, 147, 0.10), rgba(134, 137, 147, 0.22), rgba(134, 137, 147, 0.10));
+  background-size: 220% 100%;
+  animation: v6-skel-shimmer 1.25s ease-in-out infinite;
+}
+
+body[data-current-page="orderflow"] .v6-skel-brand {
+  width: 18px;
+  height: 18px;
+  background-color: var(--v6-accent-soft);
+}
+
+body[data-current-page="orderflow"] .v6-skel-pill {
+  width: 72px;
+  height: 24px;
+}
+
+body[data-current-page="orderflow"] .v6-skel-pill-lg {
+  width: 86px;
+}
+
+body[data-current-page="orderflow"] .v6-skel-tabs {
+  display: flex;
+  gap: 3px;
+}
+
+body[data-current-page="orderflow"] .v6-skel-tabs span {
+  width: 34px;
+  height: 24px;
+}
+
+body[data-current-page="orderflow"] .v6-skel-live {
+  width: 132px;
+  height: 24px;
+  margin-left: auto;
+}
+
+body[data-current-page="orderflow"] .v6-build-meta {
+  flex: 0 0 auto;
+  min-height: 22px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 7px;
+  border: 1px solid var(--v6-hairline);
+  border-radius: var(--v6-r-sm);
+  background: rgba(134, 137, 147, 0.08);
+  color: var(--v6-text-faint);
+  font: 800 9px/1 var(--v6-mono);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+body[data-current-page="orderflow"] .v6-fullscreen-slot {
+  width: 28px;
+  min-width: 28px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0;
+  opacity: 0.45;
+  cursor: default;
+}
+
+body[data-current-page="orderflow"] .v6-fullscreen-slot:disabled {
+  color: var(--v6-text-faint);
+  border-color: var(--v6-hairline);
+  background: transparent;
+}
+
+body[data-current-page="orderflow"] .v6-skel-main {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  min-height: 0;
+}
+
+body[data-current-page="orderflow"] .v6-skel-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 5px 3px;
+  border-right: 1px solid var(--v6-hairline);
+  background: #ffffff;
+}
+
+body[data-current-page="orderflow"] .v6-skel-tools span {
+  width: 29px;
+  height: 28px;
+  background: #e6e9ef;
+  animation: none;
+}
+
+body[data-current-page="orderflow"] .v6-skel-panels {
+  display: grid;
+  grid-template-columns: minmax(220px, 270px) minmax(340px, 1fr) minmax(200px, 245px) minmax(210px, 255px);
+  grid-template-rows: minmax(320px, 1fr) minmax(150px, 184px);
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px;
+  background: var(--v6-bg);
+}
+
+body[data-current-page="orderflow"] .v6-skel-panel {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  border: 1px solid var(--v6-hairline);
+  border-radius: 0;
+  overflow: hidden;
+}
+
+body[data-current-page="orderflow"] .v6-skel-panel::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 30px;
+  border-bottom: 1px solid var(--v6-hairline);
+  background: var(--v6-bg-2);
+}
+
+body[data-current-page="orderflow"] .v6-skel-panel::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 11px;
+  width: 74px;
+  height: 8px;
+  border-radius: 2px;
+  background: rgba(134, 137, 147, 0.28);
+}
+
+body[data-current-page="orderflow"] .v6-skel-panel-tape {
+  grid-row: 1 / span 2;
+}
+
+body[data-current-page="orderflow"] .v6-skel-panel-chart {
+  position: relative;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+body[data-current-page="orderflow"] .v6-skel-panel-dom {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+body[data-current-page="orderflow"] .v6-skel-panel-settings {
+  grid-column: 4;
+  grid-row: 1;
+}
+
+body[data-current-page="orderflow"] .v6-skel-panel-cvd {
+  grid-column: 2 / span 2;
+  grid-row: 2;
+}
+
+body[data-current-page="orderflow"] .v6-skel-panel-vwap {
+  grid-column: 4;
+  grid-row: 2;
+}
+
+body[data-current-page="orderflow"] .v6-skel-gridlines {
+  position: absolute;
+  inset: 0;
+  opacity: 0.55;
+  background-image:
+    linear-gradient(rgba(19, 23, 34, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(19, 23, 34, 0.08) 1px, transparent 1px);
+  background-size: 100% 52px, 72px 100%;
+}
+
+body[data-current-page="orderflow"] .v6-skel-candles {
+  position: absolute;
+  left: 9%;
+  right: 9%;
+  bottom: 24%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: 42%;
+}
+
+body[data-current-page="orderflow"] .v6-skel-candles span {
+  width: 12px;
+  height: var(--h, 38%);
+  border-radius: 2px;
+  background: rgba(8, 153, 129, 0.55);
+}
+
+body[data-current-page="orderflow"] .v6-skel-candles span:nth-child(2n) { --h: 62%; background: rgba(242, 54, 69, 0.50); }
+body[data-current-page="orderflow"] .v6-skel-candles span:nth-child(3n) { --h: 78%; }
+body[data-current-page="orderflow"] .v6-skel-candles span:nth-child(4n) { --h: 48%; }
+
+body[data-current-page="orderflow"] .v6-skel-side {
+  margin: 10px;
+  display: none;
+}
+
+body[data-current-page="orderflow"] .v6-skel-status::before {
+  content: "";
+  width: 220px;
+  height: 9px;
+  margin-left: 10px;
+}
+
+body[data-current-page="orderflow"] .v6-mount-error-region {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 7px 12px;
+  border-bottom: 1px solid rgba(242, 54, 69, 0.38);
+  background: rgba(242, 54, 69, 0.12);
+  color: #ff9aa3;
+  font: 700 11px/1.35 var(--v6-font);
+}
+
+body[data-current-page="orderflow"] .v6-mount-error-region[hidden] {
+  display: none;
+}
+
+body[data-current-page="orderflow"] .v6-mount-error-region strong {
+  flex: 0 0 auto;
+  color: #ffffff;
+  font: 900 10px/1 var(--v6-font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+body[data-current-page="orderflow"] .v6-mount-error-region span {
+  min-width: 0;
+  overflow: hidden;
+  color: #ffb7bd;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body[data-current-page="orderflow"] .v6-noscript-fallback {
+  position: relative;
+  z-index: 40;
+  margin: 12px;
+  border: 1px solid rgba(242, 54, 69, 0.38);
+}
+
+@keyframes v6-skel-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+@media (max-width: 1180px) {
+  body[data-current-page="orderflow"] .v6-skel-main {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  body[data-current-page="orderflow"] .v6-skel-panels {
+    grid-template-columns: minmax(190px, 230px) minmax(280px, 1fr) minmax(220px, 300px);
+    grid-template-rows: minmax(300px, 1fr) minmax(132px, 170px);
+  }
+
+  body[data-current-page="orderflow"] .v6-skel-panel-settings,
+  body[data-current-page="orderflow"] .v6-skel-panel-vwap {
+    display: none;
+  }
+
+  body[data-current-page="orderflow"] .v6-skel-panel-cvd {
+    grid-column: 2 / span 2;
+  }
+
+  body[data-current-page="orderflow"] .v6-skel-tabs span:nth-child(n+3) {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  body[data-current-page="orderflow"] .v6-skel-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: 34px minmax(0, 1fr);
+  }
+
+  body[data-current-page="orderflow"] .v6-skel-tools {
+    flex-direction: row;
+    border-right: 0;
+    border-bottom: 1px solid var(--v6-hairline);
+  }
+
+  body[data-current-page="orderflow"] .v6-skel-panels {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(240px, 1fr) 132px 132px;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  body[data-current-page="orderflow"] .v6-skel-panel-tape,
+  body[data-current-page="orderflow"] .v6-skel-panel-cvd,
+  body[data-current-page="orderflow"] .v6-skel-panel-vwap {
+    display: none;
+  }
+
+  body[data-current-page="orderflow"] .v6-skel-panel-chart,
+  body[data-current-page="orderflow"] .v6-skel-panel-dom,
+  body[data-current-page="orderflow"] .v6-skel-panel-settings {
+    grid-column: 1;
+  }
+
+  body[data-current-page="orderflow"] .v6-skel-panel-chart { grid-row: 1; }
+  body[data-current-page="orderflow"] .v6-skel-panel-dom { grid-row: 2; }
+  body[data-current-page="orderflow"] .v6-skel-panel-settings {
+    display: block;
+    grid-row: 3;
+  }
+}
+
 body[data-current-page="orderflow"] .v6-shell,
 body[data-current-page="orderflow"] .v6-main-area,
 body[data-current-page="orderflow"] .v6-center-col,

@@ -23,9 +23,9 @@
       showBubbles: true,
       showHeatmap: false,
       showFootprint: false,
-      rightColWidth: 330,
+      rightColWidth: 430,
       cvdStripHeight: 226,
-      maxTrades: 500,
+      maxTrades: 5000,
       activeTab: 'dom'
     },
     'Orderflow': {
@@ -38,10 +38,25 @@
       showBubbles: false,
       showHeatmap: true,
       showFootprint: true,
-      rightColWidth: 360,
+      rightColWidth: 460,
       cvdStripHeight: 260,
-      maxTrades: 1000,
+      maxTrades: 10000,
       activeTab: 'dom'
+    },
+    'Analysis': {
+      chartMode: 'both',
+      showTape: true,
+      showDOM: false,
+      showCVD: true,
+      showVwap: true,
+      showCandles: true,
+      showBubbles: false,
+      showHeatmap: true,
+      showFootprint: true,
+      rightColWidth: 480,
+      cvdStripHeight: 240,
+      maxTrades: 5000,
+      activeTab: 'info'
     }
   };
 
@@ -496,9 +511,9 @@
         showBubbles: settings.showBubbles !== false,
         showHeatmap: settings.showHeatmap === true,
         showFootprint: settings.showFootprint === true,
-        rightColWidth: rightCol ? rightCol.offsetWidth : 330,
+        rightColWidth: rightCol ? rightCol.offsetWidth : 430,
         cvdStripHeight: cvdStrip ? cvdStrip.offsetHeight : 226,
-        maxTrades: settings.maxTrades || 500,
+        maxTrades: settings.maxTrades || 5000,
         activeTab: activeTab
       };
       saveWorkspaces(wList);
@@ -517,7 +532,7 @@
         showBubbles: config.showBubbles !== false,
         showHeatmap: config.showHeatmap === true,
         showFootprint: config.showFootprint === true,
-        maxTrades: config.maxTrades || 500
+        maxTrades: config.maxTrades || 5000
       });
 
       if (V6OF.ResizablePanels) {

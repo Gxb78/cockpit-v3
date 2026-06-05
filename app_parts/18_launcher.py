@@ -58,9 +58,30 @@ def launch():
     import sys
     import requests
     import time as time_module
+    import subprocess
 
     backup_db()
     init_db()
+
+    # ── Auto-lancer le WebSocket engine (market_ws_server.py) ──
+    ws_script = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             "workers", "market_ws_server.py")
+    if os.path.exists(ws_script):
+        ws_env = os.environ.copy()
+        ws_env.setdefault("PORT", os.environ.get("PORT", "5000"))
+        try:
+            ws_proc = subprocess.Popen(
+                [sys.executable, ws_script],
+                env=ws_env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+            )
+            log.info("WebSocket engine PID=%s demarre sur ws://127.0.0.1:8765/stream", ws_proc.pid)
+        except Exception as e:
+            log.warning("Impossible de lancer le WS engine: %s", e)
+    else:
+        log.warning("Fichier WS engine introuvable: %s", ws_script)
 
     debug_mode = env_bool("DEBUG", env_bool("FLASK_DEBUG", False))
     host = os.environ.get("HOST", "127.0.0.1")

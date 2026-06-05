@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"cockpit-v6-market-go/internal/config"
@@ -84,6 +85,30 @@ func TestWebsocketAccept(t *testing.T) {
 	want := "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="
 	if got != want {
 		t.Fatalf("unexpected accept: got %q want %q", got, want)
+	}
+}
+
+func TestReplayStepEndpoint(t *testing.T) {
+	cfg := config.Default()
+	server := NewServer(cfg, engine.New(cfg, logx.New(testWriter{t})), logx.New(testWriter{t}))
+	ts := httptest.NewServer(server.Handler())
+	defer ts.Close()
+
+	res, err := http.Post(ts.URL+"/replay", "application/json", strings.NewReader(`{"action":"step","count":1}`))
+	if err != nil {
+		t.Fatalf("POST /replay: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected status: %d", res.StatusCode)
+	}
+	var payload map[string]any
+	if err := json.NewDecoder(res.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if payload["state"] != "idle" {
+		t.Fatalf("unexpected replay state: %#v", payload["state"])
 	}
 }
 

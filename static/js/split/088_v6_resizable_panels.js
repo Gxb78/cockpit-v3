@@ -8,13 +8,22 @@
   'use strict';
   var V6OF = window.V6OF = window.V6OF || {};
 
-  var MIN_RIGHT_WIDTH = 260;
-  var MAX_RIGHT_WIDTH = 520;
+  var MIN_RIGHT_WIDTH = 420;
+  var MAX_RIGHT_WIDTH = 760;
   var MIN_CVD_HEIGHT = 120;
   var MAX_CVD_HEIGHT = 420;
 
   var STORAGE_WIDTH_KEY = 'cockpitV6.rightColWidth';
   var STORAGE_HEIGHT_KEY = 'cockpitV6.cvdStripHeight';
+
+  function applyCvdHeight(root, cvdStrip, height) {
+    if (!cvdStrip || !height) return;
+    var h = Math.max(MIN_CVD_HEIGHT, Math.min(MAX_CVD_HEIGHT, parseInt(height, 10)));
+    cvdStrip.style.height = h + 'px';
+    cvdStrip.style.flex = '0 0 ' + h + 'px';
+    var centerCol = root && root.querySelector('.v6-center-col');
+    if (centerCol) centerCol.style.setProperty('--v6-cvd-strip-height', h + 'px');
+  }
 
   var redrawQueued = false;
   function redrawCharts() {
@@ -61,8 +70,9 @@
       var savedHeight = localStorage.getItem(STORAGE_HEIGHT_KEY);
       if (savedHeight) {
         var h = Math.max(MIN_CVD_HEIGHT, Math.min(MAX_CVD_HEIGHT, parseInt(savedHeight, 10)));
-        cvdStrip.style.height = h + 'px';
-        cvdStrip.style.flex = '0 0 ' + h + 'px';
+        applyCvdHeight(root, cvdStrip, h);
+      } else {
+        applyCvdHeight(root, cvdStrip, cvdStrip.offsetHeight || MIN_CVD_HEIGHT);
       }
 
       // 1. Horizontal Resize (Right Dock Width)
@@ -71,6 +81,7 @@
         var isDraggingH = false;
         var startX = 0;
         var startWidth = 0;
+        var pendingWidth = 0;
 
         handleH.addEventListener('pointerdown', function (e) {
           isDraggingH = true;
@@ -87,9 +98,9 @@
           var dx = e.clientX - startX;
           // Moving left (negative dx) increases right-dock size
           var nextWidth = Math.max(MIN_RIGHT_WIDTH, Math.min(MAX_RIGHT_WIDTH, startWidth - dx));
+          pendingWidth = nextWidth;
           rightCol.style.width = nextWidth + 'px';
           rightCol.style.flex = '0 0 ' + nextWidth + 'px';
-          localStorage.setItem(STORAGE_WIDTH_KEY, nextWidth);
           redrawCharts();
         });
 
@@ -98,6 +109,7 @@
           isDraggingH = false;
           handleH.classList.remove('is-dragging');
           mainArea.classList.remove('v6-resizing-active');
+          if (pendingWidth) localStorage.setItem(STORAGE_WIDTH_KEY, pendingWidth);
           try { handleH.releasePointerCapture(e.pointerId); } catch (_) {}
           redrawCharts();
         };
@@ -112,6 +124,7 @@
         var isDraggingV = false;
         var startY = 0;
         var startHeight = 0;
+        var pendingHeight = 0;
 
         handleV.addEventListener('pointerdown', function (e) {
           if (cvdStrip.classList.contains('is-collapsed')) return; // ignore if collapsed
@@ -129,9 +142,8 @@
           var dy = e.clientY - startY;
           // Moving up (negative dy) increases CVD strip height
           var nextHeight = Math.max(MIN_CVD_HEIGHT, Math.min(MAX_CVD_HEIGHT, startHeight - dy));
-          cvdStrip.style.height = nextHeight + 'px';
-          cvdStrip.style.flex = '0 0 ' + nextHeight + 'px';
-          localStorage.setItem(STORAGE_HEIGHT_KEY, nextHeight);
+          pendingHeight = nextHeight;
+          applyCvdHeight(root, cvdStrip, nextHeight);
           redrawCharts();
         });
 
@@ -140,6 +152,7 @@
           isDraggingV = false;
           handleV.classList.remove('is-dragging');
           mainArea.classList.remove('v6-resizing-active');
+          if (pendingHeight) localStorage.setItem(STORAGE_HEIGHT_KEY, pendingHeight);
           try { handleV.releasePointerCapture(e.pointerId); } catch (_) {}
           redrawCharts();
         };
@@ -161,8 +174,7 @@
       }
       if (cvdStrip && height) {
         var h = Math.max(MIN_CVD_HEIGHT, Math.min(MAX_CVD_HEIGHT, height));
-        cvdStrip.style.height = h + 'px';
-        cvdStrip.style.flex = '0 0 ' + h + 'px';
+        applyCvdHeight(root, cvdStrip, h);
         localStorage.setItem(STORAGE_HEIGHT_KEY, h);
       }
       redrawCharts();

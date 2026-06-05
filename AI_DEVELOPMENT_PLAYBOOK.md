@@ -1345,3 +1345,11 @@ if end_time is not None:
 - Test de non-regression: Tests unitaires de sequencage dans `services/market-go/internal/exchange/binance/book_test.go` (toutes les branches) + test d'integration live garde par `BINANCE_LIVE=1` (`live_test.go`) verifiant >= 100 niveaux/cote et un tri strict. Verifie live: spot 5006/5004, futures 1051/1024.
 - Fichiers a surveiller: `services/market-go/internal/exchange/binance/book.go`, `depth.go`, `client.go`, `services/market-go/internal/config/config.go`, `services/market-go/internal/ws/server.go`.
 
+### BUG-20260603-12 - [RESOLU] aggTrades Binance limit>1000 ne backfill pas les trades recents sans fenetre temporelle
+
+- Symptome: Le replay affichait beaucoup plus de trades que le live/rest prefill; demander `/api/market/aggtrades?limit=8000` ne renvoyait qu'environ 1000 trades recents, donc le tape, le CVD et les volumes buy/sell du DOM restaient pauvres.
+- Cause racine: L'endpoint Binance `aggTrades` sans `startTime` renvoie les derniers trades, puis la pagination par `fromId=lastId+1` part vers le futur. Augmenter `limit` seul ne peut donc pas recuperer les trades precedents. Le frontend attendait en plus parfois un tableau brut alors que la route Flask renvoie `{trades: [...]}`.
+- Regle de prevention: Pour un backfill de trades recents, utiliser des fenetres temporelles courtes `startTime/endTime` en remontant dans le temps, puis normaliser le contrat `{id, tsExchange, price, qty, side}` avant d'alimenter tape, DOM et CVD. Ne jamais supposer que `limit>1000` donne automatiquement plus d'historique sur une API paginee.
+- Test de non-regression: Verifier via Flask test client ou endpoint local que `/api/market/aggtrades?symbol=BTCUSDT&limit=8000&force=1` renvoie plusieurs pages et jusqu'a 8000 trades quand Binance fournit assez de donnees; verifier aussi le parseur frontend sur `{trades: [...]}` et tableau brut.
+- Fichiers a surveiller: `app_parts/23_routes_market.py`, `static/js/split/073_v6_orderflow_layout.js`, `static/js/split/075_v6_dom_panel.js`, `static/js/split/076_v6_cvd_panel.js`, `static/js/split/078_v6_local_engine_client.js`.
+

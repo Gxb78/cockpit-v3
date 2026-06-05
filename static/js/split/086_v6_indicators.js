@@ -116,7 +116,19 @@
     defaults: { period: 20, multiplier: 2, source: 'close', color: '#8b5cf6', width: 1, fillOpacity: 0.08 }
   };
 
-  // ── Drawing primitives ──
+  function findFirstVisibleIndex(data, timeStart) {
+    if (!data || !data.length) return 0;
+    var lo = 0, hi = data.length - 1;
+    while (lo < hi) {
+      var mid = (lo + hi) >>> 1;
+      if (data[mid].time < timeStart) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    return Math.max(0, lo - 1);
+  }
 
   function drawLineIndicator(ctx, vp, plot, data, color, width, dash) {
     if (!data || !data.length) return;
@@ -126,13 +138,21 @@
     ctx.setLineDash(dash || []);
     ctx.beginPath();
     var started = false;
-    for (var i = 0; i < data.length; i++) {
+    var startIdx = findFirstVisibleIndex(data, vp.timeStart);
+    for (var i = startIdx; i < data.length; i++) {
       var d = data[i];
+      if (d.time > vp.timeEnd) {
+        if (Number.isFinite(d.value)) {
+          var x = vp.timeToX(d.time);
+          var y = vp.priceToY(d.value);
+          if (started) ctx.lineTo(x, y);
+        }
+        break;
+      }
       if (!Number.isFinite(d.value)) { started = false; continue; }
       if (d.value < vp.priceMin || d.value > vp.priceMax) { started = false; continue; }
       var x = vp.timeToX(d.time);
       var y = vp.priceToY(d.value);
-      if (x < plot.left || x > plot.left + plot.width) { started = false; continue; }
       if (!started) { ctx.moveTo(x, y); started = true; }
       else { ctx.lineTo(x, y); }
     }
@@ -147,17 +167,30 @@
     ctx.save();
     ctx.beginPath();
     var started = false;
-    for (var i = 0; i < data.length; i++) {
+    var startIdx = findFirstVisibleIndex(data, vp.timeStart);
+    var lastX = 0;
+    for (var i = startIdx; i < data.length; i++) {
       var d = data[i];
+      if (d.time > vp.timeEnd) {
+        if (Number.isFinite(d.value)) {
+          var x = vp.timeToX(d.time);
+          var y = vp.priceToY(Math.max(vp.priceMin, Math.min(vp.priceMax, d.value)));
+          if (started) {
+            ctx.lineTo(x, y);
+            lastX = x;
+          }
+        }
+        break;
+      }
       if (!Number.isFinite(d.value)) { started = false; continue; }
       var x = vp.timeToX(d.time);
       var y = vp.priceToY(Math.max(vp.priceMin, Math.min(vp.priceMax, d.value)));
-      if (x < plot.left - 10 || x > plot.left + plot.width + 10) { started = false; continue; }
       if (!started) { ctx.moveTo(x, baseY); ctx.lineTo(x, y); started = true; }
       else { ctx.lineTo(x, y); }
+      lastX = x;
     }
     if (started) {
-      ctx.lineTo(vp.timeToX(data[data.length - 1].time), baseY);
+      ctx.lineTo(lastX, baseY);
       ctx.closePath();
       ctx.fillStyle = fillColor || color.replace(')', ', ' + (fillOpacity || 0.1) + ')').replace('rgb', 'rgba');
       ctx.fill();
@@ -176,26 +209,35 @@
     var fillColor = color.replace(')', ', ' + alpha + ')').replace('rgb', 'rgba');
     if (fillColor === color) fillColor = color; // fallback if regex fails
 
+    var startIdx = findFirstVisibleIndex(upper, vp.timeStart);
+
     // Fill between upper and lower
     ctx.beginPath();
     var started = false;
-    for (var i = 0; i < upper.length; i++) {
-      var u = upper[i], l = lower[i];
-      if (!Number.isFinite(u.value) || !Number.isFinite(l.value)) { started = false; continue; }
+    var endIdx = upper.length - 1;
+    for (var i = startIdx; i < upper.length; i++) {
+      var u = upper[i];
+      if (u.time > vp.timeEnd) {
+        if (Number.isFinite(u.value)) {
+          var x = vp.timeToX(u.time);
+          var yu = vp.priceToY(Math.max(vp.priceMin, Math.min(vp.priceMax, u.value)));
+          if (started) ctx.lineTo(x, yu);
+        }
+        endIdx = i;
+        break;
+      }
+      if (!Number.isFinite(u.value)) { started = false; continue; }
       var x = vp.timeToX(u.time);
       var yu = vp.priceToY(Math.max(vp.priceMin, Math.min(vp.priceMax, u.value)));
-      var yl = vp.priceToY(Math.max(vp.priceMin, Math.min(vp.priceMax, l.value)));
-      if (x < plot.left || x > plot.left + plot.width) { started = false; continue; }
       if (!started) { ctx.moveTo(x, yu); started = true; }
       else { ctx.lineTo(x, yu); }
     }
     // Trace back along the lower band
-    for (var i = lower.length - 1; i >= 0; i--) {
+    for (var i = endIdx; i >= startIdx; i--) {
       var l = lower[i];
-      if (!Number.isFinite(l.value)) continue;
+      if (!l || !Number.isFinite(l.value)) continue;
       var x = vp.timeToX(l.time);
       var yl = vp.priceToY(Math.max(vp.priceMin, Math.min(vp.priceMax, l.value)));
-      if (x < plot.left || x > plot.left + plot.width) continue;
       ctx.lineTo(x, yl);
     }
     ctx.closePath();

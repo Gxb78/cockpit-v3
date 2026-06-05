@@ -9,16 +9,16 @@
   var V6OF = window.V6OF = window.V6OF || {};
 
   var DEFAULT_URL = 'ws://127.0.0.1:8765/stream';
-  var DEFAULT_MAX_TRADE_BUFFER = 10000;
+  var DEFAULT_MAX_TRADE_BUFFER = 5000;
   var STALE_THRESHOLD_MS = 10000;
   var MAX_BUCKETS_PER_INTERVAL = 5000;
-  var DEFAULT_MAX_HEATMAP_FRAMES = 5000;
-  var DEFAULT_MAX_FOOTPRINT_CANDLES = 2000;
+  var DEFAULT_MAX_HEATMAP_FRAMES = 10000;
+  var DEFAULT_MAX_FOOTPRINT_CANDLES = 3000;
   var RECONNECT_BASE_MS = 2000;
   var RECONNECT_MAX_MS = 30000;
   var RECONNECT_MAX_ATTEMPTS = 8;
-  var BATCH_RENDER_MS = 80;
-  var MAX_DEPTH_HISTORY = 1000;
+  var BATCH_RENDER_MS = 33;
+  var MAX_DEPTH_HISTORY = 10000;
 
   function timeframeToMs(tf) {
     if (!tf) return 60000;
@@ -32,6 +32,21 @@
     return 60000;
   }
 
+  // Normalize symbol: 'BTC' -> 'BTCUSDT', leave 'BTCUSDT' etc. unchanged.
+  // This prevents the subscriber from seeing a fake symbol change each batch.
+  function normalizeSymbol(sym) {
+    if (!sym) return 'BTCUSDT';
+    var s = sym.toUpperCase();
+    // Short coin names (no quote currency) get USDT appended
+    if (/^[A-Z]{2,6}$/.test(s) && !s.match(/USDT$|BUSD$|USDC$|BTC$|ETH$/)) {
+      return s + 'USDT';
+    }
+    // 'BTC' alone is shorthand for BTCUSDT
+    if (s === 'BTC') return 'BTCUSDT';
+    if (s === 'ETH') return 'ETHUSDT';
+    return s;
+  }
+
   /**
    * @typedef {Object} V6EngineStats
    * @property {number} tradesReceived
@@ -42,6 +57,9 @@
    * @property {number} footprintCandlesReceived
    * @property {number} errorsCount
    * @property {number} reconnectsCount
+   * @property {number} droppedCount
+   * @property {number} queueDepth
+   * @property {number} lagMs
    * @property {number|null} lastMessageTs
    * @property {string} lastError
    */
@@ -62,6 +80,7 @@
       footprintCandlesReceived: 0,
       errorsCount: 0,
       reconnectsCount: 0,
+      droppedCount: 0,
       lastMessageTs: null,
       lastError: ''
     };
@@ -84,12 +103,36 @@
     var depthHistory = [];
     var pendingDepthPoint = null;
 
+    function pendingQueueDepth() {
+      return pendingTrades.length +
+        pendingDeltaBuckets.length +
+        (pendingVwap ? 1 : 0) +
+        (pendingOrderBook ? 1 : 0) +
+        pendingHeatmapFrames.length +
+        pendingFootprintCandles.length +
+        (pendingDepthPoint ? 1 : 0);
+    }
+
+    function statsSnapshot() {
+      var out = Object.assign({}, stats);
+      out.queueDepth = pendingQueueDepth();
+      out.lagMs = stats.lastMessageTs ? Math.max(0, Date.now() - stats.lastMessageTs) : 0;
+      return out;
+    }
+
     var lastTf = (store && store.getState().timeframe) || '1m';
+    // Always store a normalized symbol so 'BTC' vs 'BTCUSDT' oscillation never
+    // triggers a spurious footprint history refetch.
+    var lastSymbol = normalizeSymbol((store && store.getState().symbol) || 'BTC');
     if (store) {
       store.subscribe(function (state) {
         var currentTf = state.timeframe || '1m';
+        // Normalize before comparing: engine sends 'BTC', store may hold 'BTCUSDT'
+        var currentSymbol = normalizeSymbol(state.symbol || 'BTC');
+        var changed = false;
         if (currentTf !== lastTf) {
           lastTf = currentTf;
+          changed = true;
           if (ws && status === 'connected') {
             try {
               ws.send(JSON.stringify({ type: 'cvd_history_request', timeframe: currentTf }));
@@ -98,6 +141,14 @@
               console.warn('[V6 Client] failed to request CVD history:', e);
             }
           }
+        }
+        if (currentSymbol !== lastSymbol) {
+          lastSymbol = currentSymbol;
+          changed = true;
+          console.log('[V6 Client] symbol changed to', currentSymbol, '— will fetch footprint history');
+        }
+        if (changed && status === 'connected') {
+          fetchFootprintHistory();
         }
       });
     }
@@ -126,10 +177,8 @@
         if (next === 'connected') {
           patch.dataFreshness = 'live';
         } else if (next === 'disconnected' || next === 'error') {
-          var prev = store.getState();
-          if (prev.source !== 'mock') {
-            patch.dataFreshness = (prev.dataFreshness === 'rest-fallback') ? 'rest-fallback' : 'offline';
-          }
+          var s = store.getState();
+          patch.dataFreshness = (s.dataFreshness === 'rest-fallback') ? 'rest-fallback' : 'offline';
         }
         store.setState(patch, 'transport-status-change');
       }
@@ -160,11 +209,12 @@
         if (store) {
           var curSettings = store.getState().settings;
           if (curSettings && Number.isFinite(curSettings.maxTrades) && curSettings.maxTrades > 0) {
-            maxTrades = curSettings.maxTrades;
+            maxTrades = Math.max(50, Math.min(5000, curSettings.maxTrades));
           }
         }
         tradeBuffer = newTrades.concat(tradeBuffer);
         if (tradeBuffer.length > maxTrades) {
+          stats.droppedCount += tradeBuffer.length - maxTrades;
           tradeBuffer.length = maxTrades;
         }
       }
@@ -183,6 +233,7 @@
               var list = Array.isArray(bucketsByInterval[key]) ? bucketsByInterval[key].slice() : [];
               list.push(bucket);
               if (list.length > MAX_BUCKETS_PER_INTERVAL) {
+                stats.droppedCount += list.length - MAX_BUCKETS_PER_INTERVAL;
                 list = list.slice(list.length - MAX_BUCKETS_PER_INTERVAL);
               }
               bucketsByInterval[key] = list;
@@ -217,9 +268,10 @@
             patch.depthHistory = depthHistory;
           }
           if (nextHeatmapFrames.length) {
-            var maxFrames = Math.max(60, Math.min(1000, Number((state.settings && state.settings.heatmapMaxFrames) || DEFAULT_MAX_HEATMAP_FRAMES)));
+            var maxFrames = Math.max(60, Math.min(10000, Number((state.settings && state.settings.heatmapMaxFrames) || DEFAULT_MAX_HEATMAP_FRAMES)));
             var frames = (state.heatmapFrames || []).concat(nextHeatmapFrames);
             if (frames.length > maxFrames) {
+              stats.droppedCount += frames.length - maxFrames;
               frames = frames.slice(frames.length - maxFrames);
             }
             var lastFrame = frames[frames.length - 1] || null;
@@ -230,8 +282,12 @@
             patch.selectedHeatmapSymbol = lastFrame ? (lastFrame.symbol || state.selectedHeatmapSymbol || 'BTC') : state.selectedHeatmapSymbol;
           }
           if (nextFootprintCandles.length) {
-            var maxCandles = Math.max(60, Math.min(300, Number((state.settings && state.settings.footprintMaxCandles) || DEFAULT_MAX_FOOTPRINT_CANDLES)));
+            var maxCandles = Math.max(60, Math.min(3000, Number((state.settings && state.settings.footprintMaxCandles) || DEFAULT_MAX_FOOTPRINT_CANDLES)));
+            var fpBefore = (state.footprintCandles || []).length + nextFootprintCandles.length;
             var candles = mergeFootprintCandles(state.footprintCandles || [], nextFootprintCandles, maxCandles);
+            if (fpBefore > candles.length) {
+              stats.droppedCount += fpBefore - candles.length;
+            }
             var lastCandle = candles[candles.length - 1] || nextFootprintCandles[nextFootprintCandles.length - 1] || null;
             patch.footprintCandles = candles;
             patch.lastFootprintCandle = lastCandle;
@@ -243,13 +299,18 @@
             patch.source = 'live';
             patch.lastMessageAt = stats.lastMessageTs || Date.now();
             patch.isStale = false;
-            patch.symbol = (nextVwap && nextVwap.symbol) ||
+            // Always normalize the symbol before writing it to the store.
+            // Raw engine payloads use 'BTC'; the store canonical form is 'BTCUSDT'.
+            // Without this, state.symbol oscillates each batch and the subscriber
+            // mistakes it for a real symbol change, triggering endless history refetches.
+            var rawSym = (nextVwap && nextVwap.symbol) ||
               (nextOrderBook && nextOrderBook.symbol) ||
               (nextHeatmapFrames.length && nextHeatmapFrames[nextHeatmapFrames.length - 1].symbol) ||
               (nextFootprintCandles.length && nextFootprintCandles[nextFootprintCandles.length - 1].symbol) ||
               (newDeltaBuckets.length && newDeltaBuckets[newDeltaBuckets.length - 1].symbol) ||
               (newTrades.length && newTrades[0].symbol) ||
               state.symbol;
+            patch.symbol = normalizeSymbol(rawSym);
           }
           return patch;
         }, 'live-engine-batch');
@@ -297,24 +358,22 @@
 
     function mergeFootprintCandles(existing, incoming, maxCandles) {
       var byKey = {};
+      var indexByKey = {};
       var merged = [];
       (Array.isArray(existing) ? existing : []).forEach(function (candle) {
         var key = footprintKey(candle);
         if (!key) return;
         byKey[key] = candle;
+        indexByKey[key] = merged.length;
         merged.push(candle);
       });
       incoming.forEach(function (candle) {
         var key = footprintKey(candle);
         if (!key) return;
         if (byKey[key]) {
-          for (var i = 0; i < merged.length; i++) {
-            if (footprintKey(merged[i]) === key) {
-              merged[i] = candle;
-              break;
-            }
-          }
+          merged[indexByKey[key]] = candle;
         } else {
+          indexByKey[key] = merged.length;
           merged.push(candle);
         }
         byKey[key] = candle;
@@ -377,7 +436,7 @@
     }
 
     function normalizeOrderBook(payload, fallbackTs) {
-      var depth = Math.max(1, Math.min(50, Number(payload.depth || 20)));
+      var depth = Math.max(1, Math.min(5000, Number(payload.depth || 1000)));
       var bids = normalizeOrderBookSide(payload.bids, depth);
       var asks = normalizeOrderBookSide(payload.asks, depth);
       var bestBid = Number(payload.bestBid || (bids[0] && bids[0].price) || 0);
@@ -561,6 +620,8 @@
           low: Number.isFinite(low) ? low : open,
           close: Number.isFinite(close) ? close : open,
           volume: Number(c.volume) || 0,
+          priceOnly: true,
+          analyticsSource: 'price-only-rest',
           source: 'rest-fallback'
         });
       }
@@ -587,11 +648,11 @@
       var src = (state && state.dataSource) || 'binance';
       if (src === 'hyperliquid') {
         var coin = ((state && state.symbol) || 'BTC').replace(/USDT$/i, '') || 'BTC';
-        return '/api/hyperliquid/klines?market=' + encodeURIComponent(coin) + '&interval=' + encodeURIComponent(interval) + '&limit=500';
+        return '/api/hyperliquid/klines?market=' + encodeURIComponent(coin) + '&interval=' + encodeURIComponent(interval) + '&limit=1000';
       }
       var symbol = ((state && state.symbol) || 'BTCUSDT').toUpperCase();
       if (symbol === 'BTC') symbol = 'BTCUSDT';
-      return '/api/market/klines?symbol=' + encodeURIComponent(symbol) + '&interval=' + encodeURIComponent(interval) + '&limit=500&soft=1';
+      return '/api/market/klines?symbol=' + encodeURIComponent(symbol) + '&interval=' + encodeURIComponent(interval) + '&limit=1000&soft=1';
     }
 
     function handleMessage(event) {
@@ -695,7 +756,7 @@
               source: 'live',
               isStale: false,
               lastMessageAt: Date.now(),
-              symbol: msg.payload.symbol || history[history.length - 1].symbol || prev.symbol
+              symbol: (function (s) { return s === 'BTC' ? 'BTCUSDT' : s; })(msg.payload.symbol || history[history.length - 1].symbol || prev.symbol)
             };
             // Show this interval on the chart only if it's the active timeframe
             // (or nothing has been shown yet).
@@ -843,6 +904,7 @@
         } catch (e) {
           console.warn('[V6 Client] failed to send initial cvd request:', e);
         }
+        fetchFootprintHistory();
         scheduleCandleFallback('ws-open');
       };
 
@@ -900,9 +962,123 @@
           V6OF.chart.resetOnDataChange();
         }
         console.log('[V6] REST candle fallback loaded', interval, candles.length, reason || '');
+        fetchFootprintHistory({ symbol: state.symbol || 'BTC', timeframe: interval });
       }).catch(function (err) {
         console.warn('[V6] REST candle fallback failed', err);
       });
+    }
+    // Tracks the last footprint history fetch: {symbol, tf, from, to, ts}
+    var _lastFpFetch = null;
+
+    function fetchFootprintHistory(options) {
+      if (!store) return Promise.resolve(null);
+      options = options || {};
+      var state = store.getState();
+      var symbol = normalizeSymbol(options.symbol || state.symbol || 'BTC');
+      var tf = options.timeframe || state.timeframe || '1m';
+      var intervalMsValue = timeframeToMs(tf);
+      var from = Number(options.from || options.startTime || 0);
+      var to = Number(options.to || options.endTime || 0);
+      if ((!from || !to) && Array.isArray(state.chartCandles) && state.chartCandles.length) {
+        var firstChartCandle = state.chartCandles[0];
+        var lastChartCandle = state.chartCandles[state.chartCandles.length - 1];
+        from = from || Number(firstChartCandle.openTime || 0);
+        to = to || Number(lastChartCandle.closeTime || (Number(lastChartCandle.openTime || 0) + intervalMsValue - 1));
+      }
+      var limit = Math.max(1, Math.min(3000, Number(options.limit || DEFAULT_MAX_FOOTPRINT_CANDLES)));
+
+      // --- Idempotency guard ---
+      // Don't re-fetch the full history if we already have it for this symbol+tf+window.
+      // Only bypass when explicitly called with a forced small range (e.g. inspector, limit<=20).
+      var isSmallFetch = options.limit && options.limit <= 20;
+      if (!isSmallFetch && _lastFpFetch) {
+        var sameKey = _lastFpFetch.symbol === symbol && _lastFpFetch.tf === tf;
+        var sameWindow = (!from || _lastFpFetch.from <= from) && (!to || _lastFpFetch.to >= to);
+        var recentEnough = (Date.now() - _lastFpFetch.ts) < 60000; // 1 min debounce
+        if (sameKey && sameWindow && recentEnough) {
+          // Check we actually have candles covering this window
+          var fp = state.footprintCandles || [];
+          if (fp.length > 0) {
+            console.log('[V6 Client] footprint history already loaded (' + fp.length + ' candles), skipping refetch');
+            return Promise.resolve(null);
+          }
+        }
+      }
+      _lastFpFetch = { symbol: symbol, tf: tf, from: from, to: to, ts: Date.now() };
+
+      var wsUrl = (ws && ws.url) || DEFAULT_URL;
+      var httpBase = wsUrl.replace(/^ws(s?):/, 'http$1:').replace(/\/stream$/, '');
+      var url = httpBase + (tf === '1m' ? '/api/v1/footprint/1m' : '/api/v1/footprint/tf');
+      url += '?symbol=' + encodeURIComponent(symbol);
+      if (tf !== '1m') {
+        url += '&tf=' + encodeURIComponent(tf);
+      }
+      if (from > 0) url += '&from=' + encodeURIComponent(Math.floor(from));
+      if (to > 0) url += '&to=' + encodeURIComponent(Math.floor(to));
+      url += '&limit=' + encodeURIComponent(limit);
+
+      console.log('[V6 Client] fetching footprint history from:', url);
+      
+      return fetch(url)
+        .then(function (res) {
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return res.json();
+        })
+        .then(function (data) {
+          if (!data || !Array.isArray(data.candles)) return;
+          var candles = data.candles.map(function (c) {
+            return {
+              exchange: state.dataSource || 'local',
+              symbol: symbol,
+              intervalMs: intervalMsValue,
+              openTime: c.ts,
+              closeTime: c.ts + intervalMsValue - 1,
+              open: c.open,
+              high: c.high,
+              low: c.low,
+              close: c.close,
+              volume: c.volume,
+              buyVol: c.buy_volume,
+              sellVol: c.sell_volume,
+              delta: c.delta,
+              poc: c.close,
+              closed: true,
+              levels: (c.profile || []).map(function (lv) {
+                var buy = Number(lv.b || 0);
+                var sell = Number(lv.s || 0);
+                return {
+                  price: Number(lv.p),
+                  buyVol: buy,
+                  sellVol: sell,
+                  delta: buy - sell,
+                  totalVol: buy + sell
+                };
+              }),
+              source: 'history',
+              tsLocal: Date.now()
+            };
+          });
+          
+          if (!candles.length) return;
+          
+          store.setState(function (prev) {
+            var maxCandles = Math.max(60, Math.min(3000, Number((prev.settings && prev.settings.footprintMaxCandles) || DEFAULT_MAX_FOOTPRINT_CANDLES)));
+            var merged = mergeFootprintCandles(prev.footprintCandles || [], candles, maxCandles);
+            var lastCandle = merged[merged.length - 1];
+            return {
+              footprintCandles: merged,
+              lastFootprintCandle: lastCandle || null,
+              lastFootprintTs: lastCandle ? (lastCandle.tsLocal || Date.now()) : 0,
+              selectedFootprintSymbol: symbol,
+              selectedFootprintTimeframe: tf
+            };
+          }, 'footprint-history-loaded');
+          
+          console.log('[V6 Client] footprint history loaded:', candles.length, 'candles');
+        })
+        .catch(function (err) {
+          console.warn('[V6 Client] failed to load footprint history:', err);
+        });
     }
 
     function scheduleCandleFallback(reason) {
@@ -922,6 +1098,7 @@
       if (candles && candles.length) {
         store.setState({ chartCandles: candles, timeframe: interval }, 'switch-tf');
       }
+      fetchFootprintHistory({ symbol: state.symbol || 'BTC', timeframe: interval });
     }
 
     function tryFetch(url, retries) {
@@ -1011,7 +1188,7 @@
        * @returns {V6EngineStats}
        */
       getStats: function () {
-        return Object.assign({}, stats);
+        return statsSnapshot();
       },
 
       /**
@@ -1091,6 +1268,10 @@
 
       fetchCandleHistory: function () {
         fetchCandleHistory();
+      },
+
+      fetchFootprintHistory: function (options) {
+        return fetchFootprintHistory(options || {});
       },
 
       switchTimeframe: function (interval) {

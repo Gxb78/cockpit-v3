@@ -49,6 +49,79 @@
     return 60000;
   }
 
+  // Cap (rows fetched + retained) for the REST trade prefill of the tape.
+  // Configurable via settings.restTradePrefillLimit; mirrors the clamp in
+  // V6OF.Settings so a live store value stays in the supported range.
+  function restTradePrefillLimit(settings) {
+    settings = settings || {};
+    var n = Math.round(Number(settings.restTradePrefillLimit));
+    if (!Number.isFinite(n)) n = 500;
+    return Math.max(50, Math.min(5000, n));
+  }
+
+  function uiBuildMetaLabel() {
+    var version = (window.COCKPIT_ASSET_VERSION || '').toString();
+    return version ? 'UI ' + version.slice(0, 12) : 'UI dev';
+  }
+
+  function replayStatusLabel(replay) {
+    if (!replay || !replay.state || replay.state === 'idle') return '';
+    if (replay.error) return 'Replay error: ' + replay.error;
+    var label = 'Replay ' + replay.state;
+    if (replay.total) {
+      label += ', ' + (replay.index || 0) + ' of ' + replay.total;
+      if (replay.speed != null) label += ', speed ' + (replay.speed === 0 ? 'max' : replay.speed + 'x');
+    }
+    return label + '.';
+  }
+
+  function announceStatus(root, message) {
+    root = root || document.getElementById('v6-orderflow-root');
+    if (!root || !message) return;
+    if (root._v6LastLiveStatus === message) return;
+    root._v6LastLiveStatus = message;
+    setText(root, '[data-v6-live-status]', message);
+  }
+
+  V6OF.announceStatus = announceStatus;
+
+  function hydrateThemeVars(root, settings) {
+    if (!root) return;
+    settings = settings || {};
+    var theme = settings.theme === 'dark-tv' ? 'dark-tv' : 'light-tv';
+    var vars = theme === 'dark-tv'
+      ? {
+          '--v6-bg': '#131722',
+          '--v6-bg-2': '#171b22',
+          '--v6-surface': '#1e222d',
+          '--v6-surface-2': '#222733',
+          '--v6-surface-3': '#2a2e39',
+          '--v6-text': '#d1d4dc',
+          '--v6-text-dim': '#b2b5be',
+          '--v6-text-mute': '#868993',
+          '--v6-text-faint': '#5f636e',
+          '--v6-hairline': 'rgba(120, 130, 150, 0.20)',
+          '--v6-hairline-strong': 'rgba(120, 130, 150, 0.32)'
+        }
+      : {
+          '--v6-bg': '#f8f9fa',
+          '--v6-bg-2': '#f0f3fa',
+          '--v6-surface': '#ffffff',
+          '--v6-surface-2': '#f5f7fb',
+          '--v6-surface-3': '#e6e9ef',
+          '--v6-text': '#131722',
+          '--v6-text-dim': '#434651',
+          '--v6-text-mute': '#6b7280',
+          '--v6-text-faint': '#9aa0aa',
+          '--v6-hairline': 'rgba(19, 23, 34, 0.14)',
+          '--v6-hairline-strong': 'rgba(19, 23, 34, 0.24)'
+        };
+    root.dataset.v6Theme = theme;
+    Object.keys(vars).forEach(function (key) {
+      root.style.setProperty(key, vars[key]);
+    });
+  }
+
   function _cachedFetch(url, ttlMs, bypassCache) {
     var now = Date.now();
     var entry = _restCache[url];
@@ -77,7 +150,7 @@
 
   function shellHtml() {
     return [
-      '<div class="v6-shell">',
+      '<div class="v6-shell" data-orderflow-slot="v6" role="region" aria-label="Orderflow trading terminal" data-testid="orderflow-v6-slot">',
         '<div class="v6-demo-banner" data-v6-demo-banner style="display: none;">',
           '<span>⚠️ Live Engine Offline — Running in Demo Mode (Mock Data)</span>',
         '</div>',
@@ -118,6 +191,8 @@
             '<button type="button" class="v6-source-btn" data-v6-action="source" data-source="hyperliquid">HL</button>',
             '<button type="button" class="v6-source-btn active" data-v6-action="source" data-source="binance">BN</button>',
           '</div>',
+          '<div class="v6-build-meta" data-testid="orderflow-build-meta" title="UI build metadata">' + uiBuildMetaLabel() + '</div>',
+          '<div class="sr-only" data-v6-live-status role="status" aria-live="polite" aria-atomic="true" data-testid="orderflow-live-status">Orderflow loading.</div>',
           '<div class="v6-header-disclosure-toggle">',
             '<button type="button" class="v6-btn v6-btn-sm" data-v6-action="toggle-disclosure" aria-expanded="false" aria-controls="v6-header-disclosure-panel" title="Show/hide live metrics">Metrics ▾</button>',
           '</div>',
@@ -125,6 +200,9 @@
             '<div class="v6-header-live">',
               '<span class="v6-stat"><em>Last</em><strong data-v6-last>--</strong></span>',
               '<span class="v6-stat"><em>CVD</em><strong data-v6-cvd>--</strong></span>',
+              '<span class="v6-stat"><em>Lag</em><strong data-v6-health-lag>--</strong></span>',
+              '<span class="v6-stat"><em>Queue</em><strong data-v6-health-queue>0</strong></span>',
+              '<span class="v6-stat"><em>Drops</em><strong data-v6-health-drops>0</strong></span>',
             '</div>',
             '<div class="v6-ticket" aria-label="Live quote">',
               '<div class="v6-ticket-side is-sell"><em>BID</em><strong data-v6-ticket-bid>--</strong></div>',
@@ -133,15 +211,20 @@
             '</div>',
           '</div>',
           '<div class="v6-header-actions">',
+            '<button type="button" class="v6-btn v6-btn-icon v6-fullscreen-slot" data-v6-action="fullscreen-slot" data-testid="orderflow-fullscreen-slot" aria-label="Fullscreen slot reserved" title="Fullscreen slot reserved" disabled>⛶</button>',
             '<button type="button" class="v6-conn" data-v6-action="toggle-connection" title="Toggle local engine connection">',
               '<span class="v6-engine-dot" data-v6-engine-dot></span>',
               '<span class="v6-conn-text" data-v6-engine-status-text>Offline</span>',
             '</button>',
           '</div>',
         '</header>',
-        '<div class="v6-grid">',
+        '<div class="v6-mount-error-region" data-v6-mount-error role="status" aria-live="polite" data-testid="orderflow-mount-error" hidden>',
+          '<strong>Engine unavailable</strong>',
+          '<span data-v6-mount-error-text>Unable to connect to the orderflow engine.</span>',
+        '</div>',
+        '<div class="v6-grid" role="region" aria-label="Orderflow market data panels" data-testid="orderflow-market-panels">',
           '<section class="v6-panel v6-panel-tape" data-v6-panel="tape" aria-label="V6 tape">',
-            '<div class="v6-panel-head"><span>Tape</span><small>Time and sales</small></div>',
+            '<div class="v6-panel-head"><span>Tape</span><small class="v6-panel-freshness" data-v6-freshness="tape">No data</small></div>',
             '<div class="v6-panel-body v6-tape-body">',
               '<div class="v6-tape-list-container" data-v6-tape-list></div>',
               '<div class="v6-lad-foot v6-tape-footer" data-v6-tape-footer>',
@@ -155,11 +238,11 @@
             '</div>',
           '</section>',
           '<section class="v6-panel v6-panel-chart" data-v6-panel="chart" aria-label="V6 chart">',
-            '<div class="v6-panel-head"><span>Chart</span><small></small></div>',
+            '<div class="v6-panel-head"><span>Chart</span><small class="v6-panel-freshness" data-v6-freshness="chart">No data</small></div>',
             '<canvas class="v6-chart-canvas" data-v6-chart></canvas>',
           '</section>',
           '<section class="v6-panel v6-panel-dom" data-v6-panel="dom" aria-label="V6 DOM">',
-            '<div class="v6-panel-head"><span>DOM</span><small></small></div>',
+            '<div class="v6-panel-head"><span>DOM</span><small class="v6-panel-freshness" data-v6-freshness="dom">No data</small></div>',
             '<div class="v6-panel-body v6-dom-body">',
               '<div class="v6-dom-table-container" data-v6-dom-list></div>',
               '<div class="v6-lad-foot v6-dom-foot" data-v6-dom-footer>',
@@ -204,9 +287,38 @@
                 '<label class="v6-check"><input type="checkbox" data-v6-setting="showTape" /><span>Show Tape</span></label>',
                 '<label class="v6-check"><input type="checkbox" data-v6-setting="showDOM" /><span>Show DOM</span></label>',
                 '<label class="v6-check"><input type="checkbox" data-v6-setting="showCVD" /><span>Show Delta/CVD</span></label>',
+                '<label class="v6-check"><input type="checkbox" data-v6-setting="showVwap" /><span>Show VWAP</span></label>',
                 '<label class="v6-check"><input type="checkbox" data-v6-setting="showHeatmap" /><span>Show Heatmap</span></label>',
                 '<label class="v6-check"><input type="checkbox" data-v6-setting="showFootprint" /><span>Show Footprint</span></label>',
                 '<label class="v6-check"><input type="checkbox" data-v6-setting="showLastPrice" /><span>Show Last Price</span></label>',
+              '</div>',
+              // -- Studies --
+              '<div class="v6-settings-section">',
+                '<div class="v6-settings-section-title">Studies</div>',
+                '<label class="v6-check"><input type="checkbox" data-v6-setting="showVwapBands" /><span>VWAP bands</span></label>',
+                '<label class="v6-field">VWAP band 1',
+                  '<input type="number" min="0.1" max="5" step="0.1" data-v6-setting="vwapBand1" />',
+                '</label>',
+                '<label class="v6-field">VWAP band 2',
+                  '<input type="number" min="0.1" max="8" step="0.1" data-v6-setting="vwapBand2" />',
+                '</label>',
+                '<label class="v6-check"><input type="checkbox" data-v6-setting="alertsEnabled" /><span>Alerts enabled</span></label>',
+                '<label class="v6-field">Large trade alert',
+                  '<input type="number" min="0" step="0.1" data-v6-setting="largeTradeAlertQty" />',
+                '</label>',
+                '<label class="v6-field">Delta alert',
+                  '<input type="number" min="0" step="1" data-v6-setting="deltaAlertThreshold" />',
+                '</label>',
+                '<label class="v6-field">Imbalance ratio',
+                  '<input type="number" min="1.5" max="8" step="0.1" data-v6-setting="imbalanceRatio" />',
+                '</label>',
+                '<label class="v6-field">Imbalance stack',
+                  '<input type="number" min="2" max="6" step="1" data-v6-setting="imbalanceStack" />',
+                '</label>',
+                '<label class="v6-field">Min wick ticks',
+                  '<input type="number" min="0" max="10" step="1" data-v6-setting="minWickTicks" />',
+                '</label>',
+                '<label class="v6-check"><input type="checkbox" data-v6-setting="showFootprintVA" /><span>Footprint value area</span></label>',
               '</div>',
               // -- Buffers --
               '<div class="v6-settings-section">',
@@ -243,6 +355,9 @@
                 '<label class="v6-field">Max tape rows',
                   '<input type="number" min="8" max="500" step="1" data-v6-setting="maxRows" />',
                 '</label>',
+                '<label class="v6-field">REST trade prefill',
+                  '<input type="number" min="50" max="5000" step="50" data-v6-setting="restTradePrefillLimit" />',
+                '</label>',
               '</div>',
               // -- Actions --
               '<div class="v6-settings-section v6-settings-actions">',
@@ -256,12 +371,12 @@
             '</div>',
           '</section>',
           '<section class="v6-panel v6-panel-cvd" data-v6-panel="cvd" aria-label="V6 CVD and delta">',
-            '<div class="v6-panel-head"><span>CVD / Delta</span><small>Session</small></div>',
+            '<div class="v6-panel-head"><span>CVD / Delta</span><small class="v6-panel-freshness" data-v6-freshness="cvd">No data</small></div>',
             '<div class="v6-panel-body" data-v6-cvd-panel></div>',
           '</section>',
         '</div>',
       '</div>',
-      '<div class="v6-legacy-strip">',
+      '<div class="v6-legacy-strip" data-orderflow-slot="legacy" role="region" aria-label="Legacy orderflow view" data-testid="orderflow-legacy-slot">',
         '<span>Legacy orderflow canvas visible</span>',
         '<button type="button" class="v6-btn" data-v6-action="v6">Show V6</button>',
       '</div>'
@@ -285,6 +400,68 @@
     return buckets.length ? buckets[buckets.length - 1].cvd : 0;
   }
 
+  function latestTsFromList(list, key) {
+    if (!Array.isArray(list) || !list.length) return 0;
+    for (var i = list.length - 1; i >= 0; i--) {
+      var item = list[i] || {};
+      var ts = Number(item[key] || item.time || item.ts || item.openTime || item.closeTime);
+      if (Number.isFinite(ts) && ts > 0) return ts < 1000000000000 ? ts * 1000 : ts;
+    }
+    return 0;
+  }
+
+  function freshnessAgeLabel(ts) {
+    ts = Number(ts) || 0;
+    if (!ts) return 'No data';
+    var ageMs = Math.max(0, Date.now() - ts);
+    if (ageMs < 2000) return 'now';
+    if (ageMs < 60000) return Math.round(ageMs / 1000) + 's';
+    if (ageMs < 3600000) return Math.round(ageMs / 60000) + 'm';
+    return Math.round(ageMs / 3600000) + 'h';
+  }
+
+  function freshnessState(ts, ttlMs) {
+    ts = Number(ts) || 0;
+    if (!ts) return 'empty';
+    return (Date.now() - ts) > ttlMs ? 'stale' : 'fresh';
+  }
+
+  function formatEngineLag(ms) {
+    ms = Number(ms) || 0;
+    if (!ms) return '--';
+    if (ms < 1000) return Math.round(ms) + 'ms';
+    if (ms < 60000) return (ms / 1000).toFixed(ms < 10000 ? 1 : 0) + 's';
+    return Math.round(ms / 60000) + 'm';
+  }
+
+  function setPanelFreshness(root, panel, label, status) {
+    var el = root.querySelector('[data-v6-freshness="' + panel + '"]');
+    if (!el) return;
+    el.textContent = label;
+    el.classList.toggle('is-fresh', status === 'fresh');
+    el.classList.toggle('is-stale', status === 'stale');
+    el.classList.toggle('is-empty', status === 'empty');
+  }
+
+  function renderPanelFreshness(root, state) {
+    if (state && state.dataFreshness === 'warming') {
+      setPanelFreshness(root, 'tape', 'Warming', 'empty');
+      setPanelFreshness(root, 'chart', 'Warming', 'empty');
+      setPanelFreshness(root, 'dom', 'Warming', 'empty');
+      setPanelFreshness(root, 'cvd', 'Warming', 'empty');
+      return;
+    }
+    var live = state.transportStatus === 'connected' && state.dataFreshness !== 'rest-fallback';
+    var tapeTs = Number(state.restTradesTs) || latestTsFromList(state.trades, 'time');
+    var chartTs = Number(state.restKlinesTs) || latestTsFromList(state.chartCandles, 'closeTime');
+    var domTs = Number(state.restDepthTs || state.lastOrderBookTs) || 0;
+    var cvdTs = latestTsFromList(state.deltaBuckets, 'ts');
+    setPanelFreshness(root, 'tape', live && tapeTs ? 'Live ' + freshnessAgeLabel(tapeTs) : 'REST ' + freshnessAgeLabel(tapeTs), freshnessState(tapeTs, live ? 15000 : 30000));
+    setPanelFreshness(root, 'chart', live && chartTs ? 'Live ' + freshnessAgeLabel(chartTs) : 'REST ' + freshnessAgeLabel(chartTs), freshnessState(chartTs, live ? 120000 : 180000));
+    setPanelFreshness(root, 'dom', live && domTs ? 'Live ' + freshnessAgeLabel(domTs) : 'REST ' + freshnessAgeLabel(domTs), freshnessState(domTs, live ? 15000 : 15000));
+    setPanelFreshness(root, 'cvd', live && cvdTs ? 'Live ' + freshnessAgeLabel(cvdTs) : 'REST ' + freshnessAgeLabel(cvdTs), freshnessState(cvdTs, live ? 60000 : 120000));
+  }
+
   function setText(root, selector, value) {
     var el = root.querySelector(selector);
     if (el) {
@@ -301,6 +478,60 @@
     }
   }
 
+  function deepCloneCachePayload(value) {
+    if (value == null || typeof value !== 'object') return value;
+    if (Array.isArray(value)) {
+      return value.map(deepCloneCachePayload);
+    }
+    var out = {};
+    Object.keys(value).forEach(function (key) {
+      out[key] = deepCloneCachePayload(value[key]);
+    });
+    return out;
+  }
+
+  function sourceCachePayload(state) {
+    return {
+      trades: deepCloneCachePayload(state.trades || []),
+      orderBook: deepCloneCachePayload(state.orderBook || null),
+      heatmapFrames: deepCloneCachePayload(state.heatmapFrames || []),
+      footprintCandles: deepCloneCachePayload(state.footprintCandles || []),
+      chartCandles: deepCloneCachePayload(state.chartCandles || []),
+      deltaBuckets: deepCloneCachePayload(state.deltaBuckets || []),
+      deltaBucketsByInterval: deepCloneCachePayload(state.deltaBucketsByInterval || {}),
+      latestDeltaByInterval: deepCloneCachePayload(state.latestDeltaByInterval || {}),
+      restDepthTs: deepCloneCachePayload(state.restDepthTs || 0),
+      restTradesTs: deepCloneCachePayload(state.restTradesTs || 0),
+      restKlinesTs: deepCloneCachePayload(state.restKlinesTs || 0)
+    };
+  }
+
+  function sourceWarmingPayload(source) {
+    return {
+      dataSource: source,
+      source: 'live',
+      dataFreshness: 'warming',
+      trades: [],
+      orderBook: null,
+      orderBookCount: 0,
+      lastOrderBookTs: 0,
+      heatmapFrames: [],
+      heatmapFrameCount: 0,
+      lastHeatmapFrame: null,
+      lastHeatmapTs: 0,
+      footprintCandles: [],
+      footprintCandleCount: 0,
+      lastFootprintCandle: null,
+      lastFootprintTs: 0,
+      chartCandles: [],
+      deltaBuckets: [],
+      depthHistory: [],
+      restDepthTs: 0,
+      restTradesTs: 0,
+      restKlinesTs: 0
+    };
+  }
+
   function syncInputs(root, state) {
     var settings = state.settings || {};
     // Selects
@@ -308,8 +539,8 @@
     if (chartMode && document.activeElement !== chartMode) chartMode.value = settings.chartMode || 'both';
 
     // Checkboxes
-    var toggles = ['showTape', 'showDOM', 'showCVD', 'showHeatmap', 'showFootprint', 'showLastPrice', 'showGrid'];
-    var toggleDefaultsOn = { showTape: 1, showDOM: 1, showCVD: 1, showHeatmap: 1, showFootprint: 1, showLastPrice: 1, showGrid: 1 };
+    var toggles = ['showTape', 'showDOM', 'showCVD', 'showVwap', 'showHeatmap', 'showFootprint', 'showLastPrice', 'showGrid', 'showVwapBands', 'alertsEnabled', 'showFootprintVA'];
+    var toggleDefaultsOn = { showTape: 1, showDOM: 1, showCVD: 1, showFootprint: 1, showLastPrice: 1, showGrid: 1, showFootprintVA: 1 };
     toggles.forEach(function (key) {
       var el = root.querySelector('[data-v6-setting="' + key + '"]');
       if (el) el.checked = toggleDefaultsOn[key] ? settings[key] !== false : settings[key] === true;
@@ -324,7 +555,15 @@
       domDepth: 'domDepth',
       minQty: 'minQty',
       maxRows: 'maxRows',
+      restTradePrefillLimit: 'restTradePrefillLimit',
       tapeFontSize: 'tapeFontSize',
+      vwapBand1: 'vwapBand1',
+      vwapBand2: 'vwapBand2',
+      largeTradeAlertQty: 'largeTradeAlertQty',
+      deltaAlertThreshold: 'deltaAlertThreshold',
+      imbalanceRatio: 'imbalanceRatio',
+      imbalanceStack: 'imbalanceStack',
+      minWickTicks: 'minWickTicks',
       bgColor: 'bgColor',
       upColor: 'upColor',
       downColor: 'downColor'
@@ -352,7 +591,7 @@
     });
   }
 
-  function normalizeRestDepthBook(data, source) {
+  function normalizeIngressOrderBook(data, source) {
     var isHL = source === 'hyperliquid';
     var book = null;
     if (isHL && data && data.ok) {
@@ -379,6 +618,133 @@
     return book;
   }
 
+  function normalizeRestDepthBook(data, source) {
+    return normalizeIngressOrderBook(data, source);
+  }
+
+  function normalizeIngressTrades(data, source, symbol) {
+    var isHL = source === 'hyperliquid';
+    var normSymbol = normalizeSymbol(symbol, source);
+    var raw = null;
+    if (isHL && data && data.ok) {
+      raw = data.trades || [];
+    } else if (!isHL && Array.isArray(data)) {
+      raw = data;
+    }
+    if (!raw) return [];
+    return raw.map(function (t) {
+      var price = isHL ? Number(t.px) : Number(t.p);
+      var qty = isHL ? Number(t.sz) : Number(t.q);
+      var time = Number(isHL ? t.time : t.T);
+      var side = isHL ? t.side : (t.m ? 'sell' : 'buy');
+      return {
+        price: price,
+        qty: qty,
+        time: time,
+        side: side,
+        symbol: normSymbol,
+        source: isHL ? 'hyperliquid_rest' : 'binance_rest'
+      };
+    }).filter(function (t) {
+      return Number.isFinite(t.price) && Number.isFinite(t.qty) && t.price > 0 && t.qty >= 0;
+    });
+  }
+
+  function normalizeIngressCandles(data, source, timeframe) {
+    var isHL = source === 'hyperliquid';
+    var intervalMs = timeframeToMs(timeframe) || 60000;
+    var raw = null;
+    if (isHL && data && data.ok) {
+      raw = data.candles || [];
+    } else if (!isHL && data && Array.isArray(data.candles)) {
+      raw = data.candles;
+    }
+    if (!raw) return [];
+    return raw.map(function (c) {
+      if (!c) return null;
+      var openTime = Number(c.openTime || c.time);
+      if (!Number.isFinite(openTime) || openTime <= 0) return null;
+      if (openTime < 1000000000000) openTime *= 1000;
+      var closeTime = Number(c.closeTime);
+      if (!Number.isFinite(closeTime) || closeTime <= 0) {
+        closeTime = openTime + intervalMs - 1;
+      } else if (closeTime < 1000000000000) {
+        closeTime *= 1000;
+      }
+      var candle = {
+        openTime: openTime,
+        closeTime: closeTime,
+        open: Number(c.open),
+        high: Number(c.high),
+        low: Number(c.low),
+        close: Number(c.close),
+        volume: Number(c.volume) || 0,
+        priceOnly: true,
+        analyticsSource: 'price-only-rest',
+        source: isHL ? 'hyperliquid_rest_klines' : 'binance_rest_klines'
+      };
+      if (!Number.isFinite(candle.open) || !Number.isFinite(candle.high) ||
+          !Number.isFinite(candle.low) || !Number.isFinite(candle.close)) {
+        return null;
+      }
+      return candle;
+    }).filter(Boolean);
+  }
+
+  function applyRestOrderBook(store, data, source, reason) {
+    var book = normalizeIngressOrderBook(data, source);
+    if (!book || !V6OF.DomLadder) return null;
+    V6OF.DomLadder.feedOrderBook(book);
+    store.setState(function (prev) {
+      var patch = {
+        orderBook: book,
+        lastOrderBookTs: book.tsLocal,
+        restDepthTs: book.tsLocal,
+        restDepthCount: Math.min(book.bids ? book.bids.length : 0, book.asks ? book.asks.length : 0)
+      };
+      if (prev.transportStatus !== 'connected' || prev.dataFreshness === 'warming') {
+        patch.dataFreshness = 'rest-fallback';
+      }
+      return patch;
+    }, reason || 'rest-depth');
+    return book;
+  }
+
+  function applyRestTrades(store, data, source, symbol, reason) {
+    var trades = normalizeIngressTrades(data, source, symbol);
+    if (!trades.length) return [];
+    var limit = restTradePrefillLimit(store.getState ? store.getState().settings : null);
+    store.setState(function (prev) {
+      var patch = { trades: trades.slice(-limit), restTradesTs: Date.now() };
+      if (prev.transportStatus !== 'connected' || prev.dataFreshness === 'warming') {
+        patch.dataFreshness = 'rest-fallback';
+      }
+      return patch;
+    }, reason || 'rest-trades');
+    return trades;
+  }
+
+  function applyRestCandles(store, data, source, timeframe, reason) {
+    var candles = normalizeIngressCandles(data, source, timeframe);
+    if (!candles.length) return [];
+    store.setState(function (prev) {
+      var patch = { chartCandles: candles, restKlinesTs: Date.now() };
+      if (prev.transportStatus !== 'connected' || prev.dataFreshness === 'warming') {
+        patch.dataFreshness = 'rest-fallback';
+      }
+      return patch;
+    }, reason || 'rest-klines');
+    if (V6OF.chart && V6OF.chart.resetOnDataChange) V6OF.chart.resetOnDataChange();
+    return candles;
+  }
+
+  V6OF.LayoutIngress = Object.freeze({
+    normalizeSymbol: normalizeSymbol,
+    normalizeOrderBook: normalizeIngressOrderBook,
+    normalizeTrades: normalizeIngressTrades,
+    normalizeCandles: normalizeIngressCandles
+  });
+
   function prefetchDomDepth(store, reason) {
     if (!store) return;
     var state = store.getState ? store.getState() : {};
@@ -389,21 +755,8 @@
       : '/api/market/depth?symbol=' + symbol + '&limit=5000';
     var bypass = (reason === 'refresh' || reason === 'symbol-change' || reason === 'reconnect' || reason === 'auto-connect');
     _cachedFetch(url, 5000, bypass).then(function (data) {
-      var book = normalizeRestDepthBook(data, source);
-      if (!book || !V6OF.DomLadder) return;
-      V6OF.DomLadder.feedOrderBook(book);
-      store.setState(function (prev) {
-        var patch = {
-          orderBook: book,
-          lastOrderBookTs: book.tsLocal,
-          restDepthTs: book.tsLocal,
-          restDepthCount: Math.min(book.bids ? book.bids.length : 0, book.asks ? book.asks.length : 0)
-        };
-        if (prev.transportStatus !== 'connected') {
-          patch.dataFreshness = 'rest-fallback';
-        }
-        return patch;
-      }, 'rest-depth-' + (reason || 'prefetch'));
+      var book = applyRestOrderBook(store, data, source, 'rest-depth-' + (reason || 'prefetch'));
+      if (!book) return;
       console.log('[DOM] REST depth prefetch (' + source + '): bids=' + book.bids.length + ' asks=' + book.asks.length + ' reason=' + (reason || ''));
     }).catch(function (e) {
       console.warn('[DOM] REST depth prefetch failed', e);
@@ -433,12 +786,14 @@
 
     var freshness = state && state.dataFreshness;
     var statusLabel = (state && state.source === 'mock') ? 'Mock'
+      : freshness === 'warming' ? 'Warming'
       : status === 'connected' ? 'Live'
       : status === 'connecting' ? 'Connecting…'
       : status === 'error' ? 'Reconnecting…'
       : freshness === 'rest-fallback' ? 'Offline (REST Fallback)'
       : 'Offline';
     setText(root, '[data-v6-engine-status-text]', statusLabel);
+    announceStatus(root, 'Orderflow ' + statusLabel + '. ' + (replayStatusLabel(state && state.replay) || 'Replay idle.'));
 
     // Counters
     setText(root, '[data-v6-cnt-trades]', String(stats.tradesReceived || 0));
@@ -449,10 +804,16 @@
     setText(root, '[data-v6-cnt-footprint]', String(stats.footprintCandlesReceived || 0));
     setText(root, '[data-v6-cnt-errors]', String(stats.errorsCount || 0));
     setText(root, '[data-v6-cnt-reconnects]', String(stats.reconnectsCount || 0));
+    setText(root, '[data-v6-health-lag]', formatEngineLag(stats.lagMs));
+    setText(root, '[data-v6-health-queue]', String(stats.queueDepth || 0));
+    setText(root, '[data-v6-health-drops]', String(stats.droppedCount || 0));
 
     // Status bar updates
     setText(root, '[data-v6-status-url]', 'ws://127.0.0.1:8765/stream');
     setText(root, '[data-v6-status-reconnects]', String(stats.reconnectsCount || 0));
+    setText(root, '[data-v6-status-lag]', formatEngineLag(stats.lagMs));
+    setText(root, '[data-v6-status-queue]', String(stats.queueDepth || 0));
+    setText(root, '[data-v6-status-drops]', String(stats.droppedCount || 0));
     if (state) {
       setText(root, '[data-v6-status-buffer-trades]', String((state.trades && state.trades.length) || 0));
       setText(root, '[data-v6-status-buffer-heatmap]', String((state.heatmapFrames && state.heatmapFrames.length) || 0));
@@ -480,6 +841,9 @@
     if (badge) {
       if (state && state.source === 'mock') {
         badge.textContent = 'V6 MOCK / No live data';
+        badge.className = 'v6-badge';
+      } else if (state && state.dataFreshness === 'warming') {
+        badge.textContent = 'V6 WARMING / Loading source';
         badge.className = 'v6-badge';
       } else if (status === 'connected') {
         if (state && state.isStale) {
@@ -509,6 +873,24 @@
     if (pauseBtn) {
       pauseBtn.textContent = snapshot.paused ? 'Resume' : 'Pause';
     }
+
+    renderMountErrorRegion(root, snapshot, state);
+  }
+
+  function renderMountErrorRegion(root, snapshot, state) {
+    var region = root && root.querySelector('[data-v6-mount-error]');
+    if (!region || !snapshot) return;
+    var status = snapshot.status || 'disconnected';
+    var stats = snapshot.stats || {};
+    var freshness = state && state.dataFreshness;
+    var shouldShow = state && state.source !== 'mock' && (status === 'error' || (status === 'disconnected' && freshness === 'offline'));
+    region.hidden = !shouldShow;
+    region.classList.toggle('is-visible', !!shouldShow);
+    if (!shouldShow) return;
+    var text = stats.lastError || (status === 'error'
+      ? 'WebSocket engine error. Retrying connection.'
+      : 'Local engine is offline. Start marketd or reconnect.');
+    setText(region, '[data-v6-mount-error-text]', text);
   }
 
   function shouldRender(root, panelName, slice, force) {
@@ -558,6 +940,7 @@
     setText(root, '[data-v6-cvd]', V6OF.format.signed(latestCvd(state)));
 
     var settings = state.settings || {};
+    hydrateThemeVars(root, settings);
 
     // Live BID/ASK/spread ticket (book first, heatmap fallback).
     var book = state.orderBook;
@@ -597,6 +980,7 @@
     });
 
     syncPanelVisibility(root, settings);
+    renderPanelFreshness(root, state);
 
     // Update Info Panel Tab
     var lPrice = lastPrice(state);
@@ -617,12 +1001,18 @@
       showTape: settings.showTape,
       tapeFontSize: settings.tapeFontSize,
       minQty: settings.minQty,
-      maxRows: settings.maxRows
+      maxRows: settings.maxRows,
+      restTradesTs: state.restTradesTs,
+      transportStatus: state.transportStatus,
+      dataFreshness: state.dataFreshness
     };
 
     var domSlice = {
       orderBookCount: state.orderBookCount,
       lastOrderBookTs: state.lastOrderBookTs,
+      restDepthTs: state.restDepthTs,
+      transportStatus: state.transportStatus,
+      dataFreshness: state.dataFreshness,
       showDOM: settings.showDOM,
       selectedDomSymbol: state.selectedDomSymbol,
       symbol: state.symbol
@@ -640,6 +1030,9 @@
 
     var chartSlice = {
       chartCandles: state.chartCandles,
+      restKlinesTs: state.restKlinesTs,
+      transportStatus: state.transportStatus,
+      dataFreshness: state.dataFreshness,
       trades: state.trades,
       heatmapFrames: state.heatmapFrames,
       footprintCandles: state.footprintCandles,
@@ -649,13 +1042,13 @@
       showFootprint: settings.showFootprint === true
     };
 
-    if (tapeList && V6OF.Panels && V6OF.Panels.renderTape && settings.showTape !== false) {
+    if (tapeList && V6OF.Panels && V6OF.Panels.renderTapeInto && settings.showTape !== false) {
       if (shouldRender(root, 'tape', tapeSlice, force)) {
-        tapeList.innerHTML = V6OF.Panels.renderTape(state.trades, state.settings);
-        var tapeTable = tapeList.querySelector('.v6-tape-table');
-        if (tapeTable) {
-          tapeTable.style.fontSize = (settings.tapeFontSize || 10) + 'px';
-        }
+        // Incremental, virtualized update: keeps a stable shell and only
+        // rewrites the visible window of rows, preserving scroll position.
+        // A full-innerHTML rebuild thrashed the DOM and reset scroll at high
+        // trade rates (~1000 trades/min).
+        V6OF.Panels.renderTapeInto(tapeList, state.trades, state.settings);
       }
     }
     if (domList && V6OF.DomPanel && settings.showDOM !== false) {
@@ -679,9 +1072,11 @@
       // Wire drag-and-drop on the column headers
       if (V6OF.Panels.wireDomDragDrop) V6OF.Panels.wireDomDragDrop(root, V6OF.store);
     }
-    if (cvd && V6OF.Panels && V6OF.Panels.renderCvd && settings.showCVD !== false) {
+    if (cvd && V6OF.Panels && V6OF.Panels.renderCvdInto && settings.showCVD !== false) {
       if (shouldRender(root, 'cvd', cvdSlice, force)) {
-        cvd.innerHTML = V6OF.Panels.renderCvd(state);
+        // Incremental update: stable shell preserves the interval <select>;
+        // only badges and the delta histogram are patched.
+        V6OF.Panels.renderCvdInto(cvd, state);
       }
     }
     syncInputs(root, state);
@@ -762,65 +1157,47 @@
       } else if (action === 'timeframe') {
         var interval = btn.getAttribute('data-interval');
         if (interval && interval !== state.timeframe) {
-          // G1: all intervals are pre-loaded by the Go engine. Swap the chart to
-          // the cached candles for the chosen interval.
+          // G1: all intervals are pre-loaded by the Go engine. Reset every
+          // timeframe-dependent live surface before swapping the chart data.
           var cache = state._candlesByInterval || {};
-          var tfPatch = { timeframe: interval };
-          if (cache[interval] && cache[interval].length) {
-            tfPatch.chartCandles = cache[interval];
-          }
+          var intervalMs = timeframeToMs(interval) || 60000;
+          var deltaKey = String(intervalMs);
+          var tfPatch = {
+            timeframe: interval,
+            chartCandles: (cache[interval] && cache[interval].length) ? cache[interval] : [],
+            heatmapFrames: [],
+            heatmapFrameCount: 0,
+            lastHeatmapFrame: null,
+            lastHeatmapTs: 0,
+            footprintCandles: [],
+            footprintCandleCount: 0,
+            lastFootprintCandle: null,
+            lastFootprintTs: 0,
+            deltaBuckets: (state.deltaBucketsByInterval && state.deltaBucketsByInterval[deltaKey]) || [],
+            restTradesTs: 0,
+            restKlinesTs: 0,
+            depthHistory: []
+          };
           store.setState(tfPatch, 'timeframe-change');
           var meta = root.querySelector('[data-v6-interval]');
           if (meta) meta.textContent = interval;
-          // Clear stale live overlays so old footprint doesn't mix across TFs.
           if (V6OF.CvdBuckets) V6OF.CvdBuckets.reset();
+          if (V6OF.chart && V6OF.chart.resetOnDataChange) V6OF.chart.resetOnDataChange();
           // Fetch full depth via REST for deeper DOM ladder
           var source = state.dataSource || 'binance';
           var normSymbol = normalizeSymbol(state.symbol, source);
-          if (source === 'hyperliquid') {
-            fetchJson('/api/hyperliquid/orderbook?market=' + normSymbol)
-              .then(function(data) {
-                if (data.ok && data.bids && data.asks && V6OF.DomLadder) {
-                  var book = {
-                    bids: data.bids.map(function(b) { return { price: b.px, size: b.sz }; }),
-                    asks: data.asks.map(function(a) { return { price: a.px, size: a.sz }; }),
-                    bestBid: data.bids[0] ? data.bids[0].px : 0,
-                    bestAsk: data.asks[0] ? data.asks[0].px : 0,
-                    spread: data.asks[0] && data.bids[0] ? data.asks[0].px - data.bids[0].px : 0,
-                    mid: data.asks[0] && data.bids[0] ? (data.asks[0].px + data.bids[0].px) / 2 : 0
-                  };
-                  V6OF.DomLadder.feedOrderBook(book);
-                  console.log('[DOM] REST depth loaded: bids=' + data.bids.length + ' asks=' + data.asks.length);
-                }
-              })
-              .catch(function(e) { console.warn('[DOM] REST depth fetch failed', e); });
-          } else if (source === 'binance') {
-            fetchJson('/api/market/depth?symbol=' + normSymbol + '&limit=5000')
-              .then(function(data) {
-                if (data.bids && data.asks && V6OF.DomLadder) {
-                  var book = {
-                    bids: data.bids.map(function(b) { return { price: parseFloat(b[0]), size: parseFloat(b[1]) }; }),
-                    asks: data.asks.map(function(a) { return { price: parseFloat(a[0]), size: parseFloat(a[1]) }; })
-                  };
-                  if (book.bids.length) book.bestBid = book.bids[0].price;
-                  if (book.asks.length) book.bestAsk = book.asks[0].price;
-                  if (book.bestBid && book.bestAsk) {
-                    book.spread = book.bestAsk - book.bestBid;
-                    book.mid = (book.bestBid + book.bestAsk) / 2;
-                  }
-                  V6OF.DomLadder.feedOrderBook(book);
-                  console.log('[DOM] REST depth loaded (Binance): bids=' + data.bids.length + ' asks=' + data.asks.length);
-                }
-              })
-              .catch(function(e) { console.warn('[DOM] REST depth fetch failed', e); });
-          }
+          var depthUrl = source === 'hyperliquid'
+            ? '/api/hyperliquid/orderbook?market=' + normSymbol
+            : '/api/market/depth?symbol=' + normSymbol + '&limit=5000';
+          _cachedFetch(depthUrl, 5000, true).then(function (data) {
+            var book = applyRestOrderBook(store, data, source, 'rest-depth-timeframe');
+            if (book) console.log('[DOM] REST depth loaded (' + source + '): bids=' + book.bids.length + ' asks=' + book.asks.length);
+          }).catch(function(e) { console.warn('[DOM] REST depth fetch failed', e); });
           if (engineClient) {
             engineClient.clearFootprint();
             engineClient.clearTrades();
             engineClient.clearHeatmap();
           }
-          // Re-fit viewport to the new data range.
-          if (V6OF.chart && V6OF.chart.resetOnDataChange) V6OF.chart.resetOnDataChange();
         }
       } else if (action === 'source') {
         var source = btn.getAttribute('data-source');
@@ -845,30 +1222,17 @@
 
           // Cache current data before switching
           if (!V6OF._sourceCache) V6OF._sourceCache = {};
-          V6OF._sourceCache[oldSource] = {
-            trades: (state.trades || []).slice(),
-            orderBook: state.orderBook || null,
-            heatmapFrames: (state.heatmapFrames || []).slice(),
-            footprintCandles: (state.footprintCandles || []).slice(),
-            chartCandles: (state.chartCandles || []).slice(),
-            deltaBuckets: (state.deltaBuckets || []).slice(),
-            deltaBucketsByInterval: state.deltaBucketsByInterval || {},
-            latestDeltaByInterval: state.latestDeltaByInterval || {}
-          };
+          V6OF._sourceCache[oldSource] = sourceCachePayload(state);
 
-          // Restore cached data if available, else keep old data visible
+          // Restore cached data if available. Without cache, clear source-bound
+          // visuals so the old exchange is not shown as current data.
           var cached = V6OF._sourceCache[source];
           if (cached) {
-            store.setState({
-              trades: cached.trades,
-              orderBook: cached.orderBook,
-              heatmapFrames: cached.heatmapFrames,
-              footprintCandles: cached.footprintCandles,
-              chartCandles: cached.chartCandles,
-              deltaBuckets: cached.deltaBuckets,
-              deltaBucketsByInterval: cached.deltaBucketsByInterval,
-              latestDeltaByInterval: cached.latestDeltaByInterval
-            }, 'source-switch-restore');
+            store.setState(sourceCachePayload(cached), 'source-switch-restore');
+          } else {
+            store.setState(sourceWarmingPayload(source), 'source-switch-warming');
+            if (V6OF.CvdBuckets) V6OF.CvdBuckets.reset();
+            if (V6OF.chart && V6OF.chart.resetOnDataChange) V6OF.chart.resetOnDataChange();
           }
 
           // ── REST pre-fetch: depth + trades + klines in parallel ──
@@ -881,67 +1245,18 @@
             ? '/api/hyperliquid/orderbook?market=' + normSymbol
             : '/api/market/depth?symbol=' + normSymbol + '&limit=5000';
           _cachedFetch(depthUrl, 5000, true).then(function(data) {
-            if (V6OF.DomLadder) {
-              var book;
-              if (isHL && data.ok) {
-                book = {
-                  bids: (data.bids || []).map(function(b) { return { price: b.px, size: b.sz }; }),
-                  asks: (data.asks || []).map(function(a) { return { price: a.px, size: a.sz }; })
-                };
-              } else if (!isHL && data.bids) {
-                book = {
-                  bids: data.bids.map(function(b) { return { price: parseFloat(b[0]), size: parseFloat(b[1]) }; }),
-                  asks: data.asks.map(function(a) { return { price: parseFloat(a[0]), size: parseFloat(a[1]) }; })
-                };
-              }
-              if (book && book.bids.length && book.asks.length) {
-                book.bestBid = book.bids[0].price;
-                book.bestAsk = book.asks[0].price;
-                book.spread = book.bestAsk - book.bestBid;
-                book.mid = (book.bestBid + book.bestAsk) / 2;
-                V6OF.DomLadder.feedOrderBook(book);
-                store.setState(function (prev) {
-                  var patch = {
-                    orderBook: book,
-                    lastOrderBookTs: book.tsLocal,
-                    restDepthTs: book.tsLocal,
-                    restDepthCount: Math.min(book.bids ? book.bids.length : 0, book.asks ? book.asks.length : 0)
-                  };
-                  if (prev.transportStatus !== 'connected') {
-                    patch.dataFreshness = 'rest-fallback';
-                  }
-                  return patch;
-                }, 'rest-depth');
-                console.log('[DOM] REST depth: bids=' + book.bids.length + ' asks=' + book.asks.length);
-              }
-            }
+            var book = applyRestOrderBook(store, data, source, 'rest-depth');
+            if (book) console.log('[DOM] REST depth: bids=' + book.bids.length + ' asks=' + book.asks.length);
           }).catch(function(e) { console.warn('[DOM] REST depth failed', e); });
 
           // 2. Trades → fill the tape
+          var tradesPrefill = restTradePrefillLimit(state.settings);
           var tradesUrl = isHL
-            ? '/api/hyperliquid/trades?market=' + normSymbol
-            : '/api/market/aggtrades?symbol=' + normSymbol + '&limit=500';
+            ? '/api/hyperliquid/trades?market=' + normSymbol + '&limit=' + tradesPrefill
+            : '/api/market/aggtrades?symbol=' + normSymbol + '&limit=' + tradesPrefill;
           _cachedFetch(tradesUrl, 15000, true).then(function(data) {
-            var trades;
-            if (isHL && data.ok) {
-              trades = (data.trades || []).map(function(t) {
-                return { price: t.px, qty: t.sz, time: t.time, side: t.side, symbol: normSymbol, source: 'hyperliquid_rest' };
-              });
-            } else if (!isHL && Array.isArray(data)) {
-              trades = data.map(function(t) {
-                return { price: parseFloat(t.p), qty: parseFloat(t.q), time: t.T, side: t.m ? 'sell' : 'buy', symbol: normSymbol, source: 'binance_rest' };
-              });
-            }
-            if (trades && trades.length) {
-              store.setState(function (prev) {
-                var patch = { trades: trades.slice(-500) };
-                if (prev.transportStatus !== 'connected') {
-                  patch.dataFreshness = 'rest-fallback';
-                }
-                return patch;
-              }, 'rest-trades');
-              console.log('[TAPE] REST trades loaded: ' + trades.length);
-            }
+            var trades = applyRestTrades(store, data, source, normSymbol, 'rest-trades');
+            if (trades.length) console.log('[TAPE] REST trades loaded: ' + trades.length);
           }).catch(function(e) { console.warn('[TAPE] REST trades failed', e); });
 
           // 3. Klines → pre-fill the chart
@@ -949,38 +1264,8 @@
             ? '/api/hyperliquid/klines?market=' + normSymbol + '&interval=' + tf + '&limit=500'
             : '/api/market/klines?symbol=' + normSymbol + '&interval=' + tf + '&limit=500';
           _cachedFetch(klinesUrl, 60000, true).then(function(data) {
-            var candles;
-            if (isHL && data.ok) {
-              candles = (data.candles || []).filter(function(c) { return c && c.openTime; }).map(function(c) {
-                return { openTime: c.openTime, closeTime: c.closeTime, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume };
-              });
-            } else if (!isHL && Array.isArray(data.candles)) {
-              candles = data.candles.filter(function(c) { return c && (c.openTime || c.time); }).map(function(c) {
-                var t = Number(c.openTime || c.time);
-                if (t < 1000000000000) t *= 1000;
-                var intervalMs = timeframeToMs(tf) || 60000;
-                return {
-                  openTime: t,
-                  closeTime: c.closeTime ? (Number(c.closeTime) < 1000000000000 ? Number(c.closeTime) * 1000 : Number(c.closeTime)) : (t + intervalMs - 1),
-                  open: Number(c.open),
-                  high: Number(c.high),
-                  low: Number(c.low),
-                  close: Number(c.close),
-                  volume: Number(c.volume) || 0
-                };
-              });
-            }
-            if (candles && candles.length) {
-              store.setState(function (prev) {
-                var patch = { chartCandles: candles };
-                if (prev.transportStatus !== 'connected') {
-                  patch.dataFreshness = 'rest-fallback';
-                }
-                return patch;
-              }, 'rest-klines');
-              if (V6OF.chart && V6OF.chart.resetOnDataChange) V6OF.chart.resetOnDataChange();
-              console.log('[CHART] REST klines loaded: ' + candles.length);
-            }
+            var candles = applyRestCandles(store, data, source, tf, 'rest-klines');
+            if (candles.length) console.log('[CHART] REST klines loaded: ' + candles.length);
           }).catch(function(e) { console.warn('[CHART] REST klines failed', e); });
 
           // Send source switch to the Go engine
@@ -1047,89 +1332,28 @@
           var tf = state.timeframe || '1m';
           var source = state.dataSource || 'binance';
           var isHL = source === 'hyperliquid';
-          var baseAsset = symbol.replace('USDT', '');
+          var normSymbol = normalizeSymbol(symbol, source);
 
           var depthUrl = isHL
-            ? '/api/hyperliquid/orderbook?market=' + baseAsset
-            : '/api/market/depth?symbol=' + symbol + '&limit=5000';
+            ? '/api/hyperliquid/orderbook?market=' + normSymbol
+            : '/api/market/depth?symbol=' + normSymbol + '&limit=5000';
           _cachedFetch(depthUrl, 5000).then(function(data) {
-            var book = normalizeRestDepthBook(data, source);
-            if (book && V6OF.DomLadder) {
-              V6OF.DomLadder.feedOrderBook(book);
-              store.setState(function (prev) {
-                var patch = {
-                  orderBook: book,
-                  lastOrderBookTs: book.tsLocal,
-                  restDepthTs: book.tsLocal
-                };
-                if (prev.transportStatus !== 'connected') {
-                  patch.dataFreshness = 'rest-fallback';
-                }
-                return patch;
-              }, 'rest-depth');
-            }
+            applyRestOrderBook(store, data, source, 'rest-depth');
           }).catch(function(e) { console.warn('[DOM] REST depth failed', e); });
 
+          var tradesPrefill = restTradePrefillLimit(state.settings);
           var tradesUrl = isHL
-            ? '/api/hyperliquid/trades?market=' + baseAsset
-            : '/api/market/aggtrades?symbol=' + symbol + '&limit=500';
+            ? '/api/hyperliquid/trades?market=' + normSymbol + '&limit=' + tradesPrefill
+            : '/api/market/aggtrades?symbol=' + normSymbol + '&limit=' + tradesPrefill;
           _cachedFetch(tradesUrl, 15000).then(function(data) {
-            var trades;
-            if (isHL && data.ok) {
-              trades = (data.trades || []).map(function(t) {
-                return { price: t.px, qty: t.sz, time: t.time, side: t.side, symbol: baseAsset, source: 'hyperliquid_rest' };
-              });
-            } else if (!isHL && Array.isArray(data)) {
-              trades = data.map(function(t) {
-                return { price: parseFloat(t.p), qty: parseFloat(t.q), time: t.T, side: t.m ? 'sell' : 'buy', symbol: symbol, source: 'binance_rest' };
-              });
-            }
-            if (trades && trades.length) {
-              store.setState(function (prev) {
-                var patch = { trades: trades.slice(-500) };
-                if (prev.transportStatus !== 'connected') {
-                  patch.dataFreshness = 'rest-fallback';
-                }
-                return patch;
-              }, 'rest-trades');
-            }
+            applyRestTrades(store, data, source, normSymbol, 'rest-trades');
           }).catch(function(e) { console.warn('[TAPE] REST trades failed', e); });
 
           var klinesUrl = isHL
-            ? '/api/hyperliquid/klines?market=' + baseAsset + '&interval=' + tf + '&limit=500'
-            : '/api/market/klines?symbol=' + symbol + '&interval=' + tf + '&limit=500';
+            ? '/api/hyperliquid/klines?market=' + normSymbol + '&interval=' + tf + '&limit=500'
+            : '/api/market/klines?symbol=' + normSymbol + '&interval=' + tf + '&limit=500';
           _cachedFetch(klinesUrl, 60000).then(function(data) {
-            var candles;
-            if (isHL && data.ok) {
-              candles = (data.candles || []).filter(function(c) { return c && c.openTime; }).map(function(c) {
-                return { openTime: c.openTime, closeTime: c.closeTime, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume };
-              });
-            } else if (!isHL && Array.isArray(data.candles)) {
-              candles = data.candles.filter(function(c) { return c && (c.openTime || c.time); }).map(function(c) {
-                var t = Number(c.openTime || c.time);
-                if (t < 1000000000000) t *= 1000;
-                var intervalMs = timeframeToMs(tf) || 60000;
-                return {
-                  openTime: t,
-                  closeTime: c.closeTime ? (Number(c.closeTime) < 1000000000000 ? Number(c.closeTime) * 1000 : Number(c.closeTime)) : (t + intervalMs - 1),
-                  open: Number(c.open),
-                  high: Number(c.high),
-                  low: Number(c.low),
-                  close: Number(c.close),
-                  volume: Number(c.volume) || 0
-                };
-              });
-            }
-            if (candles && candles.length) {
-              store.setState(function (prev) {
-                var patch = { chartCandles: candles };
-                if (prev.transportStatus !== 'connected') {
-                  patch.dataFreshness = 'rest-fallback';
-                }
-                return patch;
-              }, 'rest-klines');
-              if (V6OF.chart && V6OF.chart.resetOnDataChange) V6OF.chart.resetOnDataChange();
-            }
+            applyRestCandles(store, data, source, tf, 'rest-klines');
           }).catch(function(e) { console.warn('[CHART] REST klines failed', e); });
         }
         return;
@@ -1153,7 +1377,9 @@
       } else if (key === 'domGroup') {
         store.updateSettings({ domGroup: Math.max(1, Math.min(100, Number(input.value) || 1)) });
       } else if (key === 'showTape' || key === 'showDOM' || key === 'showCVD' ||
-                 key === 'showHeatmap' || key === 'showFootprint' || key === 'showLastPrice' || key === 'showGrid') {
+                 key === 'showVwap' || key === 'showHeatmap' || key === 'showFootprint' ||
+                 key === 'showLastPrice' || key === 'showGrid' || key === 'showVwapBands' ||
+                 key === 'alertsEnabled' || key === 'showFootprintVA') {
         var patch = {};
         patch[key] = !!input.checked;
         store.updateSettings(patch);
@@ -1180,6 +1406,8 @@
         store.updateSettings({ tapeFontSize: Math.max(8, Math.min(20, Number(input.value) || 10)) });
       } else if (key === 'maxRows') {
         store.updateSettings({ maxRows: Math.max(8, Math.min(500, Number(input.value) || 42)) });
+      } else if (key === 'restTradePrefillLimit') {
+        store.updateSettings({ restTradePrefillLimit: Math.max(50, Math.min(5000, Math.round(Number(input.value) || 500))) });
       } else if (key === 'maxTrades') {
         store.updateSettings({ maxTrades: Math.max(50, Math.min(5000, Number(input.value) || 500)) });
       } else if (key === 'maxHeatmapFrames') {
@@ -1190,6 +1418,20 @@
         store.updateSettings({ domDepth: Math.max(5, Math.min(50, Number(input.value) || 20)) });
       } else if (key === 'domGroup') {
         store.updateSettings({ domGroup: Math.max(1, Math.min(100, Math.round(Number(input.value) || 1))) });
+      } else if (key === 'vwapBand1') {
+        store.updateSettings({ vwapBand1: Math.max(0.1, Math.min(5, Number(input.value) || 1)) });
+      } else if (key === 'vwapBand2') {
+        store.updateSettings({ vwapBand2: Math.max(0.1, Math.min(8, Number(input.value) || 2)) });
+      } else if (key === 'largeTradeAlertQty') {
+        store.updateSettings({ largeTradeAlertQty: Math.max(0, Number(input.value) || 0) });
+      } else if (key === 'deltaAlertThreshold') {
+        store.updateSettings({ deltaAlertThreshold: Math.max(0, Number(input.value) || 0) });
+      } else if (key === 'imbalanceRatio') {
+        store.updateSettings({ imbalanceRatio: Math.max(1.5, Math.min(8, Number(input.value) || 3)) });
+      } else if (key === 'imbalanceStack') {
+        store.updateSettings({ imbalanceStack: Math.max(2, Math.min(6, Math.round(Number(input.value) || 3))) });
+      } else if (key === 'minWickTicks') {
+        store.updateSettings({ minWickTicks: Math.max(0, Math.min(10, Math.round(Number(input.value) || 0))) });
       }
     });
 
@@ -1210,11 +1452,13 @@
     init: function (root) {
       if (!root || root.dataset.v6Mounted === '1') return;
       root.dataset.v6Mounted = '1';
+      var savedSettings = (V6OF.Settings && V6OF.Settings.load) ? V6OF.Settings.load() : {};
+      hydrateThemeVars(root, savedSettings);
       root.innerHTML = shellHtml();
+      root.setAttribute('aria-busy', 'false');
 
       // Load settings from localStorage. Start from an EMPTY live state — no
       // mock/fake data is ever generated unless data-v6-mode="mock" is set.
-      var savedSettings = (V6OF.Settings && V6OF.Settings.load) ? V6OF.Settings.load() : {};
       var initial;
       var isMockMode = root.getAttribute('data-v6-mode') === 'mock';
       if (isMockMode && V6OF.Mock && typeof V6OF.Mock.createState === 'function') {

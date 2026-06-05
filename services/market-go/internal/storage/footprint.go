@@ -206,11 +206,12 @@ func scanFootprints(rows *sql.Rows) ([]FootprintRecord, error) {
 		var fp FootprintRecord
 		var profileJSON string
 		var buyAbs, sellAbs, exH, exL, unfH, unfL int
+		var absBuy, absSell sql.NullFloat64
 		if err := rows.Scan(&fp.Symbol, &fp.MinuteTs, &fp.Open, &fp.High, &fp.Low, &fp.Close,
 			&fp.Volume, &fp.BuyVolume, &fp.SellVolume, &fp.Delta, &fp.CVD,
 			&fp.MaxImbalanceRatio, &fp.BuyImbalanceCount, &fp.SellImbalanceCount,
 			&fp.StackedBuyImbalanceCount, &fp.StackedSellImbalanceCount,
-			&buyAbs, &sellAbs, &fp.AbsorptionPriceBuy, &fp.AbsorptionPriceSell,
+			&buyAbs, &sellAbs, &absBuy, &absSell,
 			&exH, &exL, &unfH, &unfL, &profileJSON); err != nil {
 			return nil, err
 		}
@@ -219,6 +220,8 @@ func scanFootprints(rows *sql.Rows) ([]FootprintRecord, error) {
 			return nil, err
 		}
 		fp.Profile = profile
+		fp.AbsorptionPriceBuy = absBuy.Float64
+		fp.AbsorptionPriceSell = absSell.Float64
 		fp.HasBuyAbsorption = buyAbs != 0
 		fp.HasSellAbsorption = sellAbs != 0
 		fp.IsExhaustionHigh = exH != 0

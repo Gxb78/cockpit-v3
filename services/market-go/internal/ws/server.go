@@ -147,7 +147,18 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/footprint/stats", s.handleGetFootprintStats)
 	// Archive rotation
 	mux.HandleFunc("/api/v1/archive/rotate", s.handleArchiveRotate)
-	return mux
+
+	// Wrap in global CORS middleware
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) Run(ctx context.Context) error {
@@ -882,10 +893,11 @@ func (s *Server) throttledBookHandler(ctx context.Context, symbol string) func(m
 }
 
 type replayCommand struct {
-	Action string  `json:"action"` // start | pause | resume | speed | stop | status
+	Action string  `json:"action"` // start | pause | resume | step | speed | stop | status
 	Symbol string  `json:"symbol"`
 	Date   string  `json:"date"`
 	Speed  float64 `json:"speed"`
+	Count  int     `json:"count"`
 }
 
 // handleReplay controls the backtest player. The browser POSTs JSON commands;
@@ -923,6 +935,8 @@ func (s *Server) handleReplay(w http.ResponseWriter, r *http.Request) {
 		s.player.Pause()
 	case "resume":
 		s.player.Resume()
+	case "step":
+		s.player.Step(cmd.Count)
 	case "speed":
 		s.player.SetSpeed(cmd.Speed)
 	case "stop":

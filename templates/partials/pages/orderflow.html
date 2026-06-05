@@ -1,4 +1,79 @@
 <!-- ============ ORDERFLOW PAGE — V6 only ============ -->
-<section class="page" data-page="orderflow">
-  <div id="v6-orderflow-root" class="v6-orderflow-root"></div>
+<section class="page" data-page="orderflow" aria-label="Orderflow terminal">
+  <noscript>
+    <div class="v6-mount-error-region v6-noscript-fallback" role="status" data-testid="orderflow-noscript-fallback">
+      <strong>JavaScript requis</strong>
+      <span>Le terminal orderflow nécessite JavaScript pour charger les flux de marché.</span>
+    </div>
+  </noscript>
+  <div id="v6-orderflow-root" class="v6-orderflow-root" role="region" aria-label="Orderflow terminal" aria-busy="true" data-testid="orderflow-root">
+    <script>
+      (function () {
+        try {
+          var root = document.getElementById('v6-orderflow-root');
+          var raw = JSON.parse(localStorage.getItem('cockpitV6.orderflow.settings') || '{}');
+          var theme = raw && raw.theme === 'dark-tv' ? 'dark-tv' : 'light-tv';
+          var vars = theme === 'dark-tv'
+            ? {
+                '--v6-bg': '#131722', '--v6-bg-2': '#171b22', '--v6-surface': '#1e222d',
+                '--v6-surface-2': '#222733', '--v6-surface-3': '#2a2e39',
+                '--v6-text': '#d1d4dc', '--v6-text-dim': '#b2b5be', '--v6-text-mute': '#868993',
+                '--v6-text-faint': '#5f636e', '--v6-hairline': 'rgba(120, 130, 150, 0.20)',
+                '--v6-hairline-strong': 'rgba(120, 130, 150, 0.32)'
+              }
+            : {
+                '--v6-bg': '#f8f9fa', '--v6-bg-2': '#f0f3fa', '--v6-surface': '#ffffff',
+                '--v6-surface-2': '#f5f7fb', '--v6-surface-3': '#e6e9ef',
+                '--v6-text': '#131722', '--v6-text-dim': '#434651', '--v6-text-mute': '#6b7280',
+                '--v6-text-faint': '#9aa0aa', '--v6-hairline': 'rgba(19, 23, 34, 0.14)',
+                '--v6-hairline-strong': 'rgba(19, 23, 34, 0.24)'
+              };
+          if (root) {
+            root.dataset.v6Theme = theme;
+            Object.keys(vars).forEach(function (key) { root.style.setProperty(key, vars[key]); });
+          }
+        } catch (_) {}
+      })();
+    </script>
+    <div class="v6-initial-skeleton" data-orderflow-slot="boot" role="region" aria-label="Chargement du terminal orderflow" aria-busy="true" data-testid="orderflow-loading-skeleton">
+      <div class="v6-skel-header">
+        <div class="v6-skel-brand"></div>
+        <div class="v6-skel-pill v6-skel-pill-lg"></div>
+        <div class="v6-skel-tabs">
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <div class="v6-build-meta" data-testid="orderflow-build-meta">UI {{ ASSET_VERSION[:12] }}</div>
+        <div class="sr-only" role="status" aria-live="polite" aria-atomic="true" data-testid="orderflow-live-status">Orderflow loading.</div>
+        <div class="v6-skel-live"></div>
+      </div>
+      <div class="v6-skel-main">
+        <div class="v6-skel-tools">
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <div class="v6-skel-panels" data-testid="orderflow-panel-placeholder">
+          <div class="v6-skel-panel v6-skel-panel-tape"></div>
+          <div class="v6-skel-panel v6-skel-panel-chart">
+            <div class="v6-skel-gridlines"></div>
+            <div class="v6-skel-candles">
+              <span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+          </div>
+          <div class="v6-skel-panel v6-skel-panel-dom"></div>
+          <div class="v6-skel-panel v6-skel-panel-settings"></div>
+          <div class="v6-skel-panel v6-skel-panel-cvd"></div>
+          <div class="v6-skel-panel v6-skel-panel-vwap"></div>
+          <div class="v6-skel-side" aria-hidden="true">
+            <div class="v6-skel-panel"></div>
+            <div class="v6-skel-panel"></div>
+          </div>
+        </div>
+      </div>
+      <div class="v6-mount-error-region" role="status" aria-live="polite" data-testid="orderflow-mount-error" hidden>
+        <strong>Engine indisponible</strong>
+        <span data-v6-mount-error-text>Connexion au moteur orderflow impossible.</span>
+      </div>
+      <div class="v6-skel-status"></div>
+    </div>
+  </div>
 </section>

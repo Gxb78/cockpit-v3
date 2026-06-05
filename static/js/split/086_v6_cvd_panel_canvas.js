@@ -8,23 +8,41 @@
 
   var V6OF = window.V6OF = window.V6OF || {};
   var LABEL_W = 10;
-  var VAL_W = 66;
+  var VAL_W = 74;
   var GAP = 5;
 
+  // ── CVD Viewport (stable Y-axis + interactive X/Y zoom/pan) ──
+  var _cvp = {
+    timeStart: 0,
+    timeEnd: 0,
+    cvdMin: Infinity,
+    cvdMax: -Infinity,
+    autoFit: true,     // auto-scale Y to visible data (relaxes when user zooms)
+    followLive: true,  // track the right edge on X
+    initialized: false,
+    dragStartX: 0,
+    dragStartY: 0,
+    dragStartTime: 0,
+    dragStartCvdMin: 0,
+    dragStartCvdMax: 0,
+    wasDragging: false
+  };
+
   var C = {
-    bg:       '#f8f9fa',
-    scaleBg:  'rgba(248, 249, 250, 0.9)',
-    grid:     'rgba(0,0,0,0.04)',
-    gridStrong: 'rgba(0,0,0,0.12)',
-    sep:      'rgba(0,0,0,0.08)',
+    bg:       '#f4f6f8',
+    scaleBg:  'rgba(244,246,248,0.96)',
+    grid:     'rgba(0,0,0,0.07)',
+    gridStrong: 'rgba(0,0,0,0.22)',
+    sep:      'rgba(0,0,0,0.10)',
     estLine:  'rgba(150,160,180,0.6)',
     estBadge: 'rgba(0,0,0,0.35)',
     mixedBadge: 'rgba(0,0,0,0.25)',
-    label:    'rgba(0,0,0,0.5)',
-    timeLabel: 'rgba(0,0,0,0.3)',
-    crosshair: 'rgba(0,0,0,0.15)',
-    dotFill:  '#1a1d23',
-    verSep:   'rgba(0,0,0,0.08)',
+    label:    '#111827',
+    timeLabel: 'rgba(0,0,0,0.48)',
+    crosshair: 'rgba(0,0,0,0.28)',
+    dotFill:  '#050505',
+    verSep:   'rgba(0,0,0,0.14)',
+    line:      '#050505',
     buy:      '#059669',
     sell:     '#dc2626',
     buyGrad0: 'rgba(5,150,105,0.35)',
@@ -32,6 +50,65 @@
     sellGrad0: 'rgba(220,38,38,0.35)',
     sellGrad1: 'rgba(220,38,38,0.08)',
   };
+
+  function updateThemeColors(bgColor) {
+    var isLight = true;
+    if (bgColor) {
+      var hex = String(bgColor).replace('#', '');
+      if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+      if (hex.length === 6) {
+        var r = parseInt(hex.substring(0, 2), 16);
+        var g = parseInt(hex.substring(2, 4), 16);
+        var b = parseInt(hex.substring(4, 6), 16);
+        var brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        if (brightness < 128) isLight = false;
+      }
+    }
+
+    if (isLight) {
+      C.bg =       '#ffffff';
+      C.scaleBg =  'rgba(255,255,255,0.96)';
+      C.grid =     'rgba(0,0,0,0.06)';
+      C.gridStrong = 'rgba(0,0,0,0.12)';
+      C.sep =      'rgba(0,0,0,0.08)';
+      C.estLine =  'rgba(120,130,150,0.6)';
+      C.estBadge = 'rgba(0,0,0,0.25)';
+      C.mixedBadge = 'rgba(0,0,0,0.20)';
+      C.label =    '#131722';
+      C.timeLabel = 'rgba(0,0,0,0.48)';
+      C.crosshair = 'rgba(0,0,0,0.24)';
+      C.dotFill =  '#131722';
+      C.verSep =   'rgba(0,0,0,0.08)';
+      C.line =      '#131722';
+      C.buy =      '#089981';
+      C.sell =     '#f23645';
+      C.buyGrad0 = 'rgba(8,153,129,0.30)';
+      C.buyGrad1 = 'rgba(8,153,129,0.05)';
+      C.sellGrad0 = 'rgba(242,54,69,0.30)';
+      C.sellGrad1 = 'rgba(242,54,69,0.05)';
+    } else {
+      C.bg =       bgColor || '#131722';
+      C.scaleBg =  'rgba(19,23,34,0.96)';
+      C.grid =     'rgba(255,255,255,0.06)';
+      C.gridStrong = 'rgba(255,255,255,0.12)';
+      C.sep =      'rgba(255,255,255,0.08)';
+      C.estLine =  'rgba(180,190,210,0.6)';
+      C.estBadge = 'rgba(255,255,255,0.25)';
+      C.mixedBadge = 'rgba(255,255,255,0.20)';
+      C.label =    '#d1d4dc';
+      C.timeLabel = 'rgba(255,255,255,0.48)';
+      C.crosshair = 'rgba(255,255,255,0.24)';
+      C.dotFill =  '#d1d4dc';
+      C.verSep =   'rgba(255,255,255,0.08)';
+      C.line =      '#d1d4dc';
+      C.buy =      '#089981';
+      C.sell =     '#f23645';
+      C.buyGrad0 = 'rgba(8,153,129,0.30)';
+      C.buyGrad1 = 'rgba(8,153,129,0.05)';
+      C.sellGrad0 = 'rgba(242,54,69,0.30)';
+      C.sellGrad1 = 'rgba(242,54,69,0.05)';
+    }
+  }
 
   function recordPerf(name, startedAt) {
     if (!window.performance || !startedAt) return;
@@ -61,11 +138,15 @@
   }
 
   function timeWindow(snap) {
+    // Sync with chart viewport if available (this is the single source of truth for X axis!)
     var vp = V6OF.chart;
     if (vp && vp.timeStart && vp.timeEnd && vp.timeEnd > vp.timeStart) {
-      var span = vp.timeEnd - vp.timeStart;
-      return { start: vp.timeStart - span * 0.02, end: vp.timeEnd + span * 0.02 };
+      _cvp.timeStart = vp.timeStart;
+      _cvp.timeEnd = vp.timeEnd;
+      if (!_cvp.initialized) _cvp.initialized = true;
+      return { start: vp.timeStart, end: vp.timeEnd };
     }
+    // Fallback: compute from data (when no chart viewport)
     var minT = Infinity, maxT = -Infinity;
     snap.buckets.forEach(function (b) {
       var s = snap.series[b.key];
@@ -75,6 +156,13 @@
       var now = Date.now();
       return { start: now - 3600000, end: now };
     }
+    // Follow-live: pan to keep the right edge at the latest data point
+    if (_cvp.followLive) {
+      maxT += Math.max((maxT - minT) * 0.03, 60000);
+    }
+    _cvp.timeStart = minT;
+    _cvp.timeEnd = maxT;
+    if (!_cvp.initialized) _cvp.initialized = true;
     return { start: minT, end: maxT };
   }
 
@@ -90,8 +178,8 @@
 
   function fmtTime(ts) {
     var d = new Date(ts);
-    return d.getHours().toString().padStart(2, '0') + ':' +
-           d.getMinutes().toString().padStart(2, '0');
+    return d.getUTCHours().toString().padStart(2, '0') + ':' +
+           d.getUTCMinutes().toString().padStart(2, '0');
   }
 
   function drawPaneBg(ctx, pane) {
@@ -291,8 +379,316 @@
     return minDiff <= 300000 ? nearest : null;
   }
 
-  function draw(canvas, state) {
+  function sortedFinitePoints(points) {
+    return (Array.isArray(points) ? points : []).map(function (p) {
+      return { t: Number(p.t), v: Number(p.v) };
+    }).filter(function (p) {
+      return Number.isFinite(p.t) && Number.isFinite(p.v);
+    }).sort(function (a, b) {
+      return a.t - b.t;
+    });
+  }
+
+  function cvdSeriesFromSnapshot(snap) {
+    var buckets = snap && Array.isArray(snap.buckets) ? snap.buckets : [];
+    var bucket = buckets[0] || { key: 'total', label: 'CVD', color: C.line };
+    var raw = snap && snap.series && Array.isArray(snap.series[bucket.key]) ? snap.series[bucket.key].slice() : [];
+    var tip = snap && snap.tip ? Number(snap.tip[bucket.key]) : NaN;
+    var tipT = snap && Number.isFinite(Number(snap.lastTs)) && Number(snap.lastTs) > 0 ? Number(snap.lastTs) : Date.now();
+
+    if (Number.isFinite(tip)) {
+      if (raw.length) {
+        var last = raw[raw.length - 1];
+        var lastT = Number(last && last.t);
+        if (Number.isFinite(lastT) && tipT <= lastT) {
+          raw[raw.length - 1] = { t: lastT, v: tip };
+        } else {
+          raw.push({ t: tipT, v: tip });
+        }
+      } else {
+        raw.push({ t: tipT, v: tip });
+      }
+    }
+
+    return {
+      bucket: bucket,
+      points: sortedFinitePoints(raw),
+      tip: tip
+    };
+  }
+
+  function splitPointSegments(points, maxGapMs) {
+    var segments = [];
+    var current = [];
+    maxGapMs = Math.max(1, Number(maxGapMs) || 180000);
+    for (var i = 0; i < points.length; i++) {
+      var p = points[i];
+      if (current.length) {
+        var prev = current[current.length - 1];
+        if (p.t - prev.t > maxGapMs) {
+          segments.push(current);
+          current = [];
+        }
+      }
+      current.push(p);
+    }
+    if (current.length) segments.push(current);
+    return segments;
+  }
+
+  function drawCvdCandles(ctx, points, intervalMs, tx, ty, plot) {
+    if (!Array.isArray(points) || !points.length) return null;
+    intervalMs = Math.max(1000, Number(intervalMs) || 60000);
+    var spanPx = Math.abs(tx(intervalMs) - tx(0));
+    var bodyW = Math.max(2, Math.min(9, spanPx * 0.72));
+    var last = null;
+    for (var i = 0; i < points.length; i++) {
+      var p = points[i];
+      var prev = i > 0 ? points[i - 1] : p;
+      var open = Number(prev.v);
+      var close = Number(p.v);
+      if (!Number.isFinite(open) || !Number.isFinite(close)) continue;
+      var x = tx(p.t);
+      if (x < plot.left - bodyW || x > plot.left + plot.width + bodyW) continue;
+      var yOpen = ty(open);
+      var yClose = ty(close);
+      var yHigh = Math.min(yOpen, yClose);
+      var yLow = Math.max(yOpen, yClose);
+      var up = close >= open;
+      var color = up ? C.buy : C.sell;
+      var bodyTop = Math.min(yOpen, yClose);
+      var bodyH = Math.max(1, Math.abs(yClose - yOpen));
+
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x + 0.5, yHigh);
+      ctx.lineTo(x + 0.5, yLow);
+      ctx.stroke();
+      ctx.fillRect(Math.round(x - bodyW / 2) + 0.5, Math.round(bodyTop) + 0.5, bodyW, bodyH);
+      last = p;
+    }
+    return last;
+  }
+
+  function drawNoData(ctx, plot, gx, H, label, value) {
+    var y = plot.top + Math.round(plot.height / 2) + 0.5;
+    ctx.strokeStyle = C.gridStrong;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(plot.left, y);
+    ctx.lineTo(plot.left + plot.width, y);
+    ctx.stroke();
+
+    ctx.fillStyle = C.label;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.font = '800 10px "JetBrains Mono", Consolas, monospace';
+    ctx.font = '700 10px "JetBrains Mono", Consolas, monospace';
+    ctx.fillText(Number.isFinite(value) ? fmt(value) : 'waiting', gx + 6, H / 2);
+  }
+
+  function drawSimple(canvas, state) {
     var perfStart = window.performance ? performance.now() : 0;
+    updateThemeColors(state && state.settings && state.settings.bgColor);
+    var s = setup(canvas);
+    if (!s) return;
+    var ctx = s.ctx, W = s.width, H = s.height;
+
+    ctx.fillStyle = C.bg;
+    ctx.fillRect(0, 0, W, H);
+
+    var gx = Math.max(LABEL_W + 40, W - VAL_W);
+    var plot = {
+      left: LABEL_W,
+      top: 8,
+      width: Math.max(1, gx - LABEL_W - 1),
+      height: Math.max(24, H - 30)
+    };
+
+    ctx.fillStyle = C.scaleBg;
+    ctx.fillRect(gx, 0, Math.max(0, W - gx), H);
+    ctx.strokeStyle = C.verSep;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(gx + 0.5, 0);
+    ctx.lineTo(gx + 0.5, H);
+    ctx.stroke();
+
+    var snap = V6OF.CvdBuckets && V6OF.CvdBuckets.snapshot ? V6OF.CvdBuckets.snapshot() : null;
+    if (!snap) {
+      drawNoData(ctx, plot, gx, H, 'CVD', NaN);
+      recordPerf('cvd', perfStart);
+      return;
+    }
+
+    var data = cvdSeriesFromSnapshot(snap);
+    var win = timeWindow(snap);
+    if (!win || !Number.isFinite(win.start) || !Number.isFinite(win.end) || win.end <= win.start) {
+      var now = Date.now();
+      win = { start: now - 3600000, end: now };
+    }
+
+    var points = data.points;
+    var visible = [];
+    var startIndex = -1;
+    for (var idx = 0; idx < points.length; idx++) {
+      if (points[idx].t >= win.start) {
+        startIndex = idx;
+        break;
+      }
+    }
+    if (startIndex !== -1) {
+      var startFrom = Math.max(0, startIndex - 1);
+      for (var idx = startFrom; idx < points.length; idx++) {
+        if (points[idx].t <= win.end) {
+          visible.push(points[idx]);
+        } else {
+          visible.push(points[idx]); // include one point after the window
+          break;
+        }
+      }
+    } else if (points.length) {
+      visible.push(points[points.length - 1]);
+    }
+
+    if (visible.length < 2 && points.length >= 2) {
+      visible = points.slice(Math.max(0, points.length - 900));
+      win = { start: visible[0].t, end: visible[visible.length - 1].t };
+      if (win.end <= win.start) win.end = win.start + (snap.interval || 60000);
+    }
+    if (visible.length === 1) {
+      var only = visible[0];
+      var spanFallback = Math.max(snap.interval || 60000, win.end - win.start || 60000);
+      visible = [
+        { t: Math.max(win.start, only.t - spanFallback), v: only.v },
+        only
+      ];
+      if (visible[0].t >= visible[1].t) visible[0].t = visible[1].t - spanFallback;
+      win.start = Math.min(win.start, visible[0].t);
+      win.end = Math.max(win.end, visible[1].t);
+    }
+
+    if (!visible.length) {
+      drawNoData(ctx, plot, gx, H, data.bucket.label || 'CVD', data.tip);
+      recordPerf('cvd', perfStart);
+      return;
+    }
+
+    // ── Stable Y-axis range (expansion-only, never shrink) ──
+    var rawMin = Infinity;
+    var rawMax = -Infinity;
+    visible.forEach(function (p) {
+      if (p.v < rawMin) rawMin = p.v;
+      if (p.v > rawMax) rawMax = p.v;
+    });
+    if (Number.isFinite(data.tip)) {
+      if (data.tip < rawMin) rawMin = data.tip;
+      if (data.tip > rawMax) rawMax = data.tip;
+    }
+    if (!Number.isFinite(rawMin) || !Number.isFinite(rawMax)) {
+      rawMin = -1;
+      rawMax = 1;
+    }
+    if (rawMin === rawMax) {
+      var centeredPad = Math.max(1, Math.abs(rawMin) * 0.12);
+      rawMin -= centeredPad;
+      rawMax += centeredPad;
+    } else {
+      var pad = (rawMax - rawMin) * 0.12;
+      rawMin -= pad;
+      rawMax += pad;
+    }
+    // Expansion-only: only grow the range, never shrink (unless autoFit && not zoomed)
+    var min, max;
+    if (_cvp.autoFit || !_cvp.initialized) {
+      min = rawMin;
+      max = rawMax;
+    } else {
+      min = Math.min(_cvp.cvdMin, rawMin);
+      max = Math.max(_cvp.cvdMax, rawMax);
+    }
+    // Clamp to prevent insane ranges
+    if (max - min > 1e12) { min = rawMin; max = rawMax; }
+    _cvp.cvdMin = min;
+    _cvp.cvdMax = max;
+
+    var span = Math.max(1, win.end - win.start);
+    function tx(ts) { return plot.left + (ts - win.start) / span * plot.width; }
+    function ty(v) { return plot.top + (max - v) / (max - min) * plot.height; }
+
+    ctx.strokeStyle = C.grid;
+    ctx.lineWidth = 1;
+    for (var g = 1; g <= 3; g++) {
+      var gy = plot.top + plot.height * g / 4;
+      ctx.beginPath();
+      ctx.moveTo(plot.left, gy);
+      ctx.lineTo(plot.left + plot.width, gy);
+      ctx.stroke();
+    }
+    if (min < 0 && max > 0) {
+      ctx.strokeStyle = C.gridStrong;
+      ctx.beginPath();
+      ctx.moveTo(plot.left, ty(0));
+      ctx.lineTo(plot.left + plot.width, ty(0));
+      ctx.stroke();
+    }
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(plot.left, plot.top, plot.width, plot.height);
+    ctx.clip();
+    ctx.strokeStyle = C.line;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    var lastPoint = drawCvdCandles(ctx, visible, snap.interval || 60000, tx, ty, plot) || visible[visible.length - 1];
+    ctx.restore();
+
+    var cross = V6OF.chartCrosshair;
+    var value = Number.isFinite(data.tip) ? data.tip : visible[visible.length - 1].v;
+    if (cross && cross.visible && Number.isFinite(cross.time)) {
+      var hval = findNearestValue(points, cross.time);
+      if (hval != null) value = hval;
+    }
+
+    ctx.fillStyle = C.line;
+    ctx.textAlign = 'left';
+    ctx.font = '800 10px "JetBrains Mono", Consolas, monospace';
+    ctx.fillText(fmt(value), gx + 6, H / 2);
+
+    ctx.fillStyle = C.timeLabel;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.font = '9px "JetBrains Mono", Consolas, monospace';
+    var labelCount = Math.min(5, Math.max(2, Math.floor(plot.width / 110)));
+    for (var li = 0; li <= labelCount; li++) {
+      var t = win.start + span * li / labelCount;
+      ctx.fillText(fmtTime(t), plot.left + plot.width * li / labelCount, H - 4);
+    }
+
+    if (cross && cross.visible && cross.enabled) {
+      var crossX = Number.isFinite(cross.x) ? cross.x : (Number.isFinite(cross.time) ? tx(cross.time) : NaN);
+      if (Number.isFinite(crossX) && crossX >= plot.left && crossX <= plot.left + plot.width) {
+        ctx.save();
+        ctx.strokeStyle = C.crosshair;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(crossX, 0);
+        ctx.lineTo(crossX, H);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    recordPerf('cvd', perfStart);
+  }
+
+  function drawLegacy(canvas, state) {
+    var perfStart = window.performance ? performance.now() : 0;
+    updateThemeColors(state && state.settings && state.settings.bgColor);
     var s = setup(canvas);
     if (!s || !V6OF.CvdBuckets) return;
     var ctx = s.ctx, W = s.width, H = s.height;
@@ -334,24 +730,6 @@
       drawPaneBg(ctx, pane);
       drawSeries(ctx, pane, win, snap.series[b.key], snap.tip[b.key], b.color, hoveredTime, snap.estimatedUntil);
 
-      // Label
-      ctx.fillStyle = b.color;
-      ctx.textAlign = 'left';
-      ctx.globalAlpha = 0.7;
-      ctx.fillText(b.label, plotLeft + 8, y + 10);
-      if (snap.cvdSource === 'ohlcv_estimate') {
-        ctx.fillStyle = C.estBadge;
-        ctx.font = '7px "JetBrains Mono", monospace';
-        ctx.fillText('EST', plotLeft + 8 + ctx.measureText(b.label).width + 8, y + 10);
-        ctx.font = '9px "JetBrains Mono", monospace';
-      } else if (snap.cvdSource === 'mixed') {
-        ctx.fillStyle = C.mixedBadge;
-        ctx.font = '7px "JetBrains Mono", monospace';
-        ctx.fillText('EST\u2192REAL', plotLeft + 8 + ctx.measureText(b.label).width + 8, y + 10);
-        ctx.font = '9px "JetBrains Mono", monospace';
-      }
-      ctx.globalAlpha = 1;
-
       var currentVal = snap.tip[b.key] || 0;
       if (hoveredTime != null) {
         var hval = findNearestValue(snap.series[b.key], hoveredTime);
@@ -369,10 +747,6 @@
     var hpane = { left: plotLeft, top: y, width: plotW, height: paneH };
     drawPaneBg(ctx, hpane);
     drawHistogram(ctx, hpane, win, snap.deltaVol, snap.interval);
-
-    ctx.fillStyle = C.label;
-    ctx.textAlign = 'left';
-    ctx.fillText('Delta Vol', plotLeft + 8, y + 10);
 
     var lastDelta = snap.deltaVol.length ? snap.deltaVol[snap.deltaVol.length - 1].delta : 0;
     if (hoveredTime != null) {
@@ -419,9 +793,145 @@
       canvas._cvdState = state;
       if (canvas._cvdQueued) return;
       canvas._cvdQueued = true;
+
+      // Bind interactive controls once
+      if (!canvas._cvdInteractBound) {
+        canvas._cvdInteractBound = true;
+
+        // Wheel zoom: plain wheel = zoom X of main chart, Ctrl+wheel = zoom Y of CVD
+        canvas.addEventListener('wheel', function (e) {
+          e.preventDefault();
+          var rect = canvas.getBoundingClientRect();
+          var mx = e.clientX - rect.left;
+          var my = e.clientY - rect.top;
+          var zoomFactor = e.deltaY > 0 ? 1.12 : 1 / 1.12;
+          var vp = V6OF.chart;
+
+          if (e.ctrlKey || e.metaKey) {
+            // Zoom Y of CVD
+            var span = _cvp.cvdMax - _cvp.cvdMin;
+            if (span < 1) span = 1;
+            var ratio = my / rect.height;
+            var cvdAtCursor = _cvp.cvdMin + (1 - ratio) * span;
+            var newSpan = Math.max(0.1, span * zoomFactor);
+            _cvp.cvdMin = cvdAtCursor - (1 - ratio) * newSpan;
+            _cvp.cvdMax = _cvp.cvdMin + newSpan;
+            _cvp.autoFit = false;
+          } else if (e.shiftKey) {
+            // Shift+wheel = pan X on main chart
+            if (vp) {
+              var tSpan = vp.timeEnd - vp.timeStart;
+              var pan = tSpan * (e.deltaY > 0 ? 0.08 : -0.08);
+              vp.setTimeRange(vp.timeStart + pan, vp.timeEnd + pan);
+            }
+          } else {
+            // Plain wheel = zoom X on main chart
+            if (vp) {
+              vp.zoomTime(zoomFactor, mx);
+            }
+          }
+          // Force re-draw
+          if (V6OF.ChartInteractions && V6OF.ChartInteractions.redraw) {
+            V6OF.ChartInteractions.redraw();
+          } else {
+            canvas._cvdQueued = false;
+            V6OF.CvdPanel.draw(canvas, state || canvas._cvdState);
+          }
+        }, { passive: false });
+
+        // Drag pan (horizontal pans time axis of main chart, vertical pans CVD Y axis)
+        canvas.addEventListener('pointerdown', function (e) {
+          var rect = canvas.getBoundingClientRect();
+          var mx = e.clientX - rect.left;
+          var vp = V6OF.chart;
+
+          _cvp.dragStartX = e.clientX;
+          _cvp.dragStartY = e.clientY;
+          _cvp.dragStartTime = vp ? vp.timeStart : 0;
+          _cvp.dragStartCvdMin = _cvp.cvdMin;
+          _cvp.dragStartCvdMax = _cvp.cvdMax;
+          _cvp.wasDragging = false;
+
+          var W = rect.width;
+          var gx = Math.max(LABEL_W + 40, W - VAL_W);
+          if (mx >= gx) {
+            _cvp.dragMode = 'value-axis';
+          } else {
+            _cvp.dragMode = 'plot';
+          }
+          canvas.setPointerCapture(e.pointerId);
+        });
+
+        canvas.addEventListener('pointermove', function (e) {
+          if (!canvas.hasPointerCapture(e.pointerId)) return;
+          var dx = e.clientX - _cvp.dragStartX;
+          var dy = e.clientY - _cvp.dragStartY;
+          if (Math.abs(dx) > 3 || Math.abs(dy) > 3) _cvp.wasDragging = true;
+          if (!_cvp.wasDragging) return;
+
+          var rect = canvas.getBoundingClientRect();
+          var vp = V6OF.chart;
+
+          if (_cvp.dragMode === 'value-axis') {
+            // Drag on right axis -> Zoom Y range of CVD
+            var vSpan = _cvp.dragStartCvdMax - _cvp.dragStartCvdMin;
+            var zoomFactor = 1 + dy * 0.005;
+            if (zoomFactor < 0.1) zoomFactor = 0.1;
+            if (zoomFactor > 10) zoomFactor = 10;
+            var newSpan = vSpan * zoomFactor;
+            var mid = (_cvp.dragStartCvdMax + _cvp.dragStartCvdMin) / 2;
+            _cvp.cvdMin = mid - newSpan / 2;
+            _cvp.cvdMax = _cvp.cvdMin + newSpan;
+            _cvp.autoFit = false;
+          } else {
+            // Drag on plot area -> Pan time X of main chart + Pan Y of CVD
+            if (vp) {
+              vp.panByPixels(-dx * 0.35, 0);
+            }
+            var vSpan = _cvp.dragStartCvdMax - _cvp.dragStartCvdMin;
+            var shift = (dy / rect.height) * vSpan;
+            _cvp.cvdMin = _cvp.dragStartCvdMin + shift;
+            _cvp.cvdMax = _cvp.dragStartCvdMax + shift;
+            _cvp.autoFit = false;
+          }
+
+          if (V6OF.ChartInteractions && V6OF.ChartInteractions.redraw) {
+            V6OF.ChartInteractions.redraw();
+          } else {
+            canvas._cvdQueued = false;
+            V6OF.CvdPanel.draw(canvas, state || canvas._cvdState);
+          }
+        });
+
+        canvas.addEventListener('pointerup', function (e) {
+          canvas.releasePointerCapture(e.pointerId);
+        });
+        canvas.addEventListener('pointercancel', function (e) {
+          canvas.releasePointerCapture(e.pointerId);
+        });
+
+        // Double-click to re-fit
+        canvas.addEventListener('dblclick', function () {
+          _cvp.cvdMin = Infinity;
+          _cvp.cvdMax = -Infinity;
+          _cvp.autoFit = true;
+          _cvp.followLive = true;
+          _cvp.initialized = false;
+          var vp = V6OF.chart;
+          if (vp) {
+            vp.resetView();
+          }
+          if (V6OF.ChartInteractions && V6OF.ChartInteractions.redraw) {
+            V6OF.ChartInteractions.redraw();
+          } else {
+            canvas._cvdQueued = false;
+            V6OF.CvdPanel.draw(canvas, state || canvas._cvdState);
+          }
+        });
+      }
       var schedule = typeof requestAnimationFrame === 'function' && !document.hidden
         ? requestAnimationFrame : function (fn) { return setTimeout(fn, 33); };
-      schedule(function () { canvas._cvdQueued = false; draw(canvas, canvas._cvdState); });
+      schedule(function () { canvas._cvdQueued = false; drawSimple(canvas, canvas._cvdState); });
     }
   };
 })();

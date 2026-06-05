@@ -37,7 +37,7 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.BookEnabled {
 		t.Fatalf("book should be disabled by default")
 	}
-	if cfg.BookDepth != 1000 {
+	if cfg.BookDepth != 5000 {
 		t.Fatalf("unexpected default book depth: %d", cfg.BookDepth)
 	}
 	if cfg.BookEmitMs != 100 {
@@ -49,13 +49,13 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.HeatmapEmitMs != 250 {
 		t.Fatalf("unexpected default heatmap emit ms: %d", cfg.HeatmapEmitMs)
 	}
-	if cfg.HeatmapDepth != 500 {
+	if cfg.HeatmapDepth != 1000 {
 		t.Fatalf("unexpected default heatmap depth: %d", cfg.HeatmapDepth)
 	}
 	if cfg.HeatmapTickSize != 1 {
 		t.Fatalf("unexpected default heatmap tick size: %f", cfg.HeatmapTickSize)
 	}
-	if cfg.HeatmapMaxLevels != 500 {
+	if cfg.HeatmapMaxLevels != 1000 {
 		t.Fatalf("unexpected default heatmap max levels: %d", cfg.HeatmapMaxLevels)
 	}
 	if cfg.FootprintEnabled {
@@ -70,7 +70,7 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.FootprintEmitMs != 250 {
 		t.Fatalf("unexpected default footprint emit ms: %d", cfg.FootprintEmitMs)
 	}
-	if cfg.FootprintMaxLevels != 500 {
+	if cfg.FootprintMaxLevels != 1000 {
 		t.Fatalf("unexpected default footprint max levels: %d", cfg.FootprintMaxLevels)
 	}
 }
@@ -195,7 +195,7 @@ func TestBookConfigKeepsFallbacksForInvalidValues(t *testing.T) {
 	if cfg.BookEnabled {
 		t.Fatalf("invalid bool should keep default book disabled")
 	}
-	if cfg.BookDepth != 1000 {
+	if cfg.BookDepth != 5000 {
 		t.Fatalf("invalid depth should keep default, got %d", cfg.BookDepth)
 	}
 	if cfg.BookEmitMs != 100 {
@@ -217,13 +217,13 @@ func TestHeatmapConfigKeepsFallbacksForInvalidValues(t *testing.T) {
 	if cfg.HeatmapEmitMs != 250 {
 		t.Fatalf("invalid emit ms should keep default, got %d", cfg.HeatmapEmitMs)
 	}
-	if cfg.HeatmapDepth != 500 {
+	if cfg.HeatmapDepth != 1000 {
 		t.Fatalf("invalid depth should keep default, got %d", cfg.HeatmapDepth)
 	}
 	if cfg.HeatmapTickSize != 1 {
 		t.Fatalf("invalid tick size should keep default, got %f", cfg.HeatmapTickSize)
 	}
-	if cfg.HeatmapMaxLevels != 500 {
+	if cfg.HeatmapMaxLevels != 1000 {
 		t.Fatalf("invalid max levels should keep default, got %d", cfg.HeatmapMaxLevels)
 	}
 }
@@ -248,7 +248,7 @@ func TestFootprintConfigKeepsFallbacksForInvalidValues(t *testing.T) {
 	if cfg.FootprintEmitMs != 250 {
 		t.Fatalf("invalid emit ms should keep default, got %d", cfg.FootprintEmitMs)
 	}
-	if cfg.FootprintMaxLevels != 500 {
+	if cfg.FootprintMaxLevels != 1000 {
 		t.Fatalf("invalid max levels should keep default, got %d", cfg.FootprintMaxLevels)
 	}
 }

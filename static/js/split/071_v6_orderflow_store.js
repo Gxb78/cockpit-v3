@@ -1,5 +1,5 @@
 // ---------- 071_v6_orderflow_store.js ----------
-// Minimal observable store for the isolated Cockpit V6 mock surface.
+// Minimal observable store for the Cockpit V6 orderflow surface.
 
 (function () {
   'use strict';
@@ -18,11 +18,19 @@
     return Object.assign({}, value || {});
   }
 
-  function normalizeState(next) {
+  function normalizeState(next, prev) {
     var empty = V6OF.Contract.createEmptyState();
     next = next || {};
-    next.settings = Object.assign(empty.settings, cloneSettings(next.settings));
-    next.ui = Object.assign(empty.ui, cloneUi(next.ui));
+    if (!prev || next.settings !== prev.settings) {
+      next.settings = Object.assign(empty.settings, cloneSettings(next.settings));
+    } else {
+      next.settings = prev.settings;
+    }
+    if (!prev || next.ui !== prev.ui) {
+      next.ui = Object.assign(empty.ui, cloneUi(next.ui));
+    } else {
+      next.ui = prev.ui;
+    }
     next.trades = Array.isArray(next.trades) ? next.trades : [];
     next.candles = Array.isArray(next.candles) ? next.candles : [];
     next.chartCandles = Array.isArray(next.chartCandles) ? next.chartCandles : [];
@@ -105,7 +113,7 @@
       setState: function (patch, reason) {
         var next = typeof patch === 'function' ? patch(state) : patch;
         if (!next) return state;
-        state = normalizeState(Object.assign({}, state, next));
+        state = normalizeState(Object.assign({}, state, next), state);
         state.lastUpdateReason = reason || 'setState';
         notify();
         return state;

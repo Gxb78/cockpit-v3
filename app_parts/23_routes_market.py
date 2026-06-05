@@ -22,7 +22,8 @@ BINANCE_BASE_URLS = [
 BINANCE_API = BINANCE_BASE_URLS[0]
 MAX_PER_REQUEST = 1000
 MAX_TOTAL_TRADES = 8000
-_MAX_PAGES = 8
+_MAX_PAGES = 24
+_AGG_RECENT_WINDOW_MS = 45 * 1000
 
 # === Market Service — klines cache + stale fallback ===
 
@@ -542,12 +543,17 @@ def market_aggtrades():
     all_trades = []
     pages_used = 0
     hit_limit = False
+    backward_recent = start_time is None and desired > 1000
+    current_end_time = end_time or int(_time_mod.time() * 1000)
     # Premier appel avec startTime (si fourni), puis fromId pour les pages suivantes
     next_from_id = None
 
     while len(all_trades) < desired and pages_used < _MAX_PAGES:
         path_qs = f"/api/v3/aggTrades?symbol={symbol}&limit=1000"
-        if next_from_id:
+        if backward_recent:
+            window_start = max(0, current_end_time - _AGG_RECENT_WINDOW_MS)
+            path_qs += f"&startTime={window_start}&endTime={current_end_time}"
+        elif next_from_id:
             # Pages suivantes: pagination par fromId (précise, pas de trous)
             path_qs += f"&fromId={next_from_id}"
         else:
@@ -590,20 +596,28 @@ def market_aggtrades():
         if not batch:
             break
 
-        all_trades.extend(batch)
         pages_used += 1
 
-        # Next page: fromId = dernier aggTradeId + 1
-        last_id = batch[-1]["id"] if batch else 0
-        next_from_id = last_id + 1
+        if backward_recent:
+            all_trades = batch + all_trades
+            window_start = max(0, current_end_time - _AGG_RECENT_WINDOW_MS)
+            current_end_time = window_start - 1
+            if len(all_trades) > desired:
+                all_trades = all_trades[-desired:]
+        else:
+            all_trades.extend(batch)
+
+            # Next page: fromId = dernier aggTradeId + 1
+            last_id = batch[-1]["id"] if batch else 0
+            next_from_id = last_id + 1
 
         # Si Batch < 1000, plus de donnees disponibles
-        if len(batch) < 1000:
+        if len(batch) < 1000 and not backward_recent:
             break
 
         if len(all_trades) >= desired:
             if len(all_trades) > desired:
-                all_trades = all_trades[:desired]
+                all_trades = all_trades[-desired:] if backward_recent else all_trades[:desired]
             break
 
     # Vérifier si on a été limité

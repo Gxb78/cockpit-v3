@@ -734,6 +734,15 @@ async def heartbeat_loop():
 
 async def backfill_cvd():
     """Backfill les trades historiques Binance pour initialiser le CVD."""
+    # Attendre que Flask API soit disponible (max 10s)
+    for attempt in range(20):
+        try:
+            req = urllib.request.Request(FLASK_API + "/api/market/time")
+            with urllib.request.urlopen(req, timeout=1) as resp:
+                if resp.status == 200:
+                    break
+        except Exception:
+            await asyncio.sleep(0.5)
     historical = await fetch_historical_trades()
     if historical:
         for t in historical:

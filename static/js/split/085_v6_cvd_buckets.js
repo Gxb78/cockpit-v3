@@ -15,11 +15,11 @@
   // CVD line (classic). Size-breakdown can be re-enabled when real trade data
   // with notional info is consistently available from backfill.
   var BUCKETS = [
-    { key: 'total', label: 'CVD',    min: 0,        max: 1e12,  color: '#3ad7ee' },
+    { key: 'total', label: 'CVD',    min: 0,        max: 1e12,  color: '#050505' },
   ];
 
   var INTERVAL_MS = 60000;          // per-candle bucket = 1 minute
-  var MAX_POINTS = 20000;            // ~14 jours d'historique à 1m
+  var MAX_POINTS = 200000;           // ~10x the previous 1m CVD retention
 
   // cvd[bucketKey] = running cumulative delta (across whole session)
   var cvd = {};
@@ -116,12 +116,12 @@
     //           cvd: {s: num, m: num, l: num} }
     // Chargé depuis le serveur WS au démarrage (message cvd_init).
     // Skip si vide — on garde les trades live déjà accumulés.
-    if (!data || !data.series || !data.deltaVol) return;
+    if (!data || !data.series) return;
     var totalPoints = 0;
     for (var k in data.series) {
       if (Array.isArray(data.series[k])) totalPoints += data.series[k].length;
     }
-    if (totalPoints === 0 && data.deltaVol.length === 0) return;
+    if (totalPoints === 0 && (!data.deltaVol || data.deltaVol.length === 0)) return;
     if (typeof intervalMs === 'number' && intervalMs > 0) {
         INTERVAL_MS = intervalMs;
       }

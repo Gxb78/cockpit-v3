@@ -1,5 +1,5 @@
 // ---------- 070_v6_orderflow_contract.js ----------
-// Cockpit V6 mock data contract. No live data, no network access.
+// Cockpit V6 data contract — minimal state shape for live orderflow.
 
 (function () {
   'use strict';
@@ -145,12 +145,12 @@
 
   V6OF.Contract = {
     version: 'v6.orderflow.v1',
-    source: 'mock',
+    source: 'live',
     createEmptyState: function () {
       return {
         contractVersion: 'v6.orderflow.v1',
-        source: 'mock',
-        dataFreshness: 'mock',
+        source: 'live',
+        dataFreshness: 'offline',
         transportStatus: 'disconnected',
         symbol: 'BTCUSDT',
         timeframe: '1m',
@@ -183,7 +183,7 @@
         isStale: false,
         settings: {
           minQty: 0,
-          maxRows: 42,
+          maxRows: 420,
           showTape: true,
           showDOM: true,
           showCVD: true,
@@ -194,20 +194,47 @@
           showFootprint: false,
           showLastPrice: true,
           showGrid: true,
-          bgColor: '#080b12',
-          upColor: '#3ddc97',
-          downColor: '#ff5f73',
+          bgColor: '#ffffff',
+          upColor: '#089981',
+          downColor: '#f23645',
           chartMode: 'both',
-          maxTrades: 500,
-          heatmapMaxFrames: 360,
-          footprintMaxCandles: 120,
+          maxTrades: 5000,
+          heatmapMaxFrames: 3600,
+          footprintMaxCandles: 1200,
           deltaIntervalMs: 60000,
-          domDepth: 20,
-          tickSize: 1
+          domDepth: 1000,
+          domRangeLevels: 1000,
+          domValueMode: 'coin',
+          tickSize: 1,
+          showFootprintVA: true,
+          imbalanceRatio: 3.0,
+          imbalanceStack: 3,
+          minWickTicks: 0
+          ,
+          theme: 'light-tv',
+          indicators: [],
+          indicatorSources: []
         },
         ui: {
           legacyMode: false,
-          seed: 42
+          seed: 42,
+          activeTab: 'dom',
+          dockCollapsed: false,
+          hoveredCandle: null,
+          pinnedCandle: null,
+          panelSizes: {},
+          layerPreset: 'scalping',
+          activeIndicatorId: '',
+          indicatorEditorOpen: false,
+          indicatorPaneSizes: {},
+          indicatorToolbarOpen: '',
+          singleClickFitLiveDelayMs: 180,
+          activeCandleOpenTime: 0,
+          activeCandleCloseTime: 0,
+          activeCandleSource: '',
+          activeCandleSnapshot: null,
+          activeCandleLocked: false,
+          activeCandleUpdatedAt: 0
         }
       };
     },
