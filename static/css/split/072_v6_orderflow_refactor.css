@@ -1,0 +1,618 @@
+/* 072_v6_orderflow_refactor.css
+ * TradingView-inspired V6 orderflow pass.
+ * Keep this file last in the V6 orderflow CSS order so it can neutralize older
+ * decorative rules without editing unrelated legacy styles.
+ */
+
+body[data-current-page="orderflow"] .v6-orderflow-root {
+  --v6-bg: #131722;
+  --v6-bg-2: #171b22;
+  --v6-surface: #1e222d;
+  --v6-surface-2: #222733;
+  --v6-surface-3: #2a2e39;
+  --v6-hairline: rgba(120, 130, 150, 0.20);
+  --v6-hairline-strong: rgba(120, 130, 150, 0.32);
+  --v6-text: #d1d4dc;
+  --v6-text-dim: #b2b5be;
+  --v6-text-mute: #868993;
+  --v6-text-faint: #5f636e;
+  --v6-accent: #2962ff;
+  --v6-accent-2: #1e53e5;
+  --v6-accent-soft: rgba(41, 98, 255, 0.14);
+  --v6-accent-line: rgba(41, 98, 255, 0.40);
+  --v6-buy: #089981;
+  --v6-buy-soft: rgba(8, 153, 129, 0.16);
+  --v6-sell: #f23645;
+  --v6-sell-soft: rgba(242, 54, 69, 0.16);
+  --v6-gold: #f2c94c;
+  --v6-gold-soft: rgba(242, 201, 76, 0.14);
+  --v6-r-lg: 6px;
+  --v6-r-md: 5px;
+  --v6-r-sm: 3px;
+  --v6-fast: 90ms;
+  --v6-med: 160ms;
+  background: var(--v6-bg);
+}
+
+body[data-current-page="orderflow"] .v6-shell,
+body[data-current-page="orderflow"] .v6-main-area,
+body[data-current-page="orderflow"] .v6-center-col,
+body[data-current-page="orderflow"] .v6-center-chart,
+body[data-current-page="orderflow"] .v6-chart-canvas {
+  background: var(--v6-bg);
+}
+
+body[data-current-page="orderflow"] .v6-header {
+  height: 36px;
+  min-height: 36px;
+  gap: 6px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--v6-hairline);
+  background: var(--v6-bg-2);
+  box-shadow: none;
+}
+
+body[data-current-page="orderflow"] .v6-brand {
+  gap: 7px;
+}
+
+body[data-current-page="orderflow"] .v6-brand-mark {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--v6-accent);
+  box-shadow: none;
+}
+
+body[data-current-page="orderflow"] .v6-brand-mark::after {
+  color: #ffffff;
+  font-size: 10px;
+}
+
+body[data-current-page="orderflow"] .v6-symbol-select {
+  min-height: 24px;
+  min-width: 72px;
+  border: 1px solid transparent;
+  border-radius: var(--v6-r-sm);
+  background: transparent;
+  color: #f0f3fa;
+  font: 800 12px/1 var(--v6-font);
+  outline: none;
+}
+
+body[data-current-page="orderflow"] .v6-symbol-select:hover,
+body[data-current-page="orderflow"] .v6-symbol-select:focus {
+  border-color: var(--v6-hairline-strong);
+  background: var(--v6-surface);
+}
+
+body[data-current-page="orderflow"] .v6-badge {
+  min-height: 22px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 3px;
+  border-color: var(--v6-hairline);
+  background: transparent;
+  color: var(--v6-text-mute);
+  box-shadow: none;
+  font: 800 9px/1 var(--v6-mono);
+}
+
+body[data-current-page="orderflow"] .v6-badge-live {
+  border-color: rgba(8, 153, 129, 0.55);
+  background: var(--v6-buy-soft);
+  color: #4fd1b2;
+}
+
+body[data-current-page="orderflow"] .v6-badge-error {
+  border-color: rgba(242, 54, 69, 0.55);
+  background: var(--v6-sell-soft);
+  color: #ff7a84;
+}
+
+body[data-current-page="orderflow"] .v6-timeframes,
+body[data-current-page="orderflow"] .v6-seg,
+body[data-current-page="orderflow"] .v6-source-select,
+body[data-current-page="orderflow"] .v6-workspace-widget {
+  min-height: 26px;
+  border: 1px solid var(--v6-hairline);
+  border-radius: var(--v6-r-sm);
+  background: transparent;
+  overflow: hidden;
+}
+
+body[data-current-page="orderflow"] .v6-timeframes {
+  border: 0;
+  gap: 1px;
+}
+
+body[data-current-page="orderflow"] .v6-tf-btn,
+body[data-current-page="orderflow"] .v6-seg-btn,
+body[data-current-page="orderflow"] .v6-source-btn,
+body[data-current-page="orderflow"] .v6-workspace-btn {
+  min-height: 24px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--v6-text-mute);
+  box-shadow: none;
+  font: 800 10px/1 var(--v6-font);
+  letter-spacing: 0;
+  transition: background var(--v6-fast), color var(--v6-fast), border-color var(--v6-fast);
+}
+
+body[data-current-page="orderflow"] .v6-tf-btn:hover,
+body[data-current-page="orderflow"] .v6-seg-btn:hover,
+body[data-current-page="orderflow"] .v6-source-btn:hover,
+body[data-current-page="orderflow"] .v6-workspace-btn:hover {
+  color: var(--v6-text);
+  background: var(--v6-surface);
+  border-color: var(--v6-hairline);
+}
+
+body[data-current-page="orderflow"] .v6-tf-btn.active,
+body[data-current-page="orderflow"] .v6-seg-btn.is-active,
+body[data-current-page="orderflow"] .v6-source-btn.active {
+  color: #ffffff;
+  background: var(--v6-accent-soft);
+  border-color: var(--v6-accent-line);
+  box-shadow: none;
+}
+
+body[data-current-page="orderflow"] .v6-workspace-widget {
+  padding: 1px 3px;
+  gap: 3px;
+}
+
+body[data-current-page="orderflow"] .v6-workspace-lbl {
+  display: none;
+}
+
+body[data-current-page="orderflow"] .v6-workspace-select {
+  min-height: 22px;
+  max-width: 112px;
+  border-color: transparent;
+  background-color: transparent;
+  color: var(--v6-text-dim);
+}
+
+body[data-current-page="orderflow"] .v6-header-disclosure-toggle,
+body[data-current-page="orderflow"] .v6-header-disclosure-panel {
+  display: none;
+}
+
+body[data-current-page="orderflow"] .v6-conn {
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 4px;
+  border-color: var(--v6-hairline);
+  background: transparent;
+  color: var(--v6-text-dim);
+  box-shadow: none;
+  font-size: 10px;
+}
+
+body[data-current-page="orderflow"] .v6-conn:hover {
+  border-color: var(--v6-accent-line);
+  background: var(--v6-surface);
+}
+
+body[data-current-page="orderflow"] .v6-left-toolbar,
+body[data-current-page="orderflow"] .v6-right-col,
+body[data-current-page="orderflow"] .v6-status-bar,
+body[data-current-page="orderflow"] .v6-rtabs {
+  background: var(--v6-bg-2);
+}
+
+body[data-current-page="orderflow"] .v6-left-toolbar {
+  flex-basis: 36px;
+  width: 36px;
+  padding: 5px 3px;
+}
+
+body[data-current-page="orderflow"] .v6-left-toolbar .v6-tool {
+  width: 29px;
+  height: 28px;
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+body[data-current-page="orderflow"] .v6-left-toolbar .v6-tool.is-active {
+  color: #ffffff;
+  border-color: var(--v6-accent-line);
+  background: var(--v6-accent-soft);
+}
+
+body[data-current-page="orderflow"] .v6-left-toolbar .v6-tool.is-active::before {
+  left: -4px;
+  width: 2px;
+  background: var(--v6-accent);
+}
+
+body[data-current-page="orderflow"] .v6-right-col {
+  flex-basis: 430px;
+  width: 430px;
+  border-left: 1px solid var(--v6-hairline);
+}
+
+body[data-current-page="orderflow"] .v6-rtabs {
+  min-height: 34px;
+  padding: 4px 4px 0;
+}
+
+body[data-current-page="orderflow"] .v6-rtab {
+  min-height: 29px;
+  border-radius: 4px 4px 0 0;
+  color: var(--v6-text-mute);
+  font-size: 10px;
+}
+
+body[data-current-page="orderflow"] .v6-rtab.is-active {
+  color: #ffffff;
+  background: var(--v6-surface);
+  box-shadow: inset 0 -2px 0 var(--v6-accent);
+}
+
+body[data-current-page="orderflow"] .v6-panel,
+body[data-current-page="orderflow"] .v6-rbody > .v6-panel {
+  background: transparent;
+  border-color: var(--v6-hairline);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+body[data-current-page="orderflow"] .v6-panel-head {
+  height: 30px;
+  border-bottom: 1px solid var(--v6-hairline);
+  background: var(--v6-bg-2);
+}
+
+body[data-current-page="orderflow"] .v6-panel-head span {
+  color: var(--v6-text-dim);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+body[data-current-page="orderflow"] .v6-cvd-strip {
+  flex-basis: 132px;
+  border-top: 1px solid var(--v6-hairline);
+  background: var(--v6-bg);
+}
+
+body[data-current-page="orderflow"] .v6-indicator-toolbar {
+  border-color: var(--v6-hairline);
+  background: var(--v6-surface);
+  box-shadow: none;
+}
+
+body[data-current-page="orderflow"] .v6-indicator-action {
+  color: var(--v6-text-dim);
+}
+
+body[data-current-page="orderflow"] .v6-indicator-action:hover {
+  color: #ffffff;
+  background: var(--v6-surface-3);
+}
+
+body[data-current-page="orderflow"] .v6-status-bar {
+  height: 23px;
+  flex-basis: 23px;
+  border-top: 1px solid var(--v6-hairline);
+  color: var(--v6-text-mute);
+}
+
+body[data-current-page="orderflow"] .v6-virtual-spacer {
+  position: relative;
+  min-height: 100%;
+}
+
+body[data-current-page="orderflow"] .v6-virtual-window {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  will-change: transform;
+}
+
+body[data-current-page="orderflow"] .v6-tape-list-container,
+body[data-current-page="orderflow"] .v6-tape-shell {
+  min-height: 0;
+  height: 100%;
+}
+
+body[data-current-page="orderflow"] .v6-tape-shell {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  background: var(--v6-bg);
+}
+
+body[data-current-page="orderflow"] .v6-tape-virtual-body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+
+body[data-current-page="orderflow"] .v6-tape-head {
+  flex: 0 0 22px;
+  min-height: 22px;
+  background: var(--v6-bg-2);
+  border-bottom: 1px solid var(--v6-hairline);
+  color: var(--v6-text-mute);
+}
+
+body[data-current-page="orderflow"] .v6-tape-row {
+  min-height: 20px;
+  height: 20px;
+  border-bottom: 1px solid rgba(120, 130, 150, 0.10);
+}
+
+body[data-current-page="orderflow"] .v6-tape-row.is-buy {
+  color: #55cdb5;
+}
+
+body[data-current-page="orderflow"] .v6-tape-row.is-sell {
+  color: #ff6d78;
+}
+
+/* ── Virtual DOM body — grille de prix fixe ── */
+
+body[data-current-page="orderflow"] .v6-dom-body {
+  /* scrollable container pour la ladder virtuelle */
+  overflow-y: scroll;
+  overflow-x: hidden;
+  position: relative;
+  scrollbar-gutter: stable;
+  /* contain: layout style serait trop restrictif ici — on le retire */
+  contain: none;
+}
+
+/* Le spacer représente la hauteur totale de la ladder (totalTicks * rowHeight) */
+body[data-current-page="orderflow"] .v6-dom-spacer {
+  position: relative;
+  width: 100%;
+  /* height set via JS */
+}
+
+/* Les rows sont positionnées en absolute dans le spacer.
+   On garde display:flex (pas de grid) pour que les largeurs % des cellules
+   soient cohérentes avec .v6-dom-cols. */
+body[data-current-page="orderflow"] .v6-dom-row {
+  display: flex;          /* PAS grid — cohérence avec .v6-dom-cols */
+  height: 20px;
+  min-height: 20px;
+  box-sizing: border-box;
+  overflow: hidden;
+  /* position:absolute + top définis inline par JS */
+  width: 100%;
+}
+
+body[data-current-page="orderflow"] .v6-dom-cell {
+  font-size: 10px;
+  line-height: 20px;
+  display: flex;
+  align-items: center;
+}
+
+/* Largeurs des cellules — doivent matcher le grid-template-columns du header :
+   minmax(72px, 1fr) 76px minmax(72px, 1fr) 54px 54px 54px */
+body[data-current-page="orderflow"] .v6-dom-cell-bid   { flex: 1 1 72px; justify-content: flex-end; padding-right: 5px; }
+body[data-current-page="orderflow"] .v6-dom-cell-price { flex: 0 0 76px; justify-content: center; }
+body[data-current-page="orderflow"] .v6-dom-cell-ask   { flex: 1 1 72px; justify-content: flex-start; padding-left: 5px; }
+body[data-current-page="orderflow"] .v6-dom-cell-buy   { flex: 0 0 54px; justify-content: flex-end; }
+body[data-current-page="orderflow"] .v6-dom-cell-sell  { flex: 0 0 54px; justify-content: flex-end; }
+body[data-current-page="orderflow"] .v6-dom-cell-delta { flex: 0 0 54px; justify-content: flex-end; }
+
+/* ── Zero values silencieux dans BID/ASK : barre + valeur masquees ── */
+body[data-current-page="orderflow"] .v6-dom-cell-bid .v6-dom-val:empty,
+body[data-current-page="orderflow"] .v6-dom-cell-ask .v6-dom-val:empty {
+  display: none;
+}
+/* Barre a 0% de largeur → invisible */
+body[data-current-page="orderflow"] .v6-dom-cell-bid .v6-dom-bar[style*="width:0%"],
+body[data-current-page="orderflow"] .v6-dom-cell-ask .v6-dom-bar[style*="width:0%"],
+body[data-current-page="orderflow"] .v6-dom-cell-bid .v6-dom-bar[style*="width: 0%"],
+body[data-current-page="orderflow"] .v6-dom-cell-ask .v6-dom-bar[style*="width: 0%"] {
+  display: none;
+}
+
+/* ── Rows vides (aucun ordre) — subdued ── */
+body[data-current-page="orderflow"] .v6-dom-row.is-empty {
+  opacity: 0.35;
+}
+body[data-current-page="orderflow"] .v6-dom-row.is-empty .v6-dom-cell-bid,
+body[data-current-page="orderflow"] .v6-dom-row.is-empty .v6-dom-cell-ask {
+  visibility: hidden;
+}
+
+/* ── Wall intensity — aucun niveau masqué, seule l'intensité change ── */
+
+/* Barre normale : faible opacité */
+body[data-current-page="orderflow"] .v6-dom-bar {
+  opacity: 0.28;
+  transition: opacity 120ms ease, width 80ms ease;
+}
+
+/* Soft wall (P85) */
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-soft .v6-dom-bar {
+  opacity: 0.58;
+}
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-soft {
+  background: rgba(120, 130, 150, 0.06);
+}
+
+/* Major wall (P95) */
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-major .v6-dom-bar {
+  opacity: 0.95;
+}
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-major {
+  background: rgba(120, 130, 150, 0.12);
+}
+
+/* Major wall bid (vert) */
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-major.has-bid {
+  background: rgba(8, 153, 129, 0.10);
+}
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-major.has-bid .v6-dom-bar.is-bid {
+  background: rgba(8, 153, 129, 0.7);
+}
+
+/* Major wall ask (rouge) */
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-major.has-ask {
+  background: rgba(242, 54, 69, 0.10);
+}
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-major.has-ask .v6-dom-bar.is-ask {
+  background: rgba(242, 54, 69, 0.7);
+}
+
+/* ── Row live price ── */
+body[data-current-page="orderflow"] .v6-dom-row.is-live {
+  background: rgba(8, 153, 129, 0.22) !important;
+  box-shadow: inset 0 1px 0 rgba(8, 153, 129, 0.45), inset 0 -1px 0 rgba(8, 153, 129, 0.45);
+}
+
+body[data-current-page="orderflow"] .v6-dom-row.is-live .v6-dom-cell-price {
+  background: var(--v6-buy);
+  color: #ffffff !important;
+}
+
+/* ── DOM window (ancien VirtualList — conservé pour compatibilité) ── */
+body[data-current-page="orderflow"] .v6-dom-window {
+  display: block;
+}
+
+body[data-current-page="orderflow"] .v6-settings {
+  gap: 0;
+  padding: 0 12px 12px;
+}
+
+body[data-current-page="orderflow"] .v6-settings-section {
+  padding: 12px 0;
+}
+
+body[data-current-page="orderflow"] .v6-settings-section-title {
+  margin-bottom: 8px;
+  border-left: 0;
+  padding-left: 0;
+  color: var(--v6-text-dim);
+}
+
+body[data-current-page="orderflow"] .v6-field,
+body[data-current-page="orderflow"] .v6-check span {
+  color: var(--v6-text-dim);
+  font-size: 11px;
+}
+
+body[data-current-page="orderflow"] .v6-btn {
+  border-radius: 4px;
+  background: var(--v6-surface);
+  box-shadow: none;
+  transform: none;
+}
+
+body[data-current-page="orderflow"] .v6-btn:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+@media (max-width: 1180px) {
+  body[data-current-page="orderflow"] .v6-header {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 36px;
+    padding-block: 4px;
+  }
+
+  body[data-current-page="orderflow"] .v6-workspace-holder,
+  body[data-current-page="orderflow"] .v6-seg {
+    display: none;
+  }
+
+  body[data-current-page="orderflow"] .v6-right-col {
+    flex-basis: 360px;
+    width: 360px;
+  }
+}
+
+@media (max-width: 760px) {
+  body[data-current-page="orderflow"] .cockpit {
+    grid-template-columns: 1fr !important;
+  }
+
+  body[data-current-page="orderflow"] .rail {
+    display: none !important;
+  }
+
+  body[data-current-page="orderflow"] .v6-main-area {
+    flex-direction: column;
+  }
+
+  body[data-current-page="orderflow"] .v6-left-toolbar {
+    width: 100%;
+    flex: 0 0 34px;
+    flex-direction: row;
+    border-right: 0;
+    border-bottom: 1px solid var(--v6-hairline);
+  }
+
+  body[data-current-page="orderflow"] .v6-right-col {
+    flex: 0 0 38%;
+    width: 100%;
+    border-left: 0;
+    border-top: 1px solid var(--v6-hairline);
+  }
+
+  body[data-current-page="orderflow"] .v6-resize-h {
+    display: none;
+  }
+
+  body[data-current-page="orderflow"] .v6-status-bar {
+    display: none;
+  }
+}
+
+/* ---- Chart Area and Drawing Toolbar Light Theme Preservations ---- */
+
+/* Force chart viewport area to be white background */
+body[data-current-page="orderflow"] .v6-center-chart,
+body[data-current-page="orderflow"] .v6-chart-canvas {
+  background: #ffffff !important;
+}
+
+/* Force left drawing toolbar to be white background with dark icons */
+body[data-current-page="orderflow"] .v6-left-toolbar {
+  background: #ffffff !important;
+  border: 1px solid #d1d4dc !important;
+  border-radius: var(--v6-r-sm);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+}
+
+body[data-current-page="orderflow"] .v6-tool {
+  color: #131722 !important;
+}
+
+body[data-current-page="orderflow"] .v6-tool:hover,
+body[data-current-page="orderflow"] .v6-tool:focus-visible,
+body[data-current-page="orderflow"] .v6-tool.is-active {
+  color: #131722 !important;
+  background: #f0f3fa !important;
+}
+
+body[data-current-page="orderflow"] .v6-tool[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  z-index: 30;
+  top: -31px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 8px;
+  border-radius: 2px;
+  background: #2a2e39;
+  color: #ffffff;
+  font: 600 12px/1 Inter, system-ui, sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+}

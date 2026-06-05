@@ -35,6 +35,20 @@
     }
   }
 
+  function timeframeToMs(tf) {
+    if (!tf) return 60000;
+    var match = tf.match(/^(\d+)([mhdwM])$/);
+    if (!match) return 60000;
+    var val = parseInt(match[1], 10);
+    var unit = match[2];
+    if (unit === 'm') return val * 60 * 1000;
+    if (unit === 'h') return val * 3600 * 1000;
+    if (unit === 'd') return val * 86400 * 1000;
+    if (unit === 'w') return val * 7 * 86400 * 1000;
+    if (unit === 'M') return val * 30 * 86400 * 1000;
+    return 60000;
+  }
+
   function _cachedFetch(url, ttlMs, bypassCache) {
     var now = Date.now();
     var entry = _restCache[url];
@@ -294,7 +308,7 @@
     if (chartMode && document.activeElement !== chartMode) chartMode.value = settings.chartMode || 'both';
 
     // Checkboxes
-    var toggles = ['showTape', 'showDOM', 'showCVD', 'showHeatmap', 'showFootprint', 'showLastPrice', 'showGrid', 'domWallsOnly'];
+    var toggles = ['showTape', 'showDOM', 'showCVD', 'showHeatmap', 'showFootprint', 'showLastPrice', 'showGrid'];
     var toggleDefaultsOn = { showTape: 1, showDOM: 1, showCVD: 1, showHeatmap: 1, showFootprint: 1, showLastPrice: 1, showGrid: 1 };
     toggles.forEach(function (key) {
       var el = root.querySelector('[data-v6-setting="' + key + '"]');
@@ -308,8 +322,6 @@
       maxHeatmapFrames: 'heatmapMaxFrames',
       maxFootprintCandles: 'footprintMaxCandles',
       domDepth: 'domDepth',
-      domRangeLevels: 'domRangeLevels',
-      domWallRatio: 'domWallRatio',
       minQty: 'minQty',
       maxRows: 'maxRows',
       tapeFontSize: 'tapeFontSize',
@@ -612,8 +624,6 @@
       orderBookCount: state.orderBookCount,
       lastOrderBookTs: state.lastOrderBookTs,
       showDOM: settings.showDOM,
-      domRangeLevels: settings.domRangeLevels,
-      domWallsOnly: settings.domWallsOnly,
       selectedDomSymbol: state.selectedDomSymbol,
       symbol: state.symbol
     };
@@ -945,7 +955,20 @@
                 return { openTime: c.openTime, closeTime: c.closeTime, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume };
               });
             } else if (!isHL && Array.isArray(data.candles)) {
-              candles = data.candles.filter(function(c) { return c && c.openTime; });
+              candles = data.candles.filter(function(c) { return c && (c.openTime || c.time); }).map(function(c) {
+                var t = Number(c.openTime || c.time);
+                if (t < 1000000000000) t *= 1000;
+                var intervalMs = timeframeToMs(tf) || 60000;
+                return {
+                  openTime: t,
+                  closeTime: c.closeTime ? (Number(c.closeTime) < 1000000000000 ? Number(c.closeTime) * 1000 : Number(c.closeTime)) : (t + intervalMs - 1),
+                  open: Number(c.open),
+                  high: Number(c.high),
+                  low: Number(c.low),
+                  close: Number(c.close),
+                  volume: Number(c.volume) || 0
+                };
+              });
             }
             if (candles && candles.length) {
               store.setState(function (prev) {
@@ -1082,7 +1105,20 @@
                 return { openTime: c.openTime, closeTime: c.closeTime, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume };
               });
             } else if (!isHL && Array.isArray(data.candles)) {
-              candles = data.candles.filter(function(c) { return c && c.openTime; });
+              candles = data.candles.filter(function(c) { return c && (c.openTime || c.time); }).map(function(c) {
+                var t = Number(c.openTime || c.time);
+                if (t < 1000000000000) t *= 1000;
+                var intervalMs = timeframeToMs(tf) || 60000;
+                return {
+                  openTime: t,
+                  closeTime: c.closeTime ? (Number(c.closeTime) < 1000000000000 ? Number(c.closeTime) * 1000 : Number(c.closeTime)) : (t + intervalMs - 1),
+                  open: Number(c.open),
+                  high: Number(c.high),
+                  low: Number(c.low),
+                  close: Number(c.close),
+                  volume: Number(c.volume) || 0
+                };
+              });
             }
             if (candles && candles.length) {
               store.setState(function (prev) {
@@ -1121,8 +1157,6 @@
         var patch = {};
         patch[key] = !!input.checked;
         store.updateSettings(patch);
-      } else if (key === 'domWallsOnly') {
-        store.updateSettings({ domWallsOnly: !!input.checked });
       } else if (key === 'deltaIntervalMs') {
         var intervalMs = Number(input.value) || 60000;
         store.setState(function (prev) {
@@ -1154,10 +1188,6 @@
         store.updateSettings({ footprintMaxCandles: Math.max(30, Math.min(300, Number(input.value) || 120)) });
       } else if (key === 'domDepth') {
         store.updateSettings({ domDepth: Math.max(5, Math.min(50, Number(input.value) || 20)) });
-      } else if (key === 'domRangeLevels') {
-        store.updateSettings({ domRangeLevels: Math.max(25, Math.min(500, Math.round(Number(input.value) || 100))) });
-      } else if (key === 'domWallRatio') {
-        store.updateSettings({ domWallRatio: Math.max(2, Math.min(12, Math.round(Number(input.value) || 4))) });
       } else if (key === 'domGroup') {
         store.updateSettings({ domGroup: Math.max(1, Math.min(100, Math.round(Number(input.value) || 1))) });
       }
@@ -1230,17 +1260,20 @@
         if (!wired) requestAnimationFrame(tryWire);
       }
 
-      // Initialize the connection status bar as offline (manual connect required)
+      // Initialize and auto-connect the WebSocket engine client on startup
       if (engineClient) {
         renderEngineBar(root, {
-          status: 'disconnected',
+          status: 'connecting',
           stats: engineClient.getStats(),
           paused: false
         }, store.getState());
         if (store.getState().source !== 'mock') {
-          store.setState({ source: 'live', dataFreshness: 'offline', transportStatus: 'disconnected', trades: [] }, 'init-offline');
-          prefetchDomDepth(store, 'init-offline');
+          store.setState({ source: 'live', dataFreshness: 'offline', transportStatus: 'connecting', trades: [] }, 'init-connect');
+          prefetchDomDepth(store, 'init-connect');
           startDomDepthRefresh(root, store);
+          if (typeof engineClient.connect === 'function') {
+            engineClient.connect();
+          }
         }
       }
 
