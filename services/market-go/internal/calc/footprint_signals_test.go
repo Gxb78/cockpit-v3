@@ -107,6 +107,22 @@ func TestDeriveFootprintSignals_EmptyLevelsStillDerived(t *testing.T) {
 	}
 }
 
+func TestSetSignalConfig(t *testing.T) {
+	c := NewFootprintCalculator(FootprintConfig{Enabled: true, IntervalMs: 60000, TickSize: 1, MaxLevels: 200})
+	if c.SignalConfig().ImbalanceRatio != DefaultImbalanceRatio {
+		t.Fatalf("expected default ratio, got %v", c.SignalConfig().ImbalanceRatio)
+	}
+	c.SetSignalConfig(FootprintSignalConfig{ImbalanceRatio: 5, ImbalanceStack: 4})
+	if got := c.SignalConfig(); got.ImbalanceRatio != 5 || got.ImbalanceStack != 4 {
+		t.Fatalf("config not updated: %#v", got)
+	}
+	// Zero fields fall back to defaults via withDefaults.
+	c.SetSignalConfig(FootprintSignalConfig{})
+	if got := c.SignalConfig(); got.ImbalanceRatio != DefaultImbalanceRatio || got.ImbalanceStack != DefaultImbalanceStack {
+		t.Fatalf("zero config should default: %#v", got)
+	}
+}
+
 func TestDeriveFootprintSignals_CustomThreshold(t *testing.T) {
 	// ratio 4: with diag 10 and cur 35 → 3.5 < 4 → no imbalance.
 	candle := &marketdata.FootprintCandle{

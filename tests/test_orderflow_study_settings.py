@@ -32,6 +32,7 @@ class OrderflowStudySettingsTests(unittest.TestCase):
                 removeItem(k) {{ delete storage[k]; }}
               }},
               Date,
+              Intl,
               JSON,
               Object,
               Number,
@@ -52,6 +53,9 @@ class OrderflowStudySettingsTests(unittest.TestCase):
               domFollowThresholdTicks: 99,
               imbalanceRatio: 99,
               imbalanceStack: 9,
+              imbalanceMinVolume: 2.5,
+              footprintValueAreaPct: 80,
+              inspectorTimeZoneMode: 'exchange',
               minWickTicks: -2
             }});
             process.stdout.write(JSON.stringify(settings));
@@ -77,6 +81,9 @@ class OrderflowStudySettingsTests(unittest.TestCase):
         self.assertEqual(settings["domFollowThresholdTicks"], 20)
         self.assertEqual(settings["imbalanceRatio"], 8)
         self.assertEqual(settings["imbalanceStack"], 6)
+        self.assertEqual(settings["imbalanceMinVolume"], 2.5)
+        self.assertEqual(settings["footprintValueAreaPct"], 80)
+        self.assertEqual(settings["inspectorTimeZoneMode"], "exchange")
         self.assertEqual(settings["minWickTicks"], 0)
 
     def test_legacy_settings_load_migrates_schema_version(self):
@@ -100,6 +107,7 @@ class OrderflowStudySettingsTests(unittest.TestCase):
                 removeItem(k) {{ delete storage[k]; }}
               }},
               Date,
+              Intl,
               JSON,
               Object,
               Number,
@@ -127,6 +135,9 @@ class OrderflowStudySettingsTests(unittest.TestCase):
         self.assertEqual(out["persisted"]["schemaVersion"], 1)
         self.assertFalse(out["loaded"]["showTape"])
         self.assertEqual(out["loaded"]["imbalanceRatio"], 4)
+        self.assertEqual(out["loaded"]["imbalanceMinVolume"], 1)
+        self.assertEqual(out["loaded"]["footprintValueAreaPct"], 70)
+        self.assertEqual(out["loaded"]["inspectorTimeZoneMode"], "utc")
         self.assertEqual(out["loaded"]["domScaleMode"], "book")
 
 

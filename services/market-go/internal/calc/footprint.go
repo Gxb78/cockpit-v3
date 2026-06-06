@@ -86,6 +86,22 @@ func (c *FootprintCalculator) TickSize() float64 {
 	return c.tickSize
 }
 
+// SetSignalConfig updates the orderflow-signal thresholds at runtime (e.g. when
+// the UI changes them). Subsequent snapshots use the new thresholds; already
+// emitted candles keep their values. Thread-safe.
+func (c *FootprintCalculator) SetSignalConfig(cfg FootprintSignalConfig) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.signalCfg = cfg.withDefaults()
+}
+
+// SignalConfig returns the active signal thresholds. Thread-safe.
+func (c *FootprintCalculator) SignalConfig() FootprintSignalConfig {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.signalCfg
+}
+
 func (c *FootprintCalculator) UpdateTrade(trade marketdata.Trade) []marketdata.FootprintCandle {
 	return c.UpdateTradeAt(trade, time.Now().UnixMilli())
 }

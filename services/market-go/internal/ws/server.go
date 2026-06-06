@@ -50,9 +50,9 @@ type Server struct {
 
 	tradeCache *TradeCache // file-based trade persistence
 
-	sqlDB  *storage.DB    // SQLite for trades + footprints
+	sqlDB *storage.DB // SQLite for trades + footprints
 
-	cvdMu     sync.Mutex
+	cvdMu       sync.Mutex
 	cvdBySymbol map[string]float64 // last CVD per symbol
 
 	// Exchange switching
@@ -67,12 +67,12 @@ func NewServer(cfg config.Config, marketEngine *engine.Engine, logger *logx.Logg
 		dataDir = "data"
 	}
 	s := &Server{
-		cfg:    cfg,
-		engine: marketEngine,
-		hub:    NewHub(),
-		log:    logger,
-		klineCache: NewKlineCache(dataDir),
-		tradeCache: NewTradeCache(dataDir, cfg.TradeRetainDays),
+		cfg:         cfg,
+		engine:      marketEngine,
+		hub:         NewHub(),
+		log:         logger,
+		klineCache:  NewKlineCache(dataDir),
+		tradeCache:  NewTradeCache(dataDir, cfg.TradeRetainDays),
 		cvdBySymbol: make(map[string]float64),
 	}
 
@@ -215,23 +215,23 @@ func (s *Server) Run(ctx context.Context) error {
 		errCh <- nil
 	}()
 
-		select {
-		case <-ctx.Done():
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			if err := server.Shutdown(shutdownCtx); err != nil {
-				return err
-			}
-			if s.sqlDB != nil {
-				s.sqlDB.Close()
-			}
-			return <-errCh
-		case err := <-errCh:
-			if s.sqlDB != nil {
-				s.sqlDB.Close()
-			}
+	select {
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
 			return err
 		}
+		if s.sqlDB != nil {
+			s.sqlDB.Close()
+		}
+		return <-errCh
+	case err := <-errCh:
+		if s.sqlDB != nil {
+			s.sqlDB.Close()
+		}
+		return err
+	}
 }
 
 func (s *Server) startHyperliquid(ctx context.Context) {
@@ -1253,6 +1253,11 @@ type clientMsg struct {
 	Symbol    string `json:"symbol"`
 	FromTs    int64  `json:"fromTs"`
 	ToTs      int64  `json:"toTs"`
+	// footprint_config: UI-seeded orderflow-signal thresholds.
+	ImbalanceRatio     float64 `json:"imbalanceRatio"`
+	ImbalanceStack     int     `json:"imbalanceStack"`
+	ImbalanceMinVolume float64 `json:"imbalanceMinVolume"`
+	ExhaustionFactor   float64 `json:"exhaustionFactor"`
 }
 
 type CvdPoint struct {
@@ -1270,9 +1275,9 @@ type CvdHistoryPayload struct {
 	DeltaVol []DeltaVolPoint       `json:"deltaVol"`
 	Cvd      map[string]float64    `json:"cvd"`
 	// Metadata pour distinguer estimation vs trades réels
-	Source         string `json:"cvdSource"`         // "ohlcv_estimate" | "real_trades" | "mixed"
-	RealTradeCount int    `json:"realTradeCount"`     // nombre de trades réels utilisés
-	EstimatedUntil int64  `json:"estimatedUntil"`     // timestamp ms jusqu'auquel c'est estimé (0 = tout réel)
+	Source         string `json:"cvdSource"`      // "ohlcv_estimate" | "real_trades" | "mixed"
+	RealTradeCount int    `json:"realTradeCount"` // nombre de trades réels utilisés
+	EstimatedUntil int64  `json:"estimatedUntil"` // timestamp ms jusqu'auquel c'est estimé (0 = tout réel)
 }
 
 type CvdInitMessage struct {
@@ -1305,13 +1310,13 @@ func (s *Server) computeSizeCvdHistory(timeframe string) CvdHistoryPayload {
 	// Also try to read 1m candle history from the cache to estimate CVD
 	// for periods with no real trades. Unmarshal the last cached envelope.
 	type candlePayload struct {
-		Symbol   string            `json:"symbol"`
-		Interval string            `json:"interval"`
+		Symbol   string              `json:"symbol"`
+		Interval string              `json:"interval"`
 		Candles  []marketdata.Candle `json:"candles"`
 	}
 	type candleEnvelope struct {
-		Type    string         `json:"type"`
-		Payload candlePayload  `json:"payload"`
+		Type    string        `json:"type"`
+		Payload candlePayload `json:"payload"`
 	}
 	var historicalCandles []marketdata.Candle
 	s.historyMu.RLock()
@@ -1445,6 +1450,14 @@ func (s *Server) handleClientMessage(client *wsClient, payload []byte) {
 		} else {
 			s.log.Infof("unknown source in source_switch: %s", src)
 		}
+	} else if msg.Type == "footprint_config" {
+		// UI-seeded orderflow-signal thresholds; zero fields fall back to defaults.
+		s.engine.SetFootprintSignalConfig(calc.FootprintSignalConfig{
+			ImbalanceRatio:     msg.ImbalanceRatio,
+			ImbalanceStack:     msg.ImbalanceStack,
+			ImbalanceMinVolume: msg.ImbalanceMinVolume,
+			ExhaustionFactor:   msg.ExhaustionFactor,
+		})
 	} else if msg.Type == "rebuild_footprint" && s.sqlDB != nil {
 		symbol := strings.ToUpper(strings.TrimSpace(msg.Symbol))
 		if symbol == "" {
@@ -1870,31 +1883,31 @@ func (s *Server) persistFootprintCandle(candle marketdata.FootprintCandle) {
 	}, delta)
 
 	rec := storage.FootprintRecord{
-		Symbol:     candle.Symbol,
-		MinuteTs:   candle.OpenTime,
-		Open:       candle.Open,
-		High:       candle.High,
-		Low:        candle.Low,
-		Close:      candle.Close,
-		Volume:     candle.Volume,
-		BuyVolume:  candle.BuyVol,
-		SellVolume: candle.SellVol,
-		Delta:      delta,
-		CVD:        cvd,
-		Profile:    storage.FootprintProfile{Levels: levels},
-		MaxImbalanceRatio:        metrics.MaxImbalanceRatio,
-		BuyImbalanceCount:        metrics.BuyImbalanceCount,
-		SellImbalanceCount:       metrics.SellImbalanceCount,
+		Symbol:                    candle.Symbol,
+		MinuteTs:                  candle.OpenTime,
+		Open:                      candle.Open,
+		High:                      candle.High,
+		Low:                       candle.Low,
+		Close:                     candle.Close,
+		Volume:                    candle.Volume,
+		BuyVolume:                 candle.BuyVol,
+		SellVolume:                candle.SellVol,
+		Delta:                     delta,
+		CVD:                       cvd,
+		Profile:                   storage.FootprintProfile{Levels: levels},
+		MaxImbalanceRatio:         metrics.MaxImbalanceRatio,
+		BuyImbalanceCount:         metrics.BuyImbalanceCount,
+		SellImbalanceCount:        metrics.SellImbalanceCount,
 		StackedBuyImbalanceCount:  metrics.StackedBuyImbalanceCount,
 		StackedSellImbalanceCount: metrics.StackedSellImbalanceCount,
-		HasBuyAbsorption:         metrics.HasBuyAbsorption,
-		HasSellAbsorption:        metrics.HasSellAbsorption,
-		AbsorptionPriceBuy:       metrics.AbsorptionPriceBuy,
-		AbsorptionPriceSell:      metrics.AbsorptionPriceSell,
-		IsExhaustionHigh:         metrics.IsExhaustionHigh,
-		IsExhaustionLow:          metrics.IsExhaustionLow,
-		IsUnfinishedHigh:         metrics.IsUnfinishedHigh,
-		IsUnfinishedLow:          metrics.IsUnfinishedLow,
+		HasBuyAbsorption:          metrics.HasBuyAbsorption,
+		HasSellAbsorption:         metrics.HasSellAbsorption,
+		AbsorptionPriceBuy:        metrics.AbsorptionPriceBuy,
+		AbsorptionPriceSell:       metrics.AbsorptionPriceSell,
+		IsExhaustionHigh:          metrics.IsExhaustionHigh,
+		IsExhaustionLow:           metrics.IsExhaustionLow,
+		IsUnfinishedHigh:          metrics.IsUnfinishedHigh,
+		IsUnfinishedLow:           metrics.IsUnfinishedLow,
 	}
 
 	if err := s.sqlDB.InsertFootprint1m(rec); err != nil {

@@ -120,6 +120,31 @@
       return out;
     }
 
+    // ── Footprint signal thresholds (UI → engine) ───────────────────────────
+    // Seed the engine's orderflow-signal thresholds from the UI settings so its
+    // derived footprint signals match the client-side fallback. Sent on connect
+    // and whenever the relevant settings change.
+    var lastFpConfigJson = '';
+    function buildFootprintConfigMsg() {
+      var s = (store && store.getState && store.getState().settings) || {};
+      return {
+        type: 'footprint_config',
+        imbalanceRatio: Number(s.imbalanceRatio) > 0 ? Number(s.imbalanceRatio) : 3.0,
+        imbalanceStack: Number(s.imbalanceStack) > 0 ? Number(s.imbalanceStack) : 3,
+        imbalanceMinVolume: Number(s.imbalanceMinVolume) >= 0 ? Number(s.imbalanceMinVolume) : 1.0
+      };
+    }
+    function sendFootprintConfig(force) {
+      if (!(ws && status === 'connected')) return;
+      var json = JSON.stringify(buildFootprintConfigMsg());
+      if (!force && json === lastFpConfigJson) return;
+      lastFpConfigJson = json;
+      try { ws.send(json); } catch (e) { console.warn('[V6 EngineClient] footprint_config send failed', e); }
+    }
+    if (store && store.subscribe) {
+      store.subscribe(function () { sendFootprintConfig(false); });
+    }
+
     var lastTf = (store && store.getState().timeframe) || '1m';
     // Always store a normalized symbol so 'BTC' vs 'BTCUSDT' oscillation never
     // triggers a spurious footprint history refetch.
@@ -925,6 +950,7 @@
           console.warn('[V6 Client] failed to send initial cvd request:', e);
         }
         fetchFootprintHistory();
+        sendFootprintConfig(true);
         scheduleCandleFallback('ws-open');
       };
 

@@ -12,7 +12,7 @@ SETTINGS_JS = os.path.join(PROJECT_DIR, "static", "js", "split", "079_v6_orderfl
 
 def _node(script):
     result = subprocess.run(
-        ["node", "-e", script], cwd=PROJECT_DIR, capture_output=True, text=True
+        ["node", "-e", script], cwd=PROJECT_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
     return result
 
@@ -34,7 +34,7 @@ class InspectorTickBucketingTests(unittest.TestCase):
               window: {{ V6OF: {{}} }},
               document: {{ createElement: () => ({{}}) }},
               console: {{ log(){{}}, warn(){{}}, error(){{}} }},
-              Date, Math, JSON, Object, Number, Array, String, setTimeout, clearTimeout,
+              Date, Intl, Math, JSON, Object, Number, Array, String, setTimeout, clearTimeout,
               requestAnimationFrame: function(cb){{ return 0; }}
             }};
             vm.runInNewContext(code, context);
@@ -66,6 +66,33 @@ class InspectorTickBucketingTests(unittest.TestCase):
         r = _node(script)
         self.assertEqual(r.returncode, 0, r.stderr)
         return r.stdout
+
+    def _inspector_async_script(self, body):
+        script = textwrap.dedent(
+            f"""
+            const fs = require('fs');
+            const vm = require('vm');
+            const code = fs.readFileSync({json.dumps(INSPECTOR_JS)}, 'utf8');
+            const context = {{
+              window: {{ V6OF: {{}} }},
+              document: {{ createElement: () => ({{}}) }},
+              console: {{ log(){{}}, warn(){{}}, error(){{}} }},
+              Date, Intl, Math, JSON, Object, Number, Array, String, Promise, URLSearchParams,
+              setTimeout, clearTimeout,
+              requestAnimationFrame: function(cb){{ return 0; }}
+            }};
+            vm.runInNewContext(code, context);
+            (async function() {{
+              {body}
+            }})().catch(function(err) {{
+              console.error(err && err.stack || err);
+              process.exit(1);
+            }});
+            """
+        )
+        r = _node(script)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return json.loads(r.stdout)
 
     def test_tick_decimals(self):
         self.assertEqual(self._inspector_call("I.tickDecimals(0.01)"), 2)
@@ -132,6 +159,241 @@ class InspectorTickBucketingTests(unittest.TestCase):
         ]
         html = self._inspector_render(state)
         self.assertIn("<em>CVD</em><strong>321</strong>", html)
+
+    def test_imbalance_min_volume_filters_small_diagonal_levels(self):
+        candle = {
+            "openTime": 1000,
+            "closeTime": 60999,
+            "intervalMs": 60000,
+            "open": 100,
+            "high": 102,
+            "low": 99,
+            "close": 101,
+            "volume": 14,
+            "delta": 8,
+            "buyVol": 11,
+            "sellVol": 3,
+            "levels": [
+                {"price": 100, "buyVol": 0, "sellVol": 2, "totalVol": 2},
+                {"price": 101, "buyVol": 10, "sellVol": 0, "totalVol": 10},
+            ],
+        }
+        base_state = {
+            "symbol": "BTCUSDT",
+            "timeframe": "1m",
+            "chartCandles": [candle],
+            "ui": {"activeCandleOpenTime": 1000},
+            "settings": {"imbalanceRatio": 3, "imbalanceStack": 2},
+        }
+
+        html = self._inspector_render(base_state)
+        self.assertIn("<em>Buy Imb</em><strong>1</strong>", html)
+
+        filtered = dict(base_state)
+        filtered["settings"] = {"imbalanceRatio": 3, "imbalanceStack": 2, "imbalanceMinVolume": 5}
+        html = self._inspector_render(filtered)
+        self.assertIn("<em>Buy Imb</em><strong>0</strong>", html)
+
+    def test_value_area_percent_changes_va_levels(self):
+        candle = {
+            "openTime": 1000,
+            "closeTime": 60999,
+            "intervalMs": 60000,
+            "open": 101,
+            "high": 102,
+            "low": 100,
+            "close": 101,
+            "volume": 100,
+            "delta": 0,
+            "buyVol": 50,
+            "sellVol": 50,
+            "levels": [
+                {"price": 100, "buyVol": 8, "sellVol": 8, "totalVol": 16},
+                {"price": 101, "buyVol": 35, "sellVol": 35, "totalVol": 70},
+                {"price": 102, "buyVol": 7, "sellVol": 7, "totalVol": 14},
+            ],
+        }
+        state = {
+            "symbol": "BTCUSDT",
+            "timeframe": "1m",
+            "chartCandles": [candle],
+            "ui": {"activeCandleOpenTime": 1000},
+            "settings": {"footprintValueAreaPct": 68},
+        }
+        html = self._inspector_render(state)
+        self.assertEqual(html.count(" is-va"), 1)
+
+        state["settings"] = {"footprintValueAreaPct": 80}
+        html = self._inspector_render(state)
+        self.assertEqual(html.count(" is-va"), 2)
+
+    def test_level_sum_consistency_flag(self):
+        candle = {
+            "openTime": 1000,
+            "closeTime": 60999,
+            "intervalMs": 60000,
+            "open": 100,
+            "high": 101,
+            "low": 99,
+            "close": 100,
+            "volume": 100,
+            "delta": 0,
+            "buyVol": 10,
+            "sellVol": 10,
+            "levels": [{"price": 100, "buyVol": 10, "sellVol": 10, "totalVol": 20}],
+        }
+        state = {
+            "symbol": "BTCUSDT",
+            "timeframe": "1m",
+            "chartCandles": [candle],
+            "ui": {"activeCandleOpenTime": 1000},
+            "settings": {},
+        }
+        html = self._inspector_render(state)
+        self.assertIn('v6-inspector-flag is-on">Level sum mismatch</span>', html)
+
+        candle["volume"] = 20
+        html = self._inspector_render(state)
+        self.assertIn('v6-inspector-flag ">Level sum mismatch</span>', html)
+
+    def test_inspector_timezone_modes_change_header_label(self):
+        candle = {
+            "openTime": 1700000000000,
+            "closeTime": 1700000059999,
+            "intervalMs": 60000,
+            "open": 100,
+            "high": 101,
+            "low": 99,
+            "close": 100,
+            "volume": 1,
+            "delta": 0,
+            "buyVol": 0.5,
+            "sellVol": 0.5,
+            "levels": [{"price": 100, "buyVol": 0.5, "sellVol": 0.5, "totalVol": 1}],
+        }
+        state = {
+            "symbol": "BTCUSDT",
+            "timeframe": "1m",
+            "chartCandles": [candle],
+            "ui": {"activeCandleOpenTime": 1700000000000},
+            "settings": {},
+        }
+        html = self._inspector_render(state)
+        self.assertIn("UTC</strong>", html)
+
+        state["settings"] = {"inspectorTimeZoneMode": "local"}
+        html = self._inspector_render(state)
+        self.assertIn("Local</strong>", html)
+
+        state["settings"] = {"inspectorTimeZoneMode": "exchange"}
+        state["exchangeTimeZone"] = "America/New_York"
+        html = self._inspector_render(state)
+        self.assertIn("Exchange</strong>", html)
+
+    def test_aggtrades_footprint_fetch_splits_capped_page(self):
+        out = self._inspector_async_script(
+            """
+            const V6OF = context.window.V6OF;
+            const urls = [];
+            let call = 0;
+            function makeTrades(count, startId, startTime) {
+              const rows = [];
+              for (let i = 0; i < count; i++) {
+                rows.push({ id: startId + i, time: startTime + i, price: 100 + (i % 3), qty: 1, side: i % 2 ? 'sell' : 'buy' });
+              }
+              return rows;
+            }
+            context.fetch = function(url) {
+              urls.push(url);
+              call += 1;
+              const trades = call === 1 ? makeTrades(8000, 1, 1000) : makeTrades(2, call * 10000, 1000 + call);
+              return Promise.resolve({ ok: true, json: () => Promise.resolve({ trades }) });
+            };
+            const state = {
+              symbol: 'BTCUSDT',
+              timeframe: '1m',
+              chartCandles: [{
+                openTime: 1000, closeTime: 60999, intervalMs: 60000,
+                open: 100, high: 102, low: 99, close: 101, volume: 10, delta: 0
+              }],
+              footprintCandles: [],
+              ui: { activeCandleOpenTime: 1000, activeCandleLocked: true },
+              settings: { tickSize: 1 }
+            };
+            V6OF.store = {
+              state,
+              getState() { return this.state; },
+              setState(patchOrFn) {
+                const patch = typeof patchOrFn === 'function' ? patchOrFn(this.state) : patchOrFn;
+                this.state = Object.assign({}, this.state, patch || {});
+              }
+            };
+            V6OF.Inspector.render(state);
+            await new Promise(resolve => setTimeout(resolve, 50));
+            process.stdout.write(JSON.stringify({
+              calls: urls.length,
+              hasSplitStart: urls.some(u => u.indexOf('startTime=1000') !== -1 && u.indexOf('endTime=30999') !== -1),
+              hasSplitEnd: urls.some(u => u.indexOf('startTime=31000') !== -1 && u.indexOf('endTime=60999') !== -1),
+              footprintTrades: V6OF.store.state.footprintCandles[0] && V6OF.store.state.footprintCandles[0].levels.reduce((sum, l) => sum + l.trades, 0)
+            }));
+            """
+        )
+        self.assertGreater(out["calls"], 1)
+        self.assertTrue(out["hasSplitStart"])
+        self.assertTrue(out["hasSplitEnd"])
+        self.assertEqual(out["footprintTrades"], 4)
+
+    def test_rebuild_prefers_pinned_candle_timeframe(self):
+        out = self._inspector_async_script(
+            """
+            const V6OF = context.window.V6OF;
+            const urls = [];
+            context.fetch = function(url) {
+              urls.push(url);
+              return Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({ trades: [
+                  { id: 1, time: 1000, price: 100, qty: 1, side: 'buy' },
+                  { id: 2, time: 299999, price: 101, qty: 1, side: 'sell' }
+                ] })
+              });
+            };
+            const state = {
+              symbol: 'BTCUSDT',
+              timeframe: '1m',
+              chartCandles: [{
+                openTime: 1000, timeframe: '5m',
+                open: 100, high: 102, low: 99, close: 101, volume: 10, delta: 0
+              }],
+              footprintCandles: [],
+              ui: { activeCandleOpenTime: 1000, activeCandleLocked: true },
+              settings: { tickSize: 1 }
+            };
+            V6OF.store = {
+              state,
+              getState() { return this.state; },
+              setState(patchOrFn) {
+                const patch = typeof patchOrFn === 'function' ? patchOrFn(this.state) : patchOrFn;
+                this.state = Object.assign({}, this.state, patch || {});
+              }
+            };
+            V6OF.Inspector.render(state);
+            await new Promise(resolve => setTimeout(resolve, 30));
+            const fp = V6OF.store.state.footprintCandles[0] || {};
+            process.stdout.write(JSON.stringify({
+              url: urls[0] || '',
+              timeframe: fp.timeframe,
+              intervalMs: fp.intervalMs,
+              closeTime: fp.closeTime,
+              selectedTf: V6OF.store.state.selectedFootprintTimeframe
+            }));
+            """
+        )
+        self.assertIn("endTime=300999", out["url"])
+        self.assertEqual(out["timeframe"], "5m")
+        self.assertEqual(out["intervalMs"], 300000)
+        self.assertEqual(out["closeTime"], 300999)
+        self.assertEqual(out["selectedTf"], "5m")
 
     def test_inspector_drops_hardcoded_floor_and_precision(self):
         with open(INSPECTOR_JS, "r", encoding="utf-8") as fh:
