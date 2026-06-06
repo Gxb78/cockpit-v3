@@ -66,6 +66,14 @@
     return Number.isInteger(v) ? String(v) : v.toFixed(2);
   }
 
+  function escAttr(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
   function fmtAge(ts) {
     if (!ts || !Number.isFinite(Number(ts))) return '-';
     var age = Math.max(0, Date.now() - Number(ts));
@@ -119,6 +127,24 @@
     return snap ? String(snap.bookSize || 0) : '0';
   }
 
+  function domSequenceLabel(snap) {
+    var seq = Number(snap && (snap.sequence || snap.seq || snap.updateId || snap.bookCount));
+    if (!Number.isFinite(seq) || seq <= 0) return '-';
+    return seq >= 1000000 ? trimZeros((seq / 1000000).toFixed(1)) + 'M' : String(Math.round(seq));
+  }
+
+  function domGapCount(snap) {
+    var gap = Number(snap && (snap.sequenceGapCount || snap.gapCount || snap.gaps));
+    return Number.isFinite(gap) && gap > 0 ? Math.round(gap) : 0;
+  }
+
+  function domDroppedCount(state, snap) {
+    var localDrops = Number(snap && (snap.droppedUpdates || snap.droppedCount)) || 0;
+    var engineStats = (state && (state.engineStats || state.stats)) || {};
+    var engineDrops = Number(engineStats.droppedCount || engineStats.drops || 0) || 0;
+    return Math.max(0, Math.round(localDrops + engineDrops));
+  }
+
   function renderStats(container, snap, state, live, settings) {
     setStat(container, 'source', sourceLabel(state, snap));
     setStat(container, 'age',    fmtAge(state.lastOrderBookTs || snap.lastUpdate));
@@ -126,6 +152,9 @@
     setStat(container, 'mid',    fmtPrice(snap.midPrice));
     setStat(container, 'spread', fmtPrice(snap.spread));
     setStat(container, 'depth',  bookDepth(state, snap));
+    setStat(container, 'seq',    domSequenceLabel(snap));
+    setStat(container, 'gap',    String(domGapCount(snap)));
+    setStat(container, 'drop',   String(domDroppedCount(state, snap)));
     syncControls(container, snap.priceGrouping || 25, settings);
   }
 
@@ -175,10 +204,13 @@
           '<span class="v6-dom-stat v6-dom-stat-live"><em>LIVE</em><strong data-dom-stat="live">-</strong></span>' +
           '<span class="v6-dom-stat v6-dom-stat-mid"><em>MID</em><strong data-dom-stat="mid">-</strong></span>' +
           '<span class="v6-dom-stat"><em>SPR</em><strong data-dom-stat="spread">-</strong></span>' +
+          '<span class="v6-dom-stat"><em>SEQ</em><strong data-dom-stat="seq">-</strong></span>' +
+          '<span class="v6-dom-stat"><em>GAP</em><strong data-dom-stat="gap">0</strong></span>' +
+          '<span class="v6-dom-stat"><em>DROP</em><strong data-dom-stat="drop">0</strong></span>' +
         '</div>' +
         '<div class="v6-dom-hright">' +
           '<span class="v6-dom-stat"><em>DEPTH</em><span data-dom-stat="depth">0/0</span></span>' +
-          '<button class="v6-dom-recenter" title="Re-center">C</button>' +
+          '<button class="v6-dom-recenter" type="button" title="Follow mid: re-center on the current mid price" aria-label="Follow mid: re-center on the current mid price">Follow mid</button>' +
         '</div>' +
       '</div>' +
       '<div class="v6-dom-cols">' +
@@ -188,15 +220,23 @@
         '<div class="v6-dom-col v6-dom-col-buy">BUYS</div>' +
         '<div class="v6-dom-col v6-dom-col-sell">SELLS</div>' +
         '<div class="v6-dom-col v6-dom-col-delta">DELTA</div>' +
+        '<div class="v6-dom-col v6-dom-col-imb">IMB</div>' +
+        '<div class="v6-dom-col v6-dom-col-stack">STK</div>' +
+        '<div class="v6-dom-col v6-dom-col-abs">ABS</div>' +
       '</div>' +
-      '<div class="v6-dom-body"></div>' +
+      '<div class="v6-dom-body" role="grid" aria-label="Depth of market price ladder"></div>' +
       '<div class="v6-dom-footer">' +
         '<label class="v6-dom-glbl">Group <select class="v6-dom-grouping">' +
           groupOpts.map(function (g) {
             return '<option value="' + g + '"' + (g === grouping ? ' selected' : '') + '>' + g + '</option>';
           }).join('') +
         '</select></label>' +
-        '<button class="v6-dom-mode-toggle" type="button" data-dom-mode="coin" title="Coin / USD">C</button>' +
+        '<label class="v6-dom-glbl v6-dom-value-mode-wrap">Val <select class="v6-dom-value-mode" title="Value display mode">' +
+          '<option value="coin">Coin</option>' +
+          '<option value="notional">Notional</option>' +
+          '<option value="contracts">Contracts</option>' +
+          '<option value="ticks">Ticks</option>' +
+        '</select></label>' +
       '</div>';
   }
 
@@ -208,11 +248,10 @@
   function syncControls(container, grouping, settings) {
     var sel = container.querySelector('.v6-dom-grouping');
     if (sel && document.activeElement !== sel && String(sel.value) !== String(grouping)) sel.value = grouping;
-    var modeBtn = container.querySelector('.v6-dom-mode-toggle');
-    if (modeBtn) {
-      var mode = (settings && settings.domValueMode) || 'coin';
-      modeBtn.setAttribute('data-dom-mode', mode);
-      modeBtn.textContent = mode === 'usd' ? '$' : 'C';
+    var modeSel = container.querySelector('.v6-dom-value-mode');
+    if (modeSel && document.activeElement !== modeSel) {
+      var mode = normalizeValueMode(settings && settings.domValueMode);
+      if (String(modeSel.value) !== mode) modeSel.value = mode;
     }
   }
 
@@ -229,14 +268,146 @@
     return 0.001;
   }
 
-  function renderRow(lv, y, maxBid, maxAsk, liveTick, midTick, bestBidTick, bestAskTick, live, usdPrice, sizeThreshold) {
+  function fmtRatio(v) {
+    if (!Number.isFinite(v)) return 'inf';
+    return v >= 10 ? String(Math.round(v)) : trimZeros(v.toFixed(1));
+  }
+
+  function tradeImbalance(lv, ratio) {
+    var buy = Math.max(0, Number(lv && lv.buyVol) || 0);
+    var sell = Math.max(0, Number(lv && lv.sellVol) || 0);
+    if (!buy && !sell) return null;
+    if (buy > sell) {
+      var buyRatio = sell > 0 ? buy / sell : Infinity;
+      return buyRatio >= ratio ? { side: 'buy', ratio: buyRatio } : null;
+    }
+    if (sell > buy) {
+      var sellRatio = buy > 0 ? sell / buy : Infinity;
+      return sellRatio >= ratio ? { side: 'sell', ratio: sellRatio } : null;
+    }
+    return null;
+  }
+
+  function absorptionSignal(lv, ratio) {
+    var buy = Math.max(0, Number(lv && lv.buyVol) || 0);
+    var sell = Math.max(0, Number(lv && lv.sellVol) || 0);
+    var bid = Math.max(0, Number(lv && lv.bidSize) || 0);
+    var ask = Math.max(0, Number(lv && lv.askSize) || 0);
+    if (sell > 0 && bid >= sell * ratio) return 'bid';
+    if (buy > 0 && ask >= buy * ratio) return 'ask';
+    return '';
+  }
+
+  function computeDomAnalytics(book, minTick, maxTick, settings) {
+    var ratio = Math.max(1.5, Math.min(8, Number(settings && settings.imbalanceRatio) || 3));
+    var minStack = Math.max(2, Math.min(6, Math.round(Number(settings && settings.imbalanceStack) || 3)));
+    var out = {};
+    var streak = [];
+    var streakSide = '';
+
+    function flushStreak() {
+      if (streak.length >= minStack) {
+        streak.forEach(function (tick) {
+          if (out[tick]) out[tick].stack = streak.length;
+        });
+      }
+      streak = [];
+      streakSide = '';
+    }
+
+    for (var tick = minTick; tick <= maxTick; tick++) {
+      var lv = book.get(String(tick));
+      if (!lv) {
+        flushStreak();
+        continue;
+      }
+      var im = tradeImbalance(lv, ratio);
+      var abs = absorptionSignal(lv, ratio);
+      out[tick] = { imbalance: im, stack: 0, absorption: abs };
+      if (im && im.side === streakSide) {
+        streak.push(tick);
+      } else {
+        flushStreak();
+        if (im) {
+          streakSide = im.side;
+          streak = [tick];
+        }
+      }
+    }
+    flushStreak();
+    return out;
+  }
+
+  function depthChangeClass(current, previous) {
+    current = Math.max(0, Number(current) || 0);
+    previous = Math.max(0, Number(previous) || 0);
+    if (current > 0 && previous <= 0) return ' is-depth-refresh';
+    if (current > previous) return ' is-depth-add';
+    if (current < previous) return ' is-depth-cancel';
+    return '';
+  }
+
+  // ── Value display modes ───────────────────────────────────────────────────
+  // The DOM size/volume cells can be shown in several units. 'usd' is the
+  // legacy alias of 'notional'.
+  function normalizeValueMode(m) {
+    if (m === 'usd') return 'notional';
+    return (m === 'notional' || m === 'contracts' || m === 'ticks' || m === 'coin') ? m : 'coin';
+  }
+
+  // Map a raw base-coin quantity to the value + price arg used by fmt() for the
+  // active mode. `price > 0` makes fmt render a USD notional; otherwise the
+  // value is rendered as a plain count.
+  //   coin      → raw base quantity
+  //   notional  → quantity × live price (USD)
+  //   contracts → quantity ÷ instrument contract size
+  //   ticks     → USD notional ÷ price tick size
+  function modeValue(coinQty, mode, live, tickSize, contractSize) {
+    var q = Number(coinQty);
+    if (!Number.isFinite(q)) q = 0;
+    switch (mode) {
+      case 'notional':
+        return { v: q, price: (Number.isFinite(live) && live > 0) ? live : 0 };
+      case 'contracts':
+        return { v: (Number.isFinite(contractSize) && contractSize > 0) ? q / contractSize : q, price: 0 };
+      case 'ticks':
+        return (Number.isFinite(live) && live > 0 && Number.isFinite(tickSize) && tickSize > 0)
+          ? { v: q * live / tickSize, price: 0 }
+          : { v: q, price: 0 };
+      default: // 'coin'
+        return { v: q, price: 0 };
+    }
+  }
+
+  // Format a base-coin value for the active mode. `minCoin` (optional) hides
+  // values whose absolute base-coin size is below the noise floor.
+  function fmtMode(coinQty, showZero, vctx, minCoin) {
+    var q = Number(coinQty);
+    if (!Number.isFinite(q)) return '';
+    if (q === 0) return showZero ? '0' : '';
+    if (minCoin != null && Math.abs(q) < minCoin) return '';
+    var mv = modeValue(q, vctx.mode, vctx.live, vctx.tickSize, vctx.contractSize);
+    return fmt(mv.v, showZero, mv.price);
+  }
+
+  function fmtModeSigned(coinQty, vctx) {
+    var q = Number(coinQty);
+    if (!Number.isFinite(q) || q === 0) return '';
+    var mv = modeValue(Math.abs(q), vctx.mode, vctx.live, vctx.tickSize, vctx.contractSize);
+    var body = fmt(mv.v, true, mv.price);
+    return body ? (q >= 0 ? '+' : '-') + body : '';
+  }
+
+  function renderRow(lv, y, maxBid, maxAsk, liveTick, midTick, bestBidTick, bestAskTick, live, vctx, sizeThreshold, analytics) {
     var isLive    = lv.tick === liveTick;
     var isMid     = lv.tick === midTick;
     var isBestBid = lv.tick === bestBidTick;
     var isBestAsk = lv.tick === bestAskTick;
     var hasBid    = lv.bidSize > 0;
     var hasAsk    = lv.askSize > 0;
-    var isEmpty   = !hasBid && !hasAsk;
+    var bidChangeClass = depthChangeClass(lv.bidSize, lv.prevBidSize);
+    var askChangeClass = depthChangeClass(lv.askSize, lv.prevAskSize);
+    var isEmpty   = !hasBid && !hasAsk && !bidChangeClass && !askChangeClass;
 
     var cls = 'v6-dom-row';
     if (isMid)     cls += ' is-mid';
@@ -254,22 +425,35 @@
 
     var liveBadge = isLive ? '<span class="v6-dom-live-pill">LIVE ' + fmtPrice(live) + '</span>' : '';
     var marker    = isLive ? '<span class="v6-dom-marker">&#9658;</span>' : '';
+    var im        = analytics && analytics.imbalance;
+    var imSide    = im && im.side === 'buy' ? 'is-buy' : (im && im.side === 'sell' ? 'is-sell' : '');
+    var imText    = im ? (im.side === 'buy' ? 'B ' : 'S ') + fmtRatio(im.ratio) + 'x' : '';
+    var stackText = analytics && analytics.stack ? String(analytics.stack) : '';
+    var absSide   = analytics && analytics.absorption === 'bid' ? 'is-bid' : (analytics && analytics.absorption === 'ask' ? 'is-ask' : '');
+    var absText   = analytics && analytics.absorption === 'bid' ? 'B' : (analytics && analytics.absorption === 'ask' ? 'A' : '');
+    var priceText = fmtPrice(lv.price);
+    var bidText   = fmtMode(lv.bidSize, false, vctx, sizeThreshold) || '0';
+    var askText   = fmtMode(lv.askSize, false, vctx, sizeThreshold) || '0';
+    var rowLabel  = 'Price ' + priceText + ', bid ' + bidText + ', ask ' + askText;
 
     return '<div class="' + cls + '"' +
       ' style="position:absolute;top:' + y + 'px;left:0;right:0;height:' + DOM_ROW_HEIGHT + 'px"' +
-      ' data-price-key="' + lv.priceKey + '">' +
-      '<div class="v6-dom-cell v6-dom-cell-bid">' +
+      ' data-price-key="' + lv.priceKey + '" role="row" aria-label="' + escAttr(rowLabel) + '">' +
+      '<div class="v6-dom-cell v6-dom-cell-bid' + bidChangeClass + '" role="gridcell" tabindex="0" aria-label="' + escAttr('Bid size ' + bidText + ' at price ' + priceText) + '">' +
         '<div class="v6-dom-bar is-bid" style="width:' + bidPct + '%"></div>' +
-        '<span class="v6-dom-val">' + fmt(lv.bidSize, false, usdPrice, sizeThreshold) + '</span>' +
+        '<span class="v6-dom-val">' + (bidText === '0' ? '' : bidText) + '</span>' +
       '</div>' +
-      '<div class="v6-dom-cell v6-dom-cell-price">' + marker + fmtPrice(lv.price) + liveBadge + '</div>' +
-      '<div class="v6-dom-cell v6-dom-cell-ask">' +
+      '<div class="v6-dom-cell v6-dom-cell-price" role="gridcell" tabindex="0" aria-label="' + escAttr(rowLabel) + '">' + marker + priceText + liveBadge + '</div>' +
+      '<div class="v6-dom-cell v6-dom-cell-ask' + askChangeClass + '" role="gridcell" tabindex="0" aria-label="' + escAttr('Ask size ' + askText + ' at price ' + priceText) + '">' +
         '<div class="v6-dom-bar is-ask" style="width:' + askPct + '%"></div>' +
-        '<span class="v6-dom-val">' + fmt(lv.askSize, false, usdPrice, sizeThreshold) + '</span>' +
+        '<span class="v6-dom-val">' + (askText === '0' ? '' : askText) + '</span>' +
       '</div>' +
-      '<div class="v6-dom-cell v6-dom-cell-buy">'   + fmt(lv.buyVol,  false, usdPrice) + '</div>' +
-      '<div class="v6-dom-cell v6-dom-cell-sell">'  + fmt(lv.sellVol, false, usdPrice) + '</div>' +
-      '<div class="v6-dom-cell v6-dom-cell-delta">' + fmtSigned(lv.delta, usdPrice)    + '</div>' +
+      '<div class="v6-dom-cell v6-dom-cell-buy">'   + fmtMode(lv.buyVol,  false, vctx) + '</div>' +
+      '<div class="v6-dom-cell v6-dom-cell-sell">'  + fmtMode(lv.sellVol, false, vctx) + '</div>' +
+      '<div class="v6-dom-cell v6-dom-cell-delta">' + fmtModeSigned(lv.delta, vctx)    + '</div>' +
+      '<div class="v6-dom-cell v6-dom-cell-imb ' + imSide + '">' + imText + '</div>' +
+      '<div class="v6-dom-cell v6-dom-cell-stack ' + imSide + '">' + stackText + '</div>' +
+      '<div class="v6-dom-cell v6-dom-cell-abs ' + absSide + '">' + absText + '</div>' +
     '</div>';
   }
 
@@ -351,27 +535,34 @@
     var startTick = maxTick - firstRow;
     var endTick   = maxTick - lastRow;
 
-    // 5. Max bid/ask pour les barres (sur tout le book visible)
+    // 5. Max bid/ask pour les barres.
+    // book: stable viewMin/viewMax, visible: rows currently rendered in the scroll window.
+    var scaleMinTick = (settings && settings.domScaleMode) === 'visible' ? endTick : minTick;
+    var scaleMaxTick = (settings && settings.domScaleMode) === 'visible' ? startTick : maxTick;
     var maxBid = 1, maxAsk = 1;
     book.forEach(function (lv) {
-      if (lv.tick < minTick || lv.tick > maxTick) return;
+      if (lv.tick < scaleMinTick || lv.tick > scaleMaxTick) return;
       if (lv.bidSize > maxBid) maxBid = lv.bidSize;
       if (lv.askSize > maxAsk) maxAsk = lv.askSize;
     });
 
     // 6. Parametres de rendu
-    var usdPrice    = ((settings && settings.domValueMode) === 'usd') ? live : 0;
-    // Bid/ask noise filter: hide sizes below a configurable USD notional floor
-    // (settings.domMinNotionalUsd). In coin mode the floor is converted to coin
-    // units via the live price, so the filter stays instrument-aware across
-    // BTC, alts, and futures instead of assuming a BTC-priced book.
-    var sizeThreshold = computeSizeThreshold(settings, usdPrice > 0, live);
+    var valueMode   = normalizeValueMode(settings && settings.domValueMode);
+    // contractSize comes from instrument metadata on the snapshot (default 1 for
+    // base-coin venues like Binance USDT / Hyperliquid).
+    var contractSize = (snap && Number(snap.contractSize) > 0) ? Number(snap.contractSize) : 1;
+    var vctx        = { mode: valueMode, live: live, tickSize: tickSize, contractSize: contractSize };
+    // Bid/ask noise filter is always evaluated in base-coin units (instrument-
+    // aware via settings.domMinNotionalUsd ÷ price) so the same notional floor
+    // applies regardless of the active display mode.
+    var sizeThreshold = computeSizeThreshold(settings, false, live);
     var liveTick    = (Number.isFinite(live) && live > 0 && tickSize > 0)
                         ? Math.round(live / tickSize)
                         : snap.midTick;
     var midTick     = snap.midTick;
     var bestBidTick = snap.bestBidTick;
     var bestAskTick = snap.bestAskTick;
+    var analyticsByTick = computeDomAnalytics(book, minTick, maxTick, settings);
 
     // 7. Generation du HTML
     var html = '';
@@ -387,7 +578,7 @@
           wallScore: 0, bidWallScore: 0, askWallScore: 0
         };
       }
-      html += renderRow(lv, y, maxBid, maxAsk, liveTick, midTick, bestBidTick, bestAskTick, live, usdPrice, sizeThreshold);
+      html += renderRow(lv, y, maxBid, maxAsk, liveTick, midTick, bestBidTick, bestAskTick, live, vctx, sizeThreshold, analyticsByTick[tick]);
     }
 
     virt.spacer.innerHTML = html;
@@ -483,6 +674,9 @@
     setStat(container, 'mid',    fmtPrice(snap.midPrice));
     setStat(container, 'spread', fmtPrice(snap.spread));
     setStat(container, 'depth',  bookDepth(state, snap));
+    setStat(container, 'seq',    domSequenceLabel(snap));
+    setStat(container, 'gap',    String(domGapCount(snap)));
+    setStat(container, 'drop',   String(domDroppedCount(state, snap)));
     syncControls(container, snap.priceGrouping || 25, settings);
 
     // ── Memorisation pour le scroll handler ──
@@ -544,9 +738,8 @@
           });
         }
       }
-      if (target.classList.contains('v6-dom-mode-toggle') && onSettingsPatch) {
-        var cur = target.getAttribute('data-dom-mode') || 'coin';
-        onSettingsPatch({ domValueMode: cur === 'usd' ? 'coin' : 'usd' });
+      if (target.classList.contains('v6-dom-value-mode') && onSettingsPatch) {
+        onSettingsPatch({ domValueMode: normalizeValueMode(target.value) });
       }
     });
 
@@ -589,7 +782,9 @@
   V6OF.DomPanel = {
     render       : render,
     bindControls : bindControls,
-    computeSizeThreshold : computeSizeThreshold
+    computeSizeThreshold : computeSizeThreshold,
+    modeValue    : modeValue,
+    normalizeValueMode : normalizeValueMode
   };
 
 })();

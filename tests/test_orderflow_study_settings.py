@@ -48,6 +48,7 @@ class OrderflowStudySettingsTests(unittest.TestCase):
               alertsEnabled: true,
               largeTradeAlertQty: 25.25,
               deltaAlertThreshold: 250,
+              domScaleMode: 'visible',
               domFollowThresholdTicks: 99,
               imbalanceRatio: 99,
               imbalanceStack: 9,
@@ -72,6 +73,7 @@ class OrderflowStudySettingsTests(unittest.TestCase):
         self.assertTrue(settings["alertsEnabled"])
         self.assertEqual(settings["largeTradeAlertQty"], 25.25)
         self.assertEqual(settings["deltaAlertThreshold"], 250)
+        self.assertEqual(settings["domScaleMode"], "visible")
         self.assertEqual(settings["domFollowThresholdTicks"], 20)
         self.assertEqual(settings["imbalanceRatio"], 8)
         self.assertEqual(settings["imbalanceStack"], 6)
@@ -125,6 +127,7 @@ class OrderflowStudySettingsTests(unittest.TestCase):
         self.assertEqual(out["persisted"]["schemaVersion"], 1)
         self.assertFalse(out["loaded"]["showTape"])
         self.assertEqual(out["loaded"]["imbalanceRatio"], 4)
+        self.assertEqual(out["loaded"]["domScaleMode"], "book")
 
 
 if __name__ == "__main__":

@@ -461,6 +461,9 @@
         spread: Number.isFinite(spread) ? spread : 0,
         mid: Number.isFinite(mid) ? mid : 0,
         depth: Number(payload.depth || Math.min(bids.length, asks.length)),
+        seq: Number(payload.seq || payload.sequence || payload.updateId || payload.lastUpdateId || payload.u || 0),
+        firstSeq: Number(payload.firstSeq || payload.firstUpdateId || payload.U || 0),
+        prevSeq: Number(payload.prevSeq || payload.previousUpdateId || payload.pu || 0),
         source: payload.source || 'l2Book'
       };
     }

@@ -1358,6 +1358,12 @@ body[data-current-page="orderflow"] .v6-dom-recenter {
   font: 800 10px/1 var(--v6-font);
 }
 
+body[data-current-page="orderflow"] .v6-dom-recenter {
+  min-width: 72px;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
 body[data-current-page="orderflow"] .v6-dom-walls-toggle {
   width: 26px;
   padding: 0;

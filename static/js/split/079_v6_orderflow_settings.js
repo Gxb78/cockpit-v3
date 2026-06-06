@@ -10,8 +10,8 @@
   var STORAGE_KEY = 'cockpitV6.orderflow.settings';
   var SETTINGS_SCHEMA_VERSION = 1;
 
-  var DEFAULT_DOM_COLUMNS = ['bid', 'price', 'ask', 'buy', 'sell', 'delta'];
-  var VALID_DOM_KEYS = { vol: 1, sell: 1, buy: 1, bid: 1, price: 1, ask: 1, delta: 1 };
+  var DEFAULT_DOM_COLUMNS = ['bid', 'price', 'ask', 'buy', 'sell', 'delta', 'imb', 'stack', 'abs'];
+  var VALID_DOM_KEYS = { vol: 1, sell: 1, buy: 1, bid: 1, price: 1, ask: 1, delta: 1, imb: 1, stack: 1, abs: 1 };
 
   var DEFAULTS = {
     schemaVersion: SETTINGS_SCHEMA_VERSION,
@@ -33,6 +33,8 @@
     domWallRatio: 4,
     domMinNotionalUsd: 100,
     domFollowThresholdTicks: 1,
+    domScaleMode: 'book',
+    domValueMode: 'coin',
     domGroup: 1,
     domColumns: DEFAULT_DOM_COLUMNS.slice(),
     minQty: 0,
@@ -65,6 +67,8 @@
   };
 
   var VALID_CHART_MODES = { heatmap: 1, footprint: 1, both: 1, none: 1 };
+  // DOM bid/ask value display modes. 'usd' is the legacy alias of 'notional'.
+  var VALID_VALUE_MODES = { coin: 1, notional: 1, contracts: 1, ticks: 1 };
   var VALID_THEMES = { 'light-tv': 1, 'dark-tv': 1 };
 
   function clampInt(value, min, max, fallback) {
@@ -106,7 +110,10 @@
     out.domWallRatio = clampInt(raw.domWallRatio, 2, 12, DEFAULTS.domWallRatio);
     out.domMinNotionalUsd = Math.max(0, Math.min(10000000, Number(raw.domMinNotionalUsd) || DEFAULTS.domMinNotionalUsd));
     out.domFollowThresholdTicks = clampInt(raw.domFollowThresholdTicks, 1, 20, DEFAULTS.domFollowThresholdTicks);
+    out.domScaleMode = raw.domScaleMode === 'visible' ? 'visible' : DEFAULTS.domScaleMode;
     out.domGroup = clampInt(raw.domGroup, 1, 100, DEFAULTS.domGroup);
+    var rawValueMode = raw.domValueMode === 'usd' ? 'notional' : raw.domValueMode;
+    out.domValueMode = VALID_VALUE_MODES[rawValueMode] ? rawValueMode : DEFAULTS.domValueMode;
     // Validate domColumns: must be a non-empty array of unique valid keys.
     if (Array.isArray(raw.domColumns) && raw.domColumns.length > 0) {
       var seen = {};

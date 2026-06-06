@@ -347,6 +347,12 @@
                 '<label class="v6-field">Follow threshold',
                   '<input type="number" min="1" max="20" step="1" data-v6-setting="domFollowThresholdTicks" />',
                 '</label>',
+                '<label class="v6-field">DOM scale',
+                  '<select data-v6-setting="domScaleMode">',
+                    '<option value="book">Book window</option>',
+                    '<option value="visible">Visible rows</option>',
+                  '</select>',
+                '</label>',
                 '<label class="v6-check"><input type="checkbox" data-v6-setting="domWallsOnly" /><span>Walls only</span></label>',
               '</div>',
               // -- Tape & DOM --
@@ -543,6 +549,8 @@
     // Selects
     var chartMode = root.querySelector('[data-v6-setting="chartMode"]');
     if (chartMode && document.activeElement !== chartMode) chartMode.value = settings.chartMode || 'both';
+    var domScaleMode = root.querySelector('[data-v6-setting="domScaleMode"]');
+    if (domScaleMode && document.activeElement !== domScaleMode) domScaleMode.value = settings.domScaleMode || 'book';
 
     // Checkboxes
     var toggles = ['showTape', 'showDOM', 'showCVD', 'showVwap', 'showHeatmap', 'showFootprint', 'showLastPrice', 'showGrid', 'showVwapBands', 'alertsEnabled', 'showFootprintVA'];
@@ -621,6 +629,7 @@
     book.bestAsk = book.asks[0].price;
     book.spread = book.bestAsk - book.bestBid;
     book.mid = (book.bestBid + book.bestAsk) / 2;
+    book.seq = Number(data.lastUpdateId || data.updateId || data.seq || data.sequence || 0);
     book.source = 'rest-depth';
     book.tsLocal = Date.now();
     return book;
@@ -1376,6 +1385,8 @@
         store.setState({ symbol: input.value }, 'symbol');
       } else if (key === 'chartMode') {
         store.updateSettings({ chartMode: input.value || 'both' });
+      } else if (key === 'domScaleMode') {
+        store.updateSettings({ domScaleMode: input.value === 'visible' ? 'visible' : 'book' });
       } else if (key === 'bgColor') {
         store.updateSettings({ bgColor: input.value || '#080b12' });
       } else if (key === 'upColor') {

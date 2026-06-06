@@ -23,6 +23,7 @@
   // ── State ──
   var book         = new Map();  // Map<priceKey, BookLevel>
   var tickSize     = 1;
+  var contractSize = 1;          // instrument contract size (metadata; 1 for base-coin venues)
   var priceGrouping = 25;
   var midPrice     = 0;
   var bestBid      = 0;
@@ -34,6 +35,9 @@
   var dataMax      = 0;          // tick le plus haut avec donnees reelles
   var bookCount    = 0;
   var lastUpdateTs = 0;
+  var lastSequence = 0;
+  var sequenceGapCount = 0;
+  var droppedUpdates = 0;
   var source       = 'unknown';
   var symbol       = '';
 
@@ -166,6 +170,29 @@
     dataMax       = 0;
     bookCount     = 0;
     lastUpdateTs  = 0;
+    lastSequence  = 0;
+    sequenceGapCount = 0;
+    droppedUpdates = 0;
+  }
+
+  function ingestSequence(ob) {
+    var seq = Number(ob.seq || ob.sequence || ob.updateId || ob.lastUpdateId || ob.u || 0);
+    var firstSeq = Number(ob.firstSeq || ob.firstUpdateId || ob.U || 0);
+    var prevSeq = Number(ob.prevSeq || ob.previousUpdateId || ob.pu || 0);
+    if (!Number.isFinite(seq) || seq <= 0) {
+      lastSequence = bookCount;
+      return;
+    }
+
+    if (lastSequence > 0) {
+      var expectedPrev = prevSeq > 0 ? prevSeq : (firstSeq > 0 ? firstSeq - 1 : lastSequence);
+      if (expectedPrev > lastSequence || seq > lastSequence + 1) {
+        var missed = Math.max(1, expectedPrev > lastSequence ? expectedPrev - lastSequence : seq - lastSequence - 1);
+        sequenceGapCount += 1;
+        droppedUpdates += missed;
+      }
+    }
+    lastSequence = seq;
   }
 
   // ── Ajuster la fenetre stable autour du mid ──
@@ -209,11 +236,15 @@
     lastUpdateTs = Date.now();
     source = ob.exchange || ob.source || 'unknown';
     symbol = ob.symbol || symbol;
+    ingestSequence(ob);
 
     // --- Tick size : stable, base sur le grouping uniquement ---
     // Ne JAMAIS recalculer dynamiquement — changerait les priceKeys entre feeds
     // et rendrait les niveaux orphelins (ASK disparaissent).
     tickSize = priceGrouping > 0 ? priceGrouping : 1;
+
+    // --- Contract size : metadata instrument (defaut 1, conserve la derniere valeur connue) ---
+    if (Number(ob.contractSize) > 0) contractSize = Number(ob.contractSize);
 
     // --- Prix cles ---
     var rawBestBid = Number(ob.bestBid) || (ob.bids[0] && Number(ob.bids[0].price)) || 0;
@@ -391,6 +422,7 @@
     return {
       book         : book,
       tickSize     : tickSize,
+      contractSize : contractSize,
       priceGrouping: priceGrouping,
       midPrice     : midPrice,
       bestBid      : bestBid,
@@ -406,6 +438,9 @@
       bestBidTick  : priceToTick(bestBid),
       bestAskTick  : priceToTick(bestAsk),
       bookCount    : bookCount,
+      sequence     : lastSequence,
+      sequenceGapCount: sequenceGapCount,
+      droppedUpdates: droppedUpdates,
       bookSize     : book.size,
       lastUpdate   : lastUpdateTs,
       source       : source,

@@ -828,14 +828,16 @@
 .v6-dom-glbl select:focus { border-color: rgba(58,215,238,0.4); }
 .v6-dom-recenter {
   min-height: 18px;
-  padding: 0 6px;
+  min-width: 68px;
+  padding: 0 8px;
   border: 1px solid rgba(150,168,196,0.15);
   border-radius: 3px;
   background: rgba(8,12,20,0.6);
   color: rgba(150,168,196,0.6);
-  font: 11px/1 var(--v6-mono);
+  font: 800 10px/1 var(--v6-font);
   cursor: pointer;
   transition: all 0.15s;
+  white-space: nowrap;
 }
 .v6-dom-recenter:hover { color: #3ad7ee; border-color: rgba(58,215,238,0.3); }
 
@@ -867,17 +869,23 @@
    bid=23%, price=20%, ask=23%, buy=11%, sell=11%, delta=12% = 100%
    On utilise flex-shrink:0 + width fixe pour éviter tout débordement. ── */
 .v6-dom-col-bid,
-.v6-dom-cell-bid   { width: 23%; flex-shrink: 0; text-align: right; justify-content: flex-end; padding-right: 5px; }
+.v6-dom-cell-bid   { width: 18%; flex-shrink: 0; text-align: right; justify-content: flex-end; padding-right: 5px; }
 .v6-dom-col-price,
-.v6-dom-cell-price { width: 20%; flex-shrink: 0; justify-content: center; font-weight: 700; color: rgba(220,230,240,0.8); }
+.v6-dom-cell-price { width: 16%; flex-shrink: 0; justify-content: center; font-weight: 700; color: rgba(220,230,240,0.8); }
 .v6-dom-col-ask,
-.v6-dom-cell-ask   { width: 23%; flex-shrink: 0; text-align: left; justify-content: flex-start; padding-left: 5px; }
+.v6-dom-cell-ask   { width: 18%; flex-shrink: 0; text-align: left; justify-content: flex-start; padding-left: 5px; }
 .v6-dom-col-buy,
-.v6-dom-cell-buy   { width: 11%; flex-shrink: 0; text-align: right; justify-content: flex-end; }
+.v6-dom-cell-buy   { width: 9%; flex-shrink: 0; text-align: right; justify-content: flex-end; }
 .v6-dom-col-sell,
-.v6-dom-cell-sell  { width: 11%; flex-shrink: 0; text-align: right; justify-content: flex-end; }
+.v6-dom-cell-sell  { width: 9%; flex-shrink: 0; text-align: right; justify-content: flex-end; }
 .v6-dom-col-delta,
-.v6-dom-cell-delta { width: 12%; flex-shrink: 0; text-align: right; justify-content: flex-end; }
+.v6-dom-cell-delta { width: 10%; flex-shrink: 0; text-align: right; justify-content: flex-end; }
+.v6-dom-col-imb,
+.v6-dom-cell-imb   { width: 8%; flex-shrink: 0; text-align: right; justify-content: flex-end; }
+.v6-dom-col-stack,
+.v6-dom-cell-stack { width: 5%; flex-shrink: 0; text-align: center; justify-content: center; }
+.v6-dom-col-abs,
+.v6-dom-cell-abs   { width: 7%; flex-shrink: 0; text-align: center; justify-content: center; }
 
 /* ── Rows ── */
 .v6-dom-body {
@@ -961,6 +969,15 @@
 .v6-dom-cell-delta { color: rgba(150,168,196,0.4); }
 .has-bid .v6-dom-cell-delta { color: rgba(74,232,160,0.7); }
 .has-ask .v6-dom-cell-delta { color: rgba(255,107,128,0.7); }
+.v6-dom-cell-imb,
+.v6-dom-cell-stack,
+.v6-dom-cell-abs { color: rgba(150,168,196,0.38); font-weight: 700; }
+.v6-dom-cell-imb.is-buy,
+.v6-dom-cell-stack.is-buy,
+.v6-dom-cell-abs.is-bid { color: rgba(74,232,160,0.76); }
+.v6-dom-cell-imb.is-sell,
+.v6-dom-cell-stack.is-sell,
+.v6-dom-cell-abs.is-ask { color: rgba(255,107,128,0.76); }
 
 /* ── Depth bars ── */
 .v6-dom-bar {
