@@ -225,6 +225,9 @@
         '<div class="v6-dom-col v6-dom-col-abs">ABS</div>' +
       '</div>' +
       '<div class="v6-dom-body" role="grid" aria-label="Depth of market price ladder"></div>' +
+      '<div class="v6-dom-stale-overlay" data-dom-stale-overlay hidden aria-live="polite">' +
+        '<strong>Stale DOM</strong><span data-dom-stale-text>Waiting for order book</span>' +
+      '</div>' +
       '<div class="v6-dom-footer">' +
         '<label class="v6-dom-glbl">Group <select class="v6-dom-grouping">' +
           groupOpts.map(function (g) {
@@ -243,6 +246,15 @@
   function setStat(container, name, value) {
     var el = container.querySelector('[data-dom-stat="' + name + '"]');
     if (el && el.textContent !== String(value)) el.textContent = String(value);
+  }
+
+  function setStaleOverlay(container, visible, text) {
+    var overlay = container && container.querySelector('[data-dom-stale-overlay]');
+    if (!overlay) return;
+    overlay.hidden = !visible;
+    overlay.classList.toggle('is-visible', !!visible);
+    var label = overlay.querySelector('[data-dom-stale-text]');
+    if (label && text && label.textContent !== String(text)) label.textContent = String(text);
   }
 
   function syncControls(container, grouping, settings) {
@@ -641,9 +653,16 @@
         if (body) {
           body.innerHTML = '<div class="v6-dom-empty">Waiting for order book\u2026</div>';
         }
+        setStaleOverlay(container, true, 'Waiting for first order book update');
         setStat(container, 'source', sourceLabel(state, snap));
         setStat(container, 'age', '-');
         setStat(container, 'live', '-');
+      } else {
+        var lastTs = (container._domLastSnap && container._domLastSnap.lastUpdate) || state.lastOrderBookTs || 0;
+        var staleText = lastTs ? 'Last valid book ' + fmtAge(lastTs) + ' ago. Keeping previous rows visible.'
+          : 'No fresh order book. Keeping previous rows visible.';
+        setStaleOverlay(container, true, staleText);
+        setStat(container, 'age', fmtAge(lastTs));
       }
       // Sinon : on garde l'ancien rendu visible, pas de flash
       return;
@@ -651,6 +670,7 @@
 
     // ── Throttle ──
     var live = livePrice(state, snap);
+    setStaleOverlay(container, false);
     renderStats(container, snap, state, live, settings);
     container._domLastSnap  = snap;
     container._domLastState = state;

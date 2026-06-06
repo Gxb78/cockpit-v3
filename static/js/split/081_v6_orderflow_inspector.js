@@ -364,21 +364,51 @@
     return { price: price, qty: qty, time: time, side: side === 'sell' ? 'sell' : 'buy' };
   }
 
+  // ── Exact price bucketing ───────────────────────────────────────────────
+  // Footprint levels are bucketed on the instrument's native tick. A hard 0.01
+  // floor + fixed 2-decimal rounding merged distinct levels on fine-tick assets
+  // ("faux niveaux prix"); here the bucket key carries exactly the tick's own
+  // precision.
+  function normalizeTick(tick) {
+    var t = num(tick, 1);
+    return (Number.isFinite(t) && t > 0) ? t : 1;
+  }
+
+  function tickDecimals(tick) {
+    var t = normalizeTick(tick);
+    var s = t.toString();
+    var eIdx = s.indexOf('e-');
+    if (eIdx === -1) eIdx = s.indexOf('E-');
+    if (eIdx !== -1) {
+      var exp = parseInt(s.slice(eIdx + 2), 10) || 0;
+      var mant = s.slice(0, eIdx);
+      var mdot = mant.indexOf('.');
+      return exp + (mdot === -1 ? 0 : mant.length - mdot - 1);
+    }
+    var dot = s.indexOf('.');
+    return dot === -1 ? 0 : s.length - dot - 1;
+  }
+
+  function priceBucketKey(price, tick) {
+    var t = normalizeTick(tick);
+    var bucket = Math.round(num(price) / t) * t;
+    return bucket.toFixed(Math.min(20, tickDecimals(t)));
+  }
+
   function buildFootprintFromTrades(candle, state, rawTrades) {
     var settings = (state && state.settings) || {};
     var tf = (state && state.timeframe) || candle.timeframe || '1m';
     var intervalMs = num(candle.intervalMs, timeframeToMs(tf));
     var openMs = openTime(candle);
     var closeMs = closeTime(candle) || (openMs + intervalMs - 1);
-    var tick = Math.max(0.01, num(settings.tickSize, 1));
+    var tick = normalizeTick(settings.tickSize);
     var byPrice = {};
     var buy = 0;
     var sell = 0;
     (Array.isArray(rawTrades) ? rawTrades : []).forEach(function (raw) {
       var t = normalizeTrade(raw);
       if (!t || (t.time && (t.time < openMs || t.time > closeMs))) return;
-      var bucket = Math.round(t.price / tick) * tick;
-      var key = bucket.toFixed(tick < 1 ? 2 : 0);
+      var key = priceBucketKey(t.price, tick);
       var level = byPrice[key];
       if (!level) {
         level = byPrice[key] = { price: Number(key), buyVol: 0, sellVol: 0, delta: 0, totalVol: 0, trades: 0 };
@@ -532,45 +562,23 @@
   }
 
   function cvdAtCandle(state, candle) {
-    // Use candle's actual intervalMs for correct CVD lookup
     var intervalMs = num(candle && candle.intervalMs,
       (candle ? (closeTime(candle) - openTime(candle) + 1) : 0));
     if (intervalMs <= 0) intervalMs = num((state && state.settings && state.settings.deltaIntervalMs), 60000);
+    var targetOpen = openTime(candle);
+    if (!targetOpen || intervalMs <= 0) return null;
+
     var key = String(intervalMs);
     var byInterval = (state && state.deltaBucketsByInterval) || {};
     var buckets = byInterval[key];
+    if (!Array.isArray(buckets) || !buckets.length) return null;
 
-    // Fallback: if no buckets for this exact interval, try other intervals
-    if (!buckets || !buckets.length) {
-      var keys = Object.keys(byInterval);
-      for (var ki = 0; ki < keys.length; ki++) {
-        buckets = byInterval[keys[ki]];
-        if (buckets && buckets.length) break;
-      }
-    }
-    // Absolute fallback
-    if (!buckets || !buckets.length) {
-      buckets = (state && state.deltaBuckets) || [];
-    }
-
-    var target = closeTime(candle) || openTime(candle);
-    var best = null;
     for (var i = 0; i < buckets.length; i++) {
       var b = buckets[i];
-      var end = num(b.endTime, num(b.startTime));
-      if (end <= target) best = b;
-      else break;
+      if (num(b && b.intervalMs) !== intervalMs) continue;
+      if (num(b && b.startTime) === targetOpen) return num(b.cvd);
     }
-    if (best) return num(best.cvd);
-
-    // Last resort: latest CVD from any interval
-    var latestByInterval = (state && state.latestDeltaByInterval) || {};
-    var latestKeys = Object.keys(latestByInterval);
-    if (latestKeys.length) {
-      var last = latestByInterval[latestKeys[latestKeys.length - 1]];
-      if (last) return num(last.cvd);
-    }
-    return 0;
+    return null;
   }
 
   function trimZeros(s) {
@@ -601,6 +609,7 @@
   }
 
   function metric(label, value, cls) {
+    if (value == null || value === '') value = '--';
     return '<div class="v6-inspector-card ' + (cls || '') + '"><em>' + esc(label) + '</em><strong>' + esc(value) + '</strong></div>';
   }
 
@@ -718,6 +727,7 @@
       var pct = (m.delta / m.volume) * 100;
       deltaPctText = (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%';
     }
+    var cvdCls = Number.isFinite(Number(m.cvd)) ? (m.cvd >= 0 ? 'is-pos' : 'is-neg') : '';
 
     return [
       '<div class="v6-inspector">',
@@ -744,7 +754,7 @@
           metric('Buy Vol', fmtVal(m.buyVol), 'is-pos'),
           metric('Sell Vol', fmtVal(m.sellVol), 'is-neg'),
           metric('Delta', fmtVal(m.delta) + ' (' + deltaPctText + ')', deltaCls),
-          metric('CVD', fmtVal(m.cvd), m.cvd >= 0 ? 'is-pos' : 'is-neg'),
+          metric('CVD', fmtVal(m.cvd), cvdCls),
           metric('Max Imb', ratioText(m.maxImbalanceRatio), 'is-warn'),
         '</div>',
         '<div class="v6-inspector-section-title">Derived metrics</div>',
@@ -920,6 +930,8 @@
 
   V6OF.Inspector = {
     findActiveCandle: findActiveCandle,
+    tickDecimals: tickDecimals,
+    priceBucketKey: priceBucketKey,
     render: renderInspector,
     renderInto: function (root, state) {
       var body = root && root.querySelector('[data-v6-info-panel]');

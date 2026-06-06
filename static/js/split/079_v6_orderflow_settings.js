@@ -137,7 +137,11 @@
     out.restTradePrefillLimit = clampInt(raw.restTradePrefillLimit, 50, 5000, DEFAULTS.restTradePrefillLimit);
     out.tapeFontSize = clampInt(raw.tapeFontSize, 8, 20, DEFAULTS.tapeFontSize);
     out.deltaIntervalMs = Number(raw.deltaIntervalMs) || DEFAULTS.deltaIntervalMs;
-    out.tickSize = Math.max(0.01, Number(raw.tickSize) || DEFAULTS.tickSize);
+    // Respect the instrument's native tick precision — no 0.01 floor, which
+    // merged distinct levels on fine-tick assets. Only reject non-positive/NaN.
+    out.tickSize = (Number.isFinite(Number(raw.tickSize)) && Number(raw.tickSize) > 0)
+      ? Number(raw.tickSize)
+      : DEFAULTS.tickSize;
     out.activeTab = typeof raw.activeTab === 'string' ? raw.activeTab : DEFAULTS.activeTab;
     out.dockCollapsed = typeof raw.dockCollapsed === 'boolean' ? raw.dockCollapsed : DEFAULTS.dockCollapsed;
     out.cvdCollapsed = typeof raw.cvdCollapsed === 'boolean' ? raw.cvdCollapsed : DEFAULTS.cvdCollapsed;
