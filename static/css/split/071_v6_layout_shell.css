@@ -682,6 +682,18 @@
   text-transform: uppercase;
   margin-top: 5px;
 }
+/* Provenance of derived signals: engine (authoritative) vs client fallback. */
+.v6-inspector-srcbadge {
+  margin-left: 5px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font: 800 7px/1.5 var(--v6-mono);
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+  text-transform: lowercase;
+}
+.v6-inspector-srcbadge.is-engine { color: var(--v6-buy); background: var(--v6-surface-3); }
+.v6-inspector-srcbadge.is-computed { color: var(--v6-text-faint); background: var(--v6-surface-3); }
 .v6-inspector-flags {
   display: flex;
   flex-wrap: wrap;

@@ -315,6 +315,19 @@
                 '<label class="v6-field">Imbalance stack',
                   '<input type="number" min="2" max="6" step="1" data-v6-setting="imbalanceStack" />',
                 '</label>',
+                '<label class="v6-field">Imbalance min volume',
+                  '<input type="number" min="0" step="0.1" data-v6-setting="imbalanceMinVolume" />',
+                '</label>',
+                '<label class="v6-field">Value area %',
+                  '<input type="number" min="1" max="100" step="1" data-v6-setting="footprintValueAreaPct" />',
+                '</label>',
+                '<label class="v6-field">Inspector timezone',
+                  '<select data-v6-setting="inspectorTimeZoneMode">',
+                    '<option value="utc">UTC</option>',
+                    '<option value="local">Local</option>',
+                    '<option value="exchange">Exchange</option>',
+                  '</select>',
+                '</label>',
                 '<label class="v6-field">Min wick ticks',
                   '<input type="number" min="0" max="10" step="1" data-v6-setting="minWickTicks" />',
                 '</label>',
@@ -551,6 +564,8 @@
     if (chartMode && document.activeElement !== chartMode) chartMode.value = settings.chartMode || 'both';
     var domScaleMode = root.querySelector('[data-v6-setting="domScaleMode"]');
     if (domScaleMode && document.activeElement !== domScaleMode) domScaleMode.value = settings.domScaleMode || 'book';
+    var inspectorTimeZoneMode = root.querySelector('[data-v6-setting="inspectorTimeZoneMode"]');
+    if (inspectorTimeZoneMode && document.activeElement !== inspectorTimeZoneMode) inspectorTimeZoneMode.value = settings.inspectorTimeZoneMode || 'utc';
 
     // Checkboxes
     var toggles = ['showTape', 'showDOM', 'showCVD', 'showVwap', 'showHeatmap', 'showFootprint', 'showLastPrice', 'showGrid', 'showVwapBands', 'alertsEnabled', 'showFootprintVA'];
@@ -579,6 +594,8 @@
       deltaAlertThreshold: 'deltaAlertThreshold',
       imbalanceRatio: 'imbalanceRatio',
       imbalanceStack: 'imbalanceStack',
+      imbalanceMinVolume: 'imbalanceMinVolume',
+      footprintValueAreaPct: 'footprintValueAreaPct',
       minWickTicks: 'minWickTicks',
       bgColor: 'bgColor',
       upColor: 'upColor',
@@ -1387,6 +1404,8 @@
         store.updateSettings({ chartMode: input.value || 'both' });
       } else if (key === 'domScaleMode') {
         store.updateSettings({ domScaleMode: input.value === 'visible' ? 'visible' : 'book' });
+      } else if (key === 'inspectorTimeZoneMode') {
+        store.updateSettings({ inspectorTimeZoneMode: input.value === 'local' || input.value === 'exchange' ? input.value : 'utc' });
       } else if (key === 'bgColor') {
         store.updateSettings({ bgColor: input.value || '#080b12' });
       } else if (key === 'upColor') {
@@ -1453,6 +1472,10 @@
         store.updateSettings({ imbalanceRatio: Math.max(1.5, Math.min(8, Number(input.value) || 3)) });
       } else if (key === 'imbalanceStack') {
         store.updateSettings({ imbalanceStack: Math.max(2, Math.min(6, Math.round(Number(input.value) || 3))) });
+      } else if (key === 'imbalanceMinVolume') {
+        store.updateSettings({ imbalanceMinVolume: Math.max(0, Math.min(1000000, Number(input.value) || 0)) });
+      } else if (key === 'footprintValueAreaPct') {
+        store.updateSettings({ footprintValueAreaPct: Math.max(1, Math.min(100, Number(input.value) || 70)) });
       } else if (key === 'minWickTicks') {
         store.updateSettings({ minWickTicks: Math.max(0, Math.min(10, Math.round(Number(input.value) || 0))) });
       }

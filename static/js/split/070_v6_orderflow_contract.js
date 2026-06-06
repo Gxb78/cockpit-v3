@@ -206,9 +206,12 @@
           domRangeLevels: 1000,
           domValueMode: 'coin',
           tickSize: 1,
+          inspectorTimeZoneMode: 'utc',
           showFootprintVA: true,
           imbalanceRatio: 3.0,
           imbalanceStack: 3,
+          imbalanceMinVolume: 1.0,
+          footprintValueAreaPct: 70,
           minWickTicks: 0
           ,
           theme: 'light-tv',

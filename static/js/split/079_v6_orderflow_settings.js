@@ -54,6 +54,7 @@
     activeTab: 'dom',
     dockCollapsed: false,
     cvdCollapsed: false,
+    inspectorTimeZoneMode: 'utc',
     showFootprintVA: true,
     showVwapBands: false,
     vwapBand1: 1.0,
@@ -63,6 +64,8 @@
     deltaAlertThreshold: 100,
     imbalanceRatio: 3.0,
     imbalanceStack: 3,
+    imbalanceMinVolume: 1.0,
+    footprintValueAreaPct: 70,
     minWickTicks: 0
   };
 
@@ -145,6 +148,9 @@
     out.activeTab = typeof raw.activeTab === 'string' ? raw.activeTab : DEFAULTS.activeTab;
     out.dockCollapsed = typeof raw.dockCollapsed === 'boolean' ? raw.dockCollapsed : DEFAULTS.dockCollapsed;
     out.cvdCollapsed = typeof raw.cvdCollapsed === 'boolean' ? raw.cvdCollapsed : DEFAULTS.cvdCollapsed;
+    out.inspectorTimeZoneMode = raw.inspectorTimeZoneMode === 'local' || raw.inspectorTimeZoneMode === 'exchange'
+      ? raw.inspectorTimeZoneMode
+      : DEFAULTS.inspectorTimeZoneMode;
     out.showFootprintVA = typeof raw.showFootprintVA === 'boolean' ? raw.showFootprintVA : DEFAULTS.showFootprintVA;
     out.showVwapBands = typeof raw.showVwapBands === 'boolean' ? raw.showVwapBands : DEFAULTS.showVwapBands;
     out.vwapBand1 = Math.max(0.1, Math.min(5, Number(raw.vwapBand1) || DEFAULTS.vwapBand1));
@@ -154,6 +160,8 @@
     out.deltaAlertThreshold = Math.max(0, Math.min(10000000, Number(raw.deltaAlertThreshold) || DEFAULTS.deltaAlertThreshold));
     out.imbalanceRatio = Math.max(1.5, Math.min(8.0, Number(raw.imbalanceRatio) || DEFAULTS.imbalanceRatio));
     out.imbalanceStack = clampInt(raw.imbalanceStack, 2, 6, DEFAULTS.imbalanceStack);
+    out.imbalanceMinVolume = Math.max(0, Math.min(1000000, Number(raw.imbalanceMinVolume) || DEFAULTS.imbalanceMinVolume));
+    out.footprintValueAreaPct = Math.max(1, Math.min(100, Number(raw.footprintValueAreaPct) || DEFAULTS.footprintValueAreaPct));
     out.minWickTicks = clampInt(raw.minWickTicks, 0, 10, DEFAULTS.minWickTicks);
     out.indicatorSources = sanitizeIndicatorSources(raw.indicatorSources);
     out.indicators = sanitizeIndicators(raw.indicators, out.indicatorSources);

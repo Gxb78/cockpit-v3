@@ -41,6 +41,53 @@
     return p(d.getUTCHours()) + ':' + p(d.getUTCMinutes()) + ':' + p(d.getUTCSeconds());
   }
 
+  function marketTimeZone(state, candle) {
+    var tz = (state && (state.exchangeTimeZone || state.marketTimeZone)) ||
+      (candle && (candle.exchangeTimeZone || candle.marketTimeZone));
+    if (tz) return String(tz);
+    return 'America/New_York';
+  }
+
+  function timeZoneConfig(state, candle) {
+    var mode = ((state && state.settings && state.settings.inspectorTimeZoneMode) || 'utc').toLowerCase();
+    if (mode === 'local') return { mode: 'local', label: 'Local', timeZone: null };
+    if (mode === 'exchange') return { mode: 'exchange', label: 'Exchange', timeZone: marketTimeZone(state, candle) };
+    return { mode: 'utc', label: 'UTC', timeZone: 'UTC' };
+  }
+
+  function datePartsInZone(ms, timeZone) {
+    ms = num(ms);
+    if (!ms) return null;
+    var opts = {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false
+    };
+    if (timeZone) opts.timeZone = timeZone;
+    try {
+      var parts = new Intl.DateTimeFormat('en-CA', opts).formatToParts(new Date(ms));
+      var out = {};
+      parts.forEach(function (p) { if (p.type !== 'literal') out[p.type] = p.value; });
+      return out;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function fmtDateTimeMode(ms, state, candle) {
+    var cfg = timeZoneConfig(state, candle);
+    var p = datePartsInZone(ms, cfg.timeZone);
+    if (!p) return fmtDateTime(ms) + ' UTC';
+    return p.year + '-' + p.month + '-' + p.day + ' ' + p.hour + ':' + p.minute + ':' + p.second + ' ' + cfg.label;
+  }
+
+  function fmtTimeMode(ms, state, candle) {
+    var cfg = timeZoneConfig(state, candle);
+    var p = datePartsInZone(ms, cfg.timeZone);
+    if (!p) return fmtTime(ms) + ' UTC';
+    return p.hour + ':' + p.minute + ':' + p.second + ' ' + cfg.label;
+  }
+
   function fmtDate(ms) {
     ms = num(ms);
     if (!ms) return '----.--.--';
@@ -201,69 +248,76 @@
     
     var imbRatio = num(settings.imbalanceRatio, 3.0);
     var minStack = num(settings.imbalanceStack, 3);
-    var minVolume = 1.0; // Filter to avoid tiny calculations
+    var minVolume = Math.max(0, num(settings.imbalanceMinVolume, 1.0));
+    var valueAreaPct = Math.max(1, Math.min(100, num(settings.footprintValueAreaPct, 70)));
     
-    // Initialize properties
+    // Prefer engine-derived signals when the candle carries them (live/replay);
+    // fall back to client-side computation for historical/REST candles that the
+    // engine never saw. Never mix the two on a single candle.
+    var useEngine = candle.signalsDerived === true;
+
+    // Initialize properties. Threshold-free fields (totalVol/delta) are always
+    // recomputed; per-level imbalance flags come from the engine when available.
     levels.forEach(function (lvl) {
-      lvl.buyImbalance = false;
-      lvl.sellImbalance = false;
       lvl.buyRatio = 0;
       lvl.sellRatio = 0;
       lvl.totalVol = num(lvl.buyVol) + num(lvl.sellVol);
       lvl.delta = num(lvl.buyVol) - num(lvl.sellVol);
-    });
-    
-    // Calculate diagonal imbalances (Standard Orderflow comparison)
-    var maxRatio = 0;
-    for (var i = 0; i < levels.length; i++) {
-      var lvl = levels[i];
-      // 1. Buy Imbalance (Ask side at P vs Bid side at P-1)
-      if (i > 0) {
-        var diagSell = num(levels[i - 1].sellVol);
-        var curBuy = num(lvl.buyVol);
-        if (diagSell > minVolume && curBuy > minVolume) {
-          lvl.buyRatio = curBuy / diagSell;
-          if (lvl.buyRatio >= imbRatio) {
-            lvl.buyImbalance = true;
-          }
-          if (lvl.buyRatio > maxRatio) maxRatio = lvl.buyRatio;
-        }
-      }
-      // 2. Sell Imbalance (Bid side at P vs Ask side at P+1)
-      if (i < levels.length - 1) {
-        var diagBuy = num(levels[i + 1].buyVol);
-        var curSell = num(lvl.sellVol);
-        if (diagBuy > minVolume && curSell > minVolume) {
-          lvl.sellRatio = curSell / diagBuy;
-          if (lvl.sellRatio >= imbRatio) {
-            lvl.sellImbalance = true;
-          }
-          if (lvl.sellRatio > maxRatio) maxRatio = lvl.sellRatio;
-        }
-      }
-    }
-    
-    // Calculate stacked imbalances
-    var buyRun = 0, sellRun = 0;
-    var maxBuyRun = 0, maxSellRun = 0;
-    var buyImb = 0, sellImb = 0;
-    
-    levels.forEach(function (lvl) {
-      if (lvl.buyImbalance) {
-        buyImb++;
-        buyRun++;
-        sellRun = 0;
-      } else if (lvl.sellImbalance) {
-        sellImb++;
-        sellRun++;
-        buyRun = 0;
+      if (useEngine) {
+        lvl.buyImbalance = lvl.buyImbalance === true;
+        lvl.sellImbalance = lvl.sellImbalance === true;
       } else {
-        buyRun = 0;
-        sellRun = 0;
+        lvl.buyImbalance = false;
+        lvl.sellImbalance = false;
       }
-      if (buyRun > maxBuyRun) maxBuyRun = buyRun;
-      if (sellRun > maxSellRun) maxSellRun = sellRun;
     });
+    var levelsVolume = levels.reduce(function (sum, lvl) { return sum + num(lvl.totalVol); }, 0);
+    var volumeMismatchAbs = Math.abs(levelsVolume - volume);
+    var volumeMismatchTolerance = Math.max(0.000001, Math.abs(volume) * 0.001);
+    var hasLevelVolumeMismatch = !!(levels.length && Number.isFinite(volume) && volume > 0 && volumeMismatchAbs > volumeMismatchTolerance);
+    
+    // Diagonal + stacked imbalances. Engine values win when present; otherwise
+    // recompute with the identical algorithm so the two never disagree.
+    var maxRatio = 0;
+    var buyImb = 0, sellImb = 0;
+    var maxBuyRun = 0, maxSellRun = 0;
+    if (useEngine) {
+      maxRatio = num(candle.maxImbalanceRatio);
+      buyImb = num(candle.buyImbalanceCount);
+      sellImb = num(candle.sellImbalanceCount);
+    } else {
+      for (var i = 0; i < levels.length; i++) {
+        var lvl = levels[i];
+        // 1. Buy Imbalance (Ask side at P vs Bid side at P-1)
+        if (i > 0) {
+          var diagSell = num(levels[i - 1].sellVol);
+          var curBuy = num(lvl.buyVol);
+          if (diagSell > minVolume && curBuy > minVolume) {
+            lvl.buyRatio = curBuy / diagSell;
+            if (lvl.buyRatio >= imbRatio) lvl.buyImbalance = true;
+            if (lvl.buyRatio > maxRatio) maxRatio = lvl.buyRatio;
+          }
+        }
+        // 2. Sell Imbalance (Bid side at P vs Ask side at P+1)
+        if (i < levels.length - 1) {
+          var diagBuy = num(levels[i + 1].buyVol);
+          var curSell = num(lvl.sellVol);
+          if (diagBuy > minVolume && curSell > minVolume) {
+            lvl.sellRatio = curSell / diagBuy;
+            if (lvl.sellRatio >= imbRatio) lvl.sellImbalance = true;
+            if (lvl.sellRatio > maxRatio) maxRatio = lvl.sellRatio;
+          }
+        }
+      }
+      var buyRun = 0, sellRun = 0;
+      levels.forEach(function (lvl) {
+        if (lvl.buyImbalance) { buyImb++; buyRun++; sellRun = 0; }
+        else if (lvl.sellImbalance) { sellImb++; sellRun++; buyRun = 0; }
+        else { buyRun = 0; sellRun = 0; }
+        if (buyRun > maxBuyRun) maxBuyRun = buyRun;
+        if (sellRun > maxSellRun) maxSellRun = sellRun;
+      });
+    }
     
     // Calculate Value Area (VAH / VAL / POC)
     var poc = 0, vah = 0, val = 0;
@@ -278,7 +332,7 @@
       vaSet.add(poc);
       
       var accumVol = pocLevel.totalVol;
-      var targetVol = totalVol * 0.70;
+      var targetVol = totalVol * (valueAreaPct / 100);
       
       var up = pocIdx + 1;
       var down = pocIdx - 1;
@@ -322,19 +376,23 @@
       sellVol: sell,
       buySellDerived: buySellDerived,
       volume: volume,
+      levelsVolume: levelsVolume,
+      levelVolumeMismatch: hasLevelVolumeMismatch,
+      levelVolumeMismatchAbs: volumeMismatchAbs,
       delta: delta,
       cvd: cvdAtCandle(state, candle),
       maxImbalanceRatio: maxRatio,
       buyImbalanceCount: buyImb,
       sellImbalanceCount: sellImb,
-      stackedBuyImbalanceCount: maxBuyRun >= minStack ? maxBuyRun : 0,
-      stackedSellImbalanceCount: maxSellRun >= minStack ? maxSellRun : 0,
-      hasBuyAbsorption: lowBuyRatio >= imbRatio && candle.close >= candle.open,
-      hasSellAbsorption: highSellRatio >= imbRatio && candle.close <= candle.open,
-      isExhaustionHigh: !!(highLevel && avgLevelVol && highTotal < avgLevelVol * 0.35),
-      isExhaustionLow: !!(lowLevel && avgLevelVol && lowTotal < avgLevelVol * 0.35),
-      isUnfinishedHigh: !!(highLevel && num(highLevel.buyVol) > 0 && num(highLevel.sellVol) > 0),
-      isUnfinishedLow: !!(lowLevel && num(lowLevel.buyVol) > 0 && num(lowLevel.sellVol) > 0),
+      stackedBuyImbalanceCount: useEngine ? num(candle.stackedBuyImbalanceCount) : (maxBuyRun >= minStack ? maxBuyRun : 0),
+      stackedSellImbalanceCount: useEngine ? num(candle.stackedSellImbalanceCount) : (maxSellRun >= minStack ? maxSellRun : 0),
+      hasBuyAbsorption: useEngine ? candle.hasBuyAbsorption === true : (lowBuyRatio >= imbRatio && candle.close >= candle.open),
+      hasSellAbsorption: useEngine ? candle.hasSellAbsorption === true : (highSellRatio >= imbRatio && candle.close <= candle.open),
+      isExhaustionHigh: useEngine ? candle.isExhaustionHigh === true : (!!(highLevel && avgLevelVol && highTotal < avgLevelVol * 0.35)),
+      isExhaustionLow: useEngine ? candle.isExhaustionLow === true : (!!(lowLevel && avgLevelVol && lowTotal < avgLevelVol * 0.35)),
+      isUnfinishedHigh: useEngine ? candle.isUnfinishedHigh === true : (!!(highLevel && num(highLevel.buyVol) > 0 && num(highLevel.sellVol) > 0)),
+      isUnfinishedLow: useEngine ? candle.isUnfinishedLow === true : (!!(lowLevel && num(lowLevel.buyVol) > 0 && num(lowLevel.sellVol) > 0)),
+      signalsSource: useEngine ? 'engine' : 'computed',
       levels: levels,
       poc: poc,
       vah: vah,
@@ -778,8 +836,8 @@
         '<div class="v6-inspector-top">',
           '<div>',
             '<span class="v6-inspector-kicker">' + (pick.locked ? 'Locked candle' : 'Hover candle') + '</span>',
-            '<strong>' + esc(fmtDateTime(openTime(candle))) + ' UTC</strong>',
-            '<small style="color:var(--v6-text-mute);font-size:10px">→ ' + esc(fmtTime(closeTime(candle))) + ' UTC  (' + esc(candleTf) + ')</small>',
+            '<strong>' + esc(fmtDateTimeMode(openTime(candle), state, candle)) + '</strong>',
+            '<small style="color:var(--v6-text-mute);font-size:10px">→ ' + esc(fmtTimeMode(closeTime(candle), state, candle)) + '  (' + esc(candleTf) + ')</small>',
           '</div>',
           '<button type="button" class="v6-btn v6-btn-sm" data-v6-action="toggle-candle-lock">' + lockText + '</button>',
         '</div>',
@@ -801,7 +859,11 @@
           metric('CVD', fmtVal(m.cvd), cvdCls),
           metric('Max Imb', ratioText(m.maxImbalanceRatio), 'is-warn'),
         '</div>',
-        '<div class="v6-inspector-section-title">Derived metrics</div>',
+        '<div class="v6-inspector-section-title">Derived metrics' +
+          (m.signalsSource === 'engine'
+            ? '<span class="v6-inspector-srcbadge is-engine" title="Computed by the engine — deterministic across live & replay">engine</span>'
+            : '<span class="v6-inspector-srcbadge is-computed" title="Computed client-side — engine signals unavailable for this candle">computed</span>') +
+        '</div>',
         '<div class="v6-inspector-grid">',
           metric('Buy Imb', String(m.buyImbalanceCount), 'is-pos'),
           metric('Sell Imb', String(m.sellImbalanceCount), 'is-neg'),
@@ -815,6 +877,7 @@
           flag('Exhaustion low', m.isExhaustionLow),
           flag('Unfinished high', m.isUnfinishedHigh),
           flag('Unfinished low', m.isUnfinishedLow),
+          flag('Level sum mismatch', m.levelVolumeMismatch),
         '</div>',
         '<div class="v6-inspector-section-title">Footprint levels</div>',
         renderLevelRows(m.levels, m.poc, m.vah, m.val, m.vaSet, m.openIdx, m.closeIdx, loadingFootprint),

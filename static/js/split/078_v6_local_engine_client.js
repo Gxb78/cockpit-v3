@@ -536,7 +536,10 @@
         sellVol: sellVol,
         delta: delta,
         totalVol: Math.max(0, totalVol),
-        trades: Math.max(0, Math.floor(Number(level.trades || 0)))
+        trades: Math.max(0, Math.floor(Number(level.trades || 0))),
+        // Engine-derived diagonal-imbalance flags (see calc.DeriveFootprintSignals).
+        buyImbalance: level.buyImbalance === true,
+        sellImbalance: level.sellImbalance === true
       };
     }
 
@@ -567,7 +570,21 @@
         closed: !!payload.closed,
         levels: levels,
         source: payload.source || 'trades',
-        tsLocal: Number(payload.tsLocal || fallbackTs || Date.now())
+        tsLocal: Number(payload.tsLocal || fallbackTs || Date.now()),
+        // Engine-derived orderflow signals — the inspector prefers these over its
+        // own client-side computation (deterministic across live/replay).
+        signalsDerived: payload.signalsDerived === true,
+        maxImbalanceRatio: Math.max(0, Number(payload.maxImbalanceRatio || 0)),
+        buyImbalanceCount: Math.max(0, Math.floor(Number(payload.buyImbalanceCount || 0))),
+        sellImbalanceCount: Math.max(0, Math.floor(Number(payload.sellImbalanceCount || 0))),
+        stackedBuyImbalanceCount: Math.max(0, Math.floor(Number(payload.stackedBuyImbalanceCount || 0))),
+        stackedSellImbalanceCount: Math.max(0, Math.floor(Number(payload.stackedSellImbalanceCount || 0))),
+        hasBuyAbsorption: payload.hasBuyAbsorption === true,
+        hasSellAbsorption: payload.hasSellAbsorption === true,
+        isExhaustionHigh: payload.isExhaustionHigh === true,
+        isExhaustionLow: payload.isExhaustionLow === true,
+        isUnfinishedHigh: payload.isUnfinishedHigh === true,
+        isUnfinishedLow: payload.isUnfinishedLow === true
       };
     }
 
