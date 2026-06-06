@@ -151,6 +151,11 @@ func (e *Engine) FootprintCandles(trade marketdata.Trade) []protocol.Envelope {
 }
 
 func (e *Engine) OrderBook(snapshot marketdata.OrderBookSnapshot) protocol.Envelope {
+	// Guarantee a positive contract size so the UI never has to guess a default
+	// (covers any snapshot source that didn't populate the metadata field).
+	if snapshot.ContractSize <= 0 {
+		snapshot.ContractSize = 1
+	}
 	return e.next("order_book", snapshot)
 }
 

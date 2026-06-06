@@ -25,6 +25,17 @@ func TestParseDepthSnapshotMissingID(t *testing.T) {
 	}
 }
 
+func TestNormalizeDepthSetsContractSize(t *testing.T) {
+	data := []byte(`{"lastUpdateId":1,"bids":[["100.0","2"]],"asks":[["101.0","1"]]}`)
+	snap, err := NormalizeDepth(data, "BTCUSDT", 1, 20)
+	if err != nil {
+		t.Fatalf("normalize depth: %v", err)
+	}
+	if snap.ContractSize != 1 {
+		t.Fatalf("expected contractSize 1, got %v", snap.ContractSize)
+	}
+}
+
 func TestDepthSnapshotPath(t *testing.T) {
 	spot := depthSnapshotPath(MarketSpot, "", "btcusdt", 9999)
 	if !strings.Contains(spot, "/api/v3/depth?symbol=BTCUSDT&limit=5000") {

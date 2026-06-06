@@ -33,6 +33,10 @@ type OrderBookSnapshot struct {
 	Mid        float64          `json:"mid"`
 	Depth      int              `json:"depth"`
 	Source     string           `json:"source"`
+	// ContractSize is the instrument's contract multiplier in base units. It is
+	// 1 for base-coin-denominated venues (Binance USDT, Hyperliquid) and lets the
+	// UI render the DOM in contract counts. The engine defaults it to 1 when unset.
+	ContractSize float64 `json:"contractSize"`
 }
 
 type Candle struct {

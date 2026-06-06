@@ -62,6 +62,20 @@ func TestNormalizeBook(t *testing.T) {
 	}
 }
 
+func TestNormalizeBookSetsContractSize(t *testing.T) {
+	snapshot, err := NormalizeBook(WsBook{
+		Coin:   "BTC",
+		Levels: [2][]WsLevel{{{Px: "10", Sz: "1", N: 1}}, {{Px: "11", Sz: "1", N: 1}}},
+		Time:   1,
+	}, 2, 20)
+	if err != nil {
+		t.Fatalf("normalize book: %v", err)
+	}
+	if snapshot.ContractSize != 1 {
+		t.Fatalf("expected contractSize 1, got %v", snapshot.ContractSize)
+	}
+}
+
 func TestNormalizeBookAppliesDepth(t *testing.T) {
 	snapshot, err := NormalizeBook(WsBook{
 		Coin: "BTC",
