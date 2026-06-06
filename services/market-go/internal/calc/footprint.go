@@ -19,6 +19,9 @@ type FootprintConfig struct {
 	TickSize   float64
 	EmitEvery  time.Duration
 	MaxLevels  int
+	// Orderflow-signal thresholds. Zero values fall back to defaults (see
+	// FootprintSignalConfig.withDefaults), which mirror the UI defaults.
+	Signals FootprintSignalConfig
 }
 
 type FootprintCalculator struct {
@@ -28,6 +31,7 @@ type FootprintCalculator struct {
 	tickSize   float64
 	throttleMs int64
 	maxLevels  int
+	signalCfg  FootprintSignalConfig
 	current    map[footprintKey]*footprintState
 	lastEmitMs map[footprintKey]int64
 }
@@ -58,6 +62,7 @@ func NewFootprintCalculator(cfg FootprintConfig) *FootprintCalculator {
 		tickSize:   tickSize,
 		throttleMs: cfg.EmitEvery.Milliseconds(),
 		maxLevels:  maxLevels,
+		signalCfg:  cfg.Signals.withDefaults(),
 		current:    make(map[footprintKey]*footprintState),
 		lastEmitMs: make(map[footprintKey]int64),
 	}
@@ -141,6 +146,7 @@ func (c *FootprintCalculator) snapshot(state *footprintState, closed bool) marke
 	candle.Closed = closed
 	candle.Levels = footprintLevels(state.levels, c.maxLevels)
 	candle.POC = footprintPOC(state.levels)
+	DeriveFootprintSignals(&candle, c.signalCfg)
 	return candle
 }
 

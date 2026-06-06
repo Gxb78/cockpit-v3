@@ -87,6 +87,9 @@ type FootprintLevel struct {
 	Delta    float64 `json:"delta"`
 	TotalVol float64 `json:"totalVol"`
 	Trades   int     `json:"trades"`
+	// Diagonal-imbalance flags (engine-derived). See calc.DeriveFootprintSignals.
+	BuyImbalance  bool `json:"buyImbalance"`
+	SellImbalance bool `json:"sellImbalance"`
 }
 
 type FootprintCandle struct {
@@ -107,6 +110,21 @@ type FootprintCandle struct {
 	Closed     bool             `json:"closed"`
 	Levels     []FootprintLevel `json:"levels"`
 	Source     string           `json:"source"`
+	// Engine-derived orderflow signals (see calc.DeriveFootprintSignals). The UI
+	// prefers these over its own client-side computation when SignalsDerived is
+	// set, giving deterministic signals across live and replay sessions.
+	MaxImbalanceRatio    float64 `json:"maxImbalanceRatio"`
+	BuyImbalanceCount    int     `json:"buyImbalanceCount"`
+	SellImbalanceCount   int     `json:"sellImbalanceCount"`
+	StackedBuyImbalance  int     `json:"stackedBuyImbalanceCount"`
+	StackedSellImbalance int     `json:"stackedSellImbalanceCount"`
+	HasBuyAbsorption     bool    `json:"hasBuyAbsorption"`
+	HasSellAbsorption    bool    `json:"hasSellAbsorption"`
+	IsExhaustionHigh     bool    `json:"isExhaustionHigh"`
+	IsExhaustionLow      bool    `json:"isExhaustionLow"`
+	IsUnfinishedHigh     bool    `json:"isUnfinishedHigh"`
+	IsUnfinishedLow      bool    `json:"isUnfinishedLow"`
+	SignalsDerived       bool    `json:"signalsDerived"`
 }
 
 type HeatmapLevel struct {
