@@ -8,6 +8,8 @@
   var REPLAY_URL = 'http://127.0.0.1:8765/replay';
   var missingFootprintLoads = {};
   var missingFootprintFailures = {};
+  var AGGTRADES_FOOTPRINT_PAGE_LIMIT = 8000;
+  var AGGTRADES_FOOTPRINT_MAX_SPLIT_DEPTH = 6;
 
   function esc(value) {
     return V6OF.escapeHtml ? V6OF.escapeHtml(value) : String(value == null ? '' : value);
@@ -186,9 +188,15 @@
     }
     if (!volume && (buy || sell)) volume = buy + sell;
     if (!delta && (buy || sell)) delta = buy - sell;
+    var buySellDerived = false;
     if ((!buy && !sell) && volume) {
+      // No measured aggressor flow (partial candle / price-only source): split
+      // total volume by delta. This is a synthesized decomposition, NOT real
+      // buy/sell data — flag it so the UI can mark the metric "derived" and
+      // avoid implying false sentiment.
       buy = Math.max(0, (volume + delta) / 2);
       sell = Math.max(0, (volume - delta) / 2);
+      buySellDerived = true;
     }
     
     var imbRatio = num(settings.imbalanceRatio, 3.0);
@@ -312,6 +320,7 @@
     return {
       buyVol: buy,
       sellVol: sell,
+      buySellDerived: buySellDerived,
       volume: volume,
       delta: delta,
       cvd: cvdAtCandle(state, candle),
@@ -397,7 +406,7 @@
 
   function buildFootprintFromTrades(candle, state, rawTrades) {
     var settings = (state && state.settings) || {};
-    var tf = (state && state.timeframe) || candle.timeframe || '1m';
+    var tf = candle.timeframe || (state && state.timeframe) || '1m';
     var intervalMs = num(candle.intervalMs, timeframeToMs(tf));
     var openMs = openTime(candle);
     var closeMs = closeTime(candle) || (openMs + intervalMs - 1);
@@ -493,17 +502,18 @@
     return false;
   }
 
-  function fetchAggTradesFootprint(state, candle) {
-    var symbol = normalizeBinanceSymbol((state && state.symbol) || candle.symbol);
-    var start = openTime(candle);
-    var tf = (state && state.timeframe) || candle.timeframe || '1m';
-    var intervalMs = num(candle.intervalMs, timeframeToMs(tf));
-    var end = closeTime(candle) || (start + intervalMs - 1);
-    if (!start || !end || end <= start || end - start > 86400000) return Promise.resolve(false);
+  function aggTradeKey(t) {
+    if (!t) return '';
+    var id = t.id != null ? t.id : (t.a != null ? t.a : null);
+    if (id != null) return 'id:' + String(id);
+    return [num(t.time, num(t.T)), num(t.price, num(t.p)), num(t.qty, num(t.q)), t.side || t.m || ''].join(':');
+  }
+
+  function fetchAggTradesRange(symbol, start, end, depth) {
     var url = '/api/market/aggtrades?symbol=' + encodeURIComponent(symbol) +
       '&startTime=' + encodeURIComponent(Math.floor(start)) +
       '&endTime=' + encodeURIComponent(Math.floor(end)) +
-      '&limit=8000&soft=1';
+      '&limit=' + AGGTRADES_FOOTPRINT_PAGE_LIMIT + '&soft=1';
     return fetch(url)
       .then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -511,7 +521,37 @@
       })
       .then(function (data) {
         var trades = Array.isArray(data) ? data : (Array.isArray(data && data.trades) ? data.trades : []);
-        var fpCandle = buildFootprintFromTrades(candle, state, trades);
+        var capped = trades.length >= AGGTRADES_FOOTPRINT_PAGE_LIMIT;
+        if (!capped || depth >= AGGTRADES_FOOTPRINT_MAX_SPLIT_DEPTH || end <= start + 1) return trades;
+
+        var mid = Math.floor((start + end) / 2);
+        return fetchAggTradesRange(symbol, start, mid, depth + 1)
+          .then(function (left) {
+            return fetchAggTradesRange(symbol, mid + 1, end, depth + 1)
+              .then(function (right) { return left.concat(right); });
+          });
+      });
+  }
+
+  function fetchAggTradesFootprint(state, candle) {
+    var symbol = normalizeBinanceSymbol((state && state.symbol) || candle.symbol);
+    var start = openTime(candle);
+    var tf = candle.timeframe || (state && state.timeframe) || '1m';
+    var intervalMs = num(candle.intervalMs, timeframeToMs(tf));
+    var end = closeTime(candle) || (start + intervalMs - 1);
+    if (!start || !end || end <= start || end - start > 86400000) return Promise.resolve(false);
+    return fetchAggTradesRange(symbol, start, end, 0)
+      .then(function (trades) {
+        var seen = {};
+        var deduped = [];
+        (Array.isArray(trades) ? trades : []).forEach(function (trade) {
+          var key = aggTradeKey(trade);
+          if (!key || seen[key]) return;
+          seen[key] = 1;
+          deduped.push(trade);
+        });
+        deduped.sort(function (a, b) { return num(a.time, num(a.T)) - num(b.time, num(b.T)); });
+        var fpCandle = buildFootprintFromTrades(candle, state, deduped);
         if (!fpCandle) return false;
         mergeFootprintCandle(state, fpCandle);
         return true;
@@ -521,7 +561,7 @@
   function requestMissingFootprint(state, pick) {
     if (!pick || !pick.locked || hasFootprintLevels(pick.candle)) return false;
     var candle = pick.candle;
-    var tf = (state && state.timeframe) || candle.timeframe || '1m';
+    var tf = candle.timeframe || (state && state.timeframe) || '1m';
     var symbol = (state && state.symbol) || candle.symbol || 'BTCUSDT';
     var key = footprintKey(symbol, tf, candle);
     if (missingFootprintLoads[key]) return true;
@@ -608,9 +648,13 @@
     return body ? (v >= 0 ? '+' : '-') + body : '0';
   }
 
-  function metric(label, value, cls) {
+  function metric(label, value, cls, derived) {
     if (value == null || value === '') value = '--';
-    return '<div class="v6-inspector-card ' + (cls || '') + '"><em>' + esc(label) + '</em><strong>' + esc(value) + '</strong></div>';
+    var mark = derived
+      ? '<span class="v6-inspector-derived" title="Synthesized from volume ± delta — not measured buy/sell flow">~est</span>'
+      : '';
+    return '<div class="v6-inspector-card ' + (cls || '') + (derived ? ' is-derived' : '') +
+      '"><em>' + esc(label) + mark + '</em><strong>' + esc(value) + '</strong></div>';
   }
 
   function flag(label, on) {
@@ -751,8 +795,8 @@
           metric('Low', fmtPrice(candle.low)),
           metric('Close', fmtPrice(candle.close)),
           metric('Volume', fmtVal(m.volume)),
-          metric('Buy Vol', fmtVal(m.buyVol), 'is-pos'),
-          metric('Sell Vol', fmtVal(m.sellVol), 'is-neg'),
+          metric('Buy Vol', fmtVal(m.buyVol), 'is-pos', m.buySellDerived),
+          metric('Sell Vol', fmtVal(m.sellVol), 'is-neg', m.buySellDerived),
           metric('Delta', fmtVal(m.delta) + ' (' + deltaPctText + ')', deltaCls),
           metric('CVD', fmtVal(m.cvd), cvdCls),
           metric('Max Imb', ratioText(m.maxImbalanceRatio), 'is-warn'),
@@ -930,6 +974,7 @@
 
   V6OF.Inspector = {
     findActiveCandle: findActiveCandle,
+    deriveMetrics: deriveMetrics,
     tickDecimals: tickDecimals,
     priceBucketKey: priceBucketKey,
     render: renderInspector,

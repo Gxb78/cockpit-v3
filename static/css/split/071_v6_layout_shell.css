@@ -662,6 +662,19 @@
 .v6-inspector-card.is-pos strong { color: var(--v6-buy); }
 .v6-inspector-card.is-neg strong { color: var(--v6-sell); }
 .v6-inspector-card.is-warn strong { color: var(--v6-gold); }
+/* Derived (synthesized) metric: buy/sell split from volume ± delta, not real flow. */
+.v6-inspector-card.is-derived { opacity: 0.78; }
+.v6-inspector-card.is-derived strong { font-style: italic; }
+.v6-inspector-derived {
+  margin-left: 3px;
+  padding: 0 3px;
+  border-radius: 3px;
+  color: var(--v6-text-faint);
+  background: var(--v6-surface-3);
+  font: 800 7px/1.4 var(--v6-mono);
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+}
 .v6-inspector-section-title {
   color: var(--v6-text-dim);
   font: 900 9px/1 var(--v6-font);
