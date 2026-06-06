@@ -140,6 +140,97 @@ class OrderflowStudySettingsTests(unittest.TestCase):
         self.assertEqual(out["loaded"]["inspectorTimeZoneMode"], "utc")
         self.assertEqual(out["loaded"]["domScaleMode"], "book")
 
+    def test_bind_store_hydrates_and_syncs_backend_surface(self):
+        script = textwrap.dedent(
+            f"""
+            const fs = require('fs');
+            const vm = require('vm');
+            const code = fs.readFileSync({json.dumps(SETTINGS_JS)}, 'utf8');
+            const storage = {{}};
+            const posts = [];
+            const context = {{
+              window: {{}},
+              console: {{ warn() {{}} }},
+              localStorage: {{
+                getItem(k) {{ return storage[k] || null; }},
+                setItem(k, v) {{ storage[k] = String(v); }},
+                removeItem(k) {{ delete storage[k]; }}
+              }},
+              fetch(url, opts) {{
+                if (opts && opts.method === 'POST') {{
+                  posts.push(JSON.parse(opts.body));
+                  return Promise.resolve({{ ok: true, json() {{ return Promise.resolve({{ ok: true }}); }} }});
+                }}
+                return Promise.resolve({{
+                  ok: true,
+                  json() {{
+                    return Promise.resolve({{
+                      workspace_profile: {{
+                        v6_orderflow_settings: {{
+                          schemaVersion: 1,
+                          showTape: false,
+                          theme: 'dark-tv'
+                        }}
+                      }}
+                    }});
+                  }}
+                }});
+              }},
+              setTimeout(fn) {{ fn(); return 1; }},
+              clearTimeout() {{}},
+              Date,
+              Intl,
+              JSON,
+              Object,
+              Number,
+              Array,
+              Math
+            }};
+            context.window.V6OF = {{}};
+            vm.runInNewContext(code, context);
+
+            let subscriber = null;
+            let currentSettings = {{}};
+            const store = {{
+              updateSettings(patch) {{
+                currentSettings = Object.assign({{}}, currentSettings, patch);
+                if (subscriber) subscriber({{ settings: currentSettings }});
+              }},
+              subscribe(fn) {{ subscriber = fn; return function () {{}}; }}
+            }};
+
+            (async () => {{
+              context.window.V6OF.Settings.bindStore(store);
+              for (let i = 0; i < 6; i++) await Promise.resolve();
+              currentSettings.showDOM = false;
+              subscriber({{ settings: currentSettings }});
+              await Promise.resolve();
+              process.stdout.write(JSON.stringify({{
+                stored: JSON.parse(storage['cockpitV6.orderflow.settings']),
+                currentSettings,
+                posts
+              }}));
+            }})().catch((err) => {{
+              process.stderr.write(err && err.stack ? err.stack : String(err));
+              process.exit(1);
+            }});
+            """
+        )
+        result = subprocess.run(
+            ["node", "-e", script],
+            cwd=PROJECT_DIR,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        out = json.loads(result.stdout)
+        self.assertFalse(out["stored"]["showTape"])
+        self.assertEqual(out["stored"]["theme"], "dark-tv")
+        self.assertFalse(out["currentSettings"]["showDOM"])
+        self.assertEqual(len(out["posts"]), 1)
+        self.assertIn("v6_orderflow_settings", out["posts"][0])
+        self.assertFalse(out["posts"][0]["v6_orderflow_settings"]["showDOM"])
+
 
 if __name__ == "__main__":
     unittest.main()

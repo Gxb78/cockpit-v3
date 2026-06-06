@@ -63,7 +63,7 @@ function setJournalLayoutMode(mode, opts = {}) {
   state._journalLayoutExplicit = persist; // auto-switch (persist:false) ne compte pas
   updateJournalLayoutToggleUI();
   updateJournalControlsVisibility();
-  if (persist) localStorage.setItem(JOURNAL_LAYOUT_MODE_KEY, mode);
+  if (persist) { localStorage.setItem(JOURNAL_LAYOUT_MODE_KEY, mode); saveUiState(); }
   if (rerender && state.currentPage === "journal") {
     if (typeof closeJournalDayTrades === "function") closeJournalDayTrades();
     renderCalendar();

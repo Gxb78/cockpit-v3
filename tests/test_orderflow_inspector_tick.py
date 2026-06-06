@@ -7,6 +7,7 @@ import unittest
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INSPECTOR_JS = os.path.join(PROJECT_DIR, "static", "js", "split", "081_v6_orderflow_inspector.js")
+STORE_JS = os.path.join(PROJECT_DIR, "static", "js", "split", "071_v6_orderflow_store.js")
 SETTINGS_JS = os.path.join(PROJECT_DIR, "static", "js", "split", "079_v6_orderflow_settings.js")
 
 
@@ -72,15 +73,32 @@ class InspectorTickBucketingTests(unittest.TestCase):
             f"""
             const fs = require('fs');
             const vm = require('vm');
+            const storeCode = fs.readFileSync({json.dumps(STORE_JS)}, 'utf8');
             const code = fs.readFileSync({json.dumps(INSPECTOR_JS)}, 'utf8');
+            const root = {{
+              dataset: {{ v6Mounted: '1' }},
+              _v6Store: null,
+              closest(selector) {{ return selector === '[data-v6-mounted="1"]' ? this : null; }},
+              querySelector() {{ return null; }}
+            }};
             const context = {{
               window: {{ V6OF: {{}} }},
-              document: {{ createElement: () => ({{}}) }},
+              document: {{ createElement: () => ({{}}), querySelector: () => root }},
               console: {{ log(){{}}, warn(){{}}, error(){{}} }},
               Date, Intl, Math, JSON, Object, Number, Array, String, Promise, URLSearchParams,
               setTimeout, clearTimeout,
               requestAnimationFrame: function(cb){{ return 0; }}
             }};
+            context.window.V6OF.Contract = {{
+              createEmptyState: () => ({{
+                settings: {{}}, ui: {{}}, trades: [], candles: [], chartCandles: [],
+                deltaBucketsByInterval: {{}}, latestDeltaByInterval: {{}}, lastOrderBookBySymbol: {{}},
+                selectedDomSymbol: 'BTCUSDT', selectedHeatmapSymbol: 'BTCUSDT', selectedFootprintSymbol: 'BTCUSDT',
+                vwapBySymbol: {{}}, contractVersion: 'test', source: 'live', dataFreshness: 'offline',
+                transportStatus: 'disconnected', symbol: 'BTCUSDT', timeframe: '1m'
+              }})
+            }};
+            vm.runInNewContext(storeCode, context);
             vm.runInNewContext(code, context);
             (async function() {{
               {body}
@@ -320,7 +338,7 @@ class InspectorTickBucketingTests(unittest.TestCase):
               ui: { activeCandleOpenTime: 1000, activeCandleLocked: true },
               settings: { tickSize: 1 }
             };
-            V6OF.store = {
+            const store = {
               state,
               getState() { return this.state; },
               setState(patchOrFn) {
@@ -328,13 +346,14 @@ class InspectorTickBucketingTests(unittest.TestCase):
                 this.state = Object.assign({}, this.state, patch || {});
               }
             };
+            V6OF.setRootStore(root, store);
             V6OF.Inspector.render(state);
             await new Promise(resolve => setTimeout(resolve, 50));
             process.stdout.write(JSON.stringify({
               calls: urls.length,
               hasSplitStart: urls.some(u => u.indexOf('startTime=1000') !== -1 && u.indexOf('endTime=30999') !== -1),
               hasSplitEnd: urls.some(u => u.indexOf('startTime=31000') !== -1 && u.indexOf('endTime=60999') !== -1),
-              footprintTrades: V6OF.store.state.footprintCandles[0] && V6OF.store.state.footprintCandles[0].levels.reduce((sum, l) => sum + l.trades, 0)
+              footprintTrades: store.state.footprintCandles[0] && store.state.footprintCandles[0].levels.reduce((sum, l) => sum + l.trades, 0)
             }));
             """
         )
@@ -369,7 +388,7 @@ class InspectorTickBucketingTests(unittest.TestCase):
               ui: { activeCandleOpenTime: 1000, activeCandleLocked: true },
               settings: { tickSize: 1 }
             };
-            V6OF.store = {
+            const store = {
               state,
               getState() { return this.state; },
               setState(patchOrFn) {
@@ -377,15 +396,16 @@ class InspectorTickBucketingTests(unittest.TestCase):
                 this.state = Object.assign({}, this.state, patch || {});
               }
             };
+            V6OF.setRootStore(root, store);
             V6OF.Inspector.render(state);
             await new Promise(resolve => setTimeout(resolve, 30));
-            const fp = V6OF.store.state.footprintCandles[0] || {};
+            const fp = store.state.footprintCandles[0] || {};
             process.stdout.write(JSON.stringify({
               url: urls[0] || '',
               timeframe: fp.timeframe,
               intervalMs: fp.intervalMs,
               closeTime: fp.closeTime,
-              selectedTf: V6OF.store.state.selectedFootprintTimeframe
+              selectedTf: store.state.selectedFootprintTimeframe
             }));
             """
         )

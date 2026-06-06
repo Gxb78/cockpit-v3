@@ -1,5 +1,5 @@
 // ---------- 083_v6_chart_viewport.js ----------
-// Phase 17: Chart viewport model for Cockpit V6 orderflow.
+// Chart viewport: owns the price/time coordinate system for the canvas chart engine.
 // Owns the price/time coordinate system used by the canvas chart engine.
 // UI-only. No network, no engine changes. Canvas 2D coordinates.
 //
@@ -16,6 +16,15 @@
   'use strict';
 
   var V6OF = window.V6OF = window.V6OF || {};
+  if (!V6OF.register) {
+    ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'].forEach(function (name) { V6OF[name] = V6OF[name] || {}; });
+    V6OF.register = function (domain, name, value, legacyName) {
+      V6OF[domain] = V6OF[domain] || {};
+      V6OF[domain][name] = value;
+      if (legacyName) V6OF[legacyName] = value;
+      return value;
+    };
+  }
 
   // Hard limits to avoid degenerate / crashing viewports.
   var MIN_TIME_SPAN_MS = 4000;            // 4s
@@ -275,5 +284,5 @@
     return vp;
   }
 
-  V6OF.ChartViewport = { create: create };
+  V6OF.register('UI', 'ChartViewport', { create: create }, 'ChartViewport');
 })();

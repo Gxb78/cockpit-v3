@@ -1,13 +1,20 @@
 // ---------- 073_v6_orderflow_layout.js ----------
-// Isolated DOM layout for Cockpit V6 orderflow.
-// Phase 7: engine bar, status, counters, pause/resume, EngineClient integration.
-// Phase 15: full settings panel, panel toggles, buffer controls, stale detection,
-//           localStorage persistence via V6OF.Settings.
+// Main V6 orderflow surface: renders the full DOM layout, engine bar, status counters,
+// settings panel, buffer controls, stale detection. Owns the V6OF.Layout.render() entry point.
 
 (function () {
   'use strict';
 
   var V6OF = window.V6OF = window.V6OF || {};
+  if (!V6OF.register) {
+    ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'].forEach(function (name) { V6OF[name] = V6OF[name] || {}; });
+    V6OF.register = function (domain, name, value, legacyName) {
+      V6OF[domain] = V6OF[domain] || {};
+      V6OF[domain][name] = value;
+      if (legacyName) V6OF[legacyName] = value;
+      return value;
+    };
+  }
 
   // ── REST request cache (TTL per endpoint) ──
   var _restCache = {};
@@ -83,7 +90,7 @@
     setText(root, '[data-v6-live-status]', message);
   }
 
-  V6OF.announceStatus = announceStatus;
+  V6OF.register('UI', 'announceStatus', announceStatus, 'announceStatus');
 
   function hydrateThemeVars(root, settings) {
     if (!root) return;
@@ -212,7 +219,7 @@
           '</div>',
           '<div class="v6-header-actions">',
             '<button type="button" class="v6-btn v6-btn-icon v6-fullscreen-slot" data-v6-action="fullscreen-slot" data-testid="orderflow-fullscreen-slot" aria-label="Fullscreen slot reserved" title="Fullscreen slot reserved" disabled>⛶</button>',
-            '<button type="button" class="v6-conn" data-v6-action="toggle-connection" title="Toggle local engine connection">',
+            '<button type="button" class="v6-conn" data-v6-action="toggle-connection" title="Disconnect or reconnect the auto-connected local engine">',
               '<span class="v6-engine-dot" data-v6-engine-dot></span>',
               '<span class="v6-conn-text" data-v6-engine-status-text>Offline</span>',
             '</button>',
@@ -318,6 +325,9 @@
                 '<label class="v6-field">Imbalance min volume',
                   '<input type="number" min="0" step="0.1" data-v6-setting="imbalanceMinVolume" />',
                 '</label>',
+                '<label class="v6-field">Exhaustion factor',
+                  '<input type="number" min="0.05" max="1" step="0.05" data-v6-setting="exhaustionFactor" />',
+                '</label>',
                 '<label class="v6-field">Value area %',
                   '<input type="number" min="1" max="100" step="1" data-v6-setting="footprintValueAreaPct" />',
                 '</label>',
@@ -400,10 +410,6 @@
             '<div class="v6-panel-body" data-v6-cvd-panel></div>',
           '</section>',
         '</div>',
-      '</div>',
-      '<div class="v6-legacy-strip" data-orderflow-slot="legacy" role="region" aria-label="Legacy orderflow view" data-testid="orderflow-legacy-slot">',
-        '<span>Legacy orderflow canvas visible</span>',
-        '<button type="button" class="v6-btn" data-v6-action="v6">Show V6</button>',
       '</div>'
     ].join('');
   }
@@ -567,12 +573,12 @@
     var inspectorTimeZoneMode = root.querySelector('[data-v6-setting="inspectorTimeZoneMode"]');
     if (inspectorTimeZoneMode && document.activeElement !== inspectorTimeZoneMode) inspectorTimeZoneMode.value = settings.inspectorTimeZoneMode || 'utc';
 
-    // Checkboxes
+    // Checkboxes — resolved centrally via SETTINGS_SCHEMA
     var toggles = ['showTape', 'showDOM', 'showCVD', 'showVwap', 'showHeatmap', 'showFootprint', 'showLastPrice', 'showGrid', 'showVwapBands', 'alertsEnabled', 'showFootprintVA'];
-    var toggleDefaultsOn = { showTape: 1, showDOM: 1, showCVD: 1, showFootprint: 1, showLastPrice: 1, showGrid: 1, showFootprintVA: 1 };
+    var resolved = V6OF.resolveSettings(settings || {});
     toggles.forEach(function (key) {
       var el = root.querySelector('[data-v6-setting="' + key + '"]');
-      if (el) el.checked = toggleDefaultsOn[key] ? settings[key] !== false : settings[key] === true;
+      if (el && key in resolved) el.checked = resolved[key];
     });
 
     // Number inputs — only sync if not focused
@@ -595,6 +601,7 @@
       imbalanceRatio: 'imbalanceRatio',
       imbalanceStack: 'imbalanceStack',
       imbalanceMinVolume: 'imbalanceMinVolume',
+      exhaustionFactor: 'exhaustionFactor',
       footprintValueAreaPct: 'footprintValueAreaPct',
       minWickTicks: 'minWickTicks',
       bgColor: 'bgColor',
@@ -611,11 +618,8 @@
   }
 
   function syncPanelVisibility(root, settings) {
-    var panels = {
-      tape: settings.showTape !== false,
-      dom: settings.showDOM !== false,
-      cvd: settings.showCVD !== false
-    };
+    var r = V6OF.resolveSettings(settings || {});
+    var panels = { tape: r.showTape, dom: r.showDOM, cvd: r.showCVD };
     Object.keys(panels).forEach(function (panelName) {
       var el = root.querySelector('[data-v6-panel="' + panelName + '"]');
       if (el) {
@@ -772,12 +776,12 @@
     return candles;
   }
 
-  V6OF.LayoutIngress = Object.freeze({
+  V6OF.register('Data', 'LayoutIngress', Object.freeze({
     normalizeSymbol: normalizeSymbol,
     normalizeOrderBook: normalizeIngressOrderBook,
     normalizeTrades: normalizeIngressTrades,
     normalizeCandles: normalizeIngressCandles
-  });
+  }), 'LayoutIngress');
 
   function prefetchDomDepth(store, reason) {
     if (!store) return;
@@ -843,11 +847,31 @@
     setText(root, '[data-v6-health-drops]', String(stats.droppedCount || 0));
 
     // Status bar updates
-    setText(root, '[data-v6-status-url]', 'ws://127.0.0.1:8765/stream');
+    setText(root, '[data-v6-status-url]', V6OF.marketWsUrl ? V6OF.marketWsUrl() : 'configured');
     setText(root, '[data-v6-status-reconnects]', String(stats.reconnectsCount || 0));
     setText(root, '[data-v6-status-lag]', formatEngineLag(stats.lagMs));
     setText(root, '[data-v6-status-queue]', String(stats.queueDepth || 0));
     setText(root, '[data-v6-status-drops]', String(stats.droppedCount || 0));
+    if (state) {
+      var cfgStatus = state.engineConfigStatus || 'stale';
+      var cfgLabel = cfgStatus === 'synced' ? 'synced'
+        : cfgStatus === 'failed' ? 'failed'
+        : 'stale';
+      var cfgEl = root.querySelector('[data-v6-engine-config-status]');
+      if (cfgEl) {
+        cfgEl.textContent = cfgLabel;
+        cfgEl.className = 'v6-sb-val is-engine-config-' + cfgLabel;
+        if (cfgStatus === 'synced' && state.engineConfigSyncedAt) {
+          cfgEl.title = 'Engine config synced at ' + V6OF.format.time(state.engineConfigSyncedAt);
+        } else if (cfgStatus === 'failed') {
+          cfgEl.title = state.engineConfigError || 'Engine config sync failed';
+        } else if (state.engineConfigStaleAt) {
+          cfgEl.title = 'Engine config stale since ' + V6OF.format.time(state.engineConfigStaleAt);
+        } else {
+          cfgEl.title = 'Engine config has not been synced yet';
+        }
+      }
+    }
     if (state) {
       setText(root, '[data-v6-status-buffer-trades]', String((state.trades && state.trades.length) || 0));
       setText(root, '[data-v6-status-buffer-heatmap]', String((state.heatmapFrames && state.heatmapFrames.length) || 0));
@@ -923,7 +947,7 @@
     if (!shouldShow) return;
     var text = stats.lastError || (status === 'error'
       ? 'WebSocket engine error. Retrying connection.'
-      : 'Local engine is offline. Start marketd or reconnect.');
+      : 'Local engine is offline. Auto-connect will retry when marketd is available.');
     setText(region, '[data-v6-mount-error-text]', text);
   }
 
@@ -949,7 +973,6 @@
 
   function render(root, state, force) {
     if (!root || !state) return;
-    root.classList.toggle('v6-legacy-mode', !!(state.ui && state.ui.legacyMode));
 
     var engineClient = root._v6EngineClient;
     if (engineClient) {
@@ -988,14 +1011,13 @@
 
     // Mid price (book.mid preferred, fallback to bid/ask average)
     var mid = (book && Number.isFinite(book.mid)) ? book.mid : (Number.isFinite(bid) && Number.isFinite(ask) ? (bid + ask) / 2 : NaN);
-    // Chart layer toggles active state.
+    // Chart layer toggles active state — resolved centrally
     var layerKeys = { candles: 'showCandles', bubbles: 'showBubbles', heatmap: 'showHeatmap', footprint: 'showFootprint' };
-    var onByDefault = { showCandles: 1 };
+    var r = V6OF.resolveSettings(settings || {});
     var layerBtns = root.querySelectorAll('[data-v6-action="layer"]');
     Array.prototype.forEach.call(layerBtns, function (btn) {
       var key = layerKeys[btn.getAttribute('data-layer')];
-      var on = onByDefault[key] ? settings[key] !== false : settings[key] === true;
-      btn.classList.toggle('is-active', on);
+      btn.classList.toggle('is-active', r[key]);
     });
 
     // Timeframe buttons active state.
@@ -1090,21 +1112,23 @@
         V6OF.DomPanel.render(domList, V6OF.DomLadder ? V6OF.DomLadder.snapshot() : null, state);
       }
       // Wire controls on first render
-      V6OF.DomPanel.bindControls(domList, function (group) {
+        V6OF.DomPanel.bindControls(domList, function (group) {
         if (V6OF.DomLadder) {
           V6OF.DomLadder.setGrouping(group);
-          var currentState = V6OF.store && V6OF.store.getState ? V6OF.store.getState() : state;
+          var scopedStore = V6OF.getStore ? V6OF.getStore(root) : store;
+          var currentState = scopedStore && scopedStore.getState ? scopedStore.getState() : state;
           V6OF.DomPanel.render(domList, V6OF.DomLadder.snapshot(), currentState);
         }
       }, function () {
         // Re-center
-        var currentState = V6OF.store && V6OF.store.getState ? V6OF.store.getState() : state;
+        var scopedStore = V6OF.getStore ? V6OF.getStore(root) : store;
+        var currentState = scopedStore && scopedStore.getState ? scopedStore.getState() : state;
         V6OF.DomPanel.render(domList, V6OF.DomLadder ? V6OF.DomLadder.snapshot() : null, currentState);
       }, function (patch) {
-        if (V6OF.store && V6OF.store.updateSettings) V6OF.store.updateSettings(patch);
+        if (store && store.updateSettings) store.updateSettings(patch);
       });
       // Wire drag-and-drop on the column headers
-      if (V6OF.Panels.wireDomDragDrop) V6OF.Panels.wireDomDragDrop(root, V6OF.store);
+      if (V6OF.Panels.wireDomDragDrop) V6OF.Panels.wireDomDragDrop(root, store);
     }
     if (cvd && V6OF.Panels && V6OF.Panels.renderCvdInto && settings.showCVD !== false) {
       if (shouldRender(root, 'cvd', cvdSlice, force)) {
@@ -1173,19 +1197,12 @@
           btn.setAttribute('aria-expanded', String(expanded));
           btn.innerHTML = 'Metrics ' + (expanded ? '▴' : '▾');
         }
-      } else if (action === 'legacy') {
-        store.updateUi({ legacyMode: true });
-        document.dispatchEvent(new CustomEvent('pageChange', { detail: { page: 'orderflow' } }));
-      } else if (action === 'v6') {
-        store.updateUi({ legacyMode: false });
-        document.dispatchEvent(new CustomEvent('pageChange', { detail: { page: 'orderflow' } }));
       } else if (action === 'layer') {
         var layerKeys = { candles: 'showCandles', bubbles: 'showBubbles', heatmap: 'showHeatmap', footprint: 'showFootprint' };
-        var onDefault = { showCandles: 1 };
         var sKey = layerKeys[btn.getAttribute('data-layer')];
         if (sKey) {
-          var cur = onDefault[sKey] ? state.settings[sKey] !== false : state.settings[sKey] === true;
-          var patch = {}; patch[sKey] = !cur;
+          var r = V6OF.resolveSettings(state.settings || {});
+          var patch = {}; patch[sKey] = !r[sKey];
           store.updateSettings(patch);
         }
       } else if (action === 'timeframe') {
@@ -1474,6 +1491,8 @@
         store.updateSettings({ imbalanceStack: Math.max(2, Math.min(6, Math.round(Number(input.value) || 3))) });
       } else if (key === 'imbalanceMinVolume') {
         store.updateSettings({ imbalanceMinVolume: Math.max(0, Math.min(1000000, Number(input.value) || 0)) });
+      } else if (key === 'exhaustionFactor') {
+        store.updateSettings({ exhaustionFactor: Math.max(0.05, Math.min(1, Number(input.value) || 0.35)) });
       } else if (key === 'footprintValueAreaPct') {
         store.updateSettings({ footprintValueAreaPct: Math.max(1, Math.min(100, Number(input.value) || 70)) });
       } else if (key === 'minWickTicks') {
@@ -1494,10 +1513,11 @@
     return engineClient;
   }
 
-  V6OF.Layout = {
-    init: function (root) {
-      if (!root || root.dataset.v6Mounted === '1') return;
-      root.dataset.v6Mounted = '1';
+  V6OF.register('Page', 'Layout', {
+    create: function (root) {
+      if (!root || root._v6LayoutCreated) return root && root._v6LayoutContext;
+      root._v6LayoutCreated = true;
+      root._v6LayoutContext = root._v6LayoutContext || { unsubs: [], listeners: [] };
       var savedSettings = (V6OF.Settings && V6OF.Settings.load) ? V6OF.Settings.load() : {};
       hydrateThemeVars(root, savedSettings);
       root.innerHTML = shellHtml();
@@ -1519,7 +1539,27 @@
         initial.settings = Object.assign({}, initial.settings, savedSettings);
       }
 
-      var store = V6OF.store = V6OF.createStore(initial);
+      var store = V6OF.createStore(initial);
+      if (V6OF.setRootStore) V6OF.setRootStore(root, store);
+
+      root._v6LayoutContext.store = store;
+      return root._v6LayoutContext;
+    },
+
+    mount: function (root) {
+      var ctx = this.create(root);
+      if (!root || !ctx || !ctx.store) return;
+      root.dataset.v6Mounted = '1';
+      render(root, ctx.store.getState(), true);
+    },
+
+    bind: function (root) {
+      var ctx = this.create(root);
+      if (!root || !ctx || !ctx.store || ctx.bound) return;
+      ctx.bound = true;
+      ctx.unsubs = ctx.unsubs || [];
+      ctx.listeners = ctx.listeners || [];
+      var store = ctx.store;
 
       // Bind localStorage auto-save
       if (V6OF.Settings && V6OF.Settings.bindStore) {
@@ -1527,8 +1567,9 @@
       }
 
       var engineClient = bind(root, store);
+      ctx.engineClient = engineClient;
       root._v6EngineClient = engineClient;
-      store.subscribe(function (state) { render(root, state); });
+      ctx.unsubs.push(store.subscribe(function (state) { render(root, state); }));
       render(root, store.getState(), true);
 
       // Wire chart interactions after the first render so the canvas exists.
@@ -1573,10 +1614,13 @@
         if (actions) V6OF.Backtest.mount(actions, store);
       }
 
-      window.addEventListener('resize', function () {
+      var onResize = function () {
         render(root, store.getState(), true);
-      });
-      document.addEventListener('pageChange', function (event) {
+      };
+      window.addEventListener('resize', onResize);
+      ctx.listeners.push({ target: window, type: 'resize', fn: onResize });
+
+      var onPageChange = function (event) {
         if (event.detail && event.detail.page === 'orderflow') {
           requestAnimationFrame(function () {
             render(root, store.getState(), true);
@@ -1587,7 +1631,38 @@
             }
           });
         }
+      };
+      document.addEventListener('pageChange', onPageChange);
+      ctx.listeners.push({ target: document, type: 'pageChange', fn: onPageChange });
+    },
+
+    unmount: function (root) {
+      if (!root || !root._v6LayoutContext) return;
+      root.removeAttribute('data-v6-mounted');
+      delete root.dataset.v6Mounted;
+    },
+
+    destroy: function (root) {
+      if (!root || !root._v6LayoutContext) return;
+      var ctx = root._v6LayoutContext;
+      (ctx.listeners || []).forEach(function (entry) {
+        try { entry.target.removeEventListener(entry.type, entry.fn); } catch (_) {}
       });
+      (ctx.unsubs || []).forEach(function (unsub) {
+        try { unsub(); } catch (_) {}
+      });
+      if (ctx.engineClient && typeof ctx.engineClient.destroy === 'function') {
+        try { ctx.engineClient.destroy(); } catch (_) {}
+      }
+      delete root._v6EngineClient;
+      delete root._v6LayoutContext;
+      delete root._v6LayoutCreated;
+    },
+
+    init: function (root) {
+      this.create(root);
+      this.mount(root);
+      this.bind(root);
     }
-  };
+  }, 'Layout');
 })();

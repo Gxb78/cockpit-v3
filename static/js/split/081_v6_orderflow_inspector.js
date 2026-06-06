@@ -5,11 +5,23 @@
   'use strict';
 
   var V6OF = window.V6OF = window.V6OF || {};
-  var REPLAY_URL = 'http://127.0.0.1:8765/replay';
+  if (!V6OF.register) {
+    ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'].forEach(function (name) { V6OF[name] = V6OF[name] || {}; });
+    V6OF.register = function (domain, name, value, legacyName) {
+      V6OF[domain] = V6OF[domain] || {};
+      V6OF[domain][name] = value;
+      if (legacyName) V6OF[legacyName] = value;
+      return value;
+    };
+  }
   var missingFootprintLoads = {};
   var missingFootprintFailures = {};
   var AGGTRADES_FOOTPRINT_PAGE_LIMIT = 8000;
   var AGGTRADES_FOOTPRINT_MAX_SPLIT_DEPTH = 6;
+
+  function storeFor(ref) {
+    return V6OF.getStore ? V6OF.getStore(ref) : null;
+  }
 
   function esc(value) {
     return V6OF.escapeHtml ? V6OF.escapeHtml(value) : String(value == null ? '' : value);
@@ -249,6 +261,7 @@
     var imbRatio = num(settings.imbalanceRatio, 3.0);
     var minStack = num(settings.imbalanceStack, 3);
     var minVolume = Math.max(0, num(settings.imbalanceMinVolume, 1.0));
+    var exhaustionFactor = Math.max(0.05, Math.min(1, num(settings.exhaustionFactor, 0.35)));
     var valueAreaPct = Math.max(1, Math.min(100, num(settings.footprintValueAreaPct, 70)));
     
     // Prefer engine-derived signals when the candle carries them (live/replay);
@@ -388,8 +401,8 @@
       stackedSellImbalanceCount: useEngine ? num(candle.stackedSellImbalanceCount) : (maxSellRun >= minStack ? maxSellRun : 0),
       hasBuyAbsorption: useEngine ? candle.hasBuyAbsorption === true : (lowBuyRatio >= imbRatio && candle.close >= candle.open),
       hasSellAbsorption: useEngine ? candle.hasSellAbsorption === true : (highSellRatio >= imbRatio && candle.close <= candle.open),
-      isExhaustionHigh: useEngine ? candle.isExhaustionHigh === true : (!!(highLevel && avgLevelVol && highTotal < avgLevelVol * 0.35)),
-      isExhaustionLow: useEngine ? candle.isExhaustionLow === true : (!!(lowLevel && avgLevelVol && lowTotal < avgLevelVol * 0.35)),
+      isExhaustionHigh: useEngine ? candle.isExhaustionHigh === true : (!!(highLevel && avgLevelVol && highTotal < avgLevelVol * exhaustionFactor)),
+      isExhaustionLow: useEngine ? candle.isExhaustionLow === true : (!!(lowLevel && avgLevelVol && lowTotal < avgLevelVol * exhaustionFactor)),
       isUnfinishedHigh: useEngine ? candle.isUnfinishedHigh === true : (!!(highLevel && num(highLevel.buyVol) > 0 && num(highLevel.sellVol) > 0)),
       isUnfinishedLow: useEngine ? candle.isUnfinishedLow === true : (!!(lowLevel && num(lowLevel.buyVol) > 0 && num(lowLevel.sellVol) > 0)),
       signalsSource: useEngine ? 'engine' : 'computed',
@@ -520,8 +533,9 @@
   }
 
   function mergeFootprintCandle(state, candle) {
-    if (!V6OF.store || !V6OF.store.setState || !candle) return;
-    V6OF.store.setState(function (prev) {
+    var store = storeFor();
+    if (!store || !store.setState || !candle) return;
+    store.setState(function (prev) {
       var settings = (prev && prev.settings) || {};
       var maxCandles = Math.max(60, Math.min(3000, num(settings.footprintMaxCandles, 3000)));
       var incomingKey = footprintKey(candle.symbol, candle.timeframe || prev.timeframe, candle);
@@ -549,7 +563,8 @@
   }
 
   function storeHasFootprint(symbol, tf, candle) {
-    var state = V6OF.store && V6OF.store.getState ? V6OF.store.getState() : null;
+    var store = storeFor();
+    var state = store && store.getState ? store.getState() : null;
     var list = state && Array.isArray(state.footprintCandles) ? state.footprintCandles : [];
     var key = footprintKey(symbol, tf, candle);
     for (var i = 0; i < list.length; i++) {
@@ -646,15 +661,17 @@
       .then(function (ok) {
         delete missingFootprintLoads[key];
         if (!ok && !storeHasFootprint(symbol, tf, candle)) missingFootprintFailures[key] = Date.now();
-        if (V6OF.store && V6OF.store.setState) {
-          V6OF.store.setState({ footprintLazyLoadTs: Date.now() }, ok ? 'historical-footprint-loaded' : 'historical-footprint-missing');
+        var store = storeFor();
+        if (store && store.setState) {
+          store.setState({ footprintLazyLoadTs: Date.now() }, ok ? 'historical-footprint-loaded' : 'historical-footprint-missing');
         }
       })
       .catch(function (err) {
         delete missingFootprintLoads[key];
         missingFootprintFailures[key] = Date.now();
         console.warn('[V6 Inspector] historical footprint load failed', err);
-        if (V6OF.store && V6OF.store.setState) V6OF.store.setState({ footprintLazyLoadTs: Date.now() }, 'historical-footprint-error');
+        var store = storeFor();
+        if (store && store.setState) store.setState({ footprintLazyLoadTs: Date.now() }, 'historical-footprint-error');
       });
     return true;
   }
@@ -886,7 +903,7 @@
   }
 
   function postReplay(cmd) {
-    return fetch(REPLAY_URL, {
+    return fetch(V6OF.resolveMarketUrl('/replay', 'http'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(cmd)
@@ -962,7 +979,8 @@
       var action = btn.getAttribute('data-v6-replay-action');
       var dateEl = el.querySelector('[data-v6-replay-date]');
       var speedEl = el.querySelector('[data-v6-replay-speed]');
-      var state = V6OF.store && V6OF.store.getState ? V6OF.store.getState() : {};
+      var store = storeFor(root);
+      var state = store && store.getState ? store.getState() : {};
       var cmd = { action: action };
       if (action === 'start') {
         var replaySymbol = String(state.symbol || 'BTCUSDT').toUpperCase();
@@ -970,19 +988,19 @@
         cmd.symbol = replaySymbol;
         cmd.date = dateEl && dateEl.value ? dateEl.value : yesterdayISO();
         cmd.speed = speedEl ? Number(speedEl.value) : 10;
-        if (V6OF.store && V6OF.store.clearAllBuffers) V6OF.store.clearAllBuffers();
+        if (store && store.clearAllBuffers) store.clearAllBuffers();
         if (V6OF.CvdBuckets && V6OF.CvdBuckets.reset) V6OF.CvdBuckets.reset();
       } else if (action === 'step') {
         cmd.count = 1;
       }
       setReplayText(el, 'Sending ' + action, null);
       postReplay(cmd).then(function (st) {
-        if (V6OF.store && V6OF.store.setState) V6OF.store.setState({ replay: st }, 'replay-command-' + action);
+        if (store && store.setState) store.setState({ replay: st }, 'replay-command-' + action);
       }).catch(function (err) {
         setReplayText(el, 'Error', err.message || String(err));
         // Store the error so updateReplayShell shows the strip
-        if (V6OF.store && V6OF.store.setState) {
-          V6OF.store.setState({ replay: { state: 'error', error: err.message } }, 'replay-error');
+        if (store && store.setState) {
+          store.setState({ replay: { state: 'error', error: err.message } }, 'replay-error');
         }
       });
     });
@@ -990,12 +1008,13 @@
     el.addEventListener('change', function (event) {
       var speed = event.target.closest('[data-v6-replay-speed]');
       if (!speed) return;
+      var store = storeFor(root);
       postReplay({ action: 'speed', speed: Number(speed.value) }).then(function (st) {
-        if (V6OF.store && V6OF.store.setState) V6OF.store.setState({ replay: st }, 'replay-speed');
+        if (store && store.setState) store.setState({ replay: st }, 'replay-speed');
       }).catch(function (err) {
         setReplayText(el, 'Error', err.message || String(err));
-        if (V6OF.store && V6OF.store.setState) {
-          V6OF.store.setState({ replay: { state: 'error', error: err.message } }, 'replay-speed-error');
+        if (store && store.setState) {
+          store.setState({ replay: { state: 'error', error: err.message } }, 'replay-speed-error');
         }
       });
     });
@@ -1035,7 +1054,7 @@
     el.classList.toggle('is-paused', replay.state === 'paused');
   }
 
-  V6OF.Inspector = {
+  V6OF.register('UI', 'Inspector', {
     findActiveCandle: findActiveCandle,
     deriveMetrics: deriveMetrics,
     tickDecimals: tickDecimals,
@@ -1067,20 +1086,22 @@
         body.addEventListener('click', function (e) {
           var btn = e.target.closest('[data-v6-action="toggle-candle-lock"]');
           if (!btn) return;
-          var state = V6OF.store && V6OF.store.getState ? V6OF.store.getState() : {};
+          var store = storeFor(root);
+          var state = store && store.getState ? store.getState() : {};
           var ui = state.ui || {};
           var locked = !ui.activeCandleLocked;
-          V6OF.store.updateUi({
+          if (!store || !store.updateUi) return;
+          store.updateUi({
             activeCandleLocked: locked,
             activeCandleUpdatedAt: Date.now()
           });
         });
       }
     }
-  };
+  }, 'Inspector');
 
-  V6OF.ReplayTimeline = {
+  V6OF.register('UI', 'ReplayTimeline', {
     post: postReplay,
     renderInto: updateReplayShell
-  };
+  }, 'ReplayTimeline');
 })();

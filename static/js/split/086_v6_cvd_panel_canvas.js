@@ -7,6 +7,15 @@
   'use strict';
 
   var V6OF = window.V6OF = window.V6OF || {};
+  if (!V6OF.register) {
+    ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'].forEach(function (name) { V6OF[name] = V6OF[name] || {}; });
+    V6OF.register = function (domain, name, value, legacyName) {
+      V6OF[domain] = V6OF[domain] || {};
+      V6OF[domain][name] = value;
+      if (legacyName) V6OF[legacyName] = value;
+      return value;
+    };
+  }
   var LABEL_W = 10;
   var VAL_W = 74;
   var GAP = 5;
@@ -787,7 +796,7 @@
     recordPerf('cvd', perfStart);
   }
 
-  V6OF.CvdPanel = {
+  V6OF.register('UI', 'CvdPanel', {
     draw: function (canvas, state) {
       if (!canvas) return;
       canvas._cvdState = state;
@@ -933,5 +942,5 @@
         ? requestAnimationFrame : function (fn) { return setTimeout(fn, 33); };
       schedule(function () { canvas._cvdQueued = false; drawSimple(canvas, canvas._cvdState); });
     }
-  };
+  }, 'CvdPanel');
 })();

@@ -1,17 +1,29 @@
 // ---------- 084_v6_chart_interactions.js ----------
-// Phase 17B: Refactored, complete pointer interactions (pan / zoom / crosshair) for V6 chart.
-// Supports synchronized vertical crosshairs across both the price chart and CVD canvases.
-// Phase 18: Touch/pinch-to-zoom + momentum/inertia on pan.
+// Chart interactions: pointer handlers (pan/zoom/crosshair) for V6 chart, synchronized
+// across price and CVD canvases. Touch/pinch-to-zoom + momentum/inertia on pan.
 
 (function () {
   'use strict';
 
   var V6OF = window.V6OF = window.V6OF || {};
+  if (!V6OF.register) {
+    ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'].forEach(function (name) { V6OF[name] = V6OF[name] || {}; });
+    V6OF.register = function (domain, name, value, legacyName) {
+      V6OF[domain] = V6OF[domain] || {};
+      V6OF[domain][name] = value;
+      if (legacyName) V6OF[legacyName] = value;
+      return value;
+    };
+  }
 
   var ZOOM_IN = 0.93;   // wheel up (less sensitive — was 0.88)
   var ZOOM_OUT = 1.0 / ZOOM_IN;
   var PAN_FACTOR = 0.5;  // touchpad pan speed multiplier (less sensitive)
   var PINCH_THRESHOLD = 8;     // px change before pinch activates
+
+  function storeFor(ref) {
+    return V6OF.getStore ? V6OF.getStore(ref) : null;
+  }
 
   function ensureViewport() {
     if (!V6OF.chart && V6OF.ChartViewport && V6OF.ChartViewport.create) {
@@ -53,9 +65,10 @@
       : function (fn) { return setTimeout(fn, 33); };
     schedule(function () {
       redrawQueued = false;
-      if (!V6OF.store) return;
-      var state = V6OF.store.getState();
       var chartCanvas = document.querySelector('[data-v6-chart]');
+      var store = storeFor(chartCanvas);
+      if (!store) return;
+      var state = store.getState();
       if (chartCanvas && V6OF.CanvasChart) {
         V6OF.CanvasChart.draw(chartCanvas, state);
       }
@@ -108,8 +121,9 @@
   }
 
   function setActiveCandleFromEvent(canvas, event, locked) {
-    if (!canvas || !event || !V6OF.store || !V6OF.CanvasChart || !V6OF.CanvasChart.pickCandle) return false;
-    var state = V6OF.store.getState();
+    var store = storeFor(canvas);
+    if (!canvas || !event || !store || !V6OF.CanvasChart || !V6OF.CanvasChart.pickCandle) return false;
+    var state = store.getState();
     var ui = (state && state.ui) || {};
     if (!locked && ui.activeCandleLocked) return false;
     var pt = localPoint(canvas, event);
@@ -121,7 +135,7 @@
     var closeTime = Number(candle.closeTime || 0);
     var nextLocked = !!locked;
     if (ui.activeCandleOpenTime === openTime && ui.activeCandleLocked === nextLocked) return false;
-    V6OF.store.updateUi({
+    store.updateUi({
       activeCandleOpenTime: openTime,
       activeCandleCloseTime: Number.isFinite(closeTime) ? closeTime : 0,
       activeCandleSource: pick.source || '',
@@ -169,7 +183,7 @@
     return bestMid;
   }
 
-  V6OF.ChartInteractions = {
+  V6OF.register('UI', 'ChartInteractions', {
     state: {
       crosshair: ensureCrosshair(),
       drag: drag,
@@ -179,7 +193,7 @@
 
     init: function (canvas, viewport, store) {
       if (viewport) V6OF.chart = viewport;
-      if (store) V6OF.store = store;
+      if (store && V6OF.setRootStore) V6OF.setRootStore(canvas && canvas.closest ? canvas.closest('[data-v6-mounted="1"]') : null, store);
       this.attach(canvas);
     },
 
@@ -197,8 +211,9 @@
       if (!vp) return;
 
       var t = vp.xToTime(pt.x);
-      if (V6OF.store) {
-        t = snapTimeToCandle(t, V6OF.store.getState());
+      var store = storeFor(canvas);
+      if (store) {
+        t = snapTimeToCandle(t, store.getState());
       }
       var x = vp.timeToX(t);
 
@@ -559,7 +574,8 @@
       // Delay deselection by 200ms so double-click can cancel it
       if (clickFitTimer) { clearTimeout(clickFitTimer); clickFitTimer = 0; }
 
-      var state = V6OF.store && V6OF.store.getState ? V6OF.store.getState() : {};
+      var store = storeFor(canvas);
+      var state = store && store.getState ? store.getState() : {};
       var pick = V6OF.CanvasChart && V6OF.CanvasChart.pickCandle
         ? V6OF.CanvasChart.pickCandle(canvas, state, pt2.x, pt2.y) : null;
 
@@ -567,7 +583,7 @@
         // Click on empty area or future time — clear selection after delay
         clickFitTimer = setTimeout(function () {
           clickFitTimer = 0;
-          V6OF.store && V6OF.store.updateUi && V6OF.store.updateUi({
+          if (store && store.updateUi) store.updateUi({
             activeCandleOpenTime: 0,
             activeCandleCloseTime: 0,
             activeCandleSource: '',
@@ -593,10 +609,11 @@
       }
       if (setActiveCandleFromEvent(canvas, event, true)) {
         try {
-          var state = V6OF.store && V6OF.store.getState ? V6OF.store.getState() : {};
+          var store = storeFor(canvas);
+          var state = store && store.getState ? store.getState() : {};
           var ui = (state && state.ui) || {};
-          if (V6OF.store && V6OF.store.updateUi) {
-            V6OF.store.updateUi({
+          if (store && store.updateUi) {
+            store.updateUi({
               pinnedCandle: ui.activeCandleSnapshot || {
                 openTime: ui.activeCandleOpenTime,
                 closeTime: ui.activeCandleCloseTime,
@@ -652,11 +669,13 @@
         document._v6OrderflowEscBound = true;
         document.addEventListener('keydown', function (e) {
           if (e.key !== 'Escape') return;
-          if (!V6OF.store || !V6OF.store.updateUi) return;
-          var state = V6OF.store.getState ? V6OF.store.getState() : {};
+          var root = document.getElementById('v6-orderflow-root');
+          var store = storeFor(root);
+          if (!store || !store.updateUi) return;
+          var state = store.getState ? store.getState() : {};
           var ui = (state && state.ui) || {};
           if (!ui.activeCandleLocked && !ui.activeCandleOpenTime) return;
-          V6OF.store.updateUi({
+          store.updateUi({
             activeCandleOpenTime: 0,
             activeCandleCloseTime: 0,
             activeCandleSource: '',
@@ -753,5 +772,5 @@
       setActiveTool(cross.enabled ? 'crosshair' : 'cursor');
       root._v6ToolbarWired = true;
     }
-  };
+  }, 'ChartInteractions');
 })();

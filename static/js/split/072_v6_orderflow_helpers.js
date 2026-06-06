@@ -5,6 +5,15 @@
   'use strict';
 
   var V6OF = window.V6OF = window.V6OF || {};
+  if (!V6OF.register) {
+    ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'].forEach(function (name) { V6OF[name] = V6OF[name] || {}; });
+    V6OF.register = function (domain, name, value, legacyName) {
+      V6OF[domain] = V6OF[domain] || {};
+      V6OF[domain][name] = value;
+      if (legacyName) V6OF[legacyName] = value;
+      return value;
+    };
+  }
 
   function shallow(a, b) {
     if (a === b) return true;
@@ -19,7 +28,7 @@
     return true;
   }
 
-  V6OF.OrderflowSelectors = {
+  V6OF.register('Data', 'Selectors', {
     tape: function (state) {
       var s = (state && state.settings) || {};
       return {
@@ -86,9 +95,119 @@
         showCVD: s.showCVD !== false
       };
     }
+  }, 'OrderflowSelectors');
+
+  // ── Central settings schema + resolver — single source of truth ──
+  // Every setting key defined once: type, default, boolean resolution rule,
+  // allowed values / numeric bounds. All consumers use resolveSettings().
+
+  var SETTINGS_SCHEMA = {
+    // ── Boolean toggles: on-by-default = truthy unless explicitly false ──
+    showTape:       { type: 'bool', default: true,  on: true },
+    showDOM:        { type: 'bool', default: true,  on: true },
+    showCVD:        { type: 'bool', default: true,  on: true },
+    showVwap:       { type: 'bool', default: true,  on: true },
+    showCandles:    { type: 'bool', default: true,  on: true },
+    showLastPrice:  { type: 'bool', default: true,  on: true },
+    showGrid:       { type: 'bool', default: true,  on: true },
+    showFootprintVA:{ type: 'bool', default: true,  on: true },
+    // ── Boolean toggles: off-by-default = only true when explicitly enabled ──
+    showBubbles:    { type: 'bool', default: false, on: false },
+    showHeatmap:    { type: 'bool', default: false, on: false },
+    showFootprint:  { type: 'bool', default: false, on: false },
+    domWallsOnly:   { type: 'bool', default: false, on: false },
+    // ── Enum ──
+    chartMode:      { type: 'enum', default: 'both', values: ['both', 'candles', 'footprint'] },
+    theme:          { type: 'enum', default: 'light-tv', values: ['light-tv', 'dark-tv'] },
+    domValueMode:   { type: 'enum', default: 'coin', values: ['coin', 'notional', 'ticks', 'contracts'] },
+    inspectorTimeZoneMode: { type: 'enum', default: 'utc', values: ['utc', 'local', 'exchange'] },
+    // ── Number with bounds ──
+    minQty:         { type: 'number', default: 0,    min: 0 },
+    maxRows:         { type: 'number', default: 420,  min: 1, max: 2000 },
+    maxTrades:       { type: 'number', default: 5000, min: 100, max: 50000 },
+    heatmapMaxFrames:{ type: 'number', default: 3600, min: 60, max: 14400 },
+    footprintMaxCandles:{ type: 'number', default: 1200, min: 60, max: 7200 },
+    deltaIntervalMs: { type: 'number', default: 60000, min: 1000, max: 3600000 },
+    domDepth:        { type: 'number', default: 1000, min: 10, max: 5000 },
+    domRangeLevels:  { type: 'number', default: 1000, min: 10, max: 5000 },
+    domWallRatio:    { type: 'number', default: 4,    min: 1, max: 20 },
+    tickSize:        { type: 'number', default: 1,    min: 0 },
+    imbalanceRatio:  { type: 'number', default: 3.0,  min: 1, max: 20 },
+    imbalanceStack:  { type: 'number', default: 3,    min: 1, max: 10 },
+    imbalanceMinVolume:{ type: 'number', default: 1.0, min: 0 },
+    exhaustionFactor:{ type: 'number', default: 0.35, min: 0.05, max: 1 },
+    footprintValueAreaPct:{ type: 'number', default: 70, min: 10, max: 90 },
+    minWickTicks:    { type: 'number', default: 0,    min: 0 },
+    tapeFontSize:    { type: 'number', default: 10,   min: 8, max: 16 },
+    singleClickFitLiveDelayMs:{ type: 'number', default: 180, min: 0, max: 2000 },
+    // ── Passthrough (validated elsewhere or free-form) ──
+    bgColor:         { type: 'string', default: '#ffffff' },
+    upColor:         { type: 'string', default: '#089981' },
+    downColor:       { type: 'string', default: '#f23645' },
+    indicators:      { type: 'array',  default: [] },
+    indicatorSources:{ type: 'array',  default: [] }
   };
 
-  V6OF.RenderScheduler = {
+  function resolveSettings(rawSettings, rawUi) {
+    var s = rawSettings || {};
+    var u = rawUi || {};
+    var out = {};
+
+    // Resolve settings from schema
+    var keys = Object.keys(SETTINGS_SCHEMA);
+    for (var i = 0; i < keys.length; i++) {
+      var key = keys[i];
+      var def = SETTINGS_SCHEMA[key];
+      var val = s[key];
+
+      if (def.type === 'bool') {
+        if (def.on) {
+          out[key] = val !== false;
+        } else {
+          out[key] = val === true;
+        }
+      } else if (def.type === 'enum') {
+        out[key] = (def.values.indexOf(val) >= 0) ? val : def.default;
+      } else if (def.type === 'number') {
+        var n = Number(val);
+        if (!Number.isFinite(n)) n = def.default;
+        if (def.min != null && n < def.min) n = def.min;
+        if (def.max != null && n > def.max) n = def.max;
+        out[key] = n;
+      } else if (def.type === 'array') {
+        out[key] = Array.isArray(val) ? val : def.default;
+      } else {
+        // string / passthrough
+        out[key] = (val != null) ? val : def.default;
+      }
+    }
+
+    // ── UI projection (from state.ui, not settings) ──
+    out.activeTab = u.activeTab || 'dom';
+    out.dockCollapsed = !!u.dockCollapsed;
+    out.hoveredCandle = u.hoveredCandle || null;
+    out.pinnedCandle = u.pinnedCandle || null;
+    out.panelSizes = u.panelSizes || {};
+    out.layerPreset = u.layerPreset || 'scalping';
+    out.activeIndicatorId = u.activeIndicatorId || '';
+    out.indicatorEditorOpen = !!u.indicatorEditorOpen;
+    out.indicatorPaneSizes = u.indicatorPaneSizes || {};
+    out.indicatorToolbarOpen = u.indicatorToolbarOpen || '';
+    out.activeCandleOpenTime = Number.isFinite(u.activeCandleOpenTime) ? u.activeCandleOpenTime : 0;
+    out.activeCandleCloseTime = Number.isFinite(u.activeCandleCloseTime) ? u.activeCandleCloseTime : 0;
+    out.activeCandleSource = u.activeCandleSource || '';
+    out.activeCandleSnapshot = u.activeCandleSnapshot || null;
+    out.activeCandleLocked = !!u.activeCandleLocked;
+    out.activeCandleUpdatedAt = Number.isFinite(u.activeCandleUpdatedAt) ? u.activeCandleUpdatedAt : 0;
+    out.seed = Number.isFinite(u.seed) ? u.seed : 42;
+
+    return out;
+  }
+
+  V6OF.register('Data', 'resolveSettings', resolveSettings, 'resolveSettings');
+  V6OF.register('Data', 'SETTINGS_SCHEMA', SETTINGS_SCHEMA, 'SETTINGS_SCHEMA');
+
+  V6OF.register('UI', 'RenderScheduler', {
     _pending: false,
     _jobs: {},
     _stats: {},
@@ -125,9 +244,9 @@
         V6OF.renderStats = self._stats;
       });
     }
-  };
+  }, 'RenderScheduler');
 
-  V6OF.VirtualList = {
+  V6OF.register('UI', 'VirtualList', {
     render: function (host, config) {
       if (!host || !config) return;
       var rows = Array.isArray(config.rows) ? config.rows : [];
@@ -191,5 +310,5 @@
       host._v6VirtualRender(config.stickToTop ? 'top' : (config.stickToBottom ? 'bottom' : false));
     },
     same: shallow
-  };
+  }, 'VirtualList');
 })();

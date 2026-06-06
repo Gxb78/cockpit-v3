@@ -12,6 +12,15 @@
   'use strict';
 
   var V6OF = window.V6OF = window.V6OF || {};
+  if (!V6OF.register) {
+    ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'].forEach(function (name) { V6OF[name] = V6OF[name] || {}; });
+    V6OF.register = function (domain, name, value, legacyName) {
+      V6OF[domain] = V6OF[domain] || {};
+      V6OF[domain][name] = value;
+      if (legacyName) V6OF[legacyName] = value;
+      return value;
+    };
+  }
 
   var DOM_ROW_HEIGHT  = 20;  // px
   var OVERSCAN        = 8;   // rows hors viewport, pour le scroll fluide
@@ -799,12 +808,12 @@
   }
 
   // ── API publique ──
-  V6OF.DomPanel = {
+  V6OF.register('UI', 'DomPanel', {
     render       : render,
     bindControls : bindControls,
     computeSizeThreshold : computeSizeThreshold,
     modeValue    : modeValue,
     normalizeValueMode : normalizeValueMode
-  };
+  }, 'DomPanel');
 
 })();

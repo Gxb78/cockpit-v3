@@ -6,6 +6,19 @@
   'use strict';
 
   var V6OF = window.V6OF = window.V6OF || {};
+  if (!V6OF.register) {
+    ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'].forEach(function (name) { V6OF[name] = V6OF[name] || {}; });
+    V6OF.register = function (domain, name, value, legacyName) {
+      V6OF[domain] = V6OF[domain] || {};
+      V6OF[domain][name] = value;
+      if (legacyName) V6OF[legacyName] = value;
+      return value;
+    };
+  }
+
+  function storeFor(ref) {
+    return V6OF.getStore ? V6OF.getStore(ref) : null;
+  }
   var escapeHtml = V6OF.escapeHtml || function (v) {
     return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
       return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
@@ -261,8 +274,9 @@
     templates: TEMPLATES,
     addTemplate: function (templateId) {
       var t = TEMPLATES[templateId] || TEMPLATES.sma;
-      if (!V6OF.store || !V6OF.store.updateSettings) return;
-      var state = V6OF.store.getState ? V6OF.store.getState() : {};
+      var store = storeFor();
+      if (!store || !store.updateSettings) return;
+      var state = store.getState ? store.getState() : {};
       var settings = state.settings || {};
       var sourceId = uid('src');
       var instanceId = uid('ind');
@@ -270,8 +284,8 @@
       var indicators = (settings.indicators || []).slice();
       sources.push({ sourceId: sourceId, name: t.name, code: t.code, updatedAt: Date.now() });
       indicators.push({ instanceId: instanceId, sourceId: sourceId, name: t.name, pane: t.pane, visible: true, inputs: {}, style: {}, height: 112 });
-      V6OF.store.updateSettings({ indicatorSources: sources, indicators: indicators, activeTab: 'indicators' });
-      if (V6OF.store.updateUi) V6OF.store.updateUi({ activeIndicatorId: instanceId, indicatorEditorOpen: true });
+      store.updateSettings({ indicatorSources: sources, indicators: indicators, activeTab: 'indicators' });
+      if (store.updateUi) store.updateUi({ activeIndicatorId: instanceId, indicatorEditorOpen: true });
     },
     evaluateAll: function (state, done) {
       var settings = (state && state.settings) || {};
@@ -308,8 +322,9 @@
         if (ok) {
           self._results[inst.instanceId] = { key: key, meta: data.meta || {}, result: data.result || {}, updatedAt: Date.now() };
           self._status[inst.instanceId] = { state: 'ok', message: 'Ready', updatedAt: Date.now() };
-          if (data.meta && V6OF.store && V6OF.store.getState && V6OF.store.updateSettings) {
-            var cur = V6OF.store.getState();
+          var store = storeFor();
+          if (data.meta && store && store.getState && store.updateSettings) {
+            var cur = store.getState();
             var curSettings = cur.settings || {};
             var nextIndicators = (curSettings.indicators || []).map(function (item) {
               if (item.instanceId !== inst.instanceId) return item;
@@ -319,7 +334,7 @@
                 inputs: Object.assign({}, data.meta.inputs || item.inputs || {})
               });
             });
-            V6OF.store.updateSettings({ indicators: nextIndicators });
+            store.updateSettings({ indicators: nextIndicators });
           }
         } else {
           self._status[inst.instanceId] = { state: 'error', message: data.error || 'Runtime error', updatedAt: Date.now() };
@@ -572,12 +587,14 @@
       this.bind(root);
       Runtime.evaluateAll(state, function () {
         var canvas = root.querySelector('[data-v6-chart]');
-        if (canvas && V6OF.CanvasChart && V6OF.store) V6OF.CanvasChart.draw(canvas, V6OF.store.getState());
-        Panel.renderPanes(root, V6OF.store ? V6OF.store.getState() : state);
+        var store = storeFor(root);
+        var current = store && store.getState ? store.getState() : state;
+        if (canvas && V6OF.CanvasChart && store) V6OF.CanvasChart.draw(canvas, current);
+        Panel.renderPanes(root, current);
         var panel = root.querySelector('[data-v6-indicators-panel]');
         if (panel) {
           panel._v6IndKey = '';
-          Panel.renderInto(root, V6OF.store ? V6OF.store.getState() : state);
+          Panel.renderInto(root, current);
         }
       });
     },
@@ -608,7 +625,8 @@
         }).join('');
       }
       Runtime.evaluateAll(state, function () {
-        Panel.renderPanes(root, V6OF.store ? V6OF.store.getState() : state);
+        var store = storeFor(root);
+        Panel.renderPanes(root, store && store.getState ? store.getState() : state);
       });
       indicators.forEach(function (inst) {
         var canvas = host.querySelector('[data-v6-ind-canvas="' + inst.instanceId + '"]');
@@ -622,7 +640,7 @@
       root.addEventListener('click', function (event) {
         var actionEl = event.target.closest('[data-v6-ind-action], [data-v6-pane-action]');
         if (!actionEl || !root.contains(actionEl)) return;
-        var store = V6OF.store;
+        var store = storeFor(root);
         if (!store || !store.getState || !store.updateSettings) return;
         var state = store.getState();
         var settings = state.settings || {};
@@ -678,15 +696,16 @@
           store.updateSettings({ indicatorSources: sources });
           Runtime.evaluateInstance(store.getState(), inst, function () {
             var canvas = root.querySelector('[data-v6-chart]');
-            if (canvas && V6OF.CanvasChart && V6OF.store) V6OF.CanvasChart.draw(canvas, V6OF.store.getState());
-            Panel.renderPanes(root, V6OF.store ? V6OF.store.getState() : state);
-            Panel.renderInto(root, V6OF.store ? V6OF.store.getState() : state);
+            var current = store.getState ? store.getState() : state;
+            if (canvas && V6OF.CanvasChart) V6OF.CanvasChart.draw(canvas, current);
+            Panel.renderPanes(root, current);
+            Panel.renderInto(root, current);
           });
         }
       });
     }
   };
 
-  V6OF.IndicatorRuntime = Runtime;
-  V6OF.IndicatorPanel = Panel;
+  V6OF.register('Studies', 'IndicatorRuntime', Runtime, 'IndicatorRuntime');
+  V6OF.register('UI', 'IndicatorPanel', Panel, 'IndicatorPanel');
 })();

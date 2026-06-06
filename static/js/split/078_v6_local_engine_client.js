@@ -1,14 +1,52 @@
 // ---------- 078_v6_local_engine_client.js ----------
-// Phase 7: WebSocket client connecting the V6 surface to the local Go market engine.
-// Connects to ws://127.0.0.1:8765/stream on manual user action only.
-// No auto-connect. No Binance. No exchange browser WebSocket. No Wails.
+// Engine client: WebSocket transport connecting the V6 surface to the local Go market engine.
+// Auto-connects to the configured local engine WebSocket when the V6 orderflow shell mounts.
+// Local engine only. No exchange browser WebSocket. No Wails dependency.
 
 (function () {
   'use strict';
 
   var V6OF = window.V6OF = window.V6OF || {};
+  if (!V6OF.register) {
+    ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'].forEach(function (name) { V6OF[name] = V6OF[name] || {}; });
+    V6OF.register = function (domain, name, value, legacyName) {
+      V6OF[domain] = V6OF[domain] || {};
+      V6OF[domain][name] = value;
+      if (legacyName) V6OF[legacyName] = value;
+      return value;
+    };
+  }
 
-  var DEFAULT_URL = 'ws://127.0.0.1:8765/stream';
+  function configuredMarketWsUrl() {
+    var cfg = window.COCKPIT_CONFIG || {};
+    if (cfg.marketWsUrl) return String(cfg.marketWsUrl);
+    var proto = window.location && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    var host = window.location && window.location.hostname ? window.location.hostname : '127.0.0.1';
+    return proto + '//' + host + ':8765/stream';
+  }
+
+  function resolveMarketUrl(path, transport) {
+    var wsUrl = configuredMarketWsUrl();
+    var suffix = path || '';
+    var base;
+    try {
+      var parsed = new URL(wsUrl, window.location && window.location.href ? window.location.href : undefined);
+      var secure = parsed.protocol === 'wss:' || parsed.protocol === 'https:';
+      parsed.protocol = transport === 'ws' ? (secure ? 'wss:' : 'ws:') : (secure ? 'https:' : 'http:');
+      parsed.pathname = parsed.pathname.replace(/\/stream\/?$/, '') || '/';
+      parsed.search = '';
+      parsed.hash = '';
+      base = parsed.toString().replace(/\/$/, '');
+    } catch (err) {
+      base = wsUrl.replace(/^ws(s?):/, 'http$1:').replace(/\/stream\/?$/, '');
+    }
+    return base + (suffix.charAt(0) === '/' ? suffix : '/' + suffix);
+  }
+
+  V6OF.register('Transport', 'resolveMarketUrl', resolveMarketUrl, 'resolveMarketUrl');
+  V6OF.register('Transport', 'marketWsUrl', configuredMarketWsUrl, 'marketWsUrl');
+
+  var DEFAULT_URL = configuredMarketWsUrl();
   var DEFAULT_MAX_TRADE_BUFFER = 5000;
   var STALE_THRESHOLD_MS = 10000;
   var MAX_BUCKETS_PER_INTERVAL = 5000;
@@ -125,24 +163,49 @@
     // derived footprint signals match the client-side fallback. Sent on connect
     // and whenever the relevant settings change.
     var lastFpConfigJson = '';
+    function setEngineConfigStatus(next, detail) {
+      if (!store || !store.setState) return;
+      var patch = {
+        engineConfigStatus: next,
+        engineConfigError: next === 'failed' ? String(detail || 'send failed') : ''
+      };
+      if (next === 'synced') {
+        patch.engineConfigSyncedAt = Date.now();
+      } else if (next === 'stale') {
+        patch.engineConfigStaleAt = Date.now();
+      }
+      store.setState(patch, 'engine-config-' + next);
+    }
     function buildFootprintConfigMsg() {
       var s = (store && store.getState && store.getState().settings) || {};
       return {
         type: 'footprint_config',
         imbalanceRatio: Number(s.imbalanceRatio) > 0 ? Number(s.imbalanceRatio) : 3.0,
         imbalanceStack: Number(s.imbalanceStack) > 0 ? Number(s.imbalanceStack) : 3,
-        imbalanceMinVolume: Number(s.imbalanceMinVolume) >= 0 ? Number(s.imbalanceMinVolume) : 1.0
+        imbalanceMinVolume: Number(s.imbalanceMinVolume) >= 0 ? Number(s.imbalanceMinVolume) : 1.0,
+        exhaustionFactor: Number(s.exhaustionFactor) > 0 ? Number(s.exhaustionFactor) : 0.35
       };
     }
     function sendFootprintConfig(force) {
-      if (!(ws && status === 'connected')) return;
       var json = JSON.stringify(buildFootprintConfigMsg());
       if (!force && json === lastFpConfigJson) return;
-      lastFpConfigJson = json;
-      try { ws.send(json); } catch (e) { console.warn('[V6 EngineClient] footprint_config send failed', e); }
+      if (!(ws && status === 'connected')) {
+        setEngineConfigStatus('stale');
+        return;
+      }
+      try {
+        ws.send(json);
+        lastFpConfigJson = json;
+        setEngineConfigStatus('synced');
+      } catch (e) {
+        setEngineConfigStatus('failed', e && e.message ? e.message : e);
+        console.warn('[V6 EngineClient] footprint_config send failed', e);
+      }
     }
     if (store && store.subscribe) {
-      store.subscribe(function () { sendFootprintConfig(false); });
+      store.subscribe(function () { sendFootprintConfig(false); }, function (state) {
+        return state ? state.settings : null;
+      });
     }
 
     var lastTf = (store && store.getState().timeframe) || '1m';
@@ -204,6 +267,8 @@
         } else if (next === 'disconnected' || next === 'error') {
           var s = store.getState();
           patch.dataFreshness = (s.dataFreshness === 'rest-fallback') ? 'rest-fallback' : 'offline';
+          patch.engineConfigStatus = 'stale';
+          patch.engineConfigStaleAt = Date.now();
         }
         store.setState(patch, 'transport-status-change');
       }
@@ -1052,9 +1117,7 @@
       }
       _lastFpFetch = { symbol: symbol, tf: tf, from: from, to: to, ts: Date.now() };
 
-      var wsUrl = (ws && ws.url) || DEFAULT_URL;
-      var httpBase = wsUrl.replace(/^ws(s?):/, 'http$1:').replace(/\/stream$/, '');
-      var url = httpBase + (tf === '1m' ? '/api/v1/footprint/1m' : '/api/v1/footprint/tf');
+      var url = resolveMarketUrl(tf === '1m' ? '/api/v1/footprint/1m' : '/api/v1/footprint/tf', 'http');
       url += '?symbol=' + encodeURIComponent(symbol);
       if (tf !== '1m') {
         url += '&tf=' + encodeURIComponent(tf);
@@ -1162,7 +1225,8 @@
 
     return {
       /**
-       * Manually connect to the local engine.
+       * Connect to the local engine. The layout calls this automatically on mount;
+       * the header control can still use it for reconnect.
        */
       connect: function () {
         if (status === 'connected' || status === 'connecting') return;
@@ -1188,7 +1252,7 @@
       },
 
       /**
-       * Manually disconnect from the local engine.
+       * Disconnect from the local engine.
        */
       disconnect: function () {
         generation++;
@@ -1349,7 +1413,7 @@
     };
   }
 
-  V6OF.EngineClient = {
+  V6OF.register('Transport', 'EngineClient', {
     create: createClient
-  };
+  }, 'EngineClient');
 })();

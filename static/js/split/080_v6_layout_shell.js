@@ -1,5 +1,5 @@
 // 080_v6_layout_shell.js
-// Phase 16 + 17: TradingView-like shell host for the V6 orderflow surface.
+// Layout shell: TradingView-inspired panel host for the V6 orderflow surface.
 //
 // NON-DESTRUCTIVE: instead of rebuilding root.innerHTML (which destroyed the
 // Layout panels), this re-homes the existing Layout panels into TradingView
@@ -8,7 +8,7 @@
 //
 // Structure produced (header + engine-bar from Layout are kept as the top bar):
 //   .v6-shell
-//     .v6-header        (kept — symbol/badge/metrics + Connect Local Engine)
+//     .v6-header        (kept — symbol/badge/metrics + reconnect control)
 //     .v6-engine-bar    (kept — status + counters + pause)
 //     .v6-main-area     (NEW — replaces .v6-grid)
 //       .v6-left-toolbar   Cursor / Crosshair / Fit / Reset / Follow live
@@ -20,6 +20,15 @@
 (function () {
   'use strict';
   var V6OF = window.V6OF = window.V6OF || {};
+  if (!V6OF.register) {
+    ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'].forEach(function (name) { V6OF[name] = V6OF[name] || {}; });
+    V6OF.register = function (domain, name, value, legacyName) {
+      V6OF[domain] = V6OF[domain] || {};
+      V6OF[domain][name] = value;
+      if (legacyName) V6OF[legacyName] = value;
+      return value;
+    };
+  }
 
   // Crisp inline SVG line icons (stroke = currentColor).
   var ICONS = {
@@ -81,7 +90,7 @@
       'default': 'dom'
     }
   };
-  V6OF.LayoutSchema = V6OF.LayoutSchema || DEFAULT_SCHEMA;
+  V6OF.register('UI', 'LayoutSchema', V6OF.UI.LayoutSchema || DEFAULT_SCHEMA, 'LayoutSchema');
 
   function rtabHtml(spec, isDefault) {
     var sel = isDefault ? 'true' : 'false';
@@ -167,7 +176,7 @@
       '<footer class="v6-status-bar">',
         '<div class="v6-sb-sec">',
           '<span class="v6-sb-lbl">Engine:</span>',
-          '<span class="v6-sb-val" data-v6-status-url>ws://127.0.0.1:8765/stream</span>',
+          '<span class="v6-sb-val" data-v6-status-url>configured</span>',
         '</div>',
         '<div class="v6-sb-sec">',
           '<span class="v6-sb-lbl">Reconnects:</span>',
@@ -176,6 +185,10 @@
         '<div class="v6-sb-sec">',
           '<span class="v6-sb-lbl">Health:</span>',
           '<span class="v6-sb-val">Lag <strong data-v6-status-lag>--</strong> | Q <strong data-v6-status-queue>0</strong> | Drop <strong data-v6-status-drops>0</strong></span>',
+        '</div>',
+        '<div class="v6-sb-sec">',
+          '<span class="v6-sb-lbl">Engine Config:</span>',
+          '<span class="v6-sb-val" data-v6-engine-config-status>stale</span>',
         '</div>',
         '<div class="v6-sb-sec">',
           '<span class="v6-sb-lbl">Local Time:</span>',
@@ -195,7 +208,7 @@
 
   var storeUnsub = null;
 
-  V6OF.Shell = {
+  V6OF.register('Page', 'Shell', {
     dispose: function () {
       if (storeUnsub) {
         try { storeUnsub(); } catch (_) {}
@@ -216,6 +229,7 @@
       var grid = root.querySelector('.v6-grid');
       if (!shell || !grid) return;            // Layout not mounted yet
       if (root.dataset.v6ShellMounted === '1') return;
+      var store = V6OF.getStore ? V6OF.getStore(root) : null;
 
       this.dispose();
       root.dataset.v6ShellMounted = '1';
@@ -276,7 +290,7 @@
       var dockToggle = main.querySelector('[data-v6-dock-toggle]');
 
       // --- Saved State Restore ---
-      var savedState = V6OF.store ? V6OF.store.getState() : {};
+      var savedState = store && store.getState ? store.getState() : {};
       var settings = savedState.settings || {};
 
       // 1. Active Tab
@@ -345,8 +359,8 @@
             var _saved = localStorage.getItem('cockpitV6.rightColWidth');
             if (_saved) { var _w = parseInt(_saved, 10); if (_w > 0) { _rightCol.style.width = _w + 'px'; _rightCol.style.flex = '0 0 ' + _w + 'px'; } }
           }
-          if (V6OF.store && V6OF.store.updateSettings) {
-            V6OF.store.updateSettings({ dockCollapsed: false });
+          if (store && store.updateSettings) {
+            store.updateSettings({ dockCollapsed: false });
           }
         }
 
@@ -357,11 +371,11 @@
           b.setAttribute('aria-selected', String(active));
         });
 
-        if (V6OF.store && V6OF.store.updateSettings) {
-          var prevState = V6OF.store.getState ? V6OF.store.getState() : {};
+        if (store && store.updateSettings) {
+          var prevState = store.getState ? store.getState() : {};
           var prevSettings = (prevState && prevState.settings) || {};
-          if ((prevSettings.activeTab || 'dom') === 'info' && name !== 'info' && V6OF.store.updateUi) {
-            V6OF.store.updateUi({
+          if ((prevSettings.activeTab || 'dom') === 'info' && name !== 'info' && store.updateUi) {
+            store.updateUi({
               activeCandleOpenTime: 0,
               activeCandleCloseTime: 0,
               activeCandleSource: '',
@@ -371,12 +385,12 @@
               pinnedCandle: null
             });
           }
-          V6OF.store.updateSettings({ activeTab: name });
+          store.updateSettings({ activeTab: name });
         }
 
         var cv = root.querySelector('[data-v6-chart]');
-        if (cv && V6OF.CanvasChart && V6OF.store) {
-          requestAnimationFrame(function () { V6OF.CanvasChart.draw(cv, V6OF.store.getState()); });
+        if (cv && V6OF.CanvasChart && store) {
+          requestAnimationFrame(function () { V6OF.CanvasChart.draw(cv, store.getState()); });
         }
       });
 
@@ -406,11 +420,11 @@
           dockToggle.innerHTML = isCollapsed ? '&#10095;' : '&#10094;';
           dockToggle.title = isCollapsed ? 'Expand dock' : 'Collapse dock';
           applyDockCollapsed(isCollapsed);
-          if (isCollapsed && V6OF.store && V6OF.store.updateUi) {
-            var st = V6OF.store.getState ? V6OF.store.getState() : {};
+          if (isCollapsed && store && store.updateUi) {
+            var st = store.getState ? store.getState() : {};
             var activeTab = st && st.settings && st.settings.activeTab;
             if ((activeTab || 'dom') === 'info') {
-              V6OF.store.updateUi({
+              store.updateUi({
                 activeCandleOpenTime: 0,
                 activeCandleCloseTime: 0,
                 activeCandleSource: '',
@@ -421,12 +435,12 @@
               });
             }
           }
-          if (V6OF.store && V6OF.store.updateSettings) {
-            V6OF.store.updateSettings({ dockCollapsed: isCollapsed });
+          if (store && store.updateSettings) {
+            store.updateSettings({ dockCollapsed: isCollapsed });
           }
           requestAnimationFrame(function () {
             var cv = root.querySelector('[data-v6-chart]');
-            if (cv && V6OF.CanvasChart && V6OF.store) V6OF.CanvasChart.draw(cv, V6OF.store.getState());
+            if (cv && V6OF.CanvasChart && store) V6OF.CanvasChart.draw(cv, store.getState());
           });
         });
       }
@@ -485,7 +499,7 @@
 
         function redrawCvdAndChart() {
           requestAnimationFrame(function () {
-            var current = V6OF.store && V6OF.store.getState ? V6OF.store.getState() : {};
+            var current = store && store.getState ? store.getState() : {};
             if (canvas && V6OF.CanvasChart) V6OF.CanvasChart.draw(canvas, current);
             if (cvdCanvas && V6OF.CvdPanel && !cvdStrip.classList.contains('is-collapsed') && !cvdStrip.classList.contains('is-removed')) {
               V6OF.CvdPanel.draw(cvdCanvas, current);
@@ -514,15 +528,15 @@
             b.classList.toggle('is-active', active);
             b.setAttribute('aria-selected', String(active));
           });
-          if (V6OF.store && V6OF.store.updateSettings) {
-            V6OF.store.updateSettings({ activeTab: name, dockCollapsed: false });
+          if (store && store.updateSettings) {
+            store.updateSettings({ activeTab: name, dockCollapsed: false });
           }
           redrawCvdAndChart();
         }
 
         function setCvdCollapsed(collapsed) {
-          if (V6OF.store && V6OF.store.updateSettings) {
-            V6OF.store.updateSettings({ showCVD: true, cvdCollapsed: !!collapsed });
+          if (store && store.updateSettings) {
+            store.updateSettings({ showCVD: true, cvdCollapsed: !!collapsed });
           } else {
             cvdStrip.classList.toggle('is-collapsed', !!collapsed);
           }
@@ -530,8 +544,8 @@
         }
 
         function setCvdRemoved(removed) {
-          if (V6OF.store && V6OF.store.updateSettings) {
-            V6OF.store.updateSettings({ showCVD: !removed });
+          if (store && store.updateSettings) {
+            store.updateSettings({ showCVD: !removed });
           } else {
             cvdStrip.classList.toggle('is-removed', !!removed);
           }
@@ -549,8 +563,8 @@
           } else if (action === 'remove') {
             setCvdRemoved(true);
           } else if (action === 'source') {
-            if (V6OF.store && V6OF.store.updateUi) {
-              V6OF.store.updateUi({ activeIndicatorId: 'cvd', indicatorEditorOpen: true });
+            if (store && store.updateUi) {
+              store.updateUi({ activeIndicatorId: 'cvd', indicatorEditorOpen: true });
             }
             openDockTab('indicators');
           }
@@ -561,8 +575,8 @@
           setCvdCollapsed(!cvdStrip.classList.contains('is-collapsed'));
         });
 
-        if (V6OF.store) {
-          applyCvdChrome(V6OF.store.getState());
+        if (store) {
+          applyCvdChrome(store.getState());
           var shellSlices = {};
           function sameSlice(name, slice) {
             var last = shellSlices[name];
@@ -570,7 +584,7 @@
             shellSlices[name] = slice;
             return false;
           }
-          storeUnsub = V6OF.store.subscribe(function (state) {
+          storeUnsub = store.subscribe(function (state) {
             var settings = (state && state.settings) || {};
             var cvdChromeSlice = {
               showCVD: settings.showCVD !== false,
@@ -619,41 +633,59 @@
       if (V6OF.WorkspaceManager) {
         V6OF.WorkspaceManager.init(root);
       }
-      if (V6OF.Inspector && V6OF.store) {
-        V6OF.Inspector.renderInto(root, V6OF.store.getState());
+      if (V6OF.Inspector && store) {
+        V6OF.Inspector.renderInto(root, store.getState());
       }
-      if (V6OF.IndicatorPanel && V6OF.store) {
-        V6OF.IndicatorPanel.renderInto(root, V6OF.store.getState());
-        V6OF.IndicatorPanel.renderPanes(root, V6OF.store.getState());
+      if (V6OF.IndicatorPanel && store) {
+        V6OF.IndicatorPanel.renderInto(root, store.getState());
+        V6OF.IndicatorPanel.renderPanes(root, store.getState());
       }
-      if (V6OF.ReplayTimeline && V6OF.store) {
-        V6OF.ReplayTimeline.renderInto(root, V6OF.store.getState());
+      if (V6OF.ReplayTimeline && store) {
+        V6OF.ReplayTimeline.renderInto(root, store.getState());
       }
 
       // Kick a redraw once the new layout sizes settle.
       requestAnimationFrame(function () {
-        if (canvas && V6OF.CanvasChart && V6OF.store) {
-          V6OF.CanvasChart.draw(canvas, V6OF.store.getState());
+        if (canvas && V6OF.CanvasChart && store) {
+          V6OF.CanvasChart.draw(canvas, store.getState());
         }
       });
     }
-  };
+  }, 'Shell');
 
-  document.addEventListener('pageChange', function (event) {
-    if (event.detail && event.detail.page !== 'orderflow') {
-      V6OF.Shell.dispose();
+  V6OF.registerPage('orderflow', {
+    create: function (root) {
+      root = root || document.getElementById('v6-orderflow-root');
+      if (!root || !V6OF.Layout || typeof V6OF.Layout.create !== 'function') return;
+      V6OF.Layout.create(root);
+    },
+    mount: function (root) {
+      root = root || document.getElementById('v6-orderflow-root');
+      if (!root || !V6OF.Layout || typeof V6OF.Layout.mount !== 'function') return;
+      V6OF.Layout.mount(root);
+      if (V6OF.Shell && typeof V6OF.Shell.init === 'function') {
+        V6OF.Shell.init(root);
+      }
+    },
+    bind: function (root) {
+      root = root || document.getElementById('v6-orderflow-root');
+      if (!root || !V6OF.Layout || typeof V6OF.Layout.bind !== 'function') return;
+      V6OF.Layout.bind(root);
+    },
+    unmount: function (root) {
+      root = root || document.getElementById('v6-orderflow-root');
+      if (V6OF.Shell && typeof V6OF.Shell.dispose === 'function') {
+        V6OF.Shell.dispose();
+      }
+      if (root && V6OF.Layout && typeof V6OF.Layout.unmount === 'function') {
+        V6OF.Layout.unmount(root);
+      }
+    },
+    destroy: function (root) {
+      root = root || document.getElementById('v6-orderflow-root');
+      if (root && V6OF.Layout && typeof V6OF.Layout.destroy === 'function') {
+        V6OF.Layout.destroy(root);
+      }
     }
   });
-
-  function tryAutoInit() {
-    var root = document.getElementById('v6-orderflow-root');
-    if (!root) return;
-    V6OF.Shell.init(root);
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { setTimeout(tryAutoInit, 120); });
-  } else {
-    setTimeout(tryAutoInit, 120);
-  }
 })();

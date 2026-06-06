@@ -52,6 +52,60 @@ function normalizeCustomStrategies(rawList) {
   return out;
 }
 
+function collectUiState() {
+  return {
+    calendarMetricMode: state.calendarMetricMode,
+    journalViewMode:    state.journalViewMode,
+    journalLayoutMode:  state.journalLayoutMode,
+    journalRangeMode:   state.journalRangeMode,
+    journalTableSortKey: state.journalTableSortKey,
+    journalTableSortDir: state.journalTableSortDir,
+    breakdownSortMode:  state.breakdownSortMode,
+  };
+}
+
+function applyServerUiState(obj) {
+  if (!obj || typeof obj !== "object") return;
+  // Map: state key → { lsKey, validSet }
+  var mapping = [
+    { stateKey: "calendarMetricMode",  lsKey: CALENDAR_METRIC_MODE_KEY,  valid: CALENDAR_METRIC_MODES },
+    { stateKey: "journalViewMode",     lsKey: JOURNAL_VIEW_MODE_KEY,     valid: JOURNAL_VIEW_MODES },
+    { stateKey: "journalLayoutMode",   lsKey: JOURNAL_LAYOUT_MODE_KEY,   valid: JOURNAL_LAYOUT_MODES },
+    { stateKey: "journalRangeMode",    lsKey: JOURNAL_RANGE_MODE_KEY,    valid: JOURNAL_RANGE_MODES },
+    { stateKey: "breakdownSortMode",   lsKey: BREAKDOWN_SORT_KEY,        valid: BREAKDOWN_SORT_MODES },
+  ];
+  var changed = false;
+  mapping.forEach(function(m) {
+    // N'appliquer que si localStorage est vide (nouvelle machine)
+    if (localStorage.getItem(m.lsKey) != null) return;
+    var val = obj[m.stateKey];
+    if (!val || !m.valid.has(val)) return;
+    state[m.stateKey] = val;
+    localStorage.setItem(m.lsKey, val);
+    changed = true;
+  });
+  // Table sort (JSON compound key)
+  if (localStorage.getItem(JOURNAL_TABLE_SORT_KEY) == null) {
+    var sk = obj.journalTableSortKey, sd = obj.journalTableSortDir;
+    if (sk && JOURNAL_TABLE_SORT_KEYS.has(sk)) { state.journalTableSortKey = sk; changed = true; }
+    if (sd === "asc" || sd === "desc")          { state.journalTableSortDir = sd; changed = true; }
+    if (changed) localStorage.setItem(JOURNAL_TABLE_SORT_KEY, JSON.stringify({
+      key: state.journalTableSortKey, dir: state.journalTableSortDir
+    }));
+  }
+  if (changed) {
+    // Refresh les UIs qui dependent de ces modes
+    if (typeof updateCalendarMetricToggleUI === "function") updateCalendarMetricToggleUI();
+    if (typeof updateJournalViewToggleUI === "function") updateJournalViewToggleUI();
+    if (typeof updateJournalLayoutToggleUI === "function") updateJournalLayoutToggleUI();
+    if (typeof updateJournalRangeToggleUI === "function") updateJournalRangeToggleUI();
+    if (typeof updateJournalTableSortUI === "function") updateJournalTableSortUI();
+    if (typeof updateBreakdownSortUI === "function") updateBreakdownSortUI();
+    if (typeof updateJournalControlsVisibility === "function") updateJournalControlsVisibility();
+    if (state.currentPage === "journal" && typeof renderCalendar === "function") renderCalendar();
+  }
+}
+
 function sanitizeSettings(raw) {
   const defaults = defaultSettingsState();
   const pseudo = String(raw?.profile?.pseudo || "").trim();
@@ -90,20 +144,21 @@ function loadSettingsState() {
   }
   // Snapshot pour detecter les modifications utilisateur pendant le fetch
   var localSnapshot = JSON.stringify(state.settings);
-  fetch("/api/user/settings", { credentials: "same-origin" })
+  fetch("/api/user/profile", { credentials: "same-origin" })
     .then(function(r) { return r.ok ? r.json() : null; })
     .then(function(data) {
-      if (!data || !data.settings) return;
+      if (!data || !data.profile) return;
       // Ne pas ecraser si l'utilisateur a modifie entre temps
       if (JSON.stringify(state.settings) !== localSnapshot) return;
       // Ne pas ecraser avec des donnees vides si on a des donnees locales
-      var apiKeys = Object.keys(data.settings);
+      var apiKeys = Object.keys(data.profile);
       if (apiKeys.length === 0) return;
-      var merged = Object.assign({}, defaultSettingsState(), data.settings);
+      var merged = Object.assign({}, defaultSettingsState(), data.profile);
       merged.custom_strategies = normalizeCustomStrategies(merged.custom_strategies || []);
       state.settings = sanitizeSettings(merged);
       applySettingsState();
       renderSettingsPage();
+      applyServerUiState(merged.ui_state);
       try { localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(state.settings)); } catch(_) {}
     })
     .catch(function() {});
@@ -113,7 +168,7 @@ function loadSettingsState() {
 function saveSettingsState() {
   if (!state.settings) return;
   try { localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(state.settings)); } catch(_) {}
-  fetch("/api/user/settings", {
+  fetch("/api/user/profile", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
@@ -121,6 +176,16 @@ function saveSettingsState() {
   }).catch(function() {
     toast("Erreur lors de la sauvegarde des réglages", "error");
   });
+}
+
+var _uiStateSaveTimer = null;
+function saveUiState() {
+  clearTimeout(_uiStateSaveTimer);
+  _uiStateSaveTimer = setTimeout(function() {
+    if (!state.settings) return;
+    state.settings.ui_state = collectUiState();
+    saveSettingsState();
+  }, 2000);
 }
 
 function applyProfileSetting() {
@@ -320,4 +385,3 @@ function saveProfileSettings() {
   toast("Profil mis à jour ✓", "success");
   if (btn) { setTimeout(function() { btn.disabled = false; btn.textContent = "Enregistrer"; }, 1500); }
 }
-

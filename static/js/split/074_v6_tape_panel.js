@@ -1,6 +1,5 @@
 // ---------- 074_v6_tape_panel.js ----------
-// Tape panel renderer for Cockpit V6 orderflow.
-// Phase 7: added exchange + symbol columns for live Go engine trades.
+// Tape panel: renders real-time trade log with exchange + symbol columns from the Go engine.
 
 (function () {
   'use strict';

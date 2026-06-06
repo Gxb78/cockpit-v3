@@ -1,14 +1,22 @@
 // ---------- 077_v6_canvas_chart.js ----------
-// Canvas chart engine for Cockpit V6 orderflow.
-// Phase 17: real chart engine — price scale (right), time scale (bottom),
-//           grid, crosshair, pan/zoom via V6OF.chart (ChartViewport).
-//           Heatmap SD + Footprint V1 render in the shared time/price space.
+// Canvas chart engine: price scale (right), time scale (bottom), grid, crosshair,
+// pan/zoom via V6OF.chart (ChartViewport). Heatmap SD + Footprint render in shared
+// time/price space.
 // The mock path (index-based candles) is preserved unchanged below.
 
 (function () {
   'use strict';
 
   var V6OF = window.V6OF = window.V6OF || {};
+  if (!V6OF.register) {
+    ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'].forEach(function (name) { V6OF[name] = V6OF[name] || {}; });
+    V6OF.register = function (domain, name, value, legacyName) {
+      V6OF[domain] = V6OF[domain] || {};
+      V6OF[domain][name] = value;
+      if (legacyName) V6OF[legacyName] = value;
+      return value;
+    };
+  }
 
   var GUTTER_RIGHT = 66;  // price scale width
   var GUTTER_BOTTOM = 24; // time scale height
@@ -58,7 +66,7 @@
   }
 
   // ===================================================================
-  // LIVE CHART ENGINE (Phase 17) — viewport-based time/price space
+  // LIVE CHART ENGINE — viewport-based time/price space
   // ===================================================================
 
   function clamp01(value) {
@@ -1494,7 +1502,7 @@
     recordPerf('chart', perfStart);
   }
 
-  V6OF.CanvasChart = {
+  V6OF.register('UI', 'CanvasChart', {
     draw: function (canvas, state) {
       if (!canvas) return;
       if (state) canvas._v6PendingState = state;
@@ -1515,7 +1523,7 @@
     // merged candle array as the chart renderer, preventing crosshair
     // from snapping to 1m footprint candles on higher timeframes.
     mergedCandles: mergedChartCandles
-  };
+  }, 'CanvasChart');
 
   // Periodic ticker to refresh the canvas chart every 1s for the countdown clock
   setInterval(function () {
@@ -1527,15 +1535,4 @@
     }
   }, 1000);
 
-  function bootV6Orderflow() {
-    var root = document.getElementById('v6-orderflow-root');
-    if (!root || !V6OF.Layout || typeof V6OF.Layout.init !== 'function') return;
-    V6OF.Layout.init(root);
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', bootV6Orderflow);
-  } else {
-    setTimeout(bootV6Orderflow, 0);
-  }
 })();

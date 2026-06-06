@@ -10,6 +10,15 @@
   'use strict';
 
   var V6OF = window.V6OF = window.V6OF || {};
+  if (!V6OF.register) {
+    ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'].forEach(function (name) { V6OF[name] = V6OF[name] || {}; });
+    V6OF.register = function (domain, name, value, legacyName) {
+      V6OF[domain] = V6OF[domain] || {};
+      V6OF[domain][name] = value;
+      if (legacyName) V6OF[legacyName] = value;
+      return value;
+    };
+  }
 
   // Size buckets by trade notional ($). For now we display a single "total"
   // CVD line (classic). Size-breakdown can be re-enabled when real trade data
@@ -105,7 +114,7 @@
     return out;
   }
 
-  V6OF.CvdBuckets = {
+  V6OF.register('Data', 'CvdBuckets', {
   BUCKETS: BUCKETS,
   addTrade: addTrade,
   reset: reset,
@@ -159,5 +168,5 @@
       if (data.realTradeCount != null) realTradeCount = Number(data.realTradeCount);
     },
     get intervalMs() { return INTERVAL_MS; }
-  };
+  }, 'CvdBuckets');
 })();

@@ -7,6 +7,14 @@
  * Inspired by the best (TradingView / ATAS / Exocharts), built from scratch.
  * ========================================================================== */
 
+/* ── Strict page containment: prevents .v6-orderflow-root (position:absolute)
+   from bleeding outside the orderflow page into other views. Creates a new
+   containing block + stacking context so z-index is page-scoped. ── */
+.page[data-page="orderflow"].active {
+  position: relative;
+  overflow: hidden;
+}
+
 .v6-orderflow-root {
   /* — surfaces (dark obsidian theme) — */
   --v6-bg:        #131722;
@@ -66,7 +74,8 @@
 }
 
 .page.active .v6-orderflow-root {
-  z-index: 35;
+  /* z-index is now scoped to the page's stacking context (see .page[data-page="orderflow"].active) */
+  z-index: 1;
   pointer-events: auto;
 }
 
@@ -1359,25 +1368,6 @@
   font-weight: 700;
   line-height: 1.4;
 }
-
-/* ============================ LEGACY STRIP ============================ */
-
-.v6-legacy-strip {
-  display: none;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 14px;
-  border: 1px solid var(--v6-hairline-strong);
-  border-radius: var(--v6-r-md);
-  background: var(--v6-surface);
-  color: var(--v6-text-dim);
-  font-size: 11px;
-  font-weight: 700;
-}
-.v6-orderflow-root.v6-legacy-mode [data-orderflow-slot="v6"] { display: none; }
-.v6-orderflow-root.v6-legacy-mode [data-orderflow-slot="legacy"] { display: flex; }
-.v6-orderflow-root.v6-legacy-mode { inset: auto 10px 10px 10px; top: auto; }
 
 /* ============================= SCROLLBARS ============================ */
 

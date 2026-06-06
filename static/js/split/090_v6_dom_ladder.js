@@ -11,6 +11,15 @@
   'use strict';
 
   var V6OF = window.V6OF = window.V6OF || {};
+  if (!V6OF.register) {
+    ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'].forEach(function (name) { V6OF[name] = V6OF[name] || {}; });
+    V6OF.register = function (domain, name, value, legacyName) {
+      V6OF[domain] = V6OF[domain] || {};
+      V6OF[domain][name] = value;
+      if (legacyName) V6OF[legacyName] = value;
+      return value;
+    };
+  }
 
   // ── Config ──
   var TRADE_DECAY_MS    = 600000;  // trades plus vieux que 10min sont retires
@@ -449,7 +458,7 @@
   }
 
   // ── API publique ──
-  V6OF.DomLadder = {
+  V6OF.register('Data', 'DomLadder', {
     reset             : reset,
     feedOrderBook     : feedOrderBook,
     feedTrade         : feedTrade,
@@ -460,6 +469,6 @@
     THROTTLE_MS       : THROTTLE_MS,
     priceToTick       : priceToTick,
     tickToPrice       : tickToPrice
-  };
+  }, 'DomLadder');
 
 })();

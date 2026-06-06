@@ -1,19 +1,31 @@
 // 089_v6_workspace_manager.js
-// Phase 20: Workspace Manager for Cockpit V6.
+// Workspace manager: visual workspace profiles (DOM, Tape, CVD, Heatmap, sizes, buffers).
 // Manages visual workspace profiles (DOM, Tape, CVD, Heatmap, sizes, and buffers).
 // Stores profiles in localStorage key 'cockpitV6.workspaces' and 'cockpitV6.activeWorkspace'.
-// No SQLite. Pure client-side.
-// Updated: Accessible custom dialogs conforming to APG/RGAA, validation, duplication, renaming, deletion.
+// Server sync via user_settings key 'v6_workspaces' (debounced 2s POST, merge on load).
+// JSON export/import with schemaVersion migrators.
 
 (function () {
   'use strict';
   var V6OF = window.V6OF = window.V6OF || {};
+  if (!V6OF.register) {
+    ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'].forEach(function (name) { V6OF[name] = V6OF[name] || {}; });
+    V6OF.register = function (domain, name, value, legacyName) {
+      V6OF[domain] = V6OF[domain] || {};
+      V6OF[domain][name] = value;
+      if (legacyName) V6OF[legacyName] = value;
+      return value;
+    };
+  }
 
   var WORKSPACES_KEY = 'cockpitV6.workspaces';
   var ACTIVE_KEY = 'cockpitV6.activeWorkspace';
+  var WORKSPACE_SCHEMA_VERSION = 1;
+  var _wsSyncTimer = null;
 
   var DEFAULT_PRESETS = {
     'Scalping': {
+      schemaVersion: WORKSPACE_SCHEMA_VERSION,
       chartMode: 'both',
       showTape: true,
       showDOM: true,
@@ -29,6 +41,7 @@
       activeTab: 'dom'
     },
     'Orderflow': {
+      schemaVersion: WORKSPACE_SCHEMA_VERSION,
       chartMode: 'both',
       showTape: false,
       showDOM: true,
@@ -44,6 +57,7 @@
       activeTab: 'dom'
     },
     'Analysis': {
+      schemaVersion: WORKSPACE_SCHEMA_VERSION,
       chartMode: 'both',
       showTape: true,
       showDOM: false,
@@ -60,18 +74,208 @@
     }
   };
 
+  function cloneWorkspaces(list) {
+    var out = {};
+    Object.keys(list || {}).forEach(function (name) {
+      if (list[name] && typeof list[name] === 'object') {
+        out[name] = Object.assign({}, list[name]);
+      }
+    });
+    return out;
+  }
+
+  function normalizeWorkspaceConfig(config) {
+    var c = Object.assign({}, config || {});
+    c.schemaVersion = WORKSPACE_SCHEMA_VERSION;
+    return c;
+  }
+
+  function normalizeWorkspaceList(list) {
+    var out = {};
+    Object.keys(list || {}).forEach(function (name) {
+      if (list[name] && typeof list[name] === 'object') {
+        out[name] = normalizeWorkspaceConfig(list[name]);
+      }
+    });
+    return Object.assign({}, cloneWorkspaces(DEFAULT_PRESETS), out);
+  }
+
+  var WORKSPACE_MIGRATORS = {
+    0: function (payload) {
+      var list = payload && payload.list && typeof payload.list === 'object' ? payload.list : {};
+      return {
+        schemaVersion: 1,
+        list: normalizeWorkspaceList(list)
+      };
+    }
+  };
+
+  function migrateWorkspacePayload(raw) {
+    var payload = raw && typeof raw === 'object' ? raw : {};
+    if (!payload.list || typeof payload.list !== 'object') {
+      payload = { schemaVersion: payload.schemaVersion || payload._v || 0, list: payload };
+    }
+    var version = Number(payload.schemaVersion || payload._v || 0);
+    if (!Number.isFinite(version) || version < 0) version = 0;
+    payload = {
+      schemaVersion: version,
+      list: payload.list && typeof payload.list === 'object' ? payload.list : {}
+    };
+    while (payload.schemaVersion < WORKSPACE_SCHEMA_VERSION) {
+      var migrator = WORKSPACE_MIGRATORS[payload.schemaVersion];
+      if (typeof migrator !== 'function') {
+        payload.schemaVersion = WORKSPACE_SCHEMA_VERSION;
+        payload.list = normalizeWorkspaceList(payload.list);
+        break;
+      }
+      payload = migrator(payload);
+    }
+    payload.schemaVersion = WORKSPACE_SCHEMA_VERSION;
+    payload.list = normalizeWorkspaceList(payload.list);
+    return payload;
+  }
+
+  function workspaceEnvelope(list) {
+    return {
+      schemaVersion: WORKSPACE_SCHEMA_VERSION,
+      list: normalizeWorkspaceList(list)
+    };
+  }
+
+  function saveWorkspaceEnvelope(payload, shouldSync) {
+    var migrated = migrateWorkspacePayload(payload);
+    try {
+      localStorage.setItem(WORKSPACES_KEY, JSON.stringify(migrated));
+    } catch (_) {}
+    if (shouldSync !== false) syncWorkspacesToServer();
+    return migrated;
+  }
+
   function getWorkspaces() {
     try {
       var raw = localStorage.getItem(WORKSPACES_KEY);
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        var migrated = migrateWorkspacePayload(parsed);
+        if (JSON.stringify(parsed) !== JSON.stringify(migrated)) {
+          saveWorkspaceEnvelope(migrated, false);
+        }
+        return migrated.list;
+      }
     } catch (_) {}
-    return Object.assign({}, DEFAULT_PRESETS);
+    return normalizeWorkspaceList(DEFAULT_PRESETS);
   }
 
   function saveWorkspaces(w) {
-    try {
-      localStorage.setItem(WORKSPACES_KEY, JSON.stringify(w));
-    } catch (_) {}
+    saveWorkspaceEnvelope(workspaceEnvelope(w), true);
+  }
+
+  function syncWorkspacesToServer() {
+    clearTimeout(_wsSyncTimer);
+    _wsSyncTimer = setTimeout(function() {
+      var payload = {
+        v6_workspaces: {
+          schemaVersion: WORKSPACE_SCHEMA_VERSION,
+          active: getActiveName(),
+          list: getWorkspaces()
+        }
+      };
+      fetch("/api/user/workspace-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify(payload)
+      }).catch(function() {});
+    }, 2000);
+  }
+
+  function loadWorkspacesFromServer(callback) {
+    fetch("/api/user/workspace-profile", { credentials: "same-origin" })
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (!data || !data.workspace_profile || !data.workspace_profile.v6_workspaces) return;
+        var serverWs = data.workspace_profile.v6_workspaces;
+        if (!serverWs || typeof serverWs !== "object") return;
+        // Only apply if localStorage is empty (new machine)
+        if (!localStorage.getItem(WORKSPACES_KEY)) {
+          var migratedServer = migrateWorkspacePayload(serverWs);
+          if (migratedServer.list && typeof migratedServer.list === "object") {
+            saveWorkspaceEnvelope(migratedServer, false);
+          }
+          if (serverWs.active && typeof serverWs.active === "string") {
+            localStorage.setItem(ACTIVE_KEY, serverWs.active);
+          }
+        }
+        if (callback) callback();
+      })
+      .catch(function() {});
+  }
+
+  function exportWorkspacesJSON() {
+    var data = {
+      schemaVersion: WORKSPACE_SCHEMA_VERSION,
+      exportedAt: new Date().toISOString(),
+      active: getActiveName(),
+      list: getWorkspaces()
+    };
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "cockpit-workspaces-" + new Date().toISOString().slice(0, 10) + ".json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function importWorkspacesJSON(root) {
+    var input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.addEventListener("change", function() {
+      var file = input.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          var imported = JSON.parse(e.target.result);
+          var hasWorkspaceList = imported && imported.list && typeof imported.list === "object";
+          var hasFlatWorkspaces = imported && typeof imported === "object" && Object.keys(imported).some(function (key) {
+            return imported[key] && typeof imported[key] === "object" && key !== "list";
+          });
+          if (!hasWorkspaceList && !hasFlatWorkspaces) {
+            throw new Error("Invalid format");
+          }
+          imported = migrateWorkspacePayload(imported);
+          var current = getWorkspaces();
+          // Merge: imported wins on conflict
+          var merged = Object.assign({}, current, imported.list);
+          saveWorkspaces(merged);
+          if (imported.active && merged[imported.active]) {
+            setActiveName(imported.active);
+          }
+          // Re-render
+          var mgr = V6OF.UI.WorkspaceManager;
+          mgr.renderSelector(root);
+          var active = getActiveName();
+          mgr.applyWorkspace(root, active, merged[active]);
+          openDialog(root, {
+            title: "Import Successful",
+            bodyHtml: "<p>Imported " + Object.keys(imported.list).length + " workspace(s).</p>",
+            onConfirm: function() {}
+          });
+        } catch (err) {
+          openDialog(root, {
+            title: "Import Failed",
+            bodyHtml: "<p>The selected file is not a valid workspace export.</p>",
+            onConfirm: function() {}
+          });
+        }
+      };
+      reader.readAsText(file);
+    });
+    input.click();
   }
 
   function getActiveName() {
@@ -80,6 +284,7 @@
 
   function setActiveName(name) {
     localStorage.setItem(ACTIVE_KEY, name);
+    syncWorkspacesToServer();
   }
 
   var _dialogNode = null;
@@ -230,24 +435,34 @@
     document.addEventListener('keydown', handleDialogKeyDown);
   }
 
-  V6OF.WorkspaceManager = {
+  V6OF.register('UI', 'WorkspaceManager', {
     init: function (root) {
       if (!root) return;
       var self = this;
 
-      if (!localStorage.getItem(WORKSPACES_KEY)) {
-        saveWorkspaces(DEFAULT_PRESETS);
-      }
+      var proceed = function() {
+        if (!localStorage.getItem(WORKSPACES_KEY)) {
+          saveWorkspaces(DEFAULT_PRESETS);
+        }
+        var active = getActiveName();
+        var list = getWorkspaces();
+        if (list[active]) {
+          self.applyWorkspace(root, active, list[active]);
+        } else {
+          self.applyWorkspace(root, 'Scalping', DEFAULT_PRESETS['Scalping']);
+        }
+        self.renderSelector(root);
+        // ── Bridge workspace into V6 store ──
+        self._syncToStore(root);
+      };
 
-      var active = getActiveName();
-      var list = getWorkspaces();
-      if (list[active]) {
-        self.applyWorkspace(root, active, list[active]);
+      if (localStorage.getItem(WORKSPACES_KEY)) {
+        // Deja des donnees locales, pas besoin d'attendre le serveur
+        proceed();
       } else {
-        self.applyWorkspace(root, 'Scalping', DEFAULT_PRESETS['Scalping']);
+        // Nouvelle machine : essayer le serveur d'abord
+        loadWorkspacesFromServer(proceed);
       }
-
-      self.renderSelector(root);
     },
 
     renderSelector: function (root) {
@@ -272,6 +487,8 @@
           '</select>',
           '<button type="button" class="v6-workspace-btn" data-v6-workspace-action="save" title="Save workspace layout">Save</button>',
           '<button type="button" class="v6-workspace-btn" data-v6-workspace-action="reset" title="Reset current workspace to default">Reset</button>',
+          '<button type="button" class="v6-workspace-btn" data-v6-workspace-action="export" title="Export all workspaces as JSON">Export</button>',
+          '<button type="button" class="v6-workspace-btn" data-v6-workspace-action="import" title="Import workspaces from JSON file">Import</button>',
           '<button type="button" class="v6-workspace-btn" data-v6-workspace-action="manage" title="Manage workspaces (duplicate, rename, delete)">Manage</button>',
         '</div>'
       ].join('');
@@ -284,6 +501,7 @@
           if (wList[next]) {
             setActiveName(next);
             self.applyWorkspace(root, next, wList[next]);
+            self._syncToStore(root);
           }
         });
       }
@@ -325,6 +543,20 @@
               onConfirm: function() {}
             });
           }
+        });
+      }
+
+      var exportBtn = container.querySelector('[data-v6-workspace-action="export"]');
+      if (exportBtn) {
+        exportBtn.addEventListener('click', function () {
+          exportWorkspacesJSON();
+        });
+      }
+
+      var importBtn = container.querySelector('[data-v6-workspace-action="import"]');
+      if (importBtn) {
+        importBtn.addEventListener('click', function () {
+          importWorkspacesJSON(root);
         });
       }
 
@@ -486,8 +718,9 @@
     },
 
     saveCurrentState: function (root, name) {
-      if (!V6OF.store) return;
-      var state = V6OF.store.getState();
+      var store = V6OF.getStore ? V6OF.getStore(root) : null;
+      if (!store) return;
+      var state = store.getState();
       var settings = state.settings || {};
 
       var rightCol = root.querySelector('.v6-right-col');
@@ -502,6 +735,7 @@
 
       var wList = getWorkspaces();
       wList[name] = {
+        schemaVersion: WORKSPACE_SCHEMA_VERSION,
         chartMode: settings.chartMode || 'both',
         showTape: settings.showTape !== false,
         showDOM: settings.showDOM !== false,
@@ -520,9 +754,10 @@
     },
 
     applyWorkspace: function (root, name, config) {
-      if (!V6OF.store || !config) return;
+      var store = V6OF.getStore ? V6OF.getStore(root) : null;
+      if (!store || !config) return;
 
-      V6OF.store.updateSettings({
+      store.updateSettings({
         chartMode: config.chartMode || 'both',
         showTape: config.showTape !== false,
         showDOM: config.showDOM !== false,
@@ -549,11 +784,21 @@
       }
 
       var cv = root.querySelector('[data-v6-chart]');
-      if (cv && V6OF.CanvasChart && V6OF.store) {
+      if (cv && V6OF.CanvasChart && store) {
         requestAnimationFrame(function () {
-          V6OF.CanvasChart.draw(cv, V6OF.store.getState());
+          V6OF.CanvasChart.draw(cv, store.getState());
         });
       }
+    },
+
+    // ── Bridge workspace state into the V6 orderflow store ──
+    _syncToStore: function (root) {
+      var store = V6OF.getStore ? V6OF.getStore(root) : null;
+      if (!store) return;
+      store.updateSlice('workspace', {
+        activeWorkspace: getActiveName(),
+        workspaceList: getWorkspaces()
+      });
     }
-  };
+  }, 'WorkspaceManager');
 })();

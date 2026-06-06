@@ -53,7 +53,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     $$(".page").forEach(function (p) { p.classList.toggle("active", p.dataset.page === pageName); });
     $$(".nav-item").forEach(function (b) { b.classList.toggle("active", b.dataset.page === pageName); });
     document.dispatchEvent(new CustomEvent('pageChange', { detail: { page: pageName } }));
+    if (window.V6OF && V6OF.Page && typeof V6OF.Page.bootstrap === "function") {
+      V6OF.Page.bootstrap(pageName);
+    }
   })();
+  document.addEventListener("pageChange", function (event) {
+    var pageName = event.detail && event.detail.page;
+    if (window.V6OF && V6OF.Page && typeof V6OF.Page.dispose === "function" && pageName !== "orderflow") {
+      V6OF.Page.dispose("orderflow");
+    }
+    if (window.V6OF && V6OF.Page && typeof V6OF.Page.bootstrap === "function") {
+      V6OF.Page.bootstrap(pageName);
+    }
+  });
   bindNav();
   bindAiPanelToggle();
   bindCalendarNav();

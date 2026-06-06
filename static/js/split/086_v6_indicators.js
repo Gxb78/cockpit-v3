@@ -1,12 +1,20 @@
 // ---------- 086_v6_indicators.js ----------
-// Phase 18: Generic indicator overlay system for V6 canvas chart.
-// Registry + compute + draw for line, dashed, area, and band indicators.
-// Extensible: add new indicators via V6OF.Indicators.register().
+// Indicator system: generic overlay registry + compute + draw for line, dashed, area, and
+// band indicators. Extensible: add new indicators via V6OF.Indicators.register().
 
 (function () {
   'use strict';
 
   var V6OF = window.V6OF = window.V6OF || {};
+  if (!V6OF.register) {
+    ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'].forEach(function (name) { V6OF[name] = V6OF[name] || {}; });
+    V6OF.register = function (domain, name, value, legacyName) {
+      V6OF[domain] = V6OF[domain] || {};
+      V6OF[domain][name] = value;
+      if (legacyName) V6OF[legacyName] = value;
+      return value;
+    };
+  }
 
   // ── Indicator registry ──
   // Each entry: { name, type, compute(candles, params) → [{time, value}], defaults }
@@ -354,5 +362,5 @@
     }
   };
 
-  V6OF.Indicators = API;
+  V6OF.register('Studies', 'Indicators', API, 'Indicators');
 })();

@@ -1779,6 +1779,9 @@ func (s *Server) RebuildFootprint1m(symbol string, fromTs, toTs int64) (int, err
 		fpCfg.IntervalMs = 60000
 	}
 	builder := calc.NewFootprintCalculator(fpCfg)
+	// Reconstruct signals with the engine's UI-synced thresholds so a rebuilt
+	// footprint matches what the user saw live (not the calculator's defaults).
+	builder.SetSignalConfig(s.engine.FootprintSignalConfig())
 
 	var closedCount int
 	for _, t := range trades {
@@ -1874,13 +1877,15 @@ func (s *Server) persistFootprintCandle(candle marketdata.FootprintCandle) {
 		}
 	}
 
-	// Compute derived metrics
-	metrics := calc.ComputeMetrics(levels, calc.OHLCData{
-		Open:  candle.Open,
-		High:  candle.High,
-		Low:   candle.Low,
-		Close: candle.Close,
-	}, delta)
+	// Persist the engine-derived signals carried on the candle. These were
+	// computed by calc.DeriveFootprintSignals in the footprint calculator using
+	// the UI-synced thresholds — the same values the UI consumes live. Persisting
+	// them (rather than recomputing with a second, divergent algorithm) keeps the
+	// stored footprint identical to what the user saw in real time. As a defensive
+	// fallback, derive with defaults if the candle never passed through the engine.
+	if !candle.SignalsDerived {
+		calc.DeriveFootprintSignals(&candle, calc.FootprintSignalConfig{})
+	}
 
 	rec := storage.FootprintRecord{
 		Symbol:                    candle.Symbol,
@@ -1895,19 +1900,17 @@ func (s *Server) persistFootprintCandle(candle marketdata.FootprintCandle) {
 		Delta:                     delta,
 		CVD:                       cvd,
 		Profile:                   storage.FootprintProfile{Levels: levels},
-		MaxImbalanceRatio:         metrics.MaxImbalanceRatio,
-		BuyImbalanceCount:         metrics.BuyImbalanceCount,
-		SellImbalanceCount:        metrics.SellImbalanceCount,
-		StackedBuyImbalanceCount:  metrics.StackedBuyImbalanceCount,
-		StackedSellImbalanceCount: metrics.StackedSellImbalanceCount,
-		HasBuyAbsorption:          metrics.HasBuyAbsorption,
-		HasSellAbsorption:         metrics.HasSellAbsorption,
-		AbsorptionPriceBuy:        metrics.AbsorptionPriceBuy,
-		AbsorptionPriceSell:       metrics.AbsorptionPriceSell,
-		IsExhaustionHigh:          metrics.IsExhaustionHigh,
-		IsExhaustionLow:           metrics.IsExhaustionLow,
-		IsUnfinishedHigh:          metrics.IsUnfinishedHigh,
-		IsUnfinishedLow:           metrics.IsUnfinishedLow,
+		MaxImbalanceRatio:         candle.MaxImbalanceRatio,
+		BuyImbalanceCount:         candle.BuyImbalanceCount,
+		SellImbalanceCount:        candle.SellImbalanceCount,
+		StackedBuyImbalanceCount:  candle.StackedBuyImbalance,
+		StackedSellImbalanceCount: candle.StackedSellImbalance,
+		HasBuyAbsorption:          candle.HasBuyAbsorption,
+		HasSellAbsorption:         candle.HasSellAbsorption,
+		IsExhaustionHigh:          candle.IsExhaustionHigh,
+		IsExhaustionLow:           candle.IsExhaustionLow,
+		IsUnfinishedHigh:          candle.IsUnfinishedHigh,
+		IsUnfinishedLow:           candle.IsUnfinishedLow,
 	}
 
 	if err := s.sqlDB.InsertFootprint1m(rec); err != nil {

@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 import re
+from unittest.mock import patch
 
 import app as mod
 import app_parts
@@ -62,6 +63,24 @@ class TemplateRenderTests(unittest.TestCase):
         self.assertIn('data-page="today"', html)
         self.assertIn('id="kpiPnl"', html)
         self.assertIn('id="todayEntries"', html)
+
+    def test_frontend_config_injects_market_ws_url_from_env(self):
+        with patch.dict(mod.os.environ, {"COCKPIT_MARKET_WS_URL": "ws://engine.local:9999/stream"}, clear=False):
+            resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.get_data(as_text=True)
+        self.assertIn('window.COCKPIT_CONFIG = {"marketWsUrl": "ws://engine.local:9999/stream"};', html)
+
+    def test_frontend_config_derives_market_ws_url_from_market_go_host_port(self):
+        with patch.dict(
+            mod.os.environ,
+            {"MARKET_GO_HOST": "0.0.0.0", "MARKET_GO_PORT": "9876", "COCKPIT_MARKET_WS_URL": ""},
+            clear=False,
+        ):
+            resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.get_data(as_text=True)
+        self.assertIn('window.COCKPIT_CONFIG = {"marketWsUrl": "ws://0.0.0.0:9876/stream"};', html)
 
 
 if __name__ == "__main__":

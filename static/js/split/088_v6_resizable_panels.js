@@ -1,5 +1,5 @@
 // 088_v6_resizable_panels.js
-// Phase 20: Library-free resizable panels for Cockpit V6.
+// Resizable panels: library-free pointer-based resize for right dock and CVD strip.
 // Controls right dock (.v6-right-col) width & bottom CVD panel (.v6-cvd-strip) height.
 // Uses Pointer Events. Automatically persists sizes in localStorage.
 // Triggers redraw of both canvas charts to prevent blur or incorrect bounds.
@@ -7,6 +7,15 @@
 (function () {
   'use strict';
   var V6OF = window.V6OF = window.V6OF || {};
+  if (!V6OF.register) {
+    ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'].forEach(function (name) { V6OF[name] = V6OF[name] || {}; });
+    V6OF.register = function (domain, name, value, legacyName) {
+      V6OF[domain] = V6OF[domain] || {};
+      V6OF[domain][name] = value;
+      if (legacyName) V6OF[legacyName] = value;
+      return value;
+    };
+  }
 
   var MIN_RIGHT_WIDTH = 420;
   var MAX_RIGHT_WIDTH = 760;
@@ -26,7 +35,7 @@
   }
 
   var redrawQueued = false;
-  function redrawCharts() {
+  function redrawCharts(root) {
     if (redrawQueued) return;
     redrawQueued = true;
     var schedule = typeof requestAnimationFrame === 'function' && !document.hidden
@@ -34,15 +43,16 @@
       : function (fn) { return setTimeout(fn, 33); };
     schedule(function () {
       redrawQueued = false;
-      if (!V6OF.store) return;
-      var state = V6OF.store.getState();
-      var chartCanvas = document.querySelector('[data-v6-chart]');
+      var chartCanvas = root && root.querySelector ? root.querySelector('[data-v6-chart]') : document.querySelector('[data-v6-chart]');
+      var store = V6OF.getStore ? V6OF.getStore(chartCanvas || root) : null;
+      if (!store) return;
+      var state = store.getState();
       if (chartCanvas && V6OF.CanvasChart) {
         V6OF.CanvasChart.draw(chartCanvas, state);
       }
-      var cvdCanvas = document.querySelector('[data-v6-cvd-canvas]');
+      var cvdCanvas = root && root.querySelector ? root.querySelector('[data-v6-cvd-canvas]') : document.querySelector('[data-v6-cvd-canvas]');
       if (cvdCanvas && V6OF.CvdPanel) {
-        var cvdStrip = document.querySelector('[data-v6-cvd-strip]');
+        var cvdStrip = root && root.querySelector ? root.querySelector('[data-v6-cvd-strip]') : document.querySelector('[data-v6-cvd-strip]');
         if (cvdStrip && !cvdStrip.classList.contains('is-collapsed')) {
           V6OF.CvdPanel.draw(cvdCanvas, state);
         }
@@ -50,7 +60,7 @@
     });
   }
 
-  V6OF.ResizablePanels = {
+  V6OF.register('UI', 'ResizablePanels', {
     init: function (root) {
       if (!root) return;
       var mainArea = root.querySelector('.v6-main-area');
@@ -101,7 +111,7 @@
           pendingWidth = nextWidth;
           rightCol.style.width = nextWidth + 'px';
           rightCol.style.flex = '0 0 ' + nextWidth + 'px';
-          redrawCharts();
+        redrawCharts(root);
         });
 
         var onPointerUpH = function (e) {
@@ -111,7 +121,7 @@
           mainArea.classList.remove('v6-resizing-active');
           if (pendingWidth) localStorage.setItem(STORAGE_WIDTH_KEY, pendingWidth);
           try { handleH.releasePointerCapture(e.pointerId); } catch (_) {}
-          redrawCharts();
+        redrawCharts(root);
         };
 
         handleH.addEventListener('pointerup', onPointerUpH);
@@ -179,5 +189,5 @@
       }
       redrawCharts();
     }
-  };
+  }, 'ResizablePanels');
 })();

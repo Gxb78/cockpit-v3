@@ -9,10 +9,18 @@
   'use strict';
 
   var V6OF = window.V6OF = window.V6OF || {};
-  var REPLAY_URL = 'http://127.0.0.1:8765/replay';
+  if (!V6OF.register) {
+    ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'].forEach(function (name) { V6OF[name] = V6OF[name] || {}; });
+    V6OF.register = function (domain, name, value, legacyName) {
+      V6OF[domain] = V6OF[domain] || {};
+      V6OF[domain][name] = value;
+      if (legacyName) V6OF[legacyName] = value;
+      return value;
+    };
+  }
 
   function post(cmd) {
-    return fetch(REPLAY_URL, {
+    return fetch(V6OF.resolveMarketUrl('/replay', 'http'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(cmd)
@@ -114,7 +122,7 @@
 
   var activeCleanups = [];
 
-  V6OF.Backtest = {
+  V6OF.register('UI', 'Backtest', {
     dispose: function () {
       activeCleanups.forEach(function (cleanup) {
         try { cleanup(); } catch (_) {}
@@ -242,5 +250,5 @@
         activeCleanups.push(unsub);
       }
     }
-  };
+  }, 'Backtest');
 })();

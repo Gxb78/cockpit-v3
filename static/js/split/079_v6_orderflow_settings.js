@@ -1,14 +1,24 @@
 // ---------- 079_v6_orderflow_settings.js ----------
-// Phase 15: localStorage persistence for V6 orderflow settings.
-// Key: cockpitV6.orderflow.settings
-// No SQLite. No Flask routes. UI-only.
+// Orderflow settings: localStorage persistence for V6 UI preferences (key: cockpitV6.orderflow.settings).
+// Local key: cockpitV6.orderflow.settings. Backend key: v6_orderflow_settings.
 
 (function () {
   'use strict';
 
   var V6OF = window.V6OF = window.V6OF || {};
+  if (!V6OF.register) {
+    ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'].forEach(function (name) { V6OF[name] = V6OF[name] || {}; });
+    V6OF.register = function (domain, name, value, legacyName) {
+      V6OF[domain] = V6OF[domain] || {};
+      V6OF[domain][name] = value;
+      if (legacyName) V6OF[legacyName] = value;
+      return value;
+    };
+  }
   var STORAGE_KEY = 'cockpitV6.orderflow.settings';
+  var SERVER_KEY = 'v6_orderflow_settings';
   var SETTINGS_SCHEMA_VERSION = 1;
+  var _settingsSyncTimer = null;
 
   var DEFAULT_DOM_COLUMNS = ['bid', 'price', 'ask', 'buy', 'sell', 'delta', 'imb', 'stack', 'abs'];
   var VALID_DOM_KEYS = { vol: 1, sell: 1, buy: 1, bid: 1, price: 1, ask: 1, delta: 1, imb: 1, stack: 1, abs: 1 };
@@ -65,6 +75,7 @@
     imbalanceRatio: 3.0,
     imbalanceStack: 3,
     imbalanceMinVolume: 1.0,
+    exhaustionFactor: 0.35,
     footprintValueAreaPct: 70,
     minWickTicks: 0
   };
@@ -161,6 +172,7 @@
     out.imbalanceRatio = Math.max(1.5, Math.min(8.0, Number(raw.imbalanceRatio) || DEFAULTS.imbalanceRatio));
     out.imbalanceStack = clampInt(raw.imbalanceStack, 2, 6, DEFAULTS.imbalanceStack);
     out.imbalanceMinVolume = Math.max(0, Math.min(1000000, Number(raw.imbalanceMinVolume) || DEFAULTS.imbalanceMinVolume));
+    out.exhaustionFactor = Math.max(0.05, Math.min(1, Number(raw.exhaustionFactor) || DEFAULTS.exhaustionFactor));
     out.footprintValueAreaPct = Math.max(1, Math.min(100, Number(raw.footprintValueAreaPct) || DEFAULTS.footprintValueAreaPct));
     out.minWickTicks = clampInt(raw.minWickTicks, 0, 10, DEFAULTS.minWickTicks);
     out.indicatorSources = sanitizeIndicatorSources(raw.indicatorSources);
@@ -229,10 +241,39 @@
     }
   }
 
-  function save(settings) {
+  function syncToServer(settings) {
+    if (typeof fetch !== 'function' || typeof setTimeout !== 'function') return;
+    if (typeof clearTimeout === 'function') clearTimeout(_settingsSyncTimer);
+    _settingsSyncTimer = setTimeout(function () {
+      var payload = {};
+      payload[SERVER_KEY] = validateSettings(settings);
+      fetch('/api/user/workspace-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload)
+      }).catch(function () {});
+    }, 1000);
+  }
+
+  function loadFromServer(callback) {
+    if (typeof fetch !== 'function') return;
+    fetch('/api/user/workspace-profile', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        var raw = data && data.workspace_profile && data.workspace_profile[SERVER_KEY];
+        if (!raw || typeof raw !== 'object') return;
+        callback(validateSettings(raw));
+      })
+      .catch(function () {});
+  }
+
+  function save(settings, opts) {
+    opts = opts || {};
     try {
       var validated = validateSettings(settings);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(validated));
+      if (opts.sync !== false) syncToServer(validated);
     } catch (err) {
       console.warn('[V6OF Settings] failed to save to localStorage', err);
     }
@@ -248,19 +289,28 @@
   function bindStore(store) {
     if (!store) return;
     var lastJson = '';
+    var hydrating = false;
+    loadFromServer(function (serverSettings) {
+      var json = JSON.stringify(serverSettings);
+      lastJson = json;
+      hydrating = true;
+      save(serverSettings, { sync: false });
+      if (store.updateSettings) store.updateSettings(serverSettings);
+      hydrating = false;
+    });
     store.subscribe(function (state) {
       if (!state || !state.settings) return;
       var json = JSON.stringify(validateSettings(state.settings));
       if (json !== lastJson) {
         lastJson = json;
-        save(state.settings);
+        save(state.settings, { sync: !hydrating });
       }
     }, function (state) {
       return state ? state.settings : null;
     });
   }
 
-  V6OF.Settings = {
+  V6OF.register('Core', 'Settings', {
     SCHEMA_VERSION: SETTINGS_SCHEMA_VERSION,
     DEFAULTS: DEFAULTS,
     load: load,
@@ -268,5 +318,5 @@
     reset: reset,
     validate: validateSettings,
     bindStore: bindStore
-  };
+  }, 'Settings');
 })();

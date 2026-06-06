@@ -369,9 +369,9 @@ function loadDbInfo() {
 function loadCalendarMetricMode() {
   try {
     const raw = localStorage.getItem(CALENDAR_METRIC_MODE_KEY);
-    return CALENDAR_METRIC_MODES.has(raw) ? raw : "pnl";
+    return CALENDAR_METRIC_MODES.has(raw) ? raw : _state.calendarMetricMode;
   } catch {
-    return "pnl";
+    return _state.calendarMetricMode;
   }
 }
 
@@ -386,7 +386,7 @@ function setCalendarMetricMode(mode, opts = {}) {
   if (!CALENDAR_METRIC_MODES.has(mode)) return;
   state.calendarMetricMode = mode;
   updateCalendarMetricToggleUI();
-  if (persist) localStorage.setItem(CALENDAR_METRIC_MODE_KEY, mode);
+  if (persist) { localStorage.setItem(CALENDAR_METRIC_MODE_KEY, mode); saveUiState(); }
   if (rerender && state.currentPage === "journal") {
     if (typeof closeJournalDayTrades === "function") closeJournalDayTrades();
     renderCalendar();
@@ -406,29 +406,30 @@ function bindCalendarMetricToggle() {
 function loadJournalViewMode() {
   try {
     const raw = localStorage.getItem(JOURNAL_VIEW_MODE_KEY);
-    return JOURNAL_VIEW_MODES.has(raw) ? raw : "month";
+    return JOURNAL_VIEW_MODES.has(raw) ? raw : _state.journalViewMode;
   } catch {
-    return "month";
+    return _state.journalViewMode;
   }
 }
 
 function loadJournalLayoutMode() {
   try {
     const raw = localStorage.getItem(JOURNAL_LAYOUT_MODE_KEY);
-    return JOURNAL_LAYOUT_MODES.has(raw) ? raw : "calendar";
+    return JOURNAL_LAYOUT_MODES.has(raw) ? raw : _state.journalLayoutMode;
   } catch {
-    return "calendar";
+    return _state.journalLayoutMode;
   }
 }
 
 function defaultJournalTradeFilters() {
+  var d = _state.journalTradeFilters;
   return {
-    strategy: "ALL",
-    result: "ALL",
-    tag: ["ALL"],
-    pnlMin: "",
-    pnlMax: "",
-    search: "",
+    strategy: d.strategy,
+    result: d.result,
+    tag: d.tag.slice(),
+    pnlMin: d.pnlMin,
+    pnlMax: d.pnlMax,
+    search: d.search || "",
   };
 }
 
