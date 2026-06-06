@@ -5,7 +5,7 @@ Phase 4 adds the first live adapter: Hyperliquid public read-only trades.
 Phase 5 adds trade-derived Delta/CVD buckets inside the Go engine.
 Phase 6 adds trade-derived session VWAP inside the Go engine.
 
-The service is independent from Flask and the existing browser chart. It does not import the Journal backend and does not modify Flask routes. The V6 UI can connect to it manually through `Connect Local Engine`.
+The service is independent from Flask and the existing browser chart. It does not import the Journal backend and does not modify Flask routes. The V6 Orderflow UI auto-connects to the local engine when the shell mounts.
 
 ## Structure
 
@@ -400,7 +400,7 @@ Phase 7 connects the Tape V6 panel to the local `/stream`. The `delta_bucket` an
 
 ## UI Shell (Phase 16)
 
-Phase 16 introduces a dedicated UI shell for the V6 Orderflow page to reorganize the layout into a TradingView-like surface (top toolbar, left tools, central chart, right Tape/DOM, bottom Delta/VWAP). This change is purely presentational and does not modify the Go engine, exchange adapters, or Flask routes. Connection to the local Go engine remains manual via the existing `Connect Local Engine` control.
+Phase 16 introduces a dedicated UI shell for the V6 Orderflow page to reorganize the layout into a TradingView-like surface (top toolbar, left tools, central chart, right Tape/DOM, bottom Delta/VWAP). This change is purely presentational and does not modify the Go engine, exchange adapters, or Flask routes. The shell auto-connects to the local Go engine on mount; the header control remains available for disconnect/reconnect.
 
 
 ### Procedure
@@ -435,14 +435,14 @@ $env:PORT='5001'; $env:OPEN_BROWSER='0'; .\.venv\Scripts\python.exe app.py
 
 - Go to `http://127.0.0.1:5001/`
 - Navigate to `Orderflow`
-- Click **Connect Local Engine**
+- The page auto-connects to the local engine
 - The status dot turns green and the Tape V6 panel shows live Hyperliquid trades
 - Counters in the engine bar show trades/deltas/vwaps received
 - Click **Disconnect** to stop the stream
 
 ### UI Controls
 
-- **Connect Local Engine** / **Disconnect**: manual toggle, no auto-connect
+- **Disconnect** / **Reconnect**: controls the auto-connected local engine stream
 - **Pause** / **Resume**: stops tape render updates but keeps buffering trades
 - **Clear tape**: removes all trades from the buffer and UI
 - **Min qty**: filters trades below a quantity threshold
@@ -450,7 +450,8 @@ $env:PORT='5001'; $env:OPEN_BROWSER='0'; .\.venv\Scripts\python.exe app.py
 
 ### Connection Behavior
 
-- The WebSocket connects to `ws://127.0.0.1:8765/stream` only on manual click
+- The WebSocket auto-connects to `window.COCKPIT_CONFIG.marketWsUrl` when the V6 Orderflow shell mounts
+- Flask injects `marketWsUrl` from `COCKPIT_MARKET_WS_URL`, or derives it from `MARKET_GO_HOST`/`MARKET_GO_PORT` when no explicit URL is set
 - If `marketd` is not running, the connection fails gracefully and the UI stays functional with mock data
 - If the connection drops, the UI displays an error status and attempts reconnection with exponential backoff (max 8 attempts)
 - Trade buffer is capped at 500 entries
@@ -781,13 +782,12 @@ Result:
 
 Phase 8a connects the existing V6 browser surface to the already available local engine messages. It does not add new engine endpoints and does not connect the UI directly to Hyperliquid or Binance.
 
-Manual UI connection:
+Auto UI connection:
 
 - The user starts `marketd` manually.
 - The user opens the Flask app manually.
-- The user clicks `Connect Local Engine` in the V6 Orderflow page.
-- The V6 UI opens one local WebSocket only:
-  - `ws://127.0.0.1:8765/stream`
+- The user opens the V6 Orderflow page; the shell auto-connects to the local engine.
+- The V6 UI opens one local WebSocket only, using `window.COCKPIT_CONFIG.marketWsUrl`
 
 Consumed envelope types:
 
@@ -842,7 +842,7 @@ Outage behavior:
 - If `marketd` stops, the V6 page keeps the last Delta/CVD and VWAP values visible.
 - The connection status changes to connecting/error.
 - The page does not crash.
-- Reconnection is still manual from the UI for now.
+- Reconnection is handled by the V6 engine client with capped exponential backoff.
 
 ## Phase 9 Hyperliquid l2Book
 
@@ -963,8 +963,8 @@ Current limits:
 
 The V6 browser surface consumes `order_book` only from the local engine stream:
 
-- Manual connection only through `Connect Local Engine`.
-- WebSocket URL: `ws://127.0.0.1:8765/stream`.
+- Auto-connect on V6 Orderflow shell mount; header control can disconnect/reconnect.
+- WebSocket URL: injected as `window.COCKPIT_CONFIG.marketWsUrl`.
 - No browser WebSocket to Hyperliquid or Binance is opened by the V6 DOM panel.
 - The DOM panel keeps mock data when disconnected.
 - When connected, the store keeps the latest snapshot by symbol and displays:
@@ -1169,7 +1169,7 @@ $env:MARKET_GO_HEATMAP_MAX_LEVELS='100'
 go run ./cmd/marketd
 ```
 
-Then launch Flask on `127.0.0.1:5001`, open `Orderflow`, and click `Connect Local Engine`.
+Then launch Flask on `127.0.0.1:5001` and open `Orderflow`; the V6 shell auto-connects to the local engine.
 
 Current Phase 12 limits:
 

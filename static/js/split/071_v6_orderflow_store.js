@@ -1,10 +1,68 @@
 // ---------- 071_v6_orderflow_store.js ----------
-// Minimal observable store for the isolated Cockpit V6 mock surface.
+// Observable store for the Cockpit V6 orderflow surface.
+//
+// State domains (see 070_v6_orderflow_contract.js):
+//   trader    → store.getTrader()   — market data
+//   render    → store.getRender()   — UI config + transient state
+//   transport → store.getTransport()— connection state
+//   workspace → store.getWorkspace()— layout profiles
+//
+// Existing flat access (state.symbol, state.settings.X, ...) still works.
+// Domain accessors are the migration path toward architectural separation.
 
 (function () {
   'use strict';
 
   var V6OF = window.V6OF = window.V6OF || {};
+  if (!V6OF.register) {
+    ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'].forEach(function (name) { V6OF[name] = V6OF[name] || {}; });
+    V6OF.register = function (domain, name, value, legacyName) {
+      V6OF[domain] = V6OF[domain] || {};
+      V6OF[domain][name] = value;
+      if (legacyName) V6OF[legacyName] = value;
+      return value;
+    };
+  }
+  var storesByRoot = typeof WeakMap === 'function' ? new WeakMap() : null;
+  var fallbackStores = [];
+
+  function resolveRoot(ref) {
+    if (ref && ref.dataset && ref.dataset.v6Mounted === '1') return ref;
+    if (ref && ref.closest) {
+      var closest = ref.closest('[data-v6-mounted="1"]');
+      if (closest) return closest;
+    }
+    return document.querySelector('[data-v6-mounted="1"]');
+  }
+
+  V6OF.register('Core', 'setRootStore', function (root, store) {
+    if (!root || !store) return store;
+    if (storesByRoot) {
+      storesByRoot.set(root, store);
+    } else {
+      fallbackStores = fallbackStores.filter(function (entry) { return entry.root !== root; });
+      fallbackStores.push({ root: root, store: store });
+    }
+    root._v6Store = store;
+    return store;
+  }, 'setRootStore');
+
+  V6OF.register('Core', 'getStore', function (ref) {
+    var root = resolveRoot(ref);
+    if (!root) return null;
+    if (storesByRoot) return storesByRoot.get(root) || root._v6Store || null;
+    for (var i = fallbackStores.length - 1; i >= 0; i--) {
+      if (fallbackStores[i].root === root) return fallbackStores[i].store;
+    }
+    return root._v6Store || null;
+  }, 'getStore');
+
+  V6OF.register('Core', 'clearRootStore', function (root) {
+    if (!root) return;
+    if (storesByRoot && storesByRoot.delete) storesByRoot.delete(root);
+    fallbackStores = fallbackStores.filter(function (entry) { return entry.root !== root; });
+    if (root._v6Store) delete root._v6Store;
+  }, 'clearRootStore');
 
   function cloneSettings(settings) {
     return Object.assign({}, settings || {});
@@ -18,11 +76,19 @@
     return Object.assign({}, value || {});
   }
 
-  function normalizeState(next) {
+  function normalizeState(next, prev) {
     var empty = V6OF.Contract.createEmptyState();
     next = next || {};
-    next.settings = Object.assign(empty.settings, cloneSettings(next.settings));
-    next.ui = Object.assign(empty.ui, cloneUi(next.ui));
+    if (!prev || next.settings !== prev.settings) {
+      next.settings = Object.assign(empty.settings, cloneSettings(next.settings));
+    } else {
+      next.settings = prev.settings;
+    }
+    if (!prev || next.ui !== prev.ui) {
+      next.ui = Object.assign(empty.ui, cloneUi(next.ui));
+    } else {
+      next.ui = prev.ui;
+    }
     next.trades = Array.isArray(next.trades) ? next.trades : [];
     next.candles = Array.isArray(next.candles) ? next.candles : [];
     next.chartCandles = Array.isArray(next.chartCandles) ? next.chartCandles : [];
@@ -49,22 +115,118 @@
     next.vwapBySymbol = cloneObjectMap(next.vwapBySymbol || empty.vwapBySymbol);
     next.lastMessageAt = Number.isFinite(next.lastMessageAt) ? next.lastMessageAt : 0;
     next.isStale = !!next.isStale;
+    next.activeWorkspace = next.activeWorkspace || empty.activeWorkspace;
+    next.workspaceList = typeof next.workspaceList === 'object' && next.workspaceList ? next.workspaceList : {};
     next.contractVersion = next.contractVersion || empty.contractVersion;
     next.source = next.source || empty.source;
+    next.dataFreshness = next.dataFreshness || empty.dataFreshness;
+    next.transportStatus = next.transportStatus || empty.transportStatus;
     next.symbol = next.symbol || empty.symbol;
     next.timeframe = next.timeframe || empty.timeframe;
     next.depthHistory = Array.isArray(next.depthHistory) ? next.depthHistory : [];
     return next;
   }
 
-  V6OF.createStore = function (initialState) {
+  function shallowEqual(a, b) {
+    if (a === b) return true;
+    if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) {
+      return false;
+    }
+    var isArrayA = Array.isArray(a);
+    var isArrayB = Array.isArray(b);
+    if (isArrayA !== isArrayB) return false;
+    if (isArrayA) {
+      if (a.length !== b.length) return false;
+      for (var i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) return false;
+      }
+      return true;
+    }
+    var keysA = Object.keys(a);
+    var keysB = Object.keys(b);
+    if (keysA.length !== keysB.length) return false;
+    for (var j = 0; j < keysA.length; j++) {
+      var key = keysA[j];
+      if (!Object.prototype.hasOwnProperty.call(b, key) || a[key] !== b[key]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  V6OF.register('Core', 'shallowEqual', shallowEqual, 'shallowEqual');
+
+  // ── Slice map: every top-level state key belongs to exactly one domain slice ──
+  var SLICE_MAP = {
+    // trader
+    symbol: 'trader', timeframe: 'trader', dataSource: 'trader',
+    trades: 'trader', orderBook: 'trader', lastOrderBookBySymbol: 'trader',
+    orderBookCount: 'trader', lastOrderBookTs: 'trader', selectedDomSymbol: 'trader',
+    heatmapFrames: 'trader', heatmapFrameCount: 'trader', lastHeatmapFrame: 'trader',
+    lastHeatmapTs: 'trader', selectedHeatmapSymbol: 'trader',
+    footprintCandles: 'trader', footprintCandleCount: 'trader', lastFootprintCandle: 'trader',
+    lastFootprintTs: 'trader', selectedFootprintSymbol: 'trader',
+    candles: 'trader', chartCandles: 'trader', _candlesByInterval: 'trader',
+    deltaBuckets: 'trader', deltaBucketsByInterval: 'trader', latestDeltaByInterval: 'trader',
+    vwap: 'trader', vwapBySymbol: 'trader',
+    depthHistory: 'trader', restTradesTs: 'trader', restKlinesTs: 'trader', restDepthTs: 'trader',
+    // render
+    settings: 'render', ui: 'render',
+    // transport
+    source: 'transport', dataFreshness: 'transport', transportStatus: 'transport',
+    engineConfigStatus: 'transport', engineConfigSyncedAt: 'transport',
+    engineConfigStaleAt: 'transport', engineConfigError: 'transport',
+    isStale: 'transport', lastMessageAt: 'transport',
+    // workspace
+    activeWorkspace: 'workspace', workspaceList: 'workspace',
+    // meta (never triggers slice notifications)
+    contractVersion: null, lastUpdateReason: null
+  };
+
+  function changedSlices(prev, next) {
+    if (!prev) return ['trader', 'render', 'transport', 'workspace'];
+    var set = {};
+    for (var key in next) {
+      if (!Object.prototype.hasOwnProperty.call(next, key)) continue;
+      if (next[key] !== prev[key]) {
+        var s = SLICE_MAP[key];
+        if (s) set[s] = true;
+      }
+    }
+    var result = Object.keys(set);
+    return result.length ? result : null; // null = no slices changed
+  }
+
+  V6OF.register('Core', 'createStore', function (initialState) {
     var state = normalizeState(initialState || V6OF.Contract.createEmptyState());
     var listeners = [];
 
-    function notify() {
-      listeners.slice().forEach(function (fn) {
-        try { fn(state); } catch (err) { console.error('[V6OF] store listener failed', err); }
-      });
+    function notify(changed) {
+      // changed: array of slice names that were modified, or null/falsy = notify all
+      var snapshot = listeners.slice();
+      for (var i = 0; i < snapshot.length; i++) {
+        var entry = snapshot[i];
+        // Skip if this listener has slice constraints and none match
+        if (entry.slices && changed) {
+          var match = false;
+          for (var j = 0; j < changed.length; j++) {
+            if (entry.slices.indexOf(changed[j]) >= 0) { match = true; break; }
+          }
+          if (!match) continue;
+        }
+        // Selector check (legacy)
+        if (entry.needsSelectorCheck) {
+          var selected;
+          try { selected = entry.selector(state); } catch (err) {
+            console.error('[V6OF] selector failed', err);
+            continue;
+          }
+          if (entry.hasLast && shallowEqual(entry.lastSelected, selected)) continue;
+          entry.lastSelected = selected;
+          entry.hasLast = true;
+        }
+        try { entry.fn(state); } catch (err) { console.error('[V6OF] store listener failed', err); }
+      }
     }
 
     return {
@@ -72,35 +234,61 @@
         return state;
       },
       setState: function (patch, reason) {
+        var prev = state;
         var next = typeof patch === 'function' ? patch(state) : patch;
         if (!next) return state;
-        state = normalizeState(Object.assign({}, state, next));
+        state = normalizeState(Object.assign({}, state, next), state);
         state.lastUpdateReason = reason || 'setState';
-        notify();
+        notify(changedSlices(prev, state));
         return state;
       },
+
+      // ── Targeted slice updates (only notify that slice's subscribers) ──
+      updateSlice: function (sliceName, patch) {
+        var prev = state;
+        if (sliceName === 'render') {
+          // render = settings + ui merged
+          state = normalizeState(Object.assign({}, state, {
+            settings: Object.assign({}, state.settings, (patch && patch.settings) || {}),
+            ui: Object.assign({}, state.ui, (patch && patch.ui) || {})
+          }), state);
+        } else if (sliceName === 'trader') {
+          state = normalizeState(Object.assign({}, state, patch || {}), state);
+        } else if (sliceName === 'transport') {
+          state = normalizeState(Object.assign({}, state, patch || {}), state);
+        } else if (sliceName === 'workspace') {
+          state = normalizeState(Object.assign({}, state, patch || {}), state);
+        } else {
+          // Unknown slice — fall back to broad update
+          return this.setState(patch, 'slice-' + sliceName);
+        }
+        state.lastUpdateReason = 'slice-' + sliceName;
+        notify([sliceName]);
+        return state;
+      },
+
       updateSettings: function (patch) {
-        this.setState({ settings: Object.assign({}, state.settings, patch || {}) }, 'settings');
+        this.updateSlice('render', { settings: patch || {} });
       },
       updateUi: function (patch) {
-        this.setState({ ui: Object.assign({}, state.ui, patch || {}) }, 'ui');
+        this.updateSlice('render', { ui: patch || {} });
       },
       clearHeatmap: function () {
-        this.setState({
+        this.updateSlice('trader', {
           heatmapFrames: [],
           lastHeatmapFrame: null,
           lastHeatmapTs: 0
-        }, 'clear-heatmap');
+        });
       },
       clearFootprint: function () {
-        this.setState({
+        this.updateSlice('trader', {
           footprintCandles: [],
           lastFootprintCandle: null,
           lastFootprintTs: 0
-        }, 'clear-footprint');
+        });
       },
       clearAllBuffers: function () {
-        this.setState({
+        this.updateSlice('trader', {
           trades: [],
           heatmapFrames: [],
           lastHeatmapFrame: null,
@@ -108,15 +296,48 @@
           footprintCandles: [],
           lastFootprintCandle: null,
           lastFootprintTs: 0
-        }, 'clear-all-buffers');
+        });
       },
-      subscribe: function (fn) {
+
+      // ── Subscribe: backward-compatible, now slice-aware ──
+      // subscribe(fn)              → broad (all changes)
+      // subscribe(fn, selectorFn) → selector-filtered (legacy)
+      // subscribe(fn, 'trader')    → only notified on trader slice changes
+      // subscribe(fn, ['trader','transport']) → multi-slice
+      subscribe: function (fn, opts) {
         if (typeof fn !== 'function') return function () {};
-        listeners.push(fn);
+        var entry = { fn: fn };
+        if (typeof opts === 'function') {
+          // Legacy selector mode
+          entry.selector = opts;
+          entry.needsSelectorCheck = true;
+          entry.hasLast = false;
+          entry.lastSelected = undefined;
+        } else if (typeof opts === 'string') {
+          entry.slices = [opts];
+        } else if (Array.isArray(opts)) {
+          entry.slices = opts.slice();
+        }
+        // else: opts is undefined/falsy → broad subscription
+        listeners.push(entry);
         return function () {
-          listeners = listeners.filter(function (item) { return item !== fn; });
+          listeners = listeners.filter(function (item) { return item !== entry; });
         };
+      },
+
+      // ── Domain accessors ──
+      getTrader: function () {
+        return V6OF.Contract.getTraderState(state);
+      },
+      getRender: function () {
+        return V6OF.Contract.getRenderState(state);
+      },
+      getTransport: function () {
+        return V6OF.Contract.getTransportState(state);
+      },
+      getWorkspace: function () {
+        return V6OF.Contract.getWorkspaceState(state);
       }
     };
-  };
+  }, 'createStore');
 })();

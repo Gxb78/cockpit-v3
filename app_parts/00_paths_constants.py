@@ -32,7 +32,7 @@ else:
     EXE_DIR      = RESOURCE_DIR
     IS_FROZEN    = False
 
-# Resolution du Mode Portable vs Mode Installe (Garde-fous Phase 25)
+# Portable vs installed mode resolution
 IS_PORTABLE = (EXE_DIR / "portable.mode").exists()
 
 if IS_PORTABLE:
@@ -67,7 +67,7 @@ SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
 BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
-# Phase 25C: Migration automatique safe de Portable vers AppData
+# Safe auto-migration from Portable to AppData
 if not IS_PORTABLE and IS_FROZEN:
     portable_db = EXE_DIR / "data" / "journal.db"
     installed_db = DB_PATH
@@ -115,7 +115,7 @@ del _FILE_DIR
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 MAX_SCREENSHOT_SIZE = 5 * 1024 * 1024  # 5 Mo par screenshot
 
-# Configuration et fallback config.json (Garde-fous Phase 25)
+# Configuration and config.json fallback
 _CONFIG_PATH = USER_DATA_DIR / "config.json"
 if not _CONFIG_PATH.exists():
     default_config = EXE_DIR / "config.json"

@@ -10,6 +10,10 @@ import (
 
 const BookSourceL2 = "l2Book"
 
+// ContractSize for Hyperliquid perps: order sizes are denominated in the base
+// coin, so one "contract" is one base unit.
+const ContractSize = 1.0
+
 func ParseBookMessage(raw []byte) (*WsBook, error) {
 	var msg streamMessage
 	if err := json.Unmarshal(raw, &msg); err != nil {
@@ -41,14 +45,15 @@ func NormalizeBook(raw WsBook, tsLocal int64, depth int) (marketdata.OrderBookSn
 	bids := normalizeBookSide(raw.Levels[0], depth)
 	asks := normalizeBookSide(raw.Levels[1], depth)
 	snapshot := marketdata.OrderBookSnapshot{
-		Exchange:   ExchangeName,
-		Symbol:     symbol,
-		TsExchange: raw.Time,
-		TsLocal:    tsLocal,
-		Bids:       bids,
-		Asks:       asks,
-		Depth:      min(len(bids), len(asks)),
-		Source:     BookSourceL2,
+		Exchange:     ExchangeName,
+		Symbol:       symbol,
+		TsExchange:   raw.Time,
+		TsLocal:      tsLocal,
+		Bids:         bids,
+		Asks:         asks,
+		Depth:        min(len(bids), len(asks)),
+		Source:       BookSourceL2,
+		ContractSize: ContractSize,
 	}
 	if len(bids) > 0 {
 		snapshot.BestBid = bids[0].Price

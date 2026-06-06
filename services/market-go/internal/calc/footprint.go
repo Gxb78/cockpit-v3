@@ -19,6 +19,9 @@ type FootprintConfig struct {
 	TickSize   float64
 	EmitEvery  time.Duration
 	MaxLevels  int
+	// Orderflow-signal thresholds. Zero values fall back to defaults (see
+	// FootprintSignalConfig.withDefaults), which mirror the UI defaults.
+	Signals FootprintSignalConfig
 }
 
 type FootprintCalculator struct {
@@ -28,6 +31,7 @@ type FootprintCalculator struct {
 	tickSize   float64
 	throttleMs int64
 	maxLevels  int
+	signalCfg  FootprintSignalConfig
 	current    map[footprintKey]*footprintState
 	lastEmitMs map[footprintKey]int64
 }
@@ -58,6 +62,7 @@ func NewFootprintCalculator(cfg FootprintConfig) *FootprintCalculator {
 		tickSize:   tickSize,
 		throttleMs: cfg.EmitEvery.Milliseconds(),
 		maxLevels:  maxLevels,
+		signalCfg:  cfg.Signals.withDefaults(),
 		current:    make(map[footprintKey]*footprintState),
 		lastEmitMs: make(map[footprintKey]int64),
 	}
@@ -79,6 +84,22 @@ func (c *FootprintCalculator) TickSize() float64 {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.tickSize
+}
+
+// SetSignalConfig updates the orderflow-signal thresholds at runtime (e.g. when
+// the UI changes them). Subsequent snapshots use the new thresholds; already
+// emitted candles keep their values. Thread-safe.
+func (c *FootprintCalculator) SetSignalConfig(cfg FootprintSignalConfig) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.signalCfg = cfg.withDefaults()
+}
+
+// SignalConfig returns the active signal thresholds. Thread-safe.
+func (c *FootprintCalculator) SignalConfig() FootprintSignalConfig {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.signalCfg
 }
 
 func (c *FootprintCalculator) UpdateTrade(trade marketdata.Trade) []marketdata.FootprintCandle {
@@ -141,6 +162,7 @@ func (c *FootprintCalculator) snapshot(state *footprintState, closed bool) marke
 	candle.Closed = closed
 	candle.Levels = footprintLevels(state.levels, c.maxLevels)
 	candle.POC = footprintPOC(state.levels)
+	DeriveFootprintSignals(&candle, c.signalCfg)
 	return candle
 }
 

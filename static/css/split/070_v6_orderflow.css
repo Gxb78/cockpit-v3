@@ -7,41 +7,49 @@
  * Inspired by the best (TradingView / ATAS / Exocharts), built from scratch.
  * ========================================================================== */
 
-.v6-orderflow-root {
-  /* — surfaces (aligned with chart page palette) — */
-  --v6-bg:        #070c11;
-  --v6-bg-2:      #091017;
-  --v6-surface:   #0b1218;
-  --v6-surface-2: #101922;
-  --v6-surface-3: #16212c;
-  --v6-hairline:        rgba(118, 144, 160, 0.16);
-  --v6-hairline-strong: rgba(118, 144, 160, 0.25);
-  --v6-edge:      rgba(255, 255, 255, 0.035);
+/* ── Strict page containment: prevents .v6-orderflow-root (position:absolute)
+   from bleeding outside the orderflow page into other views. Creates a new
+   containing block + stacking context so z-index is page-scoped. ── */
+.page[data-page="orderflow"].active {
+  position: relative;
+  overflow: hidden;
+}
 
-  /* — text (audited — brighter) — */
-  --v6-text:       #f0f4f8;
-  --v6-text-dim:   #a8c0d0;
-  --v6-text-mute:  #8da3b3;
-  --v6-text-faint: #6a7d8e;
+.v6-orderflow-root {
+  /* — surfaces (dark obsidian theme) — */
+  --v6-bg:        #131722;
+  --v6-bg-2:      #171b26;
+  --v6-surface:   #1c2030;
+  --v6-surface-2: #1e222d;
+  --v6-surface-3: #2a2e39;
+  --v6-hairline:        rgba(255, 255, 255, 0.08);
+  --v6-hairline-strong: rgba(255, 255, 255, 0.16);
+  --v6-edge:      rgba(255, 255, 255, 0.03);
+
+  /* — text — */
+  --v6-text:       #d1d4dc;
+  --v6-text-dim:   #b2b5be;
+  --v6-text-mute:  #868993;
+  --v6-text-faint: #60626a;
 
   /* — accent: cyan — */
-  --v6-accent:      #22d3ee;
-  --v6-accent-2:    #0fb6d4;
-  --v6-accent-soft: rgba(56, 211, 238, 0.06);
-  --v6-accent-line: rgba(56, 211, 238, 0.25);
-  --v6-accent-glow: rgba(56, 211, 238, 0.30);
+  --v6-accent:      #00b0ff;
+  --v6-accent-2:    #0ea5e9;
+  --v6-accent-soft: rgba(0, 176, 255, 0.08);
+  --v6-accent-line: rgba(0, 176, 255, 0.25);
+  --v6-accent-glow: rgba(0, 176, 255, 0.30);
 
-  /* — semantic (audited — +15% saturation) — */
-  --v6-buy:       #4ae8a0;
-  --v6-buy-soft:  rgba(74, 232, 160, 0.12);
-  --v6-sell:      #ff6b80;
-  --v6-sell-soft: rgba(255, 107, 128, 0.12);
-  --v6-gold:      #f59e0b;
-  --v6-gold-soft: rgba(245, 158, 11, 0.10);
+  /* — semantic — */
+  --v6-buy:       #089981;
+  --v6-buy-soft:  rgba(8, 153, 129, 0.12);
+  --v6-sell:      #f23645;
+  --v6-sell-soft: rgba(242, 54, 69, 0.12);
+  --v6-gold:      #f5c53c;
+  --v6-gold-soft: rgba(245, 197, 60, 0.10);
 
-  /* — depth (flatter, chart-page style) — */
-  --v6-shadow:     0 8px 24px -18px rgba(0, 0, 0, 0.7);
-  --v6-shadow-sm:  none;
+  /* — depth — */
+  --v6-shadow:     0 8px 24px -18px rgba(0, 0, 0, 0.15);
+  --v6-shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.06);
   --v6-glow-accent: 0 0 0 1px var(--v6-accent-line);
 
   /* — geometry (tighter, less rounded) — */
@@ -60,15 +68,31 @@
 
   position: absolute;
   inset: 0;
-  z-index: 35;
   color: var(--v6-text);
   font-family: var(--v6-font);
+  pointer-events: none;
+}
+
+.page.active .v6-orderflow-root {
+  /* z-index is now scoped to the page's stacking context (see .page[data-page="orderflow"].active) */
+  z-index: 1;
   pointer-events: auto;
 }
 
 .v6-orderflow-root *,
 .v6-orderflow-root *::before,
 .v6-orderflow-root *::after { box-sizing: border-box; }
+
+.v6-demo-banner {
+  background: #7c2d12;
+  color: #ffedd5;
+  text-align: center;
+  padding: 6px 12px;
+  font: 700 12px/1.4 var(--v6-font);
+  border-bottom: 1px solid #9a3412;
+  letter-spacing: 0.03em;
+  z-index: 100;
+}
 
 /* ---- Shell: flat chart-page surface ---- */
 .v6-shell {
@@ -101,7 +125,6 @@
   border-bottom: 1px solid var(--v6-hairline);
   background: var(--v6-bg-2);
   flex-wrap: nowrap;
-  overflow: hidden;
 }
 /* thin vertical separators between header groups */
 .v6-header > .v6-timeframes::before,
@@ -346,7 +369,7 @@
 .v6-btn-ghost { background: transparent; border-color: var(--v6-hairline); color: var(--v6-text-mute); }
 .v6-btn-ghost:hover { color: var(--v6-text); }
 
-/* Connection status pill (auto-connect; no manual button) */
+/* Connection status pill (interactive button) */
 .v6-conn {
   display: inline-flex;
   align-items: center;
@@ -359,16 +382,23 @@
   font: 800 11px/1 var(--v6-font);
   letter-spacing: 0.02em;
   white-space: nowrap;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease;
+}
+.v6-conn:hover {
+  background: var(--v6-surface-4);
+  border-color: var(--v6-text-mute);
+  color: var(--v6-text);
 }
 .v6-conn-text { text-transform: capitalize; }
 
 /* Progressive collapse so the actions (Connect) are NEVER clipped. */
 @media (max-width: 1600px) {
   .v6-header-live .v6-stat:nth-child(2),
-  .v6-header-live .v6-stat:nth-child(3) { display: none; }
+  .v6-header-live .v6-stat:nth-child(4),
+  .v6-header-live .v6-stat:nth-child(5) { display: none; }
 }
-@media (max-width: 1450px) { .v6-ticket { display: none; } }
-@media (max-width: 1340px) { .v6-header-live { display: none; } }
 @media (max-width: 1240px) {
   .v6-symbol-meta { display: none; }
   .v6-seg-btn { padding: 0 9px; }
@@ -600,6 +630,30 @@
   white-space: nowrap;
 }
 
+.v6-panel-head .v6-panel-freshness {
+  max-width: 92px;
+  padding: 3px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--v6-text-faint);
+  text-align: right;
+}
+
+.v6-panel-head .v6-panel-freshness.is-fresh {
+  border-color: rgba(61, 220, 151, 0.18);
+  color: var(--v6-buy);
+}
+
+.v6-panel-head .v6-panel-freshness.is-stale {
+  border-color: rgba(255, 178, 77, 0.22);
+  color: #ffb24d;
+}
+
+.v6-panel-head .v6-panel-freshness.is-empty {
+  color: var(--v6-text-faint);
+}
+
 .v6-panel-body {
   height: calc(100% - 36px);
   min-height: 0;
@@ -613,11 +667,20 @@
   overflow: hidden;
 }
 
-.v6-tape-list-container,
 .v6-dom-table-container {
   flex: 1 1 0;
   overflow-y: auto;
   min-height: 0;
+}
+
+.v6-tape-list-container {
+  flex: 1 1 0;
+  overflow-y: auto;
+  overflow-x: auto;
+  min-height: 0;
+  min-width: 220px;
+  mask-image: linear-gradient(to bottom, transparent 0%, black 6%, black 94%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 6%, black 94%, transparent 100%);
 }
 
 .v6-tape-footer-container,
@@ -667,6 +730,7 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.02);
   color: var(--v6-text-dim);
   background: transparent;
+  transition: background var(--v6-fast) var(--v6-ease);
 }
 .v6-tape-row::before {
   display: none; /* Remove flashy indicator */
@@ -719,10 +783,13 @@
   justify-content: space-between;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
+  padding: 0 8px;
+  height: 26px;           /* hauteur fixe — pas de saut */
+  min-height: 26px;
   border-bottom: 1px solid rgba(150,168,196,0.08);
   background: rgba(6,8,12,0.8);
-  flex: 0 0 auto;
+  flex: 0 0 26px;
+  overflow: hidden;
 }
 .v6-dom-hleft, .v6-dom-hright {
   display: flex;
@@ -735,11 +802,16 @@
   gap: 3px;
   font: 9px/1 var(--v6-mono);
   color: rgba(150,168,196,0.6);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .v6-dom-stat strong {
   font-weight: 800;
   font-size: 10px;
+  line-height: 1;
   color: var(--v6-text);
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
 }
 .v6-dom-stat .is-mid { color: #3ad7ee; }
 .v6-dom-stat .is-bid { color: var(--v6-buy); }
@@ -765,20 +837,23 @@
 .v6-dom-glbl select:focus { border-color: rgba(58,215,238,0.4); }
 .v6-dom-recenter {
   min-height: 18px;
-  padding: 0 6px;
+  min-width: 68px;
+  padding: 0 8px;
   border: 1px solid rgba(150,168,196,0.15);
   border-radius: 3px;
   background: rgba(8,12,20,0.6);
   color: rgba(150,168,196,0.6);
-  font: 11px/1 var(--v6-mono);
+  font: 800 10px/1 var(--v6-font);
   cursor: pointer;
   transition: all 0.15s;
+  white-space: nowrap;
 }
 .v6-dom-recenter:hover { color: #3ad7ee; border-color: rgba(58,215,238,0.3); }
 
 /* ── Column headers ── */
 .v6-dom-cols {
   display: flex;
+  width: 100%;
   padding: 2px 0;
   font: 8px/1.2 var(--v6-mono);
   font-weight: 800;
@@ -794,29 +869,53 @@
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
+  /* Use flex to match cell alignment behavior */
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.v6-dom-col-bid   { width: 78px; text-align: right; padding-right: 8px; }
-.v6-dom-col-price { width: 76px; }
-.v6-dom-col-ask   { width: 78px; text-align: left; padding-left: 8px; }
-.v6-dom-col-buy   { width: 76px; text-align: right; }
-.v6-dom-col-sell  { width: 76px; text-align: right; }
-.v6-dom-col-delta { width: 76px; text-align: right; }
+/* ── Largeurs des colonnes — valeurs identiques pour .v6-dom-col et .v6-dom-cell
+   bid=23%, price=20%, ask=23%, buy=11%, sell=11%, delta=12% = 100%
+   On utilise flex-shrink:0 + width fixe pour éviter tout débordement. ── */
+.v6-dom-col-bid,
+.v6-dom-cell-bid   { width: 18%; flex-shrink: 0; text-align: right; justify-content: flex-end; padding-right: 5px; }
+.v6-dom-col-price,
+.v6-dom-cell-price { width: 16%; flex-shrink: 0; justify-content: center; font-weight: 700; color: rgba(220,230,240,0.8); }
+.v6-dom-col-ask,
+.v6-dom-cell-ask   { width: 18%; flex-shrink: 0; text-align: left; justify-content: flex-start; padding-left: 5px; }
+.v6-dom-col-buy,
+.v6-dom-cell-buy   { width: 9%; flex-shrink: 0; text-align: right; justify-content: flex-end; }
+.v6-dom-col-sell,
+.v6-dom-cell-sell  { width: 9%; flex-shrink: 0; text-align: right; justify-content: flex-end; }
+.v6-dom-col-delta,
+.v6-dom-cell-delta { width: 10%; flex-shrink: 0; text-align: right; justify-content: flex-end; }
+.v6-dom-col-imb,
+.v6-dom-cell-imb   { width: 8%; flex-shrink: 0; text-align: right; justify-content: flex-end; }
+.v6-dom-col-stack,
+.v6-dom-cell-stack { width: 5%; flex-shrink: 0; text-align: center; justify-content: center; }
+.v6-dom-col-abs,
+.v6-dom-cell-abs   { width: 7%; flex-shrink: 0; text-align: center; justify-content: center; }
 
 /* ── Rows ── */
 .v6-dom-body {
   flex: 1 1 auto;
-  overflow-y: auto;
+  overflow-y: scroll;     /* scroll toujours visible pour éviter le layout-shift */
   overflow-x: hidden;
   min-height: 0;
+  scrollbar-gutter: stable;
 }
 .v6-dom-row {
   display: flex;
-  min-height: 18px;
-  font: 10px/18px var(--v6-mono);
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 20px;
+  height: 20px;
+  font: 10px/20px var(--v6-mono);
   font-variant-numeric: tabular-nums;
   border-bottom: 1px solid rgba(150,168,196,0.025);
   background: transparent;
   transition: background 0.08s;
+  overflow: hidden;       /* empêche tout débordement horizontal */
 }
 .v6-dom-row:hover { background: rgba(150,168,196,0.03); }
 
@@ -825,15 +924,13 @@
   position: relative;
   display: flex;
   align-items: center;
-  overflow: hidden;
+  overflow: hidden;       /* clip le texte qui dépasse */
   white-space: nowrap;
+  box-sizing: border-box;
+  height: 20px;
 }
-.v6-dom-cell-bid   { width: 78px; justify-content: flex-end; padding-right: 8px; }
-.v6-dom-cell-price { width: 76px; justify-content: center; font-weight: 700; color: rgba(220,230,240,0.8); }
-.v6-dom-cell-ask   { width: 78px; justify-content: flex-start; padding-left: 8px; }
-.v6-dom-cell-buy   { width: 76px; justify-content: flex-end; }
-.v6-dom-cell-sell  { width: 76px; justify-content: flex-end; }
-.v6-dom-cell-delta { width: 76px; justify-content: flex-end; font-weight: 700; }
+/* NB: les largeurs de .v6-dom-cell-* sont définies ci-dessus
+   (mutualisées avec .v6-dom-col-*) */
 
 .v6-dom-val {
   position: relative;
@@ -881,6 +978,15 @@
 .v6-dom-cell-delta { color: rgba(150,168,196,0.4); }
 .has-bid .v6-dom-cell-delta { color: rgba(74,232,160,0.7); }
 .has-ask .v6-dom-cell-delta { color: rgba(255,107,128,0.7); }
+.v6-dom-cell-imb,
+.v6-dom-cell-stack,
+.v6-dom-cell-abs { color: rgba(150,168,196,0.38); font-weight: 700; }
+.v6-dom-cell-imb.is-buy,
+.v6-dom-cell-stack.is-buy,
+.v6-dom-cell-abs.is-bid { color: rgba(74,232,160,0.76); }
+.v6-dom-cell-imb.is-sell,
+.v6-dom-cell-stack.is-sell,
+.v6-dom-cell-abs.is-ask { color: rgba(255,107,128,0.76); }
 
 /* ── Depth bars ── */
 .v6-dom-bar {
@@ -1135,152 +1241,66 @@
 }
 
 /* =============================== CVD ================================== */
-/* TradingView-style: compact, dark, data-dense */
+/* Compact bar strip for the grid panel — no header/borders, just delta info */
 
-.v6-cvd-panel {
+.v6-cvd-barstrip {
   display: flex;
-  flex-direction: column;
-  height: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 10px;
+  min-height: 26px;
+  background: rgba(6,8,12,0.6);
+  border-top: 1px solid rgba(255,255,255,0.04);
+  font: 700 10px/1 var(--v6-mono);
+  font-variant-numeric: tabular-nums;
   overflow: hidden;
 }
-
-/* ── Toolbar ── */
-.v6-cvd-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  padding: 8px 10px 4px;
+.v6-cvd-barstrip .v6-cvd-badge {
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
   flex: 0 0 auto;
 }
-.v6-cvd-status {
-  color: var(--v6-text-faint);
-  font: 700 9px/1 var(--v6-font);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.v6-cvd-live {
+.v6-cvd-barstrip .v6-cvd-badge.is-pos { color: var(--v6-buy); }
+.v6-cvd-barstrip .v6-cvd-badge.is-neg { color: var(--v6-sell); }
+.v6-cvd-barstrip .v6-cvd-interval {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 6px;
 }
-.v6-cvd-badge {
-  font: 800 12px/1 var(--v6-mono);
-  font-variant-numeric: tabular-nums;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: rgba(8, 12, 20, 0.4);
-}
-.v6-cvd-badge.is-pos { color: var(--v6-buy); }
-.v6-cvd-badge.is-neg { color: var(--v6-sell); }
-.v6-cvd-interval label {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font: 700 9px var(--v6-font);
-  color: var(--v6-text-dim);
-}
-.v6-cvd-interval select {
-  min-height: 20px;
+.v6-cvd-barstrip .v6-cvd-interval select {
+  min-height: 18px;
   padding: 0 4px;
-  border: 1px solid var(--v6-hairline-strong);
-  border-radius: var(--v6-r-sm);
-  background: var(--v6-surface-3);
-  color: var(--v6-text);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 3px;
+  background: rgba(8,12,20,0.6);
+  color: var(--v6-text-dim);
   font: 9px var(--v6-mono);
   cursor: pointer;
   outline: none;
 }
-.v6-cvd-interval select:focus {
+.v6-cvd-barstrip .v6-cvd-interval select:focus {
   border-color: var(--v6-accent);
 }
-
-/* ── Sparkline ── */
-.v6-cvd-spark {
+.v6-cvd-barstrip .v6-cvd-bars {
+  flex: 1 1 auto;
   display: flex;
   align-items: flex-end;
   gap: 1px;
-  height: 36px;
-  padding: 6px 10px 2px;
-  flex: 0 0 auto;
-}
-.v6-cvd-spark-bar {
-  display: block;
-  width: var(--w, 3px);
-  height: var(--h, 50%);
-  border-radius: 1px 1px 0 0;
-  transition: height 0.15s ease;
-}
-.v6-cvd-spark-bar.is-up { background: linear-gradient(0deg, rgba(74, 232, 160, 0.4), rgba(74, 232, 160, 0.85)); }
-.v6-cvd-spark-bar.is-down { background: linear-gradient(0deg, rgba(255, 107, 128, 0.4), rgba(255, 107, 128, 0.85)); }
-
-/* ── Metrics grid ── */
-.v6-cvd-metrics {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1px;
-  padding: 4px 10px;
-  flex: 0 0 auto;
-  background: var(--v6-hairline);
-}
-.v6-cvd-metric {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
-  background: var(--v6-surface);
-}
-.v6-cvd-metric-lbl {
-  color: var(--v6-text-faint);
-  font: 700 9px/1 var(--v6-font);
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.v6-cvd-metric-val {
-  font: 800 11px/1 var(--v6-mono);
-  font-variant-numeric: tabular-nums;
-  color: var(--v6-text);
-  text-align: right;
-  white-space: nowrap;
-}
-.v6-cvd-metric.is-pos .v6-cvd-metric-val { color: var(--v6-buy); }
-.v6-cvd-metric.is-neg .v6-cvd-metric-val { color: var(--v6-sell); }
-.v6-cvd-metric.is-warn .v6-cvd-metric-val { color: var(--v6-gold); }
-
-/* ── Delta bars ── */
-.v6-cvd-bars {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex: 1 1 auto;
-  min-height: 40px;
-  padding: 6px 10px;
+  height: 18px;
+  min-width: 0;
   overflow: hidden;
 }
-.v6-cvd-bar {
+.v6-cvd-barstrip .v6-cvd-bar {
   flex: 1 1 0;
-  min-width: 2px;
+  min-width: 1px;
   height: var(--h, 10%);
-  border-radius: 2px 2px 1px 1px;
+  border-radius: 1px 1px 0 0;
   transition: height 0.12s ease;
-  align-self: center;
+  align-self: flex-end;
 }
-.v6-cvd-bar.is-buy  { background: linear-gradient(180deg, var(--v6-buy), rgba(74, 232, 160, 0.35)); }
-.v6-cvd-bar.is-sell { background: linear-gradient(180deg, var(--v6-sell), rgba(255, 107, 128, 0.35)); }
-
-/* ── Empty / waiting ── */
-.v6-cvd-empty {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--v6-text-faint);
-  font: 600 10px/1.4 var(--v6-mono);
-  text-align: center;
-  padding: 20px;
-}
+.v6-cvd-barstrip .v6-cvd-bar.is-buy  { background: var(--v6-buy); opacity: 0.6; }
+.v6-cvd-barstrip .v6-cvd-bar.is-sell { background: var(--v6-sell); opacity: 0.6; }
 
 /* ── VWAP hero card ── */
 .v6-vwap-hero {
@@ -1349,36 +1369,27 @@
   line-height: 1.4;
 }
 
-/* ============================ LEGACY STRIP ============================ */
-
-.v6-legacy-strip {
-  display: none;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 14px;
-  border: 1px solid var(--v6-hairline-strong);
-  border-radius: var(--v6-r-md);
-  background: var(--v6-surface);
-  color: var(--v6-text-dim);
-  font-size: 11px;
-  font-weight: 700;
-}
-.v6-orderflow-root.v6-legacy-mode .v6-shell { display: none; }
-.v6-orderflow-root.v6-legacy-mode .v6-legacy-strip { display: flex; }
-.v6-orderflow-root.v6-legacy-mode { inset: auto 10px 10px 10px; top: auto; }
-
 /* ============================= SCROLLBARS ============================ */
 
-.v6-orderflow-root ::-webkit-scrollbar { width: 9px; height: 9px; }
+.v6-orderflow-root ::-webkit-scrollbar { width: 5px; height: 5px; }
 .v6-orderflow-root ::-webkit-scrollbar-track { background: transparent; }
 .v6-orderflow-root ::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
+  border: none;
   border-radius: 999px;
-  background: rgba(110, 125, 147, 0.32);
-  background-clip: padding-box;
+  background: transparent;
 }
-.v6-orderflow-root ::-webkit-scrollbar-thumb:hover { background: rgba(58, 215, 238, 0.4); background-clip: padding-box; }
+
+.v6-tape-list-container:hover::-webkit-scrollbar-thumb,
+.v6-dom-table-container:hover::-webkit-scrollbar-thumb,
+.v6-panel-body:hover::-webkit-scrollbar-thumb,
+.v6-settings:hover::-webkit-scrollbar-thumb,
+.v6-orderflow-root ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.v6-orderflow-root ::-webkit-scrollbar-thumb:active {
+  background: var(--v6-accent);
+}
 
 /* ========================== REDUCED MOTION ========================== */
 
@@ -1403,23 +1414,55 @@
 .v6-bt-dot.is-done    { background: var(--v6-accent); }
 
 .v6-bt-pop {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 60;
-  width: 300px;
+  position: fixed;
+  z-index: 1000;
+  width: 320px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 14px;
+  padding: 0;
   border: 1px solid var(--v6-hairline-strong);
   border-radius: var(--v6-r-md);
   background: linear-gradient(180deg, var(--v6-surface-2), var(--v6-surface));
-  box-shadow: var(--v6-shadow);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.6), 0 0 0 1px rgba(56,189,248,0.15);
+  user-select: none;
 }
 .v6-bt-pop[hidden] { display: none; }
-.v6-bt-row { display: flex; gap: 10px; }
-.v6-bt-row label {
+.v6-bt-pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--v6-hairline);
+  background: rgba(0,0,0,0.2);
+  border-radius: var(--v6-r-md) var(--v6-r-md) 0 0;
+}
+.v6-bt-drag-title {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  font: 800 10px/1 var(--v6-font);
+  color: var(--v6-text-dim);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 4px 0;
+}
+.v6-bt-drag-title:active { cursor: grabbing; }
+.v6-bt-pop-close {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--v6-text-faint);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+.v6-bt-pop-close:hover { color: var(--v6-sell); }
+.v6-bt-row { display: flex; gap: 10px; padding: 0 14px; }
+.v6-bt-row-solo { padding: 0 14px; }
+.v6-bt-row label,
+.v6-bt-row-solo label {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
@@ -1442,10 +1485,11 @@
   outline: none; border-color: var(--v6-accent-line);
   box-shadow: 0 0 0 3px var(--v6-accent-soft);
 }
-.v6-bt-actions { display: flex; gap: 6px; }
+.v6-bt-actions { display: flex; gap: 6px; padding: 0 14px; }
 .v6-bt-actions .v6-btn-engine { flex: 1 1 auto; animation: none; }
 .v6-bt-progress {
   height: 6px;
+  margin: 0 14px;
   border-radius: 999px;
   background: var(--v6-surface-3);
   overflow: hidden;
@@ -1459,146 +1503,12 @@
   transition: width 0.3s var(--v6-ease);
 }
 .v6-bt-status {
+  padding: 0 14px;
   color: var(--v6-text-dim);
   font: 11px/1.3 var(--v6-mono);
   font-variant-numeric: tabular-nums;
   word-break: break-word;
 }
-.v6-bt-note { color: var(--v6-text-faint); font: 9px/1 var(--v6-font); letter-spacing: 0.04em; text-transform: uppercase; }
+.v6-bt-note { padding: 0 14px 14px; color: var(--v6-text-faint); font: 9px/1 var(--v6-font); letter-spacing: 0.04em; text-transform: uppercase; }
 
-/* ========================== SOBER PRO PASS ==========================
- * Keep the V6 layout intact, but remove the constant glow/motion that made the
- * orderflow page feel busy. State is communicated through contrast and color,
- * not decorative effects.
- */
-.v6-orderflow-root {
-  --v6-bg: #06090d;
-  --v6-bg-2: #080d12;
-  --v6-surface: #0a1016;
-  --v6-surface-2: #0d151d;
-  --v6-surface-3: #111a23;
-  --v6-hairline: rgba(126, 145, 160, 0.14);
-  --v6-hairline-strong: rgba(126, 145, 160, 0.22);
-  --v6-accent: #38c7d8;
-  --v6-accent-2: #25aabb;
-  --v6-accent-soft: rgba(56, 199, 216, 0.08);
-  --v6-accent-line: rgba(56, 199, 216, 0.24);
-  --v6-accent-glow: rgba(56, 199, 216, 0.18);
-  --v6-buy: #45d18f;
-  --v6-sell: #ef6375;
-  --v6-shadow: none;
-}
-
-.v6-header {
-  height: 38px;
-  min-height: 38px;
-  gap: 7px;
-  padding: 0 12px;
-  background: #080d12;
-}
-
-.v6-brand-mark {
-  background: #10202a;
-  box-shadow: none;
-}
-
-.v6-seg,
-.v6-source-select,
-.v6-ticket,
-.v6-conn,
-.v6-workspace-widget {
-  background: #090f15;
-  box-shadow: none;
-}
-
-.v6-seg-btn,
-.v6-tf-btn,
-.v6-source-btn,
-.v6-rtab {
-  transition-duration: 90ms;
-}
-
-.v6-seg-btn.is-active,
-.v6-source-btn.active {
-  background: #1c6d79;
-  color: #e8fbff;
-  box-shadow: none;
-}
-
-.v6-tf-btn.active {
-  background: rgba(56, 199, 216, 0.10);
-  border-color: rgba(56, 199, 216, 0.22);
-  color: #9ee7ef;
-}
-
-.v6-btn,
-.v6-btn-engine,
-.v6-btn-danger,
-.v6-btn-warn {
-  background: #111a23;
-  box-shadow: none;
-  animation: none;
-}
-
-.v6-btn:hover,
-.v6-btn-engine:hover,
-.v6-btn-danger:hover,
-.v6-btn-warn:hover {
-  transform: none;
-  box-shadow: none;
-  background: #15212c;
-}
-
-.v6-badge,
-.v6-badge-live,
-.v6-engine-dot,
-.v6-engine-dot.v6-engine-connected,
-.v6-engine-dot.v6-engine-connecting,
-.v6-engine-dot.v6-engine-error,
-.v6-bt-dot.is-playing {
-  box-shadow: none;
-  animation: none;
-}
-
-.v6-engine-dot.v6-engine-connected::after,
-.v6-dom-marker,
-.v6-stale-warning {
-  animation: none;
-}
-
-.v6-dom-marker,
-.v6-dom-row.is-mid .v6-dom-cell-price,
-.v6-vwap-main strong {
-  text-shadow: none;
-}
-
-.v6-panel,
-.v6-panel-head,
-.v6-tape-table,
-.v6-tape-head,
-.v6-lad-foot {
-  background: #070b10;
-}
-
-.v6-panel:hover {
-  border-color: rgba(255, 255, 255, 0.06);
-}
-
-.v6-dom-row.is-mid {
-  background: rgba(56, 199, 216, 0.08) !important;
-  border-top-color: rgba(56, 199, 216, 0.16);
-  border-bottom-color: rgba(56, 199, 216, 0.16);
-}
-
-.v6-lad-bid.is-best-bid,
-.v6-lad-ask.is-best-ask {
-  box-shadow: none;
-}
-
-@keyframes v6-flash-up { from { background: rgba(69, 209, 143, 0.18); } to { background: transparent; } }
-@keyframes v6-flash-down { from { background: rgba(239, 99, 117, 0.18); } to { background: transparent; } }
-.v6-lad-cell.is-flash-up,
-.v6-lad-cell.is-flash-down {
-  animation-duration: 0.22s;
-}
 }

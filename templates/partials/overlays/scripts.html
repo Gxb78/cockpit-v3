@@ -1,4 +1,4 @@
-﻿<script>
+<script>
 // Global error handlers — actifs avant tout split file
 (function () {
   function _showError(msg, url, line, col, error) {
@@ -14,7 +14,7 @@
   }
   window.onerror = function (msg, url, line, col, error) {
     _showError(msg, url, line, col, error);
-    return true; // supprime le message console par defaut
+    return false; // permet au message console par defaut de s'afficher
   };
   window.addEventListener("unhandledrejection", function (e) {
     var reason = e.reason;
@@ -47,4 +47,5 @@ document.addEventListener("DOMContentLoaded", function () {
   } catch (_) {}
 });
 </script>
+<script>window.COCKPIT_ASSET_VERSION = "{{ ASSET_VERSION }}"; window.COCKPIT_CONFIG = {{ COCKPIT_CONFIG | tojson }};</script>
 <script src="/static/app.js?v={{ ASSET_VERSION }}"></script>

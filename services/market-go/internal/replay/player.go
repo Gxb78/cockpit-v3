@@ -185,6 +185,43 @@ func (p *Player) Resume() {
 	p.emitStatus()
 }
 
+func (p *Player) Step(count int) {
+	if count <= 0 {
+		count = 1
+	}
+	var emitTrades []marketdata.Trade
+	p.mu.Lock()
+	if p.state == "playing" {
+		p.paused = true
+		p.state = "paused"
+	}
+	if p.state != "paused" || len(p.trades) == 0 || p.idx >= len(p.trades) {
+		p.mu.Unlock()
+		p.emitStatus()
+		return
+	}
+	for count > 0 && p.idx < len(p.trades) {
+		emitTrades = append(emitTrades, p.trades[p.idx])
+		p.idx++
+		count--
+	}
+	if p.idx >= len(p.trades) {
+		p.state = "done"
+		p.paused = false
+	} else {
+		p.state = "paused"
+		p.paused = true
+	}
+	p.mu.Unlock()
+
+	for _, t := range emitTrades {
+		if p.emit != nil {
+			p.emit(t)
+		}
+	}
+	p.emitStatus()
+}
+
 func (p *Player) SetSpeed(speed float64) {
 	p.mu.Lock()
 	p.speed = speed

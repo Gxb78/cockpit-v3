@@ -16,9 +16,16 @@ import (
 // DefaultRESTURL is Binance public spot REST (no key required).
 const DefaultRESTURL = "https://api.binance.com"
 
+// MaxPerRequest is Binance's max candles per klines request.
+const MaxPerRequest = 1000
+
 // FetchKlines requests historical OHLCV candles from Binance public REST.
+// Supports deep pagination: fetches batches of MaxPerRequest (1000) in a loop
+// using endTime to walk backwards in time until limit candles are collected,
+// or no more data is available.
+//
 //   GET /api/v3/klines?symbol=BTCUSDT&interval=1m&limit=1000
-// If limit > 1000, makes a second request with endTime to cover earlier data.
+//   Then subsequent requests use endTime to go further back.
 func FetchKlines(ctx context.Context, restURL, symbol, interval string, limit int) ([]marketdata.Candle, error) {
 	if strings.TrimSpace(restURL) == "" {
 		restURL = DefaultRESTURL
@@ -28,36 +35,47 @@ func FetchKlines(ctx context.Context, restURL, symbol, interval string, limit in
 		interval = "1m"
 	}
 	if limit <= 0 {
-		limit = 1000
-	}
-	perReq := 1000
-	if limit < perReq {
-		perReq = limit
+		limit = MaxPerRequest
 	}
 
-	// Step 1: get the most recent batch (Binance returns oldest-first)
-	batch, err := fetchSingleBatch(ctx, restURL, sym, interval, perReq, 0)
-	if err != nil {
-		return nil, err
-	}
-	if len(batch) == 0 {
-		return batch, nil
-	}
+	var all []marketdata.Candle
+	var endTime int64 // 0 = most recent
 
-	// Step 2: if we need more and got a full batch, request an earlier batch
-	if limit > perReq && len(batch) == perReq {
-		endTime := batch[0].OpenTime - 1 // batch[0] is the oldest candle
-		earlier, err := fetchSingleBatch(ctx, restURL, sym, interval, perReq, endTime)
-		if err == nil && len(earlier) > 0 {
-			all := make([]marketdata.Candle, 0, len(earlier)+len(batch))
-			all = append(all, earlier...)
-			all = append(all, batch...)
-			return all, nil
+	for len(all) < limit {
+		batchSize := MaxPerRequest
+		if limit-len(all) < batchSize {
+			batchSize = limit - len(all)
 		}
+
+		batch, err := fetchSingleBatch(ctx, restURL, sym, interval, batchSize, endTime)
+		if err != nil {
+			if len(all) > 0 {
+				// Return what we have on error
+				break
+			}
+			return nil, err
+		}
+		if len(batch) == 0 {
+			break
+		}
+
+		// Prepend: batch comes oldest-first, we want chronological order
+		all = append(batch, all...)
+
+		// If batch was smaller than requested, we hit the beginning
+		if len(batch) < batchSize {
+			break
+		}
+
+		// Next endTime = oldest candle's OpenTime - 1ms to avoid overlap
+		endTime = batch[0].OpenTime - 1
 	}
-	return batch, nil
+
+	return all, nil
 }
 
+// fetchSingleBatch fetches one page of up to `limit` klines from Binance.
+// When endTime > 0, fetches candles with closeTime <= endTime (going backward).
 func fetchSingleBatch(ctx context.Context, restURL, symbol, interval string, limit int, endTime int64) ([]marketdata.Candle, error) {
 	url := fmt.Sprintf("%s/api/v3/klines?symbol=%s&interval=%s&limit=%d",
 		strings.TrimRight(restURL, "/"), symbol, interval, limit)

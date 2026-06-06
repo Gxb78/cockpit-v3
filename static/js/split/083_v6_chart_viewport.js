@@ -1,5 +1,5 @@
 // ---------- 083_v6_chart_viewport.js ----------
-// Phase 17: Chart viewport model for Cockpit V6 orderflow.
+// Chart viewport: owns the price/time coordinate system for the canvas chart engine.
 // Owns the price/time coordinate system used by the canvas chart engine.
 // UI-only. No network, no engine changes. Canvas 2D coordinates.
 //
@@ -16,6 +16,15 @@
   'use strict';
 
   var V6OF = window.V6OF = window.V6OF || {};
+  if (!V6OF.register) {
+    ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'].forEach(function (name) { V6OF[name] = V6OF[name] || {}; });
+    V6OF.register = function (domain, name, value, legacyName) {
+      V6OF[domain] = V6OF[domain] || {};
+      V6OF[domain][name] = value;
+      if (legacyName) V6OF[legacyName] = value;
+      return value;
+    };
+  }
 
   // Hard limits to avoid degenerate / crashing viewports.
   var MIN_TIME_SPAN_MS = 4000;            // 4s
@@ -99,19 +108,29 @@
     vp.setTimeRange = function (start, end) {
       if (!isNum(start) || !isNum(end) || end <= start) return;
       var span = clamp(end - start, MIN_TIME_SPAN_MS, MAX_TIME_SPAN_MS);
-      vp.timeStart = end - span;
-      vp.timeEnd = end;
+      var mid = (start + end) / 2;
+      if (vp.dataTimeMax > vp.dataTimeMin) {
+        var dataSpan = vp.dataTimeMax - vp.dataTimeMin;
+        var pad = Math.max(dataSpan * 8, span * 2, 24 * 3600 * 1000);
+        mid = clamp(mid, vp.dataTimeMin - pad, vp.dataTimeMax + pad);
+      }
+      vp.timeStart = mid - span / 2;
+      vp.timeEnd = mid + span / 2;
     };
 
     vp.setPriceRange = function (min, max) {
       if (!isNum(min) || !isNum(max) || max <= min) return;
-      if (max - min < MIN_PRICE_SPAN) {
-        var mid = (min + max) / 2;
-        min = mid - MIN_PRICE_SPAN / 2;
-        max = mid + MIN_PRICE_SPAN / 2;
+      var dataSpan = (vp.dataPriceMax > vp.dataPriceMin) ? (vp.dataPriceMax - vp.dataPriceMin) : 100;
+      var minSpan = MIN_PRICE_SPAN;
+      var maxSpan = Math.max(dataSpan * 50, 100000);
+      var span = clamp(max - min, minSpan, maxSpan);
+      var mid = (min + max) / 2;
+      if (vp.dataPriceMax > vp.dataPriceMin) {
+        var pad = Math.max(dataSpan * 8, span * 2, 1000);
+        mid = clamp(mid, vp.dataPriceMin - pad, vp.dataPriceMax + pad);
       }
-      vp.priceMin = min;
-      vp.priceMax = max;
+      vp.priceMin = mid - span / 2;
+      vp.priceMax = mid + span / 2;
       vp.autoFit = false;
     };
 
@@ -232,16 +251,13 @@
         // Snap to candle interval to get candle-by-candle movement.
         var ci = Math.max(1000, vp.candleIntervalMs || 60000);
         var snapped = Math.round(dt / ci) * ci;
-        vp.timeStart -= snapped;
-        vp.timeEnd -= snapped;
+        vp.setTimeRange(vp.timeStart - snapped, vp.timeEnd - snapped);
         // Any pan disables follow-live (user is exploring history).
         vp.followLive = false;
       }
       if (dy) {
         var dp = dy / p.height * priceSpan();
-        vp.priceMin += dp;
-        vp.priceMax += dp;
-        vp.autoFit = false;
+        vp.setPriceRange(vp.priceMin + dp, vp.priceMax + dp);
       }
     };
 
@@ -251,8 +267,7 @@
       var anchorTime = isNum(anchorX) ? vp.xToTime(anchorX) : (vp.timeStart + vp.timeEnd) / 2;
       var newSpan = clamp(timeSpan() * factor, MIN_TIME_SPAN_MS, MAX_TIME_SPAN_MS);
       var leftFrac = (anchorTime - vp.timeStart) / timeSpan();
-      vp.timeStart = anchorTime - leftFrac * newSpan;
-      vp.timeEnd = vp.timeStart + newSpan;
+      vp.setTimeRange(anchorTime - leftFrac * newSpan, anchorTime - leftFrac * newSpan + newSpan);
       // Zooming keeps follow-live only if the newest data is still at the edge.
       if (vp.timeEnd < vp.dataTimeMax) vp.followLive = false;
     };
@@ -262,13 +277,12 @@
       var anchorPrice = isNum(anchorY) ? vp.yToPrice(anchorY) : (vp.priceMin + vp.priceMax) / 2;
       var newSpan = Math.max(MIN_PRICE_SPAN, priceSpan() * factor);
       var topFrac = (vp.priceMax - anchorPrice) / priceSpan();
-      vp.priceMax = anchorPrice + topFrac * newSpan;
-      vp.priceMin = vp.priceMax - newSpan;
-      vp.autoFit = false;
+      var targetMax = anchorPrice + topFrac * newSpan;
+      vp.setPriceRange(targetMax - newSpan, targetMax);
     };
 
     return vp;
   }
 
-  V6OF.ChartViewport = { create: create };
+  V6OF.register('UI', 'ChartViewport', { create: create }, 'ChartViewport');
 })();

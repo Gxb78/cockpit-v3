@@ -150,7 +150,30 @@ func (e *Engine) FootprintCandles(trade marketdata.Trade) []protocol.Envelope {
 	return envelopes
 }
 
+// SetFootprintSignalConfig forwards UI-seeded orderflow-signal thresholds to the
+// footprint calculator so engine-derived signals match the client's settings.
+func (e *Engine) SetFootprintSignalConfig(cfg calc.FootprintSignalConfig) {
+	if e.footprint != nil {
+		e.footprint.SetSignalConfig(cfg)
+	}
+}
+
+// FootprintSignalConfig returns the orderflow-signal thresholds currently active
+// on the footprint calculator (UI-synced when set). Callers that rebuild
+// footprints offline use this so reconstructed signals match the live ones.
+func (e *Engine) FootprintSignalConfig() calc.FootprintSignalConfig {
+	if e.footprint != nil {
+		return e.footprint.SignalConfig()
+	}
+	return calc.FootprintSignalConfig{}
+}
+
 func (e *Engine) OrderBook(snapshot marketdata.OrderBookSnapshot) protocol.Envelope {
+	// Guarantee a positive contract size so the UI never has to guess a default
+	// (covers any snapshot source that didn't populate the metadata field).
+	if snapshot.ContractSize <= 0 {
+		snapshot.ContractSize = 1
+	}
 	return e.next("order_book", snapshot)
 }
 

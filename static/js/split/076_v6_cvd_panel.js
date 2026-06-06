@@ -13,7 +13,11 @@
   }
 
   function sourceText(state) {
-    return state && state.source === 'live' ? 'Live' : 'Offline';
+    if (!state) return 'Offline';
+    if (state.dataFreshness === 'live') return 'Live';
+    if (state.dataFreshness === 'rest-fallback') return 'REST Fallback';
+    if (state.transportStatus === 'connecting') return 'Connecting';
+    return 'Offline';
   }
 
   // Format signed value with +/-
@@ -38,95 +42,116 @@
     var buckets = bucketsByInterval[String(selected)] || state.deltaBuckets || [];
     buckets = Array.isArray(buckets) ? buckets : [];
     var latest = latestByInterval[String(selected)] || buckets[buckets.length - 1] || null;
-    var isLive = state.source === 'live';
-
-    // Build a compact metric card
-    function metric(label, value, cls) {
-      return '<div class="v6-cvd-metric' + (cls ? ' ' + cls : '') + '">' +
-        '<span class="v6-cvd-metric-lbl">' + label + '</span>' +
-        '<span class="v6-cvd-metric-val">' + value + '</span>' +
-        '</div>';
-    }
-
-    // Mini sparkline from recent delta buckets
-    function sparkline(buckets) {
-      if (!buckets || buckets.length < 2) return '';
-      var recent = buckets.slice(-48);
-      var maxAbs = 1;
-      recent.forEach(function (b) { maxAbs = Math.max(maxAbs, Math.abs(b.delta)); });
-      var barW = Math.max(2, Math.min(4, Math.floor(240 / recent.length)));
-      var bars = recent.map(function (b) {
-        var pct = Math.max(5, Math.min(100, Math.abs(b.delta) / maxAbs * 100));
-        var cls = b.delta >= 0 ? 'is-up' : 'is-down';
-        return '<span class="v6-cvd-spark-bar ' + cls + '" style="--h:' + pct.toFixed(1) + '%;--w:' + barW + 'px"></span>';
-      }).join('');
-      return '<div class="v6-cvd-spark">' + bars + '</div>';
-    }
 
     if (!latest) {
-      return [
-        '<div class="v6-cvd-panel">',
-          '<div class="v6-cvd-toolbar">',
-            '<span class="v6-cvd-status">' + sourceText(state) + '</span>',
-            '<label class="v6-cvd-interval">',
-              '<select data-v6-setting="deltaIntervalMs">',
-                intervalOption(1000, selected, '1s'),
-                intervalOption(5000, selected, '5s'),
-                intervalOption(60000, selected, '1m'),
-              '</select>',
-            '</label>',
-          '</div>',
-          '<div class="v6-cvd-empty">Waiting for data…</div>',
-        '</div>',
-      ].join('');
+      return '<div class="v6-cvd-barstrip">Waiting for data…</div>';
     }
 
     var deltaClass = latest.delta >= 0 ? 'is-pos' : 'is-neg';
-    var cvdClass = latest.cvd >= 0 ? 'is-pos' : 'is-neg';
+
+    // Mini delta bars (last 120 buckets)
+    var barsHtml = '';
+    if (buckets.length > 1) {
+      var recent = buckets.slice(-120);
+      var maxAbs = 1;
+      recent.forEach(function (b) { maxAbs = Math.max(maxAbs, Math.abs(b.delta)); });
+      barsHtml = recent.map(function (bucket) {
+        var pct = Math.max(6, Math.min(100, Math.abs(bucket.delta) / maxAbs * 100));
+        var cls = bucket.delta >= 0 ? 'is-buy' : 'is-sell';
+        return '<span class="v6-cvd-bar ' + cls + '" style="--h:' + pct.toFixed(1) + '%"></span>';
+      }).join('');
+    }
 
     return [
-      '<div class="v6-cvd-panel">',
-        // Toolbar
-        '<div class="v6-cvd-toolbar">',
-          '<span class="v6-cvd-status">' + sourceText(state) + '</span>',
-          '<div class="v6-cvd-live">',
-            '<span class="v6-cvd-badge ' + deltaClass + '">' + fmtSigned(latest.delta) + '</span>',
-            '<label class="v6-cvd-interval">',
-              '<select data-v6-setting="deltaIntervalMs">',
-                intervalOption(1000, selected, '1s'),
-                intervalOption(5000, selected, '5s'),
-                intervalOption(60000, selected, '1m'),
-              '</select>',
-            '</label>',
-          '</div>',
-        '</div>',
-        // Sparkline
-        sparkline(buckets),
-        // Compact metrics grid
-        '<div class="v6-cvd-metrics">',
-          metric('Buy Vol', fmtSigned(latest.buyVol)),
-          metric('Sell Vol', fmtSigned(latest.sellVol)),
-          metric('Delta', fmtSigned(latest.delta), deltaClass),
-          metric('CVD', fmtSigned(latest.cvd), cvdClass),
-        '</div>',
-        // Delta bars
-        '<div class="v6-cvd-bars">',
-          (function () {
-            var recent = buckets.slice(-36);
-            var maxAbs = 1;
-            recent.forEach(function (b) { maxAbs = Math.max(maxAbs, Math.abs(b.delta)); });
-            return recent.map(function (bucket) {
-              var pct = Math.max(6, Math.min(100, Math.abs(bucket.delta) / maxAbs * 100));
-              var cls = bucket.delta >= 0 ? 'is-buy' : 'is-sell';
-              return '<span class="v6-cvd-bar ' + cls + '" title="' +
-                new Date(bucket.endTime || bucket.tsLocal).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) +
-                ' ' + fmtSigned(bucket.delta) +
-                '" style="--h:' + pct.toFixed(1) + '%"></span>';
-            }).join('');
-          })(),
-        '</div>',
-      '</div>',
+      '<div class="v6-cvd-barstrip">',
+        '<span class="v6-cvd-badge ' + deltaClass + '">' + fmtSigned(latest.delta) + '</span>',
+        '<span class="v6-cvd-badge ' + (latest.cvd >= 0 ? 'is-pos' : 'is-neg') + '">CVD ' + fmtSigned(latest.cvd) + '</span>',
+        '<label class="v6-cvd-interval">',
+          '<select data-v6-setting="deltaIntervalMs">',
+            intervalOption(1000, selected, '1s'),
+            intervalOption(5000, selected, '5s'),
+            intervalOption(60000, selected, '1m'),
+          '</select>',
+        '</label>',
+        '<div class="v6-cvd-bars">' + barsHtml + '</div>',
+      '</div>'
     ].join('');
+  };
+
+  // CVD bucket -> delta histogram bars (last 120 buckets).
+  function cvdBarsHtml(buckets) {
+    if (!Array.isArray(buckets) || buckets.length <= 1) return '';
+    var recent = buckets.slice(-120);
+    var maxAbs = 1;
+    recent.forEach(function (b) { maxAbs = Math.max(maxAbs, Math.abs(b.delta)); });
+    return recent.map(function (bucket) {
+      var pct = Math.max(6, Math.min(100, Math.abs(bucket.delta) / maxAbs * 100));
+      var cls = bucket.delta >= 0 ? 'is-buy' : 'is-sell';
+      return '<span class="v6-cvd-bar ' + cls + '" style="--h:' + pct.toFixed(1) + '%"></span>';
+    }).join('');
+  }
+
+  function ensureCvdShell(container) {
+    if (!container || container._v6CvdShell) return;
+    container.innerHTML = [
+      '<div class="v6-cvd-barstrip">',
+        '<span class="v6-cvd-badge" data-v6-cvd-delta>—</span>',
+        '<span class="v6-cvd-badge" data-v6-cvd-cvd>CVD —</span>',
+        '<label class="v6-cvd-interval">',
+          '<select data-v6-setting="deltaIntervalMs">',
+            intervalOption(1000, 60000, '1s'),
+            intervalOption(5000, 60000, '5s'),
+            intervalOption(60000, 60000, '1m'),
+          '</select>',
+        '</label>',
+        '<div class="v6-cvd-bars" data-v6-cvd-bars></div>',
+      '</div>'
+    ].join('');
+    container._v6CvdShell = {
+      delta: container.querySelector('[data-v6-cvd-delta]'),
+      cvd: container.querySelector('[data-v6-cvd-cvd]'),
+      select: container.querySelector('select[data-v6-setting="deltaIntervalMs"]'),
+      bars: container.querySelector('[data-v6-cvd-bars]')
+    };
+  }
+
+  // Incremental CVD render: keeps a stable shell so the interval <select>
+  // is preserved (no rebuild/focus loss); only badge text/class, the select
+  // value, and the bar histogram are patched on each update.
+  Panels.renderCvdInto = function (container, state) {
+    if (!container) return;
+    state = state || {};
+    var settings = state.settings || {};
+    var selected = Number(settings.deltaIntervalMs || 60000);
+    var bucketsByInterval = state.deltaBucketsByInterval || {};
+    var latestByInterval = state.latestDeltaByInterval || {};
+    var buckets = bucketsByInterval[String(selected)] || state.deltaBuckets || [];
+    buckets = Array.isArray(buckets) ? buckets : [];
+    var latest = latestByInterval[String(selected)] || buckets[buckets.length - 1] || null;
+
+    if (!latest) {
+      if (container._v6CvdShell) {
+        var sh = container._v6CvdShell;
+        sh.delta.textContent = '—'; sh.delta.className = 'v6-cvd-badge';
+        sh.cvd.textContent = 'CVD —'; sh.cvd.className = 'v6-cvd-badge';
+        sh.bars.innerHTML = '';
+      } else {
+        container.innerHTML = '<div class="v6-cvd-barstrip">Waiting for data…</div>';
+      }
+      return;
+    }
+
+    ensureCvdShell(container);
+    var shell = container._v6CvdShell;
+    if (shell.select && document.activeElement !== shell.select &&
+        shell.select.value !== String(selected)) {
+      shell.select.value = String(selected);
+    }
+    shell.delta.textContent = fmtSigned(latest.delta);
+    shell.delta.className = 'v6-cvd-badge ' + (latest.delta >= 0 ? 'is-pos' : 'is-neg');
+    shell.cvd.textContent = 'CVD ' + fmtSigned(latest.cvd);
+    shell.cvd.className = 'v6-cvd-badge ' + (latest.cvd >= 0 ? 'is-pos' : 'is-neg');
+    shell.bars.innerHTML = cvdBarsHtml(buckets);
   };
 
   Panels.renderVwap = function (vwap, state) {
@@ -138,7 +163,7 @@
         '</div>',
       ].join('');
     }
-    var source = vwap.source || state.source || 'mock';
+    var source = vwap.source || state.source || 'live';
     var warm = !!vwap.isWarm;
     return [
       '<div class="v6-cvd-panel">',

@@ -649,6 +649,44 @@
     return NaN;
   }
 
+  function _marketNowMs() {
+    var now = window.BtcMarketClock ? window.BtcMarketClock.now() : Date.now();
+    if (!Number.isFinite(now) || now <= 0) now = Date.now();
+    return now;
+  }
+
+  function _dropWidgetCache(tf, reason, details) {
+    var key = _cacheKey(tf);
+    delete S.candleCache[key];
+    try { sessionStorage.removeItem('btcWidgetCandles:' + tf); } catch(e) {}
+    console.warn('[BTC-WIDGET] dropped candle cache', Object.assign({
+      tf: tf,
+      reason: reason || 'invalid'
+    }, details || {}));
+  }
+
+  function _isWidgetCacheUsable(tf, candles, source) {
+    candles = Array.isArray(candles) ? candles : [];
+    if (candles.length < 2) return false;
+    var intervalMs = _getIntervalMs(tf);
+    var last = candles[candles.length - 1];
+    var openMs = _toMs(last && last.time);
+    var closeMs = _getCandleCloseMs(last, intervalMs);
+    var nowMs = _marketNowMs();
+    if (!Number.isFinite(openMs) || !Number.isFinite(closeMs) || !Number.isFinite(nowMs)) return false;
+    var remaining = closeMs - nowMs;
+    if (remaining > intervalMs * 2) {
+      _dropWidgetCache(tf, 'future-' + (source || 'cache'), {
+        openMs: openMs,
+        closeMs: closeMs,
+        marketNow: nowMs,
+        remaining: remaining
+      });
+      return false;
+    }
+    return true;
+  }
+
   function _updateCountdownAnchor(candle, source, nowMsOverride) {
     if (!candle) return;
     var intervalMs = _getIntervalMs(S.timeframe);
@@ -1109,7 +1147,8 @@
     var key = _cacheKey(tf);
 
     if (S.candleCache[key] && S.candleCache[key].candles) {
-      return S.candleCache[key].candles;
+      var memoryCandles = _normalizeCandles(S.candleCache[key].candles);
+      if (_isWidgetCacheUsable(tf, memoryCandles, 'memory')) return memoryCandles;
     }
 
     try {
@@ -1118,6 +1157,7 @@
 
       var candles = _normalizeCandles(JSON.parse(raw));
       if (candles.length >= 2) {
+        if (!_isWidgetCacheUsable(tf, candles, 'session')) return null;
         S.candleCache[key] = {
           candles: candles,
           ts: Date.now(),
@@ -1132,6 +1172,7 @@
   function _writeWidgetCache(tf, candles) {
     candles = _normalizeCandles(candles);
     if (candles.length < 2) return;
+    if (!_isWidgetCacheUsable(tf, candles, 'write')) return;
 
     var key = _cacheKey(tf);
     S.candleCache[key] = {
@@ -1154,7 +1195,7 @@
       if (i >= tfs.length) return;
       if (S.renderInFlight) { setTimeout(next, 1000); return; }
       var tf = tfs[i++];
-      if (S.candleCache[_cacheKey(tf)]) { setTimeout(next, 250); return; }
+      if (_readWidgetCache(tf)) { setTimeout(next, 250); return; }
 
       fetch('/api/market/klines?symbol=BTCUSDT&interval=' + tf + '&limit=1000&soft=1')
         .then(function (r) { return r.ok ? r.json() : null; })

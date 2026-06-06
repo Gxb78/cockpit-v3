@@ -1,9 +1,9 @@
 function loadBreakdownSortMode() {
   try {
     const raw = localStorage.getItem(BREAKDOWN_SORT_KEY);
-    return BREAKDOWN_SORT_MODES.has(raw) ? raw : "count";
+    return BREAKDOWN_SORT_MODES.has(raw) ? raw : _state.breakdownSortMode;
   } catch {
-    return "count";
+    return _state.breakdownSortMode;
   }
 }
 
@@ -18,7 +18,7 @@ function setBreakdownSortMode(mode, opts = {}) {
   if (!BREAKDOWN_SORT_MODES.has(mode)) return;
   state.breakdownSortMode = mode;
   updateBreakdownSortUI();
-  if (persist) localStorage.setItem(BREAKDOWN_SORT_KEY, mode);
+  if (persist) { localStorage.setItem(BREAKDOWN_SORT_KEY, mode); saveUiState(); }
   if (rerender && state.currentPage === "insights") renderPerformance();
 }
 

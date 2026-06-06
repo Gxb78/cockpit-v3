@@ -13,18 +13,24 @@ import (
 
 const ExchangeName = "binance"
 
+// ContractSize for Binance spot / USDT-margined futures: order sizes are
+// denominated in the base asset, so one "contract" is one base unit.
+const ContractSize = 1.0
+
 var ErrInvalid = errors.New("invalid binance payload")
 
 // combinedMessage is the envelope Binance sends on combined streams:
-//   {"stream":"btcusdt@aggTrade","data":{...}}
+//
+//	{"stream":"btcusdt@aggTrade","data":{...}}
 type combinedMessage struct {
 	Stream string          `json:"stream"`
 	Data   json.RawMessage `json:"data"`
 }
 
 // wsAggTrade mirrors Binance aggTrade payload.
-//   e=event, E=eventTime, s=symbol, p=price, q=qty, T=tradeTime,
-//   m=isBuyerMaker (true => aggressor is the SELLER), a=aggTradeId
+//
+//	e=event, E=eventTime, s=symbol, p=price, q=qty, T=tradeTime,
+//	m=isBuyerMaker (true => aggressor is the SELLER), a=aggTradeId
 type wsAggTrade struct {
 	Symbol string `json:"s"`
 	Price  string `json:"p"`
@@ -35,7 +41,8 @@ type wsAggTrade struct {
 }
 
 // wsDepth mirrors Binance partial book depth (depthN@100ms) payload.
-//   b=bids [[price,qty],...], a=asks, E=eventTime
+//
+//	b=bids [[price,qty],...], a=asks, E=eventTime
 type wsDepth struct {
 	// NOTE: Go's encoding/json is case-insensitive, so a "E"/"e" tag would also
 	// capture the event-type string and break. We don't need exchange time here
@@ -111,14 +118,15 @@ func NormalizeDepth(data []byte, symbolFallback string, tsLocal int64, depth int
 	bids := normalizeDepthSide(d.Bids, depth)
 	asks := normalizeDepthSide(d.Asks, depth)
 	snap := marketdata.OrderBookSnapshot{
-		Exchange:   ExchangeName,
-		Symbol:     symbol,
-		TsExchange: tsLocal,
-		TsLocal:    tsLocal,
-		Bids:       bids,
-		Asks:       asks,
-		Depth:      min(len(bids), len(asks)),
-		Source:     "depth",
+		Exchange:     ExchangeName,
+		Symbol:       symbol,
+		TsExchange:   tsLocal,
+		TsLocal:      tsLocal,
+		Bids:         bids,
+		Asks:         asks,
+		Depth:        min(len(bids), len(asks)),
+		Source:       "depth",
+		ContractSize: ContractSize,
 	}
 	if len(bids) > 0 {
 		snap.BestBid = bids[0].Price

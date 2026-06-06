@@ -8,7 +8,17 @@ def _inject_asset_version():
     for _f in (RESOURCE_DIR / "static" / "app.js", RESOURCE_DIR / "static" / "style.css"):
         if _f.exists():
             _v += _h.md5(_f.read_bytes()).hexdigest()[:12]
-    return dict(ASSET_VERSION=_v)
+    market_ws_url = (os.environ.get("COCKPIT_MARKET_WS_URL") or "").strip()
+    if not market_ws_url:
+        market_host = (os.environ.get("MARKET_GO_HOST") or "127.0.0.1").strip() or "127.0.0.1"
+        market_port = (os.environ.get("MARKET_GO_PORT") or "8765").strip() or "8765"
+        market_ws_url = f"ws://{market_host}:{market_port}/stream"
+    return dict(
+        ASSET_VERSION=_v,
+        COCKPIT_CONFIG={
+            "marketWsUrl": market_ws_url,
+        },
+    )
 
 @app.route("/")
 def index():

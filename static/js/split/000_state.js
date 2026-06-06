@@ -44,6 +44,7 @@ const _state = {
     tag: ["ALL"],
     pnlMin: "",
     pnlMax: "",
+    search: "",
   },
   // Journal table sorting
   journalTableSortKey: "date",

@@ -10,16 +10,25 @@
   'use strict';
 
   var V6OF = window.V6OF = window.V6OF || {};
+  if (!V6OF.register) {
+    ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'].forEach(function (name) { V6OF[name] = V6OF[name] || {}; });
+    V6OF.register = function (domain, name, value, legacyName) {
+      V6OF[domain] = V6OF[domain] || {};
+      V6OF[domain][name] = value;
+      if (legacyName) V6OF[legacyName] = value;
+      return value;
+    };
+  }
 
   // Size buckets by trade notional ($). For now we display a single "total"
   // CVD line (classic). Size-breakdown can be re-enabled when real trade data
   // with notional info is consistently available from backfill.
   var BUCKETS = [
-    { key: 'total', label: 'CVD',    min: 0,        max: 1e12,  color: '#3ad7ee' },
+    { key: 'total', label: 'CVD',    min: 0,        max: 1e12,  color: '#050505' },
   ];
 
   var INTERVAL_MS = 60000;          // per-candle bucket = 1 minute
-  var MAX_POINTS = 20000;            // ~14 jours d'historique à 1m
+  var MAX_POINTS = 200000;           // ~10x the previous 1m CVD retention
 
   // cvd[bucketKey] = running cumulative delta (across whole session)
   var cvd = {};
@@ -105,7 +114,7 @@
     return out;
   }
 
-  V6OF.CvdBuckets = {
+  V6OF.register('Data', 'CvdBuckets', {
   BUCKETS: BUCKETS,
   addTrade: addTrade,
   reset: reset,
@@ -116,12 +125,12 @@
     //           cvd: {s: num, m: num, l: num} }
     // Chargé depuis le serveur WS au démarrage (message cvd_init).
     // Skip si vide — on garde les trades live déjà accumulés.
-    if (!data || !data.series || !data.deltaVol) return;
+    if (!data || !data.series) return;
     var totalPoints = 0;
     for (var k in data.series) {
       if (Array.isArray(data.series[k])) totalPoints += data.series[k].length;
     }
-    if (totalPoints === 0 && data.deltaVol.length === 0) return;
+    if (totalPoints === 0 && (!data.deltaVol || data.deltaVol.length === 0)) return;
     if (typeof intervalMs === 'number' && intervalMs > 0) {
         INTERVAL_MS = intervalMs;
       }
@@ -159,5 +168,5 @@
       if (data.realTradeCount != null) realTradeCount = Number(data.realTradeCount);
     },
     get intervalMs() { return INTERVAL_MS; }
-  };
+  }, 'CvdBuckets');
 })();

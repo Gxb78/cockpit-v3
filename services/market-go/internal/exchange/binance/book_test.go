@@ -28,6 +28,15 @@ func TestParseDepthDiff(t *testing.T) {
 
 // ---- LocalBook snapshot + emit (full book, sorted) ----
 
+func TestLocalBookSnapshotSetsContractSize(t *testing.T) {
+	b := newLocalBook()
+	b.loadSnapshot(50, [][]string{{"100.0", "2"}}, [][]string{{"101.0", "1"}})
+	snap := b.snapshot("BTCUSDT", 1234)
+	if snap.ContractSize != 1 {
+		t.Fatalf("expected contractSize 1, got %v", snap.ContractSize)
+	}
+}
+
 func TestLocalBookSnapshotEmit(t *testing.T) {
 	b := newLocalBook()
 	b.loadSnapshot(50,

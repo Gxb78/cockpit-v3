@@ -153,6 +153,21 @@ func TestVWAPEnvelope(t *testing.T) {
 	}
 }
 
+func TestOrderBookDefaultsContractSize(t *testing.T) {
+	cfg := config.Default()
+	cfg.BookEnabled = true
+	e := New(cfg, logx.New(testWriter{t}))
+
+	env := e.OrderBook(marketdata.OrderBookSnapshot{Symbol: "BTC", ContractSize: 0})
+	snap, ok := env.Payload.(marketdata.OrderBookSnapshot)
+	if !ok {
+		t.Fatalf("unexpected payload type %T", env.Payload)
+	}
+	if snap.ContractSize != 1 {
+		t.Fatalf("expected default contractSize 1, got %v", snap.ContractSize)
+	}
+}
+
 func TestOrderBookEnvelopeAndMetrics(t *testing.T) {
 	cfg := config.Default()
 	cfg.BookEnabled = true

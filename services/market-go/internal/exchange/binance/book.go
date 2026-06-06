@@ -145,14 +145,15 @@ func (b *LocalBook) snapshot(symbol string, tsLocal int64) marketdata.OrderBookS
 	bids := sortedLevels(b.bids, true)
 	asks := sortedLevels(b.asks, false)
 	snap := marketdata.OrderBookSnapshot{
-		Exchange:   ExchangeName,
-		Symbol:     symbol,
-		TsExchange: tsLocal,
-		TsLocal:    tsLocal,
-		Bids:       bids,
-		Asks:       asks,
-		Depth:      min(len(bids), len(asks)),
-		Source:     "book",
+		Exchange:     ExchangeName,
+		Symbol:       symbol,
+		TsExchange:   tsLocal,
+		TsLocal:      tsLocal,
+		Bids:         bids,
+		Asks:         asks,
+		Depth:        min(len(bids), len(asks)),
+		Source:       "book",
+		ContractSize: ContractSize,
 	}
 	if len(bids) > 0 {
 		snap.BestBid = bids[0].Price

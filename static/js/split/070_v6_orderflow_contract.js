@@ -1,10 +1,63 @@
 // ---------- 070_v6_orderflow_contract.js ----------
-// Cockpit V6 mock data contract. No live data, no network access.
+// Cockpit V6 data contract — domain-separated state model.
+//
+// Architecture domains:
+//   trader    — market data (symbol, trades, candles, orderBook, heatmap, footprint, delta, vwap)
+//   render    — UI configuration + transient render state (merged settings + ui)
+//   transport — connection state (source, freshness, status, isStale, lastMessageAt)
+//   workspace — layout profiles and active workspace name (managed by 089_v6_workspace_manager)
 
 (function () {
   'use strict';
 
   var V6OF = window.V6OF = window.V6OF || {};
+  var domains = ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'];
+  domains.forEach(function (name) {
+    V6OF[name] = V6OF[name] || {};
+  });
+
+  V6OF.register = function (domain, name, value, legacyName) {
+    if (!V6OF[domain]) throw new Error('[V6OF] unknown domain: ' + domain);
+    V6OF[domain][name] = value;
+    if (legacyName) V6OF[legacyName] = value;
+    return value;
+  };
+
+  V6OF.registerPage = function (pageName, lifecycle) {
+    V6OF.Page[pageName] = Object.assign({ created: false, bound: false, mounted: false }, lifecycle || {});
+    return V6OF.Page[pageName];
+  };
+
+  V6OF.Page.bootstrap = function (pageName, root) {
+    var page = V6OF.Page && V6OF.Page[pageName];
+    if (!page) return false;
+    var nextRoot = root || page.root || null;
+    if (page.mounted && page.root === nextRoot) return true;
+    page.root = nextRoot;
+    if (!page.created && typeof page.create === 'function') {
+      page.create(page.root);
+      page.created = true;
+    }
+    if (typeof page.mount === 'function') page.mount(page.root);
+    page.mounted = true;
+    if (!page.bound && typeof page.bind === 'function') {
+      page.bind(page.root);
+      page.bound = true;
+    }
+    return true;
+  };
+
+  V6OF.Page.dispose = function (pageName) {
+    var page = V6OF.Page && V6OF.Page[pageName];
+    if (!page || (!page.mounted && !page.created)) return false;
+    if (typeof page.unmount === 'function') page.unmount(page.root);
+    page.mounted = false;
+    page.bound = false;
+    if (typeof page.destroy === 'function') page.destroy(page.root);
+    page.created = false;
+    page.root = null;
+    return true;
+  };
 
   /**
    * @typedef {Object} V6Trade
@@ -143,13 +196,19 @@
    * @property {string} source
    */
 
-  V6OF.Contract = {
+  V6OF.register('Core', 'Contract', {
     version: 'v6.orderflow.v1',
-    source: 'mock',
+    source: 'live',
     createEmptyState: function () {
       return {
         contractVersion: 'v6.orderflow.v1',
-        source: 'mock',
+        source: 'live',
+        dataFreshness: 'offline',
+        transportStatus: 'disconnected',
+        engineConfigStatus: 'stale',
+        engineConfigSyncedAt: 0,
+        engineConfigStaleAt: 0,
+        engineConfigError: '',
         symbol: 'BTCUSDT',
         timeframe: '1m',
         dataSource: 'binance',
@@ -179,9 +238,13 @@
         _candlesByInterval: {},
         lastMessageAt: 0,
         isStale: false,
+        // ── Workspace bridge (fed by 089_v6_workspace_manager) ──
+        activeWorkspace: 'Scalping',
+        workspaceList: {},
+        // ── Render config ──
         settings: {
           minQty: 0,
-          maxRows: 42,
+          maxRows: 420,
           showTape: true,
           showDOM: true,
           showCVD: true,
@@ -192,20 +255,50 @@
           showFootprint: false,
           showLastPrice: true,
           showGrid: true,
-          bgColor: '#080b12',
-          upColor: '#3ddc97',
-          downColor: '#ff5f73',
+          bgColor: '#ffffff',
+          upColor: '#089981',
+          downColor: '#f23645',
           chartMode: 'both',
-          maxTrades: 500,
-          heatmapMaxFrames: 360,
-          footprintMaxCandles: 120,
+          maxTrades: 5000,
+          heatmapMaxFrames: 3600,
+          footprintMaxCandles: 1200,
           deltaIntervalMs: 60000,
-          domDepth: 20,
-          tickSize: 1
+          domDepth: 1000,
+          domRangeLevels: 1000,
+          domValueMode: 'coin',
+          tickSize: 1,
+          inspectorTimeZoneMode: 'utc',
+          showFootprintVA: true,
+          imbalanceRatio: 3.0,
+          imbalanceStack: 3,
+          imbalanceMinVolume: 1.0,
+          exhaustionFactor: 0.35,
+          footprintValueAreaPct: 70,
+          minWickTicks: 0
+          ,
+          theme: 'light-tv',
+          indicators: [],
+          indicatorSources: []
         },
         ui: {
-          legacyMode: false,
-          seed: 42
+          seed: 42,
+          activeTab: 'dom',
+          dockCollapsed: false,
+          hoveredCandle: null,
+          pinnedCandle: null,
+          panelSizes: {},
+          layerPreset: 'scalping',
+          activeIndicatorId: '',
+          indicatorEditorOpen: false,
+          indicatorPaneSizes: {},
+          indicatorToolbarOpen: '',
+          singleClickFitLiveDelayMs: 180,
+          activeCandleOpenTime: 0,
+          activeCandleCloseTime: 0,
+          activeCandleSource: '',
+          activeCandleSnapshot: null,
+          activeCandleLocked: false,
+          activeCandleUpdatedAt: 0
         }
       };
     },
@@ -217,19 +310,68 @@
         Number.isFinite(value.price) &&
         Number.isFinite(value.qty) &&
         (value.side === 'buy' || value.side === 'sell');
-    }
-  };
+    },
 
-  V6OF.escapeHtml = function (value) {
+    // ── Domain accessors: decompose flat state into architectural domains ──
+
+    TRADER_FIELDS: [
+      'symbol','timeframe','dataSource','trades',
+      'orderBook','lastOrderBookBySymbol','orderBookCount','lastOrderBookTs','selectedDomSymbol',
+      'heatmapFrames','heatmapFrameCount','lastHeatmapFrame','lastHeatmapTs','selectedHeatmapSymbol',
+      'footprintCandles','footprintCandleCount','lastFootprintCandle','lastFootprintTs','selectedFootprintSymbol',
+      'candles','chartCandles','_candlesByInterval',
+      'deltaBuckets','deltaBucketsByInterval','latestDeltaByInterval',
+      'vwap','vwapBySymbol'
+    ],
+    getTraderState: function (state) {
+      var t = {};
+      for (var i = 0; i < this.TRADER_FIELDS.length; i++) {
+        var k = this.TRADER_FIELDS[i];
+        t[k] = state[k];
+      }
+      return t;
+    },
+
+    RENDER_FIELDS: [
+      'settings','ui'
+    ],
+    getRenderState: function (state) {
+      // Merge settings + ui into a single render view
+      return Object.assign({}, state.settings, state.ui);
+    },
+
+    TRANSPORT_FIELDS: [
+      'source','dataFreshness','transportStatus','engineConfigStatus',
+      'engineConfigSyncedAt','engineConfigStaleAt','engineConfigError',
+      'isStale','lastMessageAt'
+    ],
+    getTransportState: function (state) {
+      var t = {};
+      for (var i = 0; i < this.TRANSPORT_FIELDS.length; i++) {
+        var k = this.TRANSPORT_FIELDS[i];
+        t[k] = state[k];
+      }
+      return t;
+    },
+
+    getWorkspaceState: function (state) {
+      return {
+        activeWorkspace: state.activeWorkspace || '',
+        workspaceList: state.workspaceList || {}
+      };
+    }
+  }, 'Contract');
+
+  V6OF.register('Core', 'escapeHtml', function (value) {
     return String(value == null ? '' : value)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
-  };
+  }, 'escapeHtml');
 
-  V6OF.format = {
+  V6OF.register('Core', 'format', {
     price: function (value) {
       if (!Number.isFinite(value)) return '--';
       return value.toLocaleString('en-US', {
@@ -258,5 +400,5 @@
         second: '2-digit'
       });
     }
-  };
+  }, 'format');
 })();

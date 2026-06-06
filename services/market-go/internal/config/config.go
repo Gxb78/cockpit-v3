@@ -59,7 +59,13 @@ type Config struct {
 	BackfillInterval    string
 	BackfillIntervals   []string
 	BackfillBars        int
+	BackfillDays        int   // how many days of 1m to backfill (default 30)
 	BackfillLookbackMin int
+	KlineRetainDays     int   // max days of klines to keep in cache (default = BackfillDays)
+	TradeRetainDays     int   // max days of trades to keep in cache (default 365)
+	Footprint1mRetainDays  int   // max days of 1m footprints (default 180)
+	FootprintTFRetainDays  int   // max days of TF footprints (default 1825)
+	DataDir             string // directory for persistent caches (klines, etc.)
 }
 
 func Default() Config {
@@ -77,18 +83,18 @@ func Default() Config {
 		VWAPSession:         SessionResetUTCDay,
 		VWAPEmitMs:          250,
 		BookEnabled:         false,
-		BookDepth:           1000,
+		BookDepth:           5000,
 		BookEmitMs:          100,
 		HeatmapEnabled:      false,
 		HeatmapEmitMs:       250,
-		HeatmapDepth:        500,
+		HeatmapDepth:        1000,
 		HeatmapTickSize:     1,
-		HeatmapMaxLevels:    500,
+		HeatmapMaxLevels:    1000,
 		FootprintEnabled:    false,
 		FootprintIntervalMs: 60000,
 		FootprintTickSize:   1,
 		FootprintEmitMs:     250,
-		FootprintMaxLevels:  500,
+		FootprintMaxLevels:  1000,
 		HyperliquidHTTPURL:  DefaultHyperliquidHTTPURL,
 		BinanceWSURL:        DefaultBinanceWSURL,
 		BinanceRESTURL:      DefaultBinanceRESTURL,
@@ -97,7 +103,12 @@ func Default() Config {
 		BackfillEnabled:     true,
 		BackfillInterval:    "1m",
 		BackfillIntervals:   []string{"1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "8h", "12h", "1d"},
-		BackfillBars:        5000,
+		BackfillBars:        10000,
+		BackfillDays:        30,
+		KlineRetainDays:     30,
+		TradeRetainDays:     365,
+		Footprint1mRetainDays: 180,
+		FootprintTFRetainDays: 1825,
 		BackfillLookbackMin: 10080,
 	}
 }
@@ -266,10 +277,38 @@ func FromEnv() Config {
 			cfg.BackfillBars = n
 		}
 	}
+	if raw := strings.TrimSpace(os.Getenv("MARKET_GO_BACKFILL_DAYS")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			cfg.BackfillDays = n
+		}
+	}
+	if raw := strings.TrimSpace(os.Getenv("MARKET_GO_KLINES_RETAIN_DAYS")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			cfg.KlineRetainDays = n
+		}
+	}
+	if raw := strings.TrimSpace(os.Getenv("MARKET_GO_TRADE_RETAIN_DAYS")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			cfg.TradeRetainDays = n
+		}
+	}
+	if raw := strings.TrimSpace(os.Getenv("MARKET_GO_FP_1M_RETAIN_DAYS")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			cfg.Footprint1mRetainDays = n
+		}
+	}
+	if raw := strings.TrimSpace(os.Getenv("MARKET_GO_FP_TF_RETAIN_DAYS")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			cfg.FootprintTFRetainDays = n
+		}
+	}
 	if raw := strings.TrimSpace(os.Getenv("MARKET_GO_BACKFILL_LOOKBACK_MIN")); raw != "" {
 		if mins, err := strconv.Atoi(raw); err == nil && mins > 0 {
 			cfg.BackfillLookbackMin = mins
 		}
+	}
+	if raw := strings.TrimSpace(os.Getenv("MARKET_GO_DATA_DIR")); raw != "" {
+		cfg.DataDir = raw
 	}
 
 	return cfg

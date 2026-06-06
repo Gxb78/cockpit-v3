@@ -1,11 +1,11 @@
 function loadJournalTableSort() {
   try {
     const raw = JSON.parse(localStorage.getItem(JOURNAL_TABLE_SORT_KEY) || "{}");
-    const key = (typeof raw?.key === "string" && JOURNAL_TABLE_SORT_KEYS.has(raw.key)) ? raw.key : "date";
-    const dir = raw?.dir === "asc" ? "asc" : "desc";
+    const key = (typeof raw?.key === "string" && JOURNAL_TABLE_SORT_KEYS.has(raw.key)) ? raw.key : _state.journalTableSortKey;
+    const dir = raw?.dir === "asc" ? "asc" : _state.journalTableSortDir;
     return { key, dir };
   } catch {
-    return { key: "date", dir: "desc" };
+    return { key: _state.journalTableSortKey, dir: _state.journalTableSortDir };
   }
 }
 
@@ -24,9 +24,9 @@ function updateJournalLayoutToggleUI() {
 function loadJournalRangeMode() {
   try {
     var raw = localStorage.getItem(JOURNAL_RANGE_MODE_KEY);
-    return JOURNAL_RANGE_MODES.has(raw) ? raw : "month";
+    return JOURNAL_RANGE_MODES.has(raw) ? raw : _state.journalRangeMode;
   } catch {
-    return "month";
+    return _state.journalRangeMode;
   }
 }
 
@@ -202,6 +202,7 @@ function saveJournalTableSort() {
     key: state.journalTableSortKey,
     dir: state.journalTableSortDir,
   }));
+  saveUiState();
 }
 
 function updateJournalControlsVisibility() {
@@ -223,7 +224,7 @@ function setJournalViewMode(mode, opts = {}) {
   updateJournalViewToggleUI();
   updateJournalRangeToggleUI();
   updateJournalControlsVisibility();
-  if (persist) localStorage.setItem(JOURNAL_VIEW_MODE_KEY, mode);
+  if (persist) { localStorage.setItem(JOURNAL_VIEW_MODE_KEY, mode); saveUiState(); }
   if (reload && state.currentPage === "journal") loadMonth();
 }
 
@@ -242,7 +243,7 @@ function setJournalRangeMode(mode, opts = {}) {
   updateJournalRangeToggleUI();
   updateJournalRangeTriggerLabel();
   updateJournalControlsVisibility();
-  if (persist) localStorage.setItem(JOURNAL_RANGE_MODE_KEY, mode);
+  if (persist) { localStorage.setItem(JOURNAL_RANGE_MODE_KEY, mode); saveUiState(); }
   if (reload && state.currentPage === "journal") loadMonth();
 }
 
