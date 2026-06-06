@@ -119,13 +119,24 @@
     return snap ? String(snap.bookSize || 0) : '0';
   }
 
+  function renderStats(container, snap, state, live, settings) {
+    setStat(container, 'source', sourceLabel(state, snap));
+    setStat(container, 'age',    fmtAge(state.lastOrderBookTs || snap.lastUpdate));
+    setStat(container, 'live',   fmtPrice(live));
+    setStat(container, 'mid',    fmtPrice(snap.midPrice));
+    setStat(container, 'spread', fmtPrice(snap.spread));
+    setStat(container, 'depth',  bookDepth(state, snap));
+    syncControls(container, snap.priceGrouping || 25, settings);
+  }
+
   // ── Scroll / Follow ─────────────────────────────────────────────────────────
 
   var suppressScrollUntil = 0;
   var autoCenter   = true;
   var userScrolled = false;
   var lastMidTick  = null;      // pour detecter le mouvement du mid
-  var followTimer  = null;
+  var followRaf    = null;
+  var followPending = null;
 
   function scheduleFollowReturn(container) {
     if (!container) return;
@@ -206,6 +217,17 @@
   }
 
   // ── Row HTML ──────────────────────────────────────────────────────────────────
+
+  // Instrument-aware bid/ask display floor. `usdMode` true → compare against the
+  // USD notional floor directly; otherwise convert that floor to coin units via
+  // the live price (falling back to 0.001 when the price is unknown).
+  function computeSizeThreshold(settings, usdMode, live) {
+    var minNotionalUsd = Number(settings && settings.domMinNotionalUsd);
+    if (!Number.isFinite(minNotionalUsd) || minNotionalUsd < 0) minNotionalUsd = 100;
+    if (usdMode) return minNotionalUsd;
+    if (Number.isFinite(live) && live > 0) return minNotionalUsd / live;
+    return 0.001;
+  }
 
   function renderRow(lv, y, maxBid, maxAsk, liveTick, midTick, bestBidTick, bestAskTick, live, usdPrice, sizeThreshold) {
     var isLive    = lv.tick === liveTick;
@@ -339,8 +361,11 @@
 
     // 6. Parametres de rendu
     var usdPrice    = ((settings && settings.domValueMode) === 'usd') ? live : 0;
-    // Pour bid/ask: en USD → seuil $100, en coin → seuil 0.001 BTC
-    var sizeThreshold = usdPrice > 0 ? 100 : 0.001;
+    // Bid/ask noise filter: hide sizes below a configurable USD notional floor
+    // (settings.domMinNotionalUsd). In coin mode the floor is converted to coin
+    // units via the live price, so the filter stays instrument-aware across
+    // BTC, alts, and futures instead of assuming a BTC-priced book.
+    var sizeThreshold = computeSizeThreshold(settings, usdPrice > 0, live);
     var liveTick    = (Number.isFinite(live) && live > 0 && tickSize > 0)
                         ? Math.round(live / tickSize)
                         : snap.midTick;
@@ -371,7 +396,7 @@
   // ── Follow : centrage smooth sur le mid ──
   // Appele APRES renderVirtual, quand autoCenter est actif.
 
-  function followMid(body, snap) {
+  function followMid(body, snap, settings) {
     if (!body || !snap) return;
     if (!autoCenter || userScrolled) return;
 
@@ -379,16 +404,19 @@
     var maxTick = snap.viewMax != null ? snap.viewMax : snap.maxTick;
     if (!Number.isFinite(midTick) || !Number.isFinite(maxTick)) return;
 
-    // Ne follow que si le mid a bouge
-    if (lastMidTick === midTick) return;
+    var threshold = Math.max(1, Math.min(20, Math.round(Number(settings && settings.domFollowThresholdTicks) || 1)));
+    if (lastMidTick != null && Math.abs(midTick - lastMidTick) < threshold) return;
     lastMidTick = midTick;
 
-    // Debounce : max 1 follow toutes les 200ms
-    if (followTimer) return;
-    followTimer = setTimeout(function () {
-      followTimer = null;
-      centerOnTick(body, midTick, maxTick, true);
-    }, 200);
+    followPending = { body: body, midTick: midTick, maxTick: maxTick };
+    if (followRaf) return;
+    followRaf = requestAnimationFrame(function () {
+      var pending = followPending;
+      followRaf = null;
+      followPending = null;
+      if (!pending || !pending.body || !pending.body.isConnected) return;
+      centerOnTick(pending.body, pending.midTick, pending.maxTick, true);
+    });
   }
 
   // ── Point d'entree public ─────────────────────────────────────────────────────
@@ -431,17 +459,22 @@
     }
 
     // ── Throttle ──
-    var now = Date.now();
-    if (container._domLastRender && now - container._domLastRender < RENDER_THROTTLE) return;
-    container._domLastRender = now;
-
     var live = livePrice(state, snap);
+    renderStats(container, snap, state, live, settings);
+    container._domLastSnap  = snap;
+    container._domLastState = state;
+    container._domLastLive  = live;
+
+    var now = Date.now();
+    var shouldRefreshRows = !container._domLastRowsRender || now - container._domLastRowsRender >= RENDER_THROTTLE;
+    if (!shouldRefreshRows) return;
+    container._domLastRowsRender = now;
 
     // ── Render virtuel (ne touche PAS scrollTop sauf decalage de fenetre) ──
     renderVirtual(body, snap, live, settings);
 
     // ── Follow smooth (si autoCenter) ──
-    followMid(body, snap);
+    followMid(body, snap, settings);
 
     // ── Stats header ──
     setStat(container, 'source', sourceLabel(state, snap));
@@ -555,7 +588,8 @@
   // ── API publique ──
   V6OF.DomPanel = {
     render       : render,
-    bindControls : bindControls
+    bindControls : bindControls,
+    computeSizeThreshold : computeSizeThreshold
   };
 
 })();

@@ -31,6 +31,8 @@
     domRangeLevels: 1000,
     domWallsOnly: false,
     domWallRatio: 4,
+    domMinNotionalUsd: 100,
+    domFollowThresholdTicks: 1,
     domGroup: 1,
     domColumns: DEFAULT_DOM_COLUMNS.slice(),
     minQty: 0,
@@ -102,6 +104,8 @@
     out.domRangeLevels = clampInt(raw.domRangeLevels, 250, 5000, DEFAULTS.domRangeLevels);
     out.domWallsOnly = typeof raw.domWallsOnly === 'boolean' ? raw.domWallsOnly : DEFAULTS.domWallsOnly;
     out.domWallRatio = clampInt(raw.domWallRatio, 2, 12, DEFAULTS.domWallRatio);
+    out.domMinNotionalUsd = Math.max(0, Math.min(10000000, Number(raw.domMinNotionalUsd) || DEFAULTS.domMinNotionalUsd));
+    out.domFollowThresholdTicks = clampInt(raw.domFollowThresholdTicks, 1, 20, DEFAULTS.domFollowThresholdTicks);
     out.domGroup = clampInt(raw.domGroup, 1, 100, DEFAULTS.domGroup);
     // Validate domColumns: must be a non-empty array of unique valid keys.
     if (Array.isArray(raw.domColumns) && raw.domColumns.length > 0) {

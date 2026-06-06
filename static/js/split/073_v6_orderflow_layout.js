@@ -341,6 +341,12 @@
                 '<label class="v6-field">Wall ratio',
                   '<input type="number" min="2" max="12" step="1" data-v6-setting="domWallRatio" />',
                 '</label>',
+                '<label class="v6-field">Min display ($)',
+                  '<input type="number" min="0" max="10000000" step="10" data-v6-setting="domMinNotionalUsd" />',
+                '</label>',
+                '<label class="v6-field">Follow threshold',
+                  '<input type="number" min="1" max="20" step="1" data-v6-setting="domFollowThresholdTicks" />',
+                '</label>',
                 '<label class="v6-check"><input type="checkbox" data-v6-setting="domWallsOnly" /><span>Walls only</span></label>',
               '</div>',
               // -- Tape & DOM --
@@ -553,6 +559,8 @@
       maxHeatmapFrames: 'heatmapMaxFrames',
       maxFootprintCandles: 'footprintMaxCandles',
       domDepth: 'domDepth',
+      domMinNotionalUsd: 'domMinNotionalUsd',
+      domFollowThresholdTicks: 'domFollowThresholdTicks',
       minQty: 'minQty',
       maxRows: 'maxRows',
       restTradePrefillLimit: 'restTradePrefillLimit',
@@ -1416,6 +1424,10 @@
         store.updateSettings({ footprintMaxCandles: Math.max(30, Math.min(300, Number(input.value) || 120)) });
       } else if (key === 'domDepth') {
         store.updateSettings({ domDepth: Math.max(5, Math.min(50, Number(input.value) || 20)) });
+      } else if (key === 'domMinNotionalUsd') {
+        store.updateSettings({ domMinNotionalUsd: Math.max(0, Math.min(10000000, Number(input.value) || 100)) });
+      } else if (key === 'domFollowThresholdTicks') {
+        store.updateSettings({ domFollowThresholdTicks: Math.max(1, Math.min(20, Math.round(Number(input.value) || 1))) });
       } else if (key === 'domGroup') {
         store.updateSettings({ domGroup: Math.max(1, Math.min(100, Math.round(Number(input.value) || 1))) });
       } else if (key === 'vwapBand1') {

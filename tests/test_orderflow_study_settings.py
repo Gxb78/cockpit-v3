@@ -48,6 +48,7 @@ class OrderflowStudySettingsTests(unittest.TestCase):
               alertsEnabled: true,
               largeTradeAlertQty: 25.25,
               deltaAlertThreshold: 250,
+              domFollowThresholdTicks: 99,
               imbalanceRatio: 99,
               imbalanceStack: 9,
               minWickTicks: -2
@@ -71,6 +72,7 @@ class OrderflowStudySettingsTests(unittest.TestCase):
         self.assertTrue(settings["alertsEnabled"])
         self.assertEqual(settings["largeTradeAlertQty"], 25.25)
         self.assertEqual(settings["deltaAlertThreshold"], 250)
+        self.assertEqual(settings["domFollowThresholdTicks"], 20)
         self.assertEqual(settings["imbalanceRatio"], 8)
         self.assertEqual(settings["imbalanceStack"], 6)
         self.assertEqual(settings["minWickTicks"], 0)
