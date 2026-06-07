@@ -48,7 +48,8 @@ type Server struct {
 
 	sqlDB *storage.DB // SQLite for trades + footprints
 
-	cvd *cvdTracker // running CVD-per-symbol + cvd_init history/broadcast
+	cvd        *cvdTracker     // running CVD-per-symbol + cvd_init history/broadcast
+	footprints *footprintStore // footprint persist / rebuild / aggregate
 
 	// Exchange switching
 	exchangeCancel context.CancelFunc
@@ -88,6 +89,7 @@ func NewServer(cfg config.Config, marketEngine *engine.Engine, logger *logx.Logg
 		func() []marketdata.Trade { return s.trades.Snapshot() },
 		s.cachedCandleHistory1m)
 	s.trades = newTradeStore(cfg, NewTradeCache(dataDir, cfg.TradeRetainDays), s.sqlDB, s.log, s.cvd.broadcastInit)
+	s.footprints = newFootprintStore(s.sqlDB, s.cvd, s.engine, cfg, s.log)
 
 	s.player = replay.NewPlayer(replay.NewBinanceSource(), s.replayEmit, s.replayStatus)
 	return s
@@ -1356,175 +1358,21 @@ func (s *Server) handleClientMessage(client *wsClient, payload []byte) {
 	}
 }
 
-// RebuildFootprint1m deletes existing footprints in [fromTs, toTs] and
-// regenerates them from market_trades using the footprint calculator.
-// Returns the number of footprints created.
-// Runs synchronously — call in a goroutine for async usage.
+// RebuildFootprint1m regenerates 1m footprints from stored trades. Public API
+// retained for handleClientMessage and external callers; delegates to footprintStore.
 func (s *Server) RebuildFootprint1m(symbol string, fromTs, toTs int64) (int, error) {
-	if s.sqlDB == nil {
-		return 0, fmt.Errorf("sqlite not available")
-	}
-
-	// Delete existing footprints in range
-	if err := s.sqlDB.DeleteFootprint1mRange(symbol, fromTs, toTs); err != nil {
-		return 0, fmt.Errorf("delete footprints: %w", err)
-	}
-
-	// Load trades
-	trades, err := s.sqlDB.GetTrades(symbol, fromTs, toTs)
-	if err != nil {
-		return 0, fmt.Errorf("get trades: %w", err)
-	}
-	if len(trades) == 0 {
-		s.log.Infof("rebuild footprint: no trades for %s [%d, %d]", symbol, fromTs, toTs)
-		return 0, nil
-	}
-
-	// Use the engine's footprint calculator config
-	fpCfg := calc.FootprintConfig{
-		Enabled:    true,
-		IntervalMs: s.cfg.FootprintIntervalMs, // should be 60000 for 1m
-		TickSize:   s.cfg.FootprintTickSize,
-		EmitEvery:  0, // emit every trade during rebuild (no throttle)
-		MaxLevels:  s.cfg.FootprintMaxLevels,
-	}
-	if fpCfg.IntervalMs <= 0 {
-		fpCfg.IntervalMs = 60000
-	}
-	builder := calc.NewFootprintCalculator(fpCfg)
-	// Reconstruct signals with the engine's UI-synced thresholds so a rebuilt
-	// footprint matches what the user saw live (not the calculator's defaults).
-	builder.SetSignalConfig(s.engine.FootprintSignalConfig())
-
-	var closedCount int
-	for _, t := range trades {
-		// Convert storage.TradeRecord to marketdata.Trade
-		side := "sell"
-		if t.IsBuy {
-			side = "buy"
-		}
-		mt := marketdata.Trade{
-			Symbol:     t.Symbol,
-			TsExchange: t.TimestampMs,
-			TsLocal:    t.TimestampMs,
-			Price:      t.Price,
-			Qty:        t.Qty,
-			Side:       side,
-		}
-		candles := builder.UpdateTradeAt(mt, t.TimestampMs)
-		for _, c := range candles {
-			if c.Closed {
-				s.persistFootprintCandle(c)
-				closedCount++
-			}
-		}
-	}
-
-	s.log.Infof("rebuild footprint: created %d footprints for %s [%d, %d]", closedCount, symbol, fromTs, toTs)
-	return closedCount, nil
+	return s.footprints.Rebuild1m(symbol, fromTs, toTs)
 }
 
-// AggregateFootprintTF reads 1m footprints, aggregates them to targetMs, and
-// persists to market_footprint_tf. Returns the number of TF candles created.
+// AggregateFootprintTF aggregates 1m footprints into a higher timeframe.
 func (s *Server) AggregateFootprintTF(symbol, timeframe string, targetMs int64, fromTs, toTs int64) (int, error) {
-	if s.sqlDB == nil {
-		return 0, fmt.Errorf("sqlite not available")
-	}
-
-	// Delete existing TF footprints in range
-	if err := s.sqlDB.DeleteFootprintTFRange(symbol, timeframe, fromTs, toTs); err != nil {
-		return 0, fmt.Errorf("delete tf footprints: %w", err)
-	}
-
-	// Load 1m footprints
-	oneMinFps, err := s.sqlDB.GetFootprint1m(symbol, fromTs, toTs)
-	if err != nil {
-		return 0, fmt.Errorf("get 1m footprints: %w", err)
-	}
-	if len(oneMinFps) == 0 {
-		s.log.Infof("aggregate tf: no 1m footprints for %s [%d, %d]", symbol, fromTs, toTs)
-		return 0, nil
-	}
-
-	// Aggregate
-	aggregated := calc.AggregateFootprints(oneMinFps, targetMs)
-	if len(aggregated) == 0 {
-		return 0, nil
-	}
-
-	// Persist
-	for _, fp := range aggregated {
-		if err := s.sqlDB.InsertFootprintTF(fp, timeframe); err != nil {
-			return 0, fmt.Errorf("insert tf footprint: %w", err)
-		}
-	}
-
-	s.log.Infof("aggregate tf: created %d %s candles for %s [%d, %d]",
-		len(aggregated), timeframe, symbol, fromTs, toTs)
-	return len(aggregated), nil
+	return s.footprints.AggregateTF(symbol, timeframe, targetMs, fromTs, toTs)
 }
 
-// persistFootprintCandle writes a closed footprint candle to SQLite.
-// Computes delta from buy/sell volume and accumulates CVD.
+// persistFootprintCandle writes a closed footprint candle to SQLite (delegates
+// to footprintStore). Retained as a method for the live/replay persist path.
 func (s *Server) persistFootprintCandle(candle marketdata.FootprintCandle) {
-	// Compute delta if not already set
-	delta := candle.Delta
-	if delta == 0 && (candle.BuyVol > 0 || candle.SellVol > 0) {
-		delta = candle.BuyVol - candle.SellVol
-	}
-
-	// Accumulate CVD per symbol
-	cvd := s.cvd.Accumulate(candle.Symbol, delta)
-
-	// Build price levels
-	levels := make([]storage.PriceLevel, len(candle.Levels))
-	for i, l := range candle.Levels {
-		levels[i] = storage.PriceLevel{
-			Price:      l.Price,
-			BuyVolume:  l.BuyVol,
-			SellVolume: l.SellVol,
-		}
-	}
-
-	// Persist the engine-derived signals carried on the candle. These were
-	// computed by calc.DeriveFootprintSignals in the footprint calculator using
-	// the UI-synced thresholds — the same values the UI consumes live. Persisting
-	// them (rather than recomputing with a second, divergent algorithm) keeps the
-	// stored footprint identical to what the user saw in real time. As a defensive
-	// fallback, derive with defaults if the candle never passed through the engine.
-	if !candle.SignalsDerived {
-		calc.DeriveFootprintSignals(&candle, calc.FootprintSignalConfig{})
-	}
-
-	rec := storage.FootprintRecord{
-		Symbol:                    candle.Symbol,
-		MinuteTs:                  candle.OpenTime,
-		Open:                      candle.Open,
-		High:                      candle.High,
-		Low:                       candle.Low,
-		Close:                     candle.Close,
-		Volume:                    candle.Volume,
-		BuyVolume:                 candle.BuyVol,
-		SellVolume:                candle.SellVol,
-		Delta:                     delta,
-		CVD:                       cvd,
-		Profile:                   storage.FootprintProfile{Levels: levels},
-		MaxImbalanceRatio:         candle.MaxImbalanceRatio,
-		BuyImbalanceCount:         candle.BuyImbalanceCount,
-		SellImbalanceCount:        candle.SellImbalanceCount,
-		StackedBuyImbalanceCount:  candle.StackedBuyImbalance,
-		StackedSellImbalanceCount: candle.StackedSellImbalance,
-		HasBuyAbsorption:          candle.HasBuyAbsorption,
-		HasSellAbsorption:         candle.HasSellAbsorption,
-		IsExhaustionHigh:          candle.IsExhaustionHigh,
-		IsExhaustionLow:           candle.IsExhaustionLow,
-		IsUnfinishedHigh:          candle.IsUnfinishedHigh,
-		IsUnfinishedLow:           candle.IsUnfinishedLow,
-	}
-
-	if err := s.sqlDB.InsertFootprint1m(rec); err != nil {
-		s.log.Infof("sqlite insert footprint: %v", err)
-	}
+	s.footprints.Persist(candle)
 }
 
 // rebuildReply builds a JSON reply for footprint rebuild/aggregate commands.
