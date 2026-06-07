@@ -1378,7 +1378,7 @@ if end_time is not None:
 
 - Contexte: `internal/ws/server.go` (2000 lignes) concentrait 7 responsabilites. Spec: `docs/superpowers/specs/2026-06-07-ws-server-decomposition-design.md`. Refactor behavior-preserving, un type dedie par responsabilite dans le package `ws`, Server = orchestrateur. Tests verts (Go + Python) entre chaque etape.
 - Regle: chaque composant possede son etat et expose une API etroite; les dependances transverses passent par injection (interface `broadcaster`, accesseurs `func()`), jamais par acces direct aux champs de Server. Le CVD-par-symbole n'est qu'un accumulateur ecrit par la persistence footprint (pas lu par l'historique CVD qui recalcule depuis les trades).
-- Etat (ordre d'extraction): [x] 1 cvdTracker · [x] 2 tradeStore · [x] 3 footprintStore · [x] 4 klineBackfiller · [ ] 5 replayController · [ ] 6 exchangeManager · [ ] 7 Server aminci.
+- Etat (ordre d'extraction): [x] 1 cvdTracker · [x] 2 tradeStore · [x] 3 footprintStore · [x] 4 klineBackfiller · [x] 5 replayController · [ ] 6 exchangeManager · [ ] 7 Server aminci.
 - Gate par etape: `go build ./... && go vet ./... && go test ./internal/{calc,config,engine,ws}/` (le package `ws` isole; le panic flaky `TestStreamEndpointUpgrades` n'apparait qu'en `go test ./...` complet et est pre-existant) + suite Python orderflow/cors/transport.
 - Fichiers a surveiller: `services/market-go/internal/ws/*.go` (cvd_tracker.go, trade_store.go, footprint_store.go, kline_backfiller.go, replay_controller.go, exchange_manager.go, server.go).
 

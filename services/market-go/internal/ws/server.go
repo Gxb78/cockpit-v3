@@ -24,7 +24,6 @@ import (
 	"cockpit-v6-market-go/internal/exchange/hyperliquid"
 	"cockpit-v6-market-go/internal/logx"
 	"cockpit-v6-market-go/internal/marketdata"
-	"cockpit-v6-market-go/internal/replay"
 	"cockpit-v6-market-go/internal/storage"
 )
 
@@ -40,7 +39,7 @@ type Server struct {
 	historyMu  sync.RWMutex
 	historyRaw [][]byte // cached candle_history envelopes, replayed to new clients
 
-	player *replay.Player
+	replayer *replayController // backtest player + /replay control
 
 	trades *tradeStore // live trade buffer + cache/SQLite persistence + backfill
 
@@ -91,7 +90,7 @@ func NewServer(cfg config.Config, marketEngine *engine.Engine, logger *logx.Logg
 	s.footprints = newFootprintStore(s.sqlDB, s.cvd, s.engine, cfg, s.log)
 	s.klines = newKlineBackfiller(cfg, NewKlineCache(dataDir), s.engine, s.log, s.publishHistory, s.cvd.broadcastInit)
 
-	s.player = replay.NewPlayer(replay.NewBinanceSource(), s.replayEmit, s.replayStatus)
+	s.replayer = newReplayController(s.engine, s.hub, s.replayEmit)
 	return s
 }
 
@@ -126,19 +125,12 @@ func (s *Server) replayEmit(trade marketdata.Trade) {
 	}
 }
 
-func (s *Server) replayStatus(st replay.Status) {
-	env := s.engine.ReplayStatus(st)
-	if raw, err := env.MarshalJSONBytes(); err == nil {
-		s.hub.Broadcast(raw)
-	}
-}
-
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/metrics", s.handleMetrics)
 	mux.HandleFunc("/stream", s.handleStream)
-	mux.HandleFunc("/replay", s.handleReplay)
+	mux.HandleFunc("/replay", s.replayer.handleReplay)
 	// Footprint UI
 	mux.HandleFunc("/footprint", s.handleFootprintUI)
 	mux.HandleFunc("/footprint.html", s.handleFootprintUI)
@@ -670,58 +662,6 @@ func (s *Server) throttledBookHandler(ctx context.Context, symbol string) func(m
 		hasHeatmapPending = true
 		mu.Unlock()
 	}
-}
-
-type replayCommand struct {
-	Action string  `json:"action"` // start | pause | resume | step | speed | stop | status
-	Symbol string  `json:"symbol"`
-	Date   string  `json:"date"`
-	Speed  float64 `json:"speed"`
-	Count  int     `json:"count"`
-}
-
-// handleReplay controls the backtest player. The browser POSTs JSON commands;
-// progress is pushed back over the WS stream as replay_status envelopes.
-func (s *Server) handleReplay(w http.ResponseWriter, r *http.Request) {
-	// CORS + OPTIONS preflight are handled by the global middleware in Handler().
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
-	var cmd replayCommand
-	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
-		http.Error(w, "bad json", http.StatusBadRequest)
-		return
-	}
-	switch cmd.Action {
-	case "start":
-		symbol := strings.ToUpper(strings.TrimSpace(cmd.Symbol))
-		if symbol == "" {
-			symbol = "BTCUSDT"
-		}
-		if strings.TrimSpace(cmd.Date) == "" {
-			http.Error(w, "date required (YYYY-MM-DD)", http.StatusBadRequest)
-			return
-		}
-		// speed<=0 means "as fast as possible" (UI "Max"); pass through as-is.
-		s.player.Start(symbol, cmd.Date, cmd.Speed)
-	case "pause":
-		s.player.Pause()
-	case "resume":
-		s.player.Resume()
-	case "step":
-		s.player.Step(cmd.Count)
-	case "speed":
-		s.player.SetSpeed(cmd.Speed)
-	case "stop":
-		s.player.Stop()
-	case "status":
-		// fallthrough to response below
-	default:
-		http.Error(w, "unknown action", http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, http.StatusOK, s.player.Status())
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
