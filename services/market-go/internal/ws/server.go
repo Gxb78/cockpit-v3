@@ -2,7 +2,6 @@ package ws
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"crypto/sha1"
 	"encoding/base64"
@@ -13,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -44,12 +42,9 @@ type Server struct {
 
 	player *replay.Player
 
-	tradesMu sync.RWMutex
-	trades   []marketdata.Trade
+	trades *tradeStore // live trade buffer + cache/SQLite persistence + backfill
 
 	klineCache *KlineCache // file-based kline persistence
-
-	tradeCache *TradeCache // file-based trade persistence
 
 	sqlDB *storage.DB // SQLite for trades + footprints
 
@@ -72,9 +67,7 @@ func NewServer(cfg config.Config, marketEngine *engine.Engine, logger *logx.Logg
 		hub:        NewHub(),
 		log:        logger,
 		klineCache: NewKlineCache(dataDir),
-		tradeCache: NewTradeCache(dataDir, cfg.TradeRetainDays),
 	}
-	s.cvd = newCvdTracker(s.hub, s.log, s.tradesSnapshot, s.cachedCandleHistory1m)
 
 	// Initialize SQLite for trade + footprint persistence
 	if dataDir != "" {
@@ -88,6 +81,14 @@ func NewServer(cfg config.Config, marketEngine *engine.Engine, logger *logx.Logg
 		}
 	}
 
+	// Wire components. cvd reads trades through a closure (resolved at call time)
+	// so the two can be constructed without a circular dependency: trades feeds
+	// cvd's broadcast on (re)load.
+	s.cvd = newCvdTracker(s.hub, s.log,
+		func() []marketdata.Trade { return s.trades.Snapshot() },
+		s.cachedCandleHistory1m)
+	s.trades = newTradeStore(cfg, NewTradeCache(dataDir, cfg.TradeRetainDays), s.sqlDB, s.log, s.cvd.broadcastInit)
+
 	s.player = replay.NewPlayer(replay.NewBinanceSource(), s.replayEmit, s.replayStatus)
 	return s
 }
@@ -95,7 +96,7 @@ func NewServer(cfg config.Config, marketEngine *engine.Engine, logger *logx.Logg
 // replayEmit pushes a replayed trade through the SAME engine pipeline as live
 // data, then broadcasts every derived envelope to all stream clients.
 func (s *Server) replayEmit(trade marketdata.Trade) {
-	s.recordTrade(trade)
+	s.trades.Record(trade)
 	if raw, err := s.engine.Trade(trade).MarshalJSONBytes(); err == nil {
 		s.hub.Broadcast(raw)
 	}
@@ -234,7 +235,7 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 
 	// Periodic cache cleanup (every hour)
-	go s.periodicPurge(ctx)
+	go s.trades.RunPurgeLoop(ctx)
 
 	// Auto-heal: detect gaps and rebuild footprints on startup
 	if s.sqlDB != nil {
@@ -342,7 +343,7 @@ func (s *Server) startHyperliquid(ctx context.Context) {
 				bookHandler = s.throttledBookHandler(ctx, symbol)
 			}
 			err := client.ConnectMarket(ctx, symbol, func(trade marketdata.Trade) {
-				s.recordTrade(trade)
+				s.trades.Record(trade)
 				if raw, err := s.engine.Trade(trade).MarshalJSONBytes(); err == nil {
 					s.hub.Broadcast(raw)
 				} else {
@@ -453,25 +454,17 @@ func (s *Server) startExchange(parent context.Context) {
 	s.exchangeMu.Unlock()
 
 	// Load persisted trades from cache to restore CVD history
-	s.loadPersistedTrades()
+	s.trades.LoadPersisted()
 
 	// Purge old trade cache files (async, fire and forget)
-	if s.tradeCache != nil {
-		syms := s.cfg.Symbols
-		if len(syms) == 0 {
-			syms = []string{"BTCUSDT"}
-		}
-		for _, sym := range syms {
-			go s.tradeCache.PurgeOlderThan(s.cfg.Exchange, sym)
-		}
-	}
+	go s.trades.Purge()
 
 	switch s.cfg.Exchange {
 	case config.ExchangeHyperliquid:
-		go s.backfillTrades(ctx)
+		go s.trades.Backfill(ctx)
 		s.startHyperliquid(ctx)
 	case config.ExchangeBinance:
-		go s.backfillTrades(ctx)
+		go s.trades.Backfill(ctx)
 		s.startBinance(ctx)
 	default:
 		s.log.Errorf("unknown exchange: %s", s.cfg.Exchange)
@@ -492,9 +485,7 @@ func (s *Server) switchExchange(parent context.Context, exchangeName string) {
 	s.exchangeMu.Unlock()
 
 	// Clear all server state
-	s.tradesMu.Lock()
-	s.trades = nil
-	s.tradesMu.Unlock()
+	s.trades.Reset()
 
 	s.historyMu.Lock()
 	s.historyRaw = nil
@@ -520,16 +511,6 @@ func (s *Server) switchExchange(parent context.Context, exchangeName string) {
 	s.startExchange(parent)
 
 	s.log.Infof("exchange switch complete: %s", exchangeName)
-}
-
-// tradesSnapshot returns a copy of the live trade buffer under the read lock.
-// Injected into cvdTracker so it can compute CVD history without owning trades.
-func (s *Server) tradesSnapshot() []marketdata.Trade {
-	s.tradesMu.RLock()
-	defer s.tradesMu.RUnlock()
-	out := make([]marketdata.Trade, len(s.trades))
-	copy(out, s.trades)
-	return out
 }
 
 // cachedCandleHistory1m returns the candles from the cached 1m candle_history
@@ -1063,10 +1044,7 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	// Send cvd_init on connect if historical trades are already available
 	// (backfill completed before this client joined). If trades are empty,
 	// the backfillTrades goroutine will broadcast cvd_init to everyone later.
-	s.tradesMu.RLock()
-	hasTrades := len(s.trades) > 0
-	s.tradesMu.RUnlock()
-	if hasTrades {
+	if s.trades.Len() > 0 {
 		if raw, err := json.Marshal(CvdInitMessage{Type: "cvd_init", Payload: s.cvd.computeHistory("1m")}); err == nil {
 			_ = client.Send(raw)
 		}
@@ -1275,38 +1253,6 @@ func encodeTextFrame(payload []byte) []byte {
 	return append(header, payload...)
 }
 
-func (s *Server) recordTrade(trade marketdata.Trade) {
-	// Persist to file cache (fire and forget)
-	if s.tradeCache != nil {
-		go s.tradeCache.Append(trade)
-	}
-
-	// Persist to SQLite (fire and forget)
-	if s.sqlDB != nil {
-		go func(t marketdata.Trade) {
-			side := strings.ToLower(strings.TrimSpace(t.Side))
-			rec := storage.TradeRecord{
-				Symbol:          t.Symbol,
-				ExchangeTradeID: t.TradeID,
-				TimestampMs:     t.TsExchange,
-				Price:           t.Price,
-				Qty:             t.Qty,
-				IsBuy:           side == "buy",
-			}
-			if err := s.sqlDB.InsertTrade(rec); err != nil {
-				s.log.Infof("sqlite insert trade: %v", err)
-			}
-		}(trade)
-	}
-
-	s.tradesMu.Lock()
-	defer s.tradesMu.Unlock()
-	s.trades = append(s.trades, trade)
-	if len(s.trades) > 50000 {
-		s.trades = s.trades[len(s.trades)-50000:]
-	}
-}
-
 type clientMsg struct {
 	Type      string `json:"type"`
 	Timeframe string `json:"timeframe"`
@@ -1407,241 +1353,6 @@ func (s *Server) handleClientMessage(client *wsClient, payload []byte) {
 			}
 			_ = client.Send(s.rebuildReply("aggregate_complete", fmt.Sprintf("%d %s candles created", count, tf)))
 		}()
-	}
-}
-
-type binanceAggTrade struct {
-	ID           int64  `json:"a"`
-	Price        string `json:"p"`
-	Qty          string `json:"q"`
-	FirstID      int64  `json:"f"`
-	LastID       int64  `json:"l"`
-	Time         int64  `json:"T"`
-	IsBuyerMaker bool   `json:"m"`
-}
-
-func (s *Server) fetchBinanceRecentTrades(ctx context.Context, symbol string) ([]marketdata.Trade, error) {
-	url := fmt.Sprintf("%s/api/v3/aggTrades?symbol=%s&limit=1000", s.cfg.BinanceRESTURL, symbol)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "CockpitV6-MarketGo/0.7")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("http status %d", resp.StatusCode)
-	}
-
-	var rawTrades []binanceAggTrade
-	if err := json.NewDecoder(resp.Body).Decode(&rawTrades); err != nil {
-		return nil, err
-	}
-
-	var out []marketdata.Trade
-	for _, t := range rawTrades {
-		price, _ := strconv.ParseFloat(t.Price, 64)
-		qty, _ := strconv.ParseFloat(t.Qty, 64)
-		side := "buy"
-		if t.IsBuyerMaker {
-			side = "sell"
-		}
-		tradeID := fmt.Sprintf("%d", t.ID)
-		out = append(out, marketdata.Trade{
-			ID:         tradeID,
-			TradeID:    tradeID,
-			Exchange:   "binance",
-			Symbol:     symbol,
-			TsExchange: t.Time,
-			TsLocal:    time.Now().UnixMilli(),
-			Price:      price,
-			Qty:        qty,
-			Side:       side,
-			Notional:   price * qty,
-		})
-	}
-	return out, nil
-}
-
-type hlRestTrade struct {
-	Coin string `json:"coin"`
-	Side string `json:"side"`
-	Px   string `json:"px"`
-	Sz   string `json:"sz"`
-	Hash string `json:"hash"`
-	Time int64  `json:"time"`
-	TID  int64  `json:"tid"`
-}
-
-func (s *Server) fetchHyperliquidRecentTrades(ctx context.Context, symbol string) ([]marketdata.Trade, error) {
-	coin := normalizeHlCoin(symbol)
-	url := s.cfg.HyperliquidHTTPURL
-	if url == "" {
-		url = "https://api.hyperliquid.xyz/info"
-	}
-
-	bodyMap := map[string]any{
-		"type": "recentTrades",
-		"coin": coin,
-	}
-	bodyBytes, err := json.Marshal(bodyMap)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "CockpitV6-MarketGo/0.7")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("http status %d", resp.StatusCode)
-	}
-
-	var rawTrades []hlRestTrade
-	if err := json.NewDecoder(resp.Body).Decode(&rawTrades); err != nil {
-		return nil, err
-	}
-
-	var out []marketdata.Trade
-	for _, t := range rawTrades {
-		price, _ := strconv.ParseFloat(t.Px, 64)
-		qty, _ := strconv.ParseFloat(t.Sz, 64)
-		side := "buy"
-		if strings.ToUpper(t.Side) == "A" || strings.ToUpper(t.Side) == "ASK" || strings.ToUpper(t.Side) == "SELL" {
-			side = "sell"
-		}
-		tradeID := fmt.Sprintf("%d:%s:%d", t.Time, t.Coin, t.TID)
-		out = append(out, marketdata.Trade{
-			ID:         tradeID,
-			TradeID:    tradeID,
-			Exchange:   "hyperliquid",
-			Symbol:     symbol,
-			TsExchange: t.Time,
-			TsLocal:    time.Now().UnixMilli(),
-			Price:      price,
-			Qty:        qty,
-			Side:       side,
-			Notional:   price * qty,
-		})
-	}
-	return out, nil
-}
-
-func normalizeHlCoin(coin string) string {
-	c := strings.ToUpper(strings.TrimSpace(coin))
-	c = strings.ReplaceAll(c, "USDT", "")
-	c = strings.ReplaceAll(c, "USD", "")
-	c = strings.ReplaceAll(c, "-PERP", "")
-	c = strings.ReplaceAll(c, "/", "")
-	return c
-}
-
-func (s *Server) backfillTrades(ctx context.Context) {
-	symbols := s.cfg.Symbols
-	if len(symbols) == 0 {
-		if s.cfg.Exchange == config.ExchangeHyperliquid {
-			symbols = []string{"BTC"}
-		} else {
-			symbols = []string{"BTCUSDT"}
-		}
-	}
-
-	for _, symbol := range symbols {
-		var fetched []marketdata.Trade
-		var err error
-		if s.cfg.Exchange == config.ExchangeBinance {
-			fetched, err = s.fetchBinanceRecentTrades(ctx, symbol)
-		} else if s.cfg.Exchange == config.ExchangeHyperliquid {
-			fetched, err = s.fetchHyperliquidRecentTrades(ctx, symbol)
-		}
-		if err != nil {
-			s.log.Errorf("failed to backfill trades for symbol=%s: %v", symbol, err)
-			continue
-		}
-		s.log.Infof("backfilled %d historical trades for symbol=%s", len(fetched), symbol)
-
-		// Merge with existing (persisted) trades, sort, cap
-		s.tradesMu.Lock()
-		s.trades = append(s.trades, fetched...)
-		sort.Slice(s.trades, func(i, j int) bool {
-			return s.trades[i].TsExchange < s.trades[j].TsExchange
-		})
-		if len(s.trades) > 50000 {
-			s.trades = s.trades[len(s.trades)-50000:]
-		}
-		s.tradesMu.Unlock()
-
-		// Persist the newly backfilled trades to cache
-		if s.tradeCache != nil {
-			s.tradeCache.AppendBatch(fetched)
-		}
-	}
-
-	// Broadcast a fresh cvd_init after trade backfill, if enough data exists.
-	s.cvd.broadcastInit()
-}
-
-// loadPersistedTrades loads recent trades from the file cache into s.trades.
-// Called at the start of startExchange so CVD history survives restarts.
-func (s *Server) loadPersistedTrades() {
-	if s.tradeCache == nil {
-		return
-	}
-	symbols := s.cfg.Symbols
-	if len(symbols) == 0 {
-		if s.cfg.Exchange == config.ExchangeHyperliquid {
-			symbols = []string{"BTC"}
-		} else {
-			symbols = []string{"BTCUSDT"}
-		}
-	}
-
-	exchange := s.cfg.Exchange
-	if exchange == config.ExchangeMock {
-		return
-	}
-
-	var totalLoaded int
-	for _, symbol := range symbols {
-		cached := s.tradeCache.LoadRecent(exchange, symbol)
-		if len(cached) == 0 {
-			continue
-		}
-
-		s.tradesMu.Lock()
-		// Merge with any existing trades (e.g., from switchExchange replay)
-		existing := s.trades
-		s.trades = append(existing, cached...)
-		sort.Slice(s.trades, func(i, j int) bool {
-			return s.trades[i].TsExchange < s.trades[j].TsExchange
-		})
-		if len(s.trades) > 50000 {
-			s.trades = s.trades[len(s.trades)-50000:]
-		}
-		s.tradesMu.Unlock()
-
-		totalLoaded += len(cached)
-		s.log.Infof("loaded %d persisted trades for %s/%s", len(cached), exchange, symbol)
-	}
-
-	if totalLoaded > 0 {
-		s.cvd.broadcastInit()
 	}
 }
 
@@ -1813,31 +1524,6 @@ func (s *Server) persistFootprintCandle(candle marketdata.FootprintCandle) {
 
 	if err := s.sqlDB.InsertFootprint1m(rec); err != nil {
 		s.log.Infof("sqlite insert footprint: %v", err)
-	}
-}
-
-// purgeSQLiteRetention deletes old data from SQLite based on retention config.
-// periodicPurge runs cache cleanup every hour. Stops when ctx is cancelled.
-func (s *Server) periodicPurge(ctx context.Context) {
-	ticker := time.NewTicker(1 * time.Hour)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if s.tradeCache != nil {
-				syms := s.cfg.Symbols
-				if len(syms) == 0 {
-					syms = []string{"BTCUSDT"}
-				}
-				for _, sym := range syms {
-					s.tradeCache.PurgeOlderThan(s.cfg.Exchange, sym)
-				}
-				s.log.Infof("periodic purge complete for %d symbols", len(syms))
-			}
-		}
 	}
 }
 
