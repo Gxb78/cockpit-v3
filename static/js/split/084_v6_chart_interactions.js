@@ -32,20 +32,19 @@
     return V6OF.chart;
   }
 
-  function ensureCrosshair() {
-    if (!V6OF.chartCrosshair) {
-      V6OF.chartCrosshair = {
-        enabled: true,
-        visible: false,
-        x: 0,
-        y: 0,
-        cy: null,
-        hoveringSource: null, // 'chart' | 'cvd'
-        time: null,
-        price: null
-      };
-    }
-    return V6OF.chartCrosshair;
+  function ensureCrosshair(ref) {
+    if (V6OF.getChartCrosshair) return V6OF.getChartCrosshair(ref);
+    V6OF._fallbackChartCrosshair = V6OF._fallbackChartCrosshair || {
+      enabled: true,
+      visible: false,
+      x: 0,
+      y: 0,
+      cy: null,
+      hoveringSource: null, // 'chart' | 'cvd'
+      time: null,
+      price: null
+    };
+    return V6OF._fallbackChartCrosshair;
   }
 
   function localPoint(canvas, event) {
@@ -57,23 +56,31 @@
   }
 
   var redrawQueued = false;
-  function redrawAll() {
+  function rootFor(ref) {
+    if (ref && ref.dataset && ref.dataset.v6Mounted === '1') return ref;
+    if (ref && ref.closest) return ref.closest('[data-v6-mounted="1"]') || null;
+    return document.querySelector('[data-v6-mounted="1"]');
+  }
+
+  function redrawAll(ref) {
     if (redrawQueued) return;
     redrawQueued = true;
+    var root = rootFor(ref);
     var schedule = typeof requestAnimationFrame === 'function' && !document.hidden
       ? requestAnimationFrame
       : function (fn) { return setTimeout(fn, 33); };
     schedule(function () {
       redrawQueued = false;
-      var chartCanvas = document.querySelector('[data-v6-chart]');
+      var scope = root || document;
+      var chartCanvas = scope.querySelector ? scope.querySelector('[data-v6-chart]') : null;
       var store = storeFor(chartCanvas);
       if (!store) return;
       var state = store.getState();
       if (chartCanvas && V6OF.CanvasChart) {
         V6OF.CanvasChart.draw(chartCanvas, state);
       }
-      var cvdCanvas = document.querySelector('[data-v6-cvd-canvas]');
-      var cvdStrip = document.querySelector('[data-v6-cvd-strip]');
+      var cvdCanvas = scope.querySelector ? scope.querySelector('[data-v6-cvd-canvas]') : null;
+      var cvdStrip = scope.querySelector ? scope.querySelector('[data-v6-cvd-strip]') : null;
       if (cvdCanvas && V6OF.CvdPanel && !(cvdStrip && cvdStrip.classList.contains('is-collapsed'))) {
         V6OF.CvdPanel.draw(cvdCanvas, state);
       }
@@ -207,7 +214,7 @@
     onMouseMove: function (canvas, event, source) {
       var pt = localPoint(canvas, event);
       var vp = ensureViewport();
-      var cross = ensureCrosshair();
+      var cross = ensureCrosshair(canvas);
       if (!vp) return;
 
       var t = vp.xToTime(pt.x);
@@ -232,11 +239,11 @@
         cross.price = null;
       }
 
-      if (!drag.active) redrawAll();
+      if (!drag.active) redrawAll(canvas);
     },
 
-    onMouseLeave: function () {
-      var cross = ensureCrosshair();
+    onMouseLeave: function (canvas) {
+      var cross = ensureCrosshair(canvas);
       cross.visible = false;
       cross.hoveringSource = null;
       cross.x = 0;
@@ -244,13 +251,13 @@
       cross.cy = null;
       cross.time = null;
       cross.price = null;
-      redrawAll();
+      redrawAll(canvas);
     },
 
     onWheel: function (canvas, event) {
       event.preventDefault();
       var vp = ensureViewport();
-      var cross = ensureCrosshair();
+      var cross = ensureCrosshair(canvas);
       if (!vp) return;
 
       var pt = localPoint(canvas, event);
@@ -262,7 +269,7 @@
         cross.x = pt.x;
         cross.time = vp.xToTime(pt.x);
         cross.visible = cross.enabled;
-        redrawAll();
+        redrawAll(canvas);
         return;
       }
 
@@ -291,7 +298,7 @@
       }
       cross.time = vp.xToTime(pt.x);
       cross.visible = cross.enabled;
-      redrawAll();
+      redrawAll(canvas);
     },
 
     onPointerDown: function (canvas, event) {
@@ -351,7 +358,7 @@
     onPointerMove: function (canvas, event) {
       if (!drag.active) return;
       var vp = ensureViewport();
-      var cross = ensureCrosshair();
+      var cross = ensureCrosshair(canvas);
       if (!vp) return;
 
       var pt = localPoint(canvas, event);
@@ -427,7 +434,7 @@
       }
       cross.time = vp.xToTime(pt.x);
 
-      redrawAll();
+      redrawAll(canvas);
     },
 
     onPointerUp: function (canvas, event) {
@@ -505,12 +512,12 @@
           }
         }
 
-        var cross = ensureCrosshair();
+        var cross = ensureCrosshair(canvas);
         var pt = localPoint(canvas, { clientX: mid.x, clientY: mid.y });
         cross.x = pt.x;
         cross.time = vp.xToTime(pt.x);
         cross.visible = cross.enabled;
-        redrawAll();
+        redrawAll(canvas);
         event.preventDefault();
       } else if (event.touches.length === 1 && drag.active) {
         this.onPointerMove(canvas, event.touches[0]);
@@ -551,7 +558,7 @@
         var pt = localPoint(canvas, event);
         if (pt.x >= btn.x && pt.x <= btn.x + btn.w && pt.y >= btn.y && pt.y <= btn.y + btn.h) {
           if (vp.goLive) vp.goLive();
-          redrawAll();
+          redrawAll(canvas);
           return;
         }
       }
@@ -561,12 +568,12 @@
       if (isOnPriceAxis(pt2.x, pt2.y, vp)) {
         var factor = event.shiftKey ? 1.25 : 0.8;
         vp.zoomPrice(factor, pt2.y);
-        redrawAll();
+        redrawAll(canvas);
         return;
       } else if (isOnTimeAxis(pt2.x, pt2.y, vp)) {
         var factor = event.shiftKey ? 1.25 : 0.8;
         vp.zoomTime(factor, pt2.x);
-        redrawAll();
+        redrawAll(canvas);
         return;
       }
 
@@ -592,12 +599,12 @@
             activeCandleUpdatedAt: Date.now(),
             pinnedCandle: null
           });
-          redrawAll();
+            redrawAll(canvas);
         }, 200);
         return;
       }
       // Single click on a candle does NOT select — double-click is for selection
-      redrawAll();
+      redrawAll(canvas);
     },
 
     // ── Double-click handler (opens candle info panel) ──
@@ -606,6 +613,21 @@
       if (clickFitTimer) {
         clearTimeout(clickFitTimer);
         clickFitTimer = 0;
+      }
+      var vp = ensureViewport();
+      if (vp) {
+        var pt = localPoint(canvas, event);
+        if (isOnPriceAxis(pt.x, pt.y, vp)) {
+          if (vp.fitPriceToData) vp.fitPriceToData();
+          else vp.autoFit = true;
+          redrawAll(canvas);
+          return;
+        }
+        if (isOnTimeAxis(pt.x, pt.y, vp)) {
+          if (vp.fitTimeToData) vp.fitTimeToData();
+          redrawAll(canvas);
+          return;
+        }
       }
       if (setActiveCandleFromEvent(canvas, event, true)) {
         try {
@@ -624,8 +646,10 @@
         } catch (_) {}
         var infoTab = document.querySelector('[data-v6-rtab="info"]');
         if (infoTab) infoTab.click();
+      } else if (vp && vp.goLive) {
+        vp.goLive();
       }
-      redrawAll();
+      redrawAll(canvas);
     },
 
     attach: function (canvas) {
@@ -634,7 +658,7 @@
       var self = this;
 
       function onMove(e) { self.onMouseMove(canvas, e, 'chart'); }
-      function onLeave(e) { self.onMouseLeave(); }
+      function onLeave(e) { self.onMouseLeave(canvas); }
       function onDown(e) { self.onPointerDown(canvas, e); }
       function onDragMove(e) { self.onPointerMove(canvas, e); }
       function onUp(e) { self.onPointerUp(canvas, e); }
@@ -684,7 +708,7 @@
             activeCandleUpdatedAt: Date.now(),
             pinnedCandle: null
           });
-          redrawAll();
+          redrawAll(root);
         });
       }
     },
@@ -714,7 +738,7 @@
       var self = this;
 
       function onMove(e) { self.onMouseMove(canvas, e, 'cvd'); }
-      function onLeave(e) { self.onMouseLeave(); }
+      function onLeave(e) { self.onMouseLeave(canvas); }
 
       canvas.addEventListener('mousemove', onMove);
       canvas.addEventListener('mouseleave', onLeave);
@@ -737,7 +761,7 @@
     wireToolbar: function (root, canvas) {
       if (!root || root._v6ToolbarWired) return;
       var vp = ensureViewport();
-      var cross = ensureCrosshair();
+      var cross = ensureCrosshair(root);
 
       function setActiveTool(name) {
         var tools = root.querySelectorAll('[data-v6-tool]');
@@ -746,8 +770,59 @@
         });
       }
 
+      function updateViewportButtons() {
+        var current = ensureViewport();
+        var followBtn = root.querySelector('[data-v6-tool="follow"]');
+        var detachBtn = root.querySelector('[data-v6-tool="detach"]');
+        var fitBtn = root.querySelector('[data-v6-tool="fit"]');
+        var resetBtn = root.querySelector('[data-v6-tool="reset"]');
+        var follow = !!(current && current.followLive);
+        var autoFit = !!(current && current.autoFit);
+        if (followBtn) {
+          followBtn.classList.toggle('is-active', follow);
+          followBtn.classList.toggle('is-muted', !follow);
+          followBtn.setAttribute('aria-pressed', follow ? 'true' : 'false');
+        }
+        if (detachBtn) {
+          detachBtn.classList.toggle('is-active', !follow);
+          detachBtn.classList.toggle('is-muted', follow);
+          detachBtn.setAttribute('aria-pressed', follow ? 'false' : 'true');
+        }
+        if (fitBtn) {
+          fitBtn.classList.toggle('is-active', autoFit);
+          fitBtn.setAttribute('aria-pressed', autoFit ? 'true' : 'false');
+        }
+        if (resetBtn) {
+          resetBtn.classList.toggle('is-active', follow && autoFit);
+          resetBtn.setAttribute('aria-pressed', follow && autoFit ? 'true' : 'false');
+        }
+        Array.prototype.forEach.call(root.querySelectorAll('[data-v6-price-zoom="auto"]'), function (btn) {
+          btn.classList.toggle('is-active', autoFit);
+          btn.setAttribute('aria-pressed', autoFit ? 'true' : 'false');
+        });
+      }
+
       root.addEventListener('click', function (event) {
         var btn = event.target.closest('[data-v6-tool]');
+        var priceZoomBtn = event.target.closest('[data-v6-price-zoom]');
+        if (priceZoomBtn && root.contains(priceZoomBtn)) {
+          var action = priceZoomBtn.getAttribute('data-v6-price-zoom');
+          var current = ensureViewport();
+          if (!current) return;
+          var anchorY = current.plot ? current.plot.top + current.plot.height / 2 : null;
+          if (action === 'in') {
+            current.zoomPrice(0.86, anchorY);
+          } else if (action === 'out') {
+            current.zoomPrice(1.16, anchorY);
+          } else if (action === 'auto') {
+            current.autoFit = true;
+          } else {
+            return;
+          }
+          updateViewportButtons();
+          redrawAll(root);
+          return;
+        }
         if (!btn || !root.contains(btn)) return;
         var tool = btn.getAttribute('data-v6-tool');
         if (tool === 'cursor') {
@@ -763,13 +838,19 @@
           if (vp) vp.resetView();
         } else if (tool === 'follow') {
           if (vp) vp.goLive();
+        } else if (tool === 'detach') {
+          if (vp && vp.detachLive) vp.detachLive();
+          else if (vp) vp.followLive = false;
         } else {
           return;
         }
-        redrawAll();
+        updateViewportButtons();
+        redrawAll(root);
       });
 
       setActiveTool(cross.enabled ? 'crosshair' : 'cursor');
+      updateViewportButtons();
+      V6OF.updateViewportToolbarState = updateViewportButtons;
       root._v6ToolbarWired = true;
     }
   }, 'ChartInteractions');

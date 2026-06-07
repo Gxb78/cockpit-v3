@@ -8,15 +8,20 @@ def _inject_asset_version():
     for _f in (RESOURCE_DIR / "static" / "app.js", RESOURCE_DIR / "static" / "style.css"):
         if _f.exists():
             _v += _h.md5(_f.read_bytes()).hexdigest()[:12]
-    market_ws_url = (os.environ.get("COCKPIT_MARKET_WS_URL") or "").strip()
-    if not market_ws_url:
-        market_host = (os.environ.get("MARKET_GO_HOST") or "127.0.0.1").strip() or "127.0.0.1"
-        market_port = (os.environ.get("MARKET_GO_PORT") or "8765").strip() or "8765"
-        market_ws_url = f"ws://{market_host}:{market_port}/stream"
+    # Market engine origins. The HTTP origin (footprint history, /replay) is a
+    # first-class config value, not derived from the WS URL — both default to the
+    # same host/port but can be overridden independently.
+    market_host = (os.environ.get("MARKET_GO_HOST") or "127.0.0.1").strip() or "127.0.0.1"
+    market_port = (os.environ.get("MARKET_GO_PORT") or "8765").strip() or "8765"
+    market_ws_url = (os.environ.get("COCKPIT_MARKET_WS_URL") or "").strip() \
+        or f"ws://{market_host}:{market_port}/stream"
+    market_http_url = (os.environ.get("COCKPIT_MARKET_HTTP_URL") or "").strip() \
+        or f"http://{market_host}:{market_port}"
     return dict(
         ASSET_VERSION=_v,
         COCKPIT_CONFIG={
             "marketWsUrl": market_ws_url,
+            "marketHttpUrl": market_http_url,
         },
     )
 

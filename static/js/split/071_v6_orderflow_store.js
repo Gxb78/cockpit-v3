@@ -25,6 +25,8 @@
   }
   var storesByRoot = typeof WeakMap === 'function' ? new WeakMap() : null;
   var fallbackStores = [];
+  var crosshairsByRoot = typeof WeakMap === 'function' ? new WeakMap() : null;
+  var fallbackCrosshairs = [];
 
   function resolveRoot(ref) {
     if (ref && ref.dataset && ref.dataset.v6Mounted === '1') return ref;
@@ -63,6 +65,50 @@
     fallbackStores = fallbackStores.filter(function (entry) { return entry.root !== root; });
     if (root._v6Store) delete root._v6Store;
   }, 'clearRootStore');
+
+  function createCrosshairState() {
+    return {
+      enabled: true,
+      visible: false,
+      x: 0,
+      y: 0,
+      cy: null,
+      hoveringSource: null, // 'chart' | 'cvd'
+      time: null,
+      price: null
+    };
+  }
+
+  V6OF.register('Core', 'getChartCrosshair', function (ref) {
+    var root = resolveRoot(ref);
+    if (!root) {
+      V6OF._fallbackChartCrosshair = V6OF._fallbackChartCrosshair || createCrosshairState();
+      return V6OF._fallbackChartCrosshair;
+    }
+    if (crosshairsByRoot) {
+      var cross = crosshairsByRoot.get(root) || root._v6ChartCrosshair || null;
+      if (!cross) {
+        cross = createCrosshairState();
+        crosshairsByRoot.set(root, cross);
+      }
+      root._v6ChartCrosshair = cross;
+      return cross;
+    }
+    for (var i = fallbackCrosshairs.length - 1; i >= 0; i--) {
+      if (fallbackCrosshairs[i].root === root) return fallbackCrosshairs[i].crosshair;
+    }
+    var fallback = root._v6ChartCrosshair || createCrosshairState();
+    fallbackCrosshairs.push({ root: root, crosshair: fallback });
+    root._v6ChartCrosshair = fallback;
+    return fallback;
+  }, 'getChartCrosshair');
+
+  V6OF.register('Core', 'clearChartCrosshair', function (root) {
+    if (!root) return;
+    if (crosshairsByRoot && crosshairsByRoot.delete) crosshairsByRoot.delete(root);
+    fallbackCrosshairs = fallbackCrosshairs.filter(function (entry) { return entry.root !== root; });
+    if (root._v6ChartCrosshair) delete root._v6ChartCrosshair;
+  }, 'clearChartCrosshair');
 
   function cloneSettings(settings) {
     return Object.assign({}, settings || {});

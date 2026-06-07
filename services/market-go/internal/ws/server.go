@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -148,17 +149,69 @@ func (s *Server) Handler() http.Handler {
 	// Archive rotation
 	mux.HandleFunc("/api/v1/archive/rotate", s.handleArchiveRotate)
 
-	// Wrap in global CORS middleware
+	// Wrap in global CORS middleware. The allowed origin is scoped (loopback-only
+	// by default; see resolveAllowedOrigin) instead of a blanket wildcard.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		if allow := s.resolveAllowedOrigin(r.Header.Get("Origin")); allow != "" {
+			w.Header().Set("Access-Control-Allow-Origin", allow)
+			if allow != "*" {
+				// Reflected origin varies per request: keep caches honest.
+				w.Header().Add("Vary", "Origin")
+			}
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		}
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		mux.ServeHTTP(w, r)
 	})
+}
+
+// resolveAllowedOrigin returns the value to echo in Access-Control-Allow-Origin
+// for a given request Origin, or "" when no CORS header should be sent (same-
+// origin / non-browser callers, or a disallowed cross-origin). Policy:
+//   - empty Origin            → "" (same-origin or curl: no CORS needed)
+//   - AllowedOrigins unset     → loopback origins only (mirrors the Flask app)
+//   - AllowedOrigins contains "*" → "*" (explicit opt-in for trusted dev)
+//   - AllowedOrigins lists it  → echo it; otherwise ""
+func (s *Server) resolveAllowedOrigin(origin string) string {
+	if origin == "" {
+		return ""
+	}
+	allowed := s.cfg.AllowedOrigins
+	if len(allowed) == 0 {
+		if isLoopbackOrigin(origin) {
+			return origin
+		}
+		return ""
+	}
+	for _, a := range allowed {
+		if a == "*" {
+			return "*"
+		}
+		if a == origin {
+			return origin
+		}
+	}
+	return ""
+}
+
+// isLoopbackOrigin reports whether an Origin's host is a loopback address.
+// Uses url.Parse (not a prefix check) so "http://localhost.attacker.com" is
+// correctly rejected.
+func isLoopbackOrigin(origin string) bool {
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	switch u.Hostname() {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *Server) Run(ctx context.Context) error {
@@ -903,13 +956,7 @@ type replayCommand struct {
 // handleReplay controls the backtest player. The browser POSTs JSON commands;
 // progress is pushed back over the WS stream as replay_status envelopes.
 func (s *Server) handleReplay(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
+	// CORS + OPTIONS preflight are handled by the global middleware in Handler().
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST required", http.StatusMethodNotAllowed)
 		return

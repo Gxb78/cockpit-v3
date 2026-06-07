@@ -741,6 +741,7 @@
         restDepthCount: Math.min(book.bids ? book.bids.length : 0, book.asks ? book.asks.length : 0)
       };
       if (prev.transportStatus !== 'connected' || prev.dataFreshness === 'warming') {
+        patch.source = 'rest-fallback';
         patch.dataFreshness = 'rest-fallback';
       }
       return patch;
@@ -755,6 +756,7 @@
     store.setState(function (prev) {
       var patch = { trades: trades.slice(-limit), restTradesTs: Date.now() };
       if (prev.transportStatus !== 'connected' || prev.dataFreshness === 'warming') {
+        patch.source = 'rest-fallback';
         patch.dataFreshness = 'rest-fallback';
       }
       return patch;
@@ -766,10 +768,12 @@
     var candles = normalizeIngressCandles(data, source, timeframe);
     if (!candles.length) return [];
     store.setState(function (prev) {
-      var patch = { chartCandles: candles, restKlinesTs: Date.now() };
-      if (prev.transportStatus !== 'connected' || prev.dataFreshness === 'warming') {
-        patch.dataFreshness = 'rest-fallback';
-      }
+      var patch = {
+        chartCandles: candles,
+        restKlinesTs: Date.now(),
+        source: 'rest-fallback',
+        dataFreshness: 'rest-fallback'
+      };
       return patch;
     }, reason || 'rest-klines');
     if (V6OF.chart && V6OF.chart.resetOnDataChange) V6OF.chart.resetOnDataChange();
@@ -830,6 +834,9 @@
       : status === 'error' ? 'Reconnecting…'
       : freshness === 'rest-fallback' ? 'Offline (REST Fallback)'
       : 'Offline';
+    if (freshness === 'rest-fallback') {
+      statusLabel = status === 'connected' ? 'REST Fallback (Engine Connected)' : 'Offline (REST Fallback)';
+    }
     setText(root, '[data-v6-engine-status-text]', statusLabel);
     announceStatus(root, 'Orderflow ' + statusLabel + '. ' + (replayStatusLabel(state && state.replay) || 'Replay idle.'));
 
@@ -903,6 +910,9 @@
       } else if (state && state.dataFreshness === 'warming') {
         badge.textContent = 'V6 WARMING / Loading source';
         badge.className = 'v6-badge';
+      } else if (state && state.dataFreshness === 'rest-fallback') {
+        badge.textContent = status === 'connected' ? 'V6 REST FALLBACK / Engine connected' : 'V6 REST FALLBACK / Offline';
+        badge.className = status === 'connected' ? 'v6-badge' : 'v6-badge v6-badge-error';
       } else if (status === 'connected') {
         if (state && state.isStale) {
           badge.textContent = 'V6 STALE / No data';
@@ -916,9 +926,6 @@
         badge.className = 'v6-badge';
       } else if (status === 'error') {
         badge.textContent = 'V6 ERROR / Disconnected';
-        badge.className = 'v6-badge v6-badge-error';
-      } else if (state && state.dataFreshness === 'rest-fallback') {
-        badge.textContent = 'V6 REST FALLBACK / Offline';
         badge.className = 'v6-badge v6-badge-error';
       } else {
         badge.textContent = 'Offline';
@@ -1653,6 +1660,9 @@
       });
       if (ctx.engineClient && typeof ctx.engineClient.destroy === 'function') {
         try { ctx.engineClient.destroy(); } catch (_) {}
+      }
+      if (V6OF.clearChartCrosshair) {
+        try { V6OF.clearChartCrosshair(root); } catch (_) {}
       }
       delete root._v6EngineClient;
       delete root._v6LayoutContext;

@@ -66,6 +66,10 @@ type Config struct {
 	Footprint1mRetainDays  int   // max days of 1m footprints (default 180)
 	FootprintTFRetainDays  int   // max days of TF footprints (default 1825)
 	DataDir             string // directory for persistent caches (klines, etc.)
+	// AllowedOrigins is the CORS allowlist for the HTTP API. Empty (default)
+	// means "loopback origins only" (localhost/127.0.0.1, any port). A single
+	// "*" entry restores the permissive wildcard for trusted dev setups.
+	AllowedOrigins []string
 }
 
 func Default() Config {
@@ -310,8 +314,25 @@ func FromEnv() Config {
 	if raw := strings.TrimSpace(os.Getenv("MARKET_GO_DATA_DIR")); raw != "" {
 		cfg.DataDir = raw
 	}
+	if raw := strings.TrimSpace(os.Getenv("MARKET_GO_ALLOWED_ORIGINS")); raw != "" {
+		cfg.AllowedOrigins = splitOrigins(raw)
+	}
 
 	return cfg
+}
+
+// splitOrigins parses a comma-separated CORS allowlist, trimming whitespace and
+// any trailing slash so entries match the browser-sent Origin header exactly.
+func splitOrigins(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		origin := strings.TrimRight(strings.TrimSpace(part), "/")
+		if origin != "" {
+			out = append(out, origin)
+		}
+	}
+	return out
 }
 
 func (c Config) Addr() string {

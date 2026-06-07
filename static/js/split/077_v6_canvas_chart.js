@@ -1,4 +1,4 @@
-// ---------- 077_v6_canvas_chart.js ----------
+﻿// ---------- 077_v6_canvas_chart.js ----------
 // Canvas chart engine: price scale (right), time scale (bottom), grid, crosshair,
 // pan/zoom via V6OF.chart (ChartViewport). Heatmap SD + Footprint render in shared
 // time/price space.
@@ -66,7 +66,7 @@
   }
 
   // ===================================================================
-  // LIVE CHART ENGINE — viewport-based time/price space
+  // LIVE CHART ENGINE â€” viewport-based time/price space
   // ===================================================================
 
   function clamp01(value) {
@@ -179,6 +179,106 @@
     return out;
   }
 
+  function mergeFootprintLevels(target, source) {
+    target = target || {};
+    (Array.isArray(source) ? source : []).forEach(function (lv) {
+      var price = Number(lv && lv.price);
+      if (!Number.isFinite(price)) return;
+      var key = String(price);
+      var cur = target[key] || { price: price, buyVol: 0, sellVol: 0, delta: 0, totalVol: 0, trades: 0 };
+      var buy = Number(lv.buyVol || 0);
+      var sell = Number(lv.sellVol || 0);
+      var total = Number(lv.totalVol);
+      cur.buyVol += Number.isFinite(buy) ? buy : 0;
+      cur.sellVol += Number.isFinite(sell) ? sell : 0;
+      cur.totalVol += Number.isFinite(total) ? total : ((Number.isFinite(buy) ? buy : 0) + (Number.isFinite(sell) ? sell : 0));
+      cur.delta = cur.buyVol - cur.sellVol;
+      cur.trades += Number(lv.trades || 0) || 0;
+      target[key] = cur;
+    });
+    return target;
+  }
+
+  function aggregateFootprintsToTimeframe(footprints, tf) {
+    var interval = timeframeToMs(tf);
+    if (!interval || interval <= 60000) return Array.isArray(footprints) ? footprints : [];
+    var buckets = {};
+    (Array.isArray(footprints) ? footprints : []).forEach(function (fp) {
+      var openTime = candleStartTs(fp);
+      if (!openTime) return;
+      var bucketOpen = Math.floor(openTime / interval) * interval;
+      var close = Number(fp.close);
+      var high = Number(fp.high);
+      var low = Number(fp.low);
+      var volume = Number(fp.volume || fp.totalVol || 0) || 0;
+      var buyVol = Number(fp.buyVol || 0) || 0;
+      var sellVol = Number(fp.sellVol || 0) || 0;
+      var bucket = buckets[bucketOpen];
+      if (!bucket) {
+        bucket = {
+          exchange: fp.exchange || '',
+          symbol: fp.symbol || '',
+          intervalMs: interval,
+          openTime: bucketOpen,
+          closeTime: bucketOpen + interval - 1,
+          open: Number(fp.open),
+          high: Number.isFinite(high) ? high : close,
+          low: Number.isFinite(low) ? low : close,
+          close: close,
+          volume: 0,
+          buyVol: 0,
+          sellVol: 0,
+          delta: 0,
+          closed: false,
+          source: 'live-aggregate',
+          analyticsSource: 'live-footprint-aggregate',
+          tsLocal: Number(fp.tsLocal || 0) || Date.now(),
+          _lastSourceOpenTime: openTime,
+          _levelsByPrice: {}
+        };
+        if (!Number.isFinite(bucket.open)) bucket.open = close;
+        buckets[bucketOpen] = bucket;
+      }
+      if (Number.isFinite(high)) bucket.high = Math.max(bucket.high, high);
+      if (Number.isFinite(low)) bucket.low = Math.min(bucket.low, low);
+      if (openTime >= bucket._lastSourceOpenTime) {
+        bucket.close = close;
+        bucket._lastSourceOpenTime = openTime;
+      }
+      bucket.volume += volume;
+      bucket.buyVol += buyVol;
+      bucket.sellVol += sellVol;
+      bucket.delta = bucket.buyVol - bucket.sellVol;
+      bucket.tsLocal = Math.max(bucket.tsLocal || 0, Number(fp.tsLocal || 0) || 0);
+      bucket.closed = bucket.closed && fp.closed === true;
+      mergeFootprintLevels(bucket._levelsByPrice, fp.levels);
+    });
+    return Object.keys(buckets).map(Number).sort(function (a, b) { return a - b; }).map(function (key) {
+      var bucket = buckets[key];
+      bucket.levels = Object.keys(bucket._levelsByPrice).map(function (priceKey) { return bucket._levelsByPrice[priceKey]; })
+        .sort(function (a, b) { return b.price - a.price; });
+      delete bucket._levelsByPrice;
+      delete bucket._lastSourceOpenTime;
+      return bucket;
+    });
+  }
+
+  function mergeCandlesByOpenTime(history, liveCandles, tf) {
+    history = Array.isArray(history) ? history : [];
+    liveCandles = Array.isArray(liveCandles) ? liveCandles : [];
+    if (!history.length) return liveCandles;
+    if (!liveCandles.length) return history;
+    var byTime = {};
+    var i;
+    for (i = 0; i < history.length; i++) byTime[history[i].openTime] = history[i];
+    for (i = 0; i < liveCandles.length; i++) byTime[liveCandles[i].openTime] = liveCandles[i];
+    var keys = Object.keys(byTime).map(Number).sort(function (a, b) { return a - b; });
+    var out = [];
+    for (i = 0; i < keys.length; i++) out.push(byTime[keys[i]]);
+    var interval = timeframeToMs(tf) || (out.length ? normalizeCandleInterval(out[out.length - 1], 60000) : 60000);
+    return fillCandleGaps(out, interval);
+  }
+
   // Convert hex color (#3ddc97) to rgba string with alpha
   function hexToRgba(hex, alpha) {
     if (!hex || hex.length < 7) return 'rgba(61,220,151,' + alpha + ')';
@@ -216,9 +316,8 @@
   function mergedChartCandles(state) {
     var hist = Array.isArray(state.chartCandles) ? state.chartCandles : [];
     var fp = Array.isArray(state.footprintCandles) ? state.footprintCandles : [];
-    // Live footprint candles are ALWAYS 1m. Only merge them into the base when
-    // the active timeframe is 1m — otherwise higher TFs would show stray 1m
-    // candles mixed into the history (wrong bars on 1h/4h/etc).
+    // Live footprint candles are emitted as 1m bars. Aggregate them to the
+    // active chart timeframe before merging so HTF views get the forming bar.
     var tf = state.timeframe || '1m';
 
     if (_mergedCandlesCache &&
@@ -228,24 +327,8 @@
       return _mergedCandlesCache;
     }
 
-    var out;
-    if (tf !== '1m') {
-      out = hist.length ? hist : [];
-    } else if (!hist.length) {
-      out = fp;
-    } else if (!fp.length) {
-      out = hist;
-    } else {
-      var byTime = {};
-      var i;
-      for (i = 0; i < hist.length; i++) byTime[hist[i].openTime] = hist[i];
-      for (i = 0; i < fp.length; i++) byTime[fp[i].openTime] = fp[i];
-      var keys = Object.keys(byTime).map(Number).sort(function (a, b) { return a - b; });
-      out = [];
-      for (i = 0; i < keys.length; i++) out.push(byTime[keys[i]]);
-      var interval = timeframeToMs(tf) || (out.length ? normalizeCandleInterval(out[out.length - 1], 60000) : 60000);
-      out = fillCandleGaps(out, interval);
-    }
+    var liveCandles = tf === '1m' ? fp : aggregateFootprintsToTimeframe(fp, tf);
+    var out = mergeCandlesByOpenTime(hist, liveCandles, tf);
 
     _mergedCandlesCache = out;
     _mergedCandlesSrcChart = hist;
@@ -426,17 +509,17 @@
     var d = new Date(ts);
     function pad(n) { return n < 10 ? '0' + n : String(n); }
 
-    // Step >= 24h → date format "03 Jun"
+    // Step >= 24h â†’ date format "03 Jun"
     if (step >= 86400000) {
       return pad(d.getUTCDate()) + ' ' + MONTHS_SHORT[d.getUTCMonth()];
     }
 
-    // Sub-minute (step < 60000) → "HH:MM:SS"
+    // Sub-minute (step < 60000) â†’ "HH:MM:SS"
     if (step < 60000) {
       return pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds());
     }
 
-    // Step >= 1m → "HH:MM"
+    // Step >= 1m â†’ "HH:MM"
     return pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes());
   }
 
@@ -499,10 +582,10 @@
       if (tInfo.step >= 86400000 || isNewDay) {
         label = V6OF.timeAxisDate(ts);
       } else if (tInfo.step >= 86400000) {
-        // Step >= 1 day → always show "DD Mon"
+        // Step >= 1 day â†’ always show "DD Mon"
         label = V6OF.timeAxisDate(ts);
       } else if (false) {
-        // Span covers multiple days → show "DD Mon HH:MM" on day boundaries
+        // Span covers multiple days â†’ show "DD Mon HH:MM" on day boundaries
         label = V6OF.timeAxisDate(ts) + ' ' + timeAxisLabel(ts, tInfo.step);
       } else if (isNewDay) {
         label = V6OF.timeAxisDate(ts);
@@ -581,7 +664,7 @@
     return true;
   }
 
-  // ─── Footprint imbalance detection ───
+  // â”€â”€â”€ Footprint imbalance detection â”€â”€â”€
   function imbalanceRatio(buyVol, sellVol, settings) {
     var ratio = Number(settings.imbalanceRatio) || 3.0;
     if (ratio <= 0) ratio = 3.0;
@@ -598,7 +681,7 @@
     if (stack <= 0) return 0;
     var count = 0;
     if (buyVol > sellVol * ratio) {
-      // Bid imbalance — count consecutive bid imbalances going UP
+      // Bid imbalance â€” count consecutive bid imbalances going UP
       for (var i = idx - 1; i >= 0 && count < stack; i--) {
         var lv = levels[i];
         var bv = Number(lv.buyVol || 0), sv = Number(lv.sellVol || 0);
@@ -606,7 +689,7 @@
         else break;
       }
     } else if (sellVol > buyVol * ratio) {
-      // Ask imbalance — count consecutive ask imbalances going DOWN
+      // Ask imbalance â€” count consecutive ask imbalances going DOWN
       for (var i = idx + 1; i < levels.length && count < stack; i++) {
         var la = levels[i];
         var bva = Number(la.buyVol || 0), sva = Number(la.sellVol || 0);
@@ -617,10 +700,10 @@
     return count;
   }
 
-  // ── Adaptive Footprint Renderer ─────────────────────────────────────────────
+  // â”€â”€ Adaptive Footprint Renderer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // 3 modes selon le zoom : small (candle+delta), compact (heatmap sans texte),
   // full (bid/ask + POC + imbalance).
-  // Ne force jamais le chart — s'adapte a la place disponible.
+  // Ne force jamais le chart â€” s'adapte a la place disponible.
 
   var FP_MODE_SMALL   = 0;
   var FP_MODE_COMPACT = 1;
@@ -704,7 +787,7 @@
       var candleCol = candle.close >= candle.open ? hexToRgba(upHex, 0.92) : hexToRgba(downHex, 0.92);
       var delta = Number(candle.delta || 0);
 
-      // ── MODE SMALL : candle + delta badge ──
+      // â”€â”€ MODE SMALL : candle + delta badge â”€â”€
       if (mode === FP_MODE_SMALL) {
         // Wick
         ctx.strokeStyle = candleCol;
@@ -730,11 +813,11 @@
         continue;
       }
 
-      // ── Background column (compact + full) ──
+      // â”€â”€ Background column (compact + full) â”€â”€
       ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
       ctx.fillRect(x, plot.top, colW, plot.height);
 
-      // ── OHLC body + wick ──
+      // â”€â”€ OHLC body + wick â”€â”€
       ctx.strokeStyle = candleCol;
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -746,7 +829,7 @@
       ctx.lineTo(xCenter + bodyWidth * 0.4, yClose);
       ctx.stroke();
 
-      // ── Levels (compact or full) ──
+      // â”€â”€ Levels (compact or full) â”€â”€
       var levels = Array.isArray(candle.levels) ? candle.levels : [];
       // Group levels visually if needed
       var grouped = [];
@@ -849,7 +932,7 @@
         }
       });
 
-      // ── Bottom summary bar ──
+      // â”€â”€ Bottom summary bar â”€â”€
       var GUTTER_BOTTOM = 20;
       var summaryY = plot.top + plot.height + 1;
       var summaryH = Math.min(18, GUTTER_BOTTOM - 3);
@@ -919,12 +1002,27 @@
       var yOpen = vp.priceToY(c.open);
       var yClose = vp.priceToY(c.close);
       if (c.synthetic) {
-        ctx.strokeStyle = 'rgba(148, 163, 184, 0.16)';
+        var synthX = Math.max(plot.left, x1 + 1);
+        var synthW = Math.max(2, Math.min(plot.left + plot.width, x2 - 1) - synthX);
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.08)';
+        ctx.fillRect(synthX, plot.top, synthW, plot.height);
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.32)';
         ctx.lineWidth = 1;
+        for (var sx = synthX - plot.height; sx < synthX + synthW; sx += 8) {
+          ctx.beginPath();
+          ctx.moveTo(sx, plot.top + plot.height);
+          ctx.lineTo(sx + plot.height, plot.top);
+          ctx.stroke();
+        }
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = 'rgba(226, 232, 240, 0.7)';
         ctx.beginPath();
-        ctx.moveTo(xc - Math.max(2, bodyW * 0.35), yClose);
-        ctx.lineTo(xc + Math.max(2, bodyW * 0.35), yClose);
+        ctx.moveTo(synthX, yClose);
+        ctx.lineTo(synthX + synthW, yClose);
         ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(226, 232, 240, 0.82)';
+        ctx.fillRect(xc - 1, yClose - 1, 2, 2);
         continue;
       }
       ctx.strokeStyle = hexToRgba(col, 0.96);
@@ -1132,13 +1230,16 @@
     ];
     if (Number.isFinite(candle.delta)) {
       var d = Number(candle.delta);
-      lines.push('Δ ' + (d >= 0 ? '+' : '') + d.toFixed(1));
+      lines.push('Î” ' + (d >= 0 ? '+' : '') + d.toFixed(1));
     }
     if (candle.priceOnly) {
       lines.push('Price-only REST');
     }
+    if (candle.synthetic) {
+      lines.push('Synthetic gap-fill');
+    }
     var lh = 15;
-    var pw = candle.priceOnly ? 174 : 156, ph = 4 + lines.length * lh + 6;
+    var pw = (candle.priceOnly || candle.synthetic) ? 174 : 156, ph = 4 + lines.length * lh + 6;
     var px = x + 14;
     var py = y - ph / 2;
     // Keep tooltip inside the plot bounds
@@ -1160,8 +1261,8 @@
     ctx.restore();
   }
 
-  function drawCrosshair(ctx, vp, plot, candles) {
-    var cross = V6OF.chartCrosshair;
+  function drawCrosshair(ctx, vp, plot, candles, ref) {
+    var cross = V6OF.getChartCrosshair ? V6OF.getChartCrosshair(ref) : V6OF._fallbackChartCrosshair;
     if (!cross || !cross.visible || !cross.enabled) return;
     var x = cross.x;
     var y = cross.y;
@@ -1184,7 +1285,7 @@
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
     
-    // Vertical line (snapped to candle center — always drawn)
+    // Vertical line (snapped to candle center â€” always drawn)
     ctx.beginPath();
     ctx.moveTo(snappedX, plot.top);
     ctx.lineTo(snappedX, plot.top + plot.height);
@@ -1211,9 +1312,9 @@
       ctx.setLineDash([]);
     }
 
-    // Time readout (bottom axis) — snapped to candle time
+    // Time readout (bottom axis) â€” snapped to candle time
     // Toujours afficher la date (DD Mon HH:MM:SS) pour savoir exactement
-    // quel jour on survole, même sur un viewport < 24h.
+    // quel jour on survole, mÃªme sur un viewport < 24h.
     var snappedTs = vp.xToTime(snappedX);
     var timeText = V6OF.timeAxisDate(snappedTs) + ' ' + timeAxisLabel(snappedTs, 1000);
     var tw = 130;
@@ -1225,7 +1326,7 @@
     ctx.fillText(timeText, snappedX, plot.top + plot.height + 15);
     ctx.restore();
 
-    // Tooltip disabled — user doesn't want the OHLC rectangle
+    // Tooltip disabled â€” user doesn't want the OHLC rectangle
     // if (cross.hoveringSource === 'chart') {
     //   drawCrosshairTooltip(ctx, snappedX, y, vp, plot, snappedCandle);
     // }
@@ -1313,18 +1414,81 @@
     if (state && state.isStale) {
       ctx.fillStyle = 'rgba(239, 68, 68, 0.85)';
       ctx.font = 'bold 12px JetBrains Mono, Consolas, monospace';
-      ctx.fillText('⚠ STALE — no data received', cx, cy + 130);
+      ctx.fillText('âš  STALE â€” no data received', cx, cy + 130);
     }
     ctx.textAlign = 'left';
   }
 
-  function drawWaiting(ctx, state) {
-    ctx.fillStyle = 'rgba(148, 163, 184, 0.55)';
-    ctx.font = '13px Inter, system-ui, sans-serif';
-    ctx.fillText('Not available', 18, 32);
+  function hasMarketPermission(state) {
+    if (!state) return true;
+    if (state.permissionDenied === true || state.marketPermission === 'denied') return false;
+    var p = state.permissions || {};
+    if (p.marketData === false || p.orderflow === false || p.chart === false) return false;
+    return true;
   }
 
-  function drawLive(ctx, setup, state) {
+  function emptyChartCause(state, bounds, haveData) {
+    state = state || {};
+    var source = String(state.source || '').toLowerCase();
+    var freshness = String(state.dataFreshness || '').toLowerCase();
+    var transport = String(state.transportStatus || '').toLowerCase();
+    var chartCandles = Array.isArray(state.chartCandles) ? state.chartCandles : [];
+    var footprintCandles = Array.isArray(state.footprintCandles) ? state.footprintCandles : [];
+    var heatmapFrames = Array.isArray(state.heatmapFrames) ? state.heatmapFrames : [];
+
+    if (!hasMarketPermission(state)) {
+      return {
+        title: 'No chart permissions',
+        detail: 'Market data access is disabled for this workspace or account.'
+      };
+    }
+    if (!source || source === 'unavailable' || source === 'none' || transport === 'disabled') {
+      return {
+        title: 'No market source',
+        detail: 'Select or reconnect a data source before rendering candles.'
+      };
+    }
+    if (state.isStale || freshness === 'stale') {
+      return {
+        title: 'Market data stale',
+        detail: 'The last valid update is too old; waiting for a fresh tick or fallback.'
+      };
+    }
+    if (haveData && bounds && bounds.timeMax == null && bounds.priceMax == null) {
+      return {
+        title: 'No data in visible range',
+        detail: 'The current timeframe or viewport is outside the loaded market data.'
+      };
+    }
+    if (!chartCandles.length && !footprintCandles.length) {
+      return {
+        title: 'No backfill loaded',
+        detail: 'Historical candles are empty for ' + (state.symbol || 'symbol') + ' ' + (state.timeframe || 'timeframe') + '.'
+      };
+    }
+    if (!chartCandles.length && heatmapFrames.length) {
+      return {
+        title: 'No candle backfill',
+        detail: 'Depth frames exist, but candle history is missing for this timeframe.'
+      };
+    }
+    return {
+      title: 'Waiting for chart data',
+      detail: 'The chart has a source, but no renderable candles are available yet.'
+    };
+  }
+
+  function drawWaiting(ctx, state, bounds, haveData) {
+    var cause = emptyChartCause(state, bounds, haveData);
+    ctx.fillStyle = 'rgba(226, 232, 240, 0.82)';
+    ctx.font = 'bold 13px Inter, system-ui, sans-serif';
+    ctx.fillText(cause.title, 18, 32);
+    ctx.fillStyle = 'rgba(148, 163, 184, 0.72)';
+    ctx.font = '12px Inter, system-ui, sans-serif';
+    ctx.fillText(cause.detail, 18, 52);
+  }
+
+  function drawLive(ctx, setup, state, canvas) {
     var width = setup.width;
     var height = setup.height;
     var settings = (state && state.settings) || {};
@@ -1353,7 +1517,7 @@
         candleStartTs(baseCandles[baseCandles.length - 2])) : 60000);
     var haveData = baseCandles.length || (showHeatmap && heatmapFrames.length);
     if (!haveData || (bounds.timeMax == null && bounds.priceMax == null)) {
-      drawWaiting(ctx, state);
+      drawWaiting(ctx, state, bounds, haveData);
       return;
     }
 
@@ -1392,7 +1556,7 @@
     }
     ctx.restore();
 
-    // ── Indicator overlays (EMA, SMA, Bollinger, etc.) ──
+    // â”€â”€ Indicator overlays (EMA, SMA, Bollinger, etc.) â”€â”€
     if (V6OF.Indicators && V6OF.Indicators.drawAll) {
       ctx.save();
       ctx.beginPath();
@@ -1409,12 +1573,12 @@
     var mid = book && Number.isFinite(book.mid) ? book.mid : (lastFrame ? lastFrame.mid : NaN);
     var bestBid = book && Number.isFinite(book.bestBid) ? book.bestBid : (lastFrame ? lastFrame.bestBid : NaN);
     var bestAsk = book && Number.isFinite(book.bestAsk) ? book.bestAsk : (lastFrame ? lastFrame.bestAsk : NaN);
-    // MID removed — keep chart clean
+    // MID removed â€” keep chart clean
     // drawPriceLineVp(ctx, vp, plot, Number(mid), 'rgba(56, 211, 238, 0.92)', 'MID', false);
-    // BID / ASK removed — keep chart clean
+    // BID / ASK removed â€” keep chart clean
     // drawPriceLineVp(ctx, vp, plot, Number(bestBid), 'rgba(61, 220, 151, 0.86)', 'BID', true);
     // drawPriceLineVp(ctx, vp, plot, Number(bestAsk), 'rgba(255, 95, 115, 0.86)', 'ASK', true);
-    // Last price marker (current price) — dashed, anchored to price axis
+    // Last price marker (current price) â€” dashed, anchored to price axis
     if (settings.showLastPrice !== false) {
       var lastPrice = 0;
       var trades = state.trades || [];
@@ -1479,14 +1643,17 @@
       }
     }
     if (false && showFootprint && lastCandle) drawPriceLineVp(ctx, vp, plot, Number(lastCandle.poc), 'rgba(248, 195, 93, 0.94)', 'POC', true);
-    // VWAP removed — keep chart clean
+    // VWAP removed â€” keep chart clean
     // if (settings.showVwap !== false && state.vwap && Number.isFinite(state.vwap.value)) {
     //   drawPriceLineVp(ctx, vp, plot, Number(state.vwap.value),
     //     state.vwap.isWarm ? 'rgba(245, 158, 11, 0.92)' : 'rgba(245, 158, 11, 0.6)', 'VWAP', true);
     // }
 
     // Selection is shown by coloring the selected candle yellow in drawCandlesVp.
-    drawCrosshair(ctx, vp, plot, baseCandles);
+    drawCrosshair(ctx, vp, plot, baseCandles, canvas);
+    if (typeof V6OF.updateViewportToolbarState === 'function') {
+      V6OF.updateViewportToolbarState();
+    }
     V6OF._followLiveBtn = null;
   }
 
@@ -1498,7 +1665,7 @@
     var width = setup.width;
     var height = setup.height;
     // Live-only: always render the live chart engine. No mock path.
-    drawLive(ctx, setup, state || {});
+    drawLive(ctx, setup, state || {}, canvas);
     recordPerf('chart', perfStart);
   }
 

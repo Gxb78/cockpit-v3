@@ -53,6 +53,12 @@
       '" aria-label="' + title + '">' + ICONS[name] + '</button>';
   }
 
+  function viewTool(name, label, title) {
+    return '<button type="button" class="v6-tool v6-view-tool" data-v6-tool="' + name + '" title="' + title +
+      '" aria-label="' + title + '"><span class="v6-view-tool-icon">' + ICONS[name === 'detach' ? 'follow' : name] +
+      '</span><span class="v6-view-tool-label">' + label + '</span><span class="v6-view-tool-state" aria-hidden="true"></span></button>';
+  }
+
   function indicatorButton(action, icon, title) {
     return '<button type="button" class="v6-indicator-action" data-v6-indicator-action="' + action +
       '" title="' + title + '" aria-label="' + title + '">' + ICONS[icon] + '</button>';
@@ -122,9 +128,10 @@
         tool('cursor', 'Cursor'),
         tool('crosshair', 'Crosshair'),
         '<div class="v6-tool-sep"></div>',
-        tool('fit', 'Fit view'),
-        tool('reset', 'Reset view'),
-        tool('follow', 'Follow live'),
+        viewTool('follow', 'Follow', 'Follow live'),
+        viewTool('detach', 'Detach', 'Detach from live edge'),
+        viewTool('fit', 'Fit', 'Fit price and time to loaded data'),
+        viewTool('reset', 'Reset View', 'Reset chart view'),
         /* Hiding drawing placeholders until implementation
         '<div class="v6-tool-sep"></div>',
         tool('horiz', 'Horizontal Line (Drawing Placeholder)'),
@@ -135,12 +142,24 @@
     ].join('');
   }
 
+  function priceZoomControlsHtml() {
+    return [
+      '<div class="v6-price-zoom-controls" data-v6-price-zoom-controls aria-label="Price zoom controls">',
+        '<button type="button" class="v6-price-zoom-btn" data-v6-price-zoom="in" title="Zoom price in" aria-label="Zoom price in">Price +</button>',
+        '<button type="button" class="v6-price-zoom-btn" data-v6-price-zoom="out" title="Zoom price out" aria-label="Zoom price out">Price -</button>',
+        '<button type="button" class="v6-price-zoom-btn" data-v6-price-zoom="auto" title="Auto fit price" aria-label="Auto fit price">Auto Y</button>',
+      '</div>'
+    ].join('');
+  }
+
   function mainAreaHtml(schema) {
     return [
       '<div class="v6-main-area">',
         leftToolbarHtml(),
         '<div class="v6-center-col">',
-          '<div class="v6-center-chart" data-v6-center-chart></div>',
+          '<div class="v6-center-chart" data-v6-center-chart>',
+            priceZoomControlsHtml(),
+          '</div>',
           '<div class="v6-replay-strip" data-v6-replay-strip></div>',
           '<div class="v6-resize-v" title="Drag to resize indicator height"></div>',
           '<div class="v6-cvd-strip" data-v6-cvd-strip>',

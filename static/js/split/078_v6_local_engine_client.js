@@ -25,26 +25,43 @@
     return proto + '//' + host + ':8765/stream';
   }
 
-  function resolveMarketUrl(path, transport) {
-    var wsUrl = configuredMarketWsUrl();
-    var suffix = path || '';
-    var base;
+  // Normalize an origin URL for a given transport ('ws' or 'http'), stripping the
+  // '/stream' suffix and any query/hash. Shared by both transports.
+  function normalizeOrigin(rawUrl, transport) {
     try {
-      var parsed = new URL(wsUrl, window.location && window.location.href ? window.location.href : undefined);
+      var parsed = new URL(rawUrl, window.location && window.location.href ? window.location.href : undefined);
       var secure = parsed.protocol === 'wss:' || parsed.protocol === 'https:';
       parsed.protocol = transport === 'ws' ? (secure ? 'wss:' : 'ws:') : (secure ? 'https:' : 'http:');
       parsed.pathname = parsed.pathname.replace(/\/stream\/?$/, '') || '/';
       parsed.search = '';
       parsed.hash = '';
-      base = parsed.toString().replace(/\/$/, '');
+      return parsed.toString().replace(/\/$/, '');
     } catch (err) {
-      base = wsUrl.replace(/^ws(s?):/, 'http$1:').replace(/\/stream\/?$/, '');
+      if (transport === 'ws') return rawUrl.replace(/\/stream\/?$/, '');
+      return rawUrl.replace(/^ws(s?):/, 'http$1:').replace(/\/stream\/?$/, '');
     }
+  }
+
+  // HTTP origin for the market engine REST API (footprint history, /replay).
+  // First-class config value: read COCKPIT_CONFIG.marketHttpUrl when present;
+  // otherwise fall back to deriving it from the WS origin (legacy behavior).
+  function configuredMarketHttpUrl() {
+    var cfg = window.COCKPIT_CONFIG || {};
+    if (cfg.marketHttpUrl) return String(cfg.marketHttpUrl).replace(/\/$/, '');
+    return normalizeOrigin(configuredMarketWsUrl(), 'http');
+  }
+
+  function resolveMarketUrl(path, transport) {
+    var suffix = path || '';
+    var base = transport === 'ws'
+      ? normalizeOrigin(configuredMarketWsUrl(), 'ws')
+      : configuredMarketHttpUrl();
     return base + (suffix.charAt(0) === '/' ? suffix : '/' + suffix);
   }
 
   V6OF.register('Transport', 'resolveMarketUrl', resolveMarketUrl, 'resolveMarketUrl');
   V6OF.register('Transport', 'marketWsUrl', configuredMarketWsUrl, 'marketWsUrl');
+  V6OF.register('Transport', 'marketHttpUrl', configuredMarketHttpUrl, 'marketHttpUrl');
 
   var DEFAULT_URL = configuredMarketWsUrl();
   var DEFAULT_MAX_TRADE_BUFFER = 5000;
@@ -263,7 +280,10 @@
       if (store) {
         var patch = { transportStatus: next };
         if (next === 'connected') {
-          patch.dataFreshness = 'live';
+          var connectedState = store.getState ? store.getState() : {};
+          if (connectedState.source !== 'rest-fallback' && connectedState.dataFreshness !== 'rest-fallback') {
+            patch.dataFreshness = 'warming';
+          }
         } else if (next === 'disconnected' || next === 'error') {
           var s = store.getState();
           patch.dataFreshness = (s.dataFreshness === 'rest-fallback') ? 'rest-fallback' : 'offline';
@@ -387,6 +407,7 @@
           }
           if (newTrades.length || newDeltaBuckets.length || nextVwap || nextOrderBook || nextHeatmapFrames.length || nextFootprintCandles.length) {
             patch.source = 'live';
+            patch.dataFreshness = 'live';
             patch.lastMessageAt = stats.lastMessageTs || Date.now();
             patch.isStale = false;
             // Always normalize the symbol before writing it to the store.
@@ -864,6 +885,7 @@
             var patch = {
               _candlesByInterval: byIv,
               source: 'live',
+              dataFreshness: 'live',
               isStale: false,
               lastMessageAt: Date.now(),
               symbol: (function (s) { return s === 'BTC' ? 'BTCUSDT' : s; })(msg.payload.symbol || history[history.length - 1].symbol || prev.symbol)
@@ -1059,8 +1081,8 @@
           byIv[interval] = candles;
           var patch = {
             _candlesByInterval: byIv,
-            source: 'live',
-            dataFreshness: (status === 'connected') ? 'live' : 'rest-fallback',
+            source: 'rest-fallback',
+            dataFreshness: 'rest-fallback',
             isStale: false,
             lastMessageAt: Date.now()
           };

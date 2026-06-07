@@ -198,19 +198,27 @@
     };
 
     // ---- Fit / reset / follow ----
-    vp.fitToData = function () {
+    vp.fitTimeToData = function () {
       if (vp.dataTimeMax > vp.dataTimeMin) {
         var span = clamp(vp.dataTimeMax - vp.dataTimeMin, MIN_TIME_SPAN_MS, MAX_TIME_SPAN_MS);
         var pad = span * LIVE_EDGE_PAD_RATIO;
         vp.timeEnd = vp.dataTimeMax + pad;
         vp.timeStart = vp.timeEnd - span;
       }
+    };
+
+    vp.fitPriceToData = function () {
       if (vp.dataPriceMax > vp.dataPriceMin) {
         vp.priceMin = vp.dataPriceMin;
         vp.priceMax = vp.dataPriceMax;
       }
-      vp.followLive = true;
       vp.autoFit = true;
+    };
+
+    vp.fitToData = function () {
+      vp.fitTimeToData();
+      vp.fitPriceToData();
+      vp.followLive = true;
     };
 
     // Reset viewport initialization so the next syncToData() re-computes
@@ -238,6 +246,10 @@
         vp.timeEnd = vp.dataTimeMax + pad;
         vp.timeStart = vp.timeEnd - keep;
       }
+    };
+
+    vp.detachLive = function () {
+      vp.followLive = false;
     };
 
     // ---- Pan (pixels) ----

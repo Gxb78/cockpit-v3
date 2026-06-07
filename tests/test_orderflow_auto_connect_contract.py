@@ -74,6 +74,30 @@ class OrderflowAutoConnectContractTests(unittest.TestCase):
             with self.subTest(rel_path=rel_path):
                 self.assertNotIn("V6OF.store", self._read(rel_path))
 
+    def test_orderflow_crosshair_is_scoped_by_root(self):
+        store_src = self._read("static/js/split/071_v6_orderflow_store.js")
+        layout_src = self._read("static/js/split/073_v6_orderflow_layout.js")
+        interactions_src = self._read("static/js/split/084_v6_chart_interactions.js")
+        chart_src = self._read("static/js/split/077_v6_canvas_chart.js")
+        cvd_src = self._read("static/js/split/086_v6_cvd_panel_canvas.js")
+
+        self.assertIn("getChartCrosshair", store_src)
+        self.assertIn("clearChartCrosshair", store_src)
+        self.assertIn("WeakMap", store_src)
+        self.assertIn("V6OF.clearChartCrosshair(root)", layout_src)
+        self.assertIn("ensureCrosshair(canvas)", interactions_src)
+        self.assertIn("V6OF.getChartCrosshair(ref)", chart_src)
+        self.assertIn("V6OF.getChartCrosshair(canvas)", cvd_src)
+
+        for rel_path in [
+            "static/js/split/071_v6_orderflow_store.js",
+            "static/js/split/077_v6_canvas_chart.js",
+            "static/js/split/084_v6_chart_interactions.js",
+            "static/js/split/086_v6_cvd_panel_canvas.js",
+        ]:
+            with self.subTest(rel_path=rel_path):
+                self.assertNotIn("V6OF.chartCrosshair", self._read(rel_path))
+
     def test_orderflow_uses_domain_registry_and_explicit_page_bootstrap(self):
         contract_src = self._read("static/js/split/070_v6_orderflow_contract.js")
         boot_src = self._read("static/js/split/008_boot.js")

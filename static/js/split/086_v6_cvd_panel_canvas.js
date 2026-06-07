@@ -655,7 +655,7 @@
     var lastPoint = drawCvdCandles(ctx, visible, snap.interval || 60000, tx, ty, plot) || visible[visible.length - 1];
     ctx.restore();
 
-    var cross = V6OF.chartCrosshair;
+    var cross = V6OF.getChartCrosshair ? V6OF.getChartCrosshair(canvas) : V6OF._fallbackChartCrosshair;
     var value = Number.isFinite(data.tip) ? data.tip : visible[visible.length - 1].v;
     if (cross && cross.visible && Number.isFinite(cross.time)) {
       var hval = findNearestValue(points, cross.time);
@@ -713,7 +713,7 @@
     var plotW = Math.max(1, W - LABEL_W - VAL_W);
     var paneH = Math.max(12, (H - GAP * (rows + 1)) / rows);
 
-    var cross = V6OF.chartCrosshair;
+    var cross = V6OF.getChartCrosshair ? V6OF.getChartCrosshair(canvas) : V6OF._fallbackChartCrosshair;
     var hoveredTime = cross && cross.visible ? cross.time : null;
 
     // Right scale background

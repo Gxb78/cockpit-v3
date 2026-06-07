@@ -556,8 +556,8 @@ body[data-current-page="orderflow"] .v6-rtabs {
 }
 
 body[data-current-page="orderflow"] .v6-left-toolbar {
-  flex-basis: 36px;
-  width: 36px;
+  flex-basis: 88px;
+  width: 88px;
   padding: 5px 3px;
 }
 
@@ -566,6 +566,10 @@ body[data-current-page="orderflow"] .v6-left-toolbar .v6-tool {
   height: 28px;
   border-radius: 4px;
   box-shadow: none;
+}
+
+body[data-current-page="orderflow"] .v6-left-toolbar .v6-view-tool {
+  width: 80px;
 }
 
 body[data-current-page="orderflow"] .v6-left-toolbar .v6-tool.is-active {
@@ -943,10 +947,17 @@ body[data-current-page="orderflow"] .v6-btn:hover {
 
   body[data-current-page="orderflow"] .v6-left-toolbar {
     width: 100%;
-    flex: 0 0 34px;
+    flex: 0 0 auto;
     flex-direction: row;
+    flex-wrap: wrap;
+    align-content: flex-start;
     border-right: 0;
     border-bottom: 1px solid var(--v6-hairline);
+  }
+
+  body[data-current-page="orderflow"] .v6-left-toolbar .v6-view-tool {
+    flex: 0 0 78px;
+    width: 78px;
   }
 
   body[data-current-page="orderflow"] .v6-right-col {
