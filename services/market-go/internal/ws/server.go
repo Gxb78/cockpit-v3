@@ -20,8 +20,6 @@ import (
 	"cockpit-v6-market-go/internal/calc"
 	"cockpit-v6-market-go/internal/config"
 	"cockpit-v6-market-go/internal/engine"
-	"cockpit-v6-market-go/internal/exchange/binance"
-	"cockpit-v6-market-go/internal/exchange/hyperliquid"
 	"cockpit-v6-market-go/internal/logx"
 	"cockpit-v6-market-go/internal/marketdata"
 	"cockpit-v6-market-go/internal/storage"
@@ -47,13 +45,11 @@ type Server struct {
 
 	sqlDB *storage.DB // SQLite for trades + footprints
 
-	cvd        *cvdTracker     // running CVD-per-symbol + cvd_init history/broadcast
-	footprints *footprintStore // footprint persist / rebuild / aggregate
+	cvd        *cvdTracker      // running CVD-per-symbol + cvd_init history/broadcast
+	footprints *footprintStore  // footprint persist / rebuild / aggregate
+	exchanges  *exchangeManager // live exchange lifecycle + switching
 
-	// Exchange switching
-	exchangeCancel context.CancelFunc
-	exchangeMu     sync.Mutex
-	rootCtx        context.Context // parent context for exchange switching
+	rootCtx context.Context // parent context for exchange switching
 }
 
 func NewServer(cfg config.Config, marketEngine *engine.Engine, logger *logx.Logger) *Server {
@@ -86,9 +82,10 @@ func NewServer(cfg config.Config, marketEngine *engine.Engine, logger *logx.Logg
 	s.cvd = newCvdTracker(s.hub, s.log,
 		func() []marketdata.Trade { return s.trades.Snapshot() },
 		s.cachedCandleHistory1m)
-	s.trades = newTradeStore(cfg, NewTradeCache(dataDir, cfg.TradeRetainDays), s.sqlDB, s.log, s.cvd.broadcastInit)
+	s.trades = newTradeStore(&s.cfg, NewTradeCache(dataDir, cfg.TradeRetainDays), s.sqlDB, s.log, s.cvd.broadcastInit)
 	s.footprints = newFootprintStore(s.sqlDB, s.cvd, s.engine, cfg, s.log)
 	s.klines = newKlineBackfiller(cfg, NewKlineCache(dataDir), s.engine, s.log, s.publishHistory, s.cvd.broadcastInit)
+	s.exchanges = newExchangeManager(&s.cfg, s.engine, s.hub, s.log, s.trades, s.klines, s.replayEmit, s.resetHistory)
 
 	s.replayer = newReplayController(s.engine, s.hub, s.replayEmit)
 	return s
@@ -225,7 +222,7 @@ func (s *Server) Run(ctx context.Context) error {
 		if s.cfg.Exchange == config.ExchangeMock || strings.TrimSpace(s.cfg.Exchange) == "" {
 			s.cfg.Exchange = config.ExchangeHyperliquid
 		}
-		s.startExchange(ctx)
+		s.exchanges.Start(ctx)
 	}
 
 	// Periodic cache cleanup (every hour)
@@ -281,232 +278,6 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 }
 
-func (s *Server) startHyperliquid(ctx context.Context) {
-	symbols := s.cfg.Symbols
-	if len(symbols) == 0 {
-		symbols = []string{"BTC"}
-	}
-	for _, symbol := range symbols {
-		symbol := symbol
-		if s.cfg.BackfillEnabled {
-			go s.klines.RunHyperliquid(ctx, symbol)
-		}
-		client := hyperliquid.NewWithEvents(s.cfg.HyperliquidWSURL, s.log, hyperliquid.Events{
-			OnConnected: func() {
-				s.engine.SetConnected(true)
-				s.log.Infof("hyperliquid connected symbol=%s", symbol)
-			},
-			OnSubscribed: func(subscribedSymbol string) {
-				s.log.Infof("hyperliquid subscribed trades symbol=%s", subscribedSymbol)
-			},
-			OnMessage: func() {
-				s.engine.RecordMessageIn()
-			},
-			OnTrade: func(tradeSymbol string) {
-				count := s.engine.Metrics().TotalTradesOut + 1
-				if count == 1 || count%100 == 0 {
-					s.log.Infof("hyperliquid trade received symbol=%s totalTradesOut=%d", tradeSymbol, count)
-				}
-			},
-			OnBook: func(bookSymbol string) {
-				count := s.engine.Metrics().TotalOrderBookOut + 1
-				if count == 1 || count%100 == 0 {
-					s.log.Infof("hyperliquid l2Book received symbol=%s totalOrderBookOut=%d", bookSymbol, count)
-				}
-			},
-			OnDisconnected: func(err error) {
-				s.engine.SetConnected(false)
-				if err != nil {
-					s.engine.RecordError(err.Error())
-				}
-				s.log.Errorf("hyperliquid disconnected symbol=%s err=%v", symbol, err)
-			},
-			OnReconnect: func(attempt int, delay time.Duration, err error) {
-				count := s.engine.RecordReconnect()
-				s.log.Errorf("hyperliquid reconnect scheduled symbol=%s attempt=%d reconnectCount=%d delay=%s err=%v", symbol, attempt, count, delay, err)
-			},
-			OnError: func(err error) {
-				if err != nil {
-					s.engine.RecordError(err.Error())
-				}
-			},
-		})
-		go func() {
-			var bookHandler func(marketdata.OrderBookSnapshot)
-			if s.cfg.BookEnabled || s.cfg.HeatmapEnabled {
-				bookHandler = s.throttledBookHandler(ctx, symbol)
-			}
-			err := client.ConnectMarket(ctx, symbol, func(trade marketdata.Trade) {
-				s.trades.Record(trade)
-				if raw, err := s.engine.Trade(trade).MarshalJSONBytes(); err == nil {
-					s.hub.Broadcast(raw)
-				} else {
-					s.log.Errorf("marshal trade envelope failed symbol=%s err=%v", symbol, err)
-				}
-				for _, envelope := range s.engine.DeltaBuckets(trade) {
-					if raw, err := envelope.MarshalJSONBytes(); err == nil {
-						s.hub.Broadcast(raw)
-					} else {
-						s.log.Errorf("marshal delta bucket envelope failed symbol=%s err=%v", symbol, err)
-					}
-				}
-				if envelope, ok := s.engine.VWAP(trade); ok {
-					if raw, err := envelope.MarshalJSONBytes(); err == nil {
-						s.hub.Broadcast(raw)
-					} else {
-						s.log.Errorf("marshal vwap envelope failed symbol=%s err=%v", symbol, err)
-					}
-				}
-				for _, envelope := range s.engine.FootprintCandles(trade) {
-					if raw, err := envelope.MarshalJSONBytes(); err == nil {
-						s.hub.Broadcast(raw)
-					} else {
-						s.log.Errorf("marshal footprint candle envelope failed symbol=%s err=%v", symbol, err)
-					}
-				}
-			}, bookHandler, s.cfg.BookDepth)
-			if err != nil && ctx.Err() == nil {
-				s.log.Errorf("hyperliquid adapter stopped symbol=%s err=%v", symbol, err)
-			}
-		}()
-	}
-}
-
-// startBinance connects the Binance adapter (live aggTrade + depth) and pushes
-// trades through the SAME engine pipeline as Hyperliquid, plus a REST backfill.
-func (s *Server) startBinance(ctx context.Context) {
-	symbols := s.cfg.Symbols
-	if len(symbols) == 0 {
-		symbols = []string{"BTCUSDT"}
-	}
-	for _, symbol := range symbols {
-		symbol := symbol
-		if s.cfg.BackfillEnabled {
-			go s.klines.RunBinance(ctx, symbol)
-		}
-		client := binance.NewClient(binance.ClientConfig{
-			Market:        binance.ParseMarket(s.cfg.BinanceMarket),
-			WSURL:         s.cfg.BinanceWSURL,
-			RESTURL:       s.cfg.BinanceRESTURL,
-			SnapshotLimit: s.cfg.BinanceSnapshotLimit,
-		}, s.log, binance.Events{
-			OnConnected:  func() { s.engine.SetConnected(true); s.log.Infof("binance connected symbol=%s", symbol) },
-			OnSubscribed: func(sym string) { s.log.Infof("binance subscribed symbol=%s", sym) },
-			OnMessage:    func() { s.engine.RecordMessageIn() },
-			OnTrade: func(sym string) {
-				count := s.engine.Metrics().TotalTradesOut + 1
-				if count == 1 || count%100 == 0 {
-					s.log.Infof("binance trade received symbol=%s totalTradesOut=%d", sym, count)
-				}
-			},
-			OnBook: func(sym string) {
-				count := s.engine.Metrics().TotalOrderBookOut + 1
-				if count == 1 || count%100 == 0 {
-					s.log.Infof("binance depth received symbol=%s totalOrderBookOut=%d", sym, count)
-				}
-			},
-			OnDisconnected: func(err error) {
-				s.engine.SetConnected(false)
-				if err != nil {
-					s.engine.RecordError(err.Error())
-				}
-				s.log.Errorf("binance disconnected symbol=%s err=%v", symbol, err)
-			},
-			OnReconnect: func(attempt int, delay time.Duration, err error) {
-				count := s.engine.RecordReconnect()
-				s.log.Errorf("binance reconnect symbol=%s attempt=%d reconnectCount=%d delay=%s err=%v", symbol, attempt, count, delay, err)
-			},
-			OnError: func(err error) {
-				if err != nil {
-					s.engine.RecordError(err.Error())
-				}
-			},
-		})
-		go func() {
-			var bookHandler func(marketdata.OrderBookSnapshot)
-			if s.cfg.BookEnabled || s.cfg.HeatmapEnabled {
-				bookHandler = s.throttledBookHandler(ctx, symbol)
-			}
-			err := client.ConnectMarket(ctx, symbol, s.replayEmit, bookHandler, s.cfg.BookDepth)
-			if err != nil && ctx.Err() == nil {
-				s.log.Errorf("binance adapter stopped symbol=%s err=%v", symbol, err)
-			}
-		}()
-	}
-}
-
-// startExchange launches the adapter for the current cfg.Exchange and runs
-// backfills. It uses a new derived context stored in exchangeCancel so that
-// subsequent switchExchange calls can cancel it cleanly.
-func (s *Server) startExchange(parent context.Context) {
-	s.exchangeMu.Lock()
-	if s.exchangeCancel != nil {
-		s.exchangeCancel()
-	}
-	ctx, cancel := context.WithCancel(parent)
-	s.exchangeCancel = cancel
-	s.exchangeMu.Unlock()
-
-	// Load persisted trades from cache to restore CVD history
-	s.trades.LoadPersisted()
-
-	// Purge old trade cache files (async, fire and forget)
-	go s.trades.Purge()
-
-	switch s.cfg.Exchange {
-	case config.ExchangeHyperliquid:
-		go s.trades.Backfill(ctx)
-		s.startHyperliquid(ctx)
-	case config.ExchangeBinance:
-		go s.trades.Backfill(ctx)
-		s.startBinance(ctx)
-	default:
-		s.log.Errorf("unknown exchange: %s", s.cfg.Exchange)
-	}
-}
-
-// switchExchange stops the current exchange, clears all cached state, and
-// starts the new one. Called when a WS client sends "source_switch".
-func (s *Server) switchExchange(parent context.Context, exchangeName string) {
-	s.log.Infof("switching exchange: %s -> %s", s.cfg.Exchange, exchangeName)
-
-	// Cancel current exchange goroutines
-	s.exchangeMu.Lock()
-	if s.exchangeCancel != nil {
-		s.exchangeCancel()
-		s.exchangeCancel = nil
-	}
-	s.exchangeMu.Unlock()
-
-	// Clear all server state
-	s.trades.Reset()
-
-	s.historyMu.Lock()
-	s.historyRaw = nil
-	s.historyMu.Unlock()
-
-	// Update config
-	s.cfg.Exchange = exchangeName
-	if exchangeName == config.ExchangeHyperliquid {
-		s.cfg.Symbols = []string{"BTC"}
-	} else {
-		s.cfg.Symbols = []string{"BTCUSDT"}
-	}
-
-	// Reset engine calculators
-	s.engine.Reset()
-
-	// Broadcast reset to all connected clients so they clear their local state
-	if raw, err := json.Marshal(map[string]string{"type": "source_switched", "source": exchangeName}); err == nil {
-		s.hub.Broadcast(raw)
-	}
-
-	// Start the new exchange
-	s.startExchange(parent)
-
-	s.log.Infof("exchange switch complete: %s", exchangeName)
-}
-
 // cachedCandleHistory1m returns the candles from the cached 1m candle_history
 // envelope (used by cvdTracker for OHLCV-based CVD estimation), or nil.
 func (s *Server) cachedCandleHistory1m() []marketdata.Candle {
@@ -540,6 +311,14 @@ func (s *Server) publishHistory(raw []byte) {
 	s.hub.Broadcast(raw)
 }
 
+// resetHistory clears the cached candle_history envelopes. Injected into
+// exchangeManager so the stream history is dropped on an exchange switch.
+func (s *Server) resetHistory() {
+	s.historyMu.Lock()
+	s.historyRaw = nil
+	s.historyMu.Unlock()
+}
+
 // intervalMs converts a kline interval label (1m, 1h, 1d…) to milliseconds.
 func intervalMs(iv string) int64 {
 	if iv == "" {
@@ -562,105 +341,6 @@ func intervalMs(iv string) int64 {
 		return int64(n) * 604_800_000
 	default:
 		return int64(n) * 60_000
-	}
-}
-
-func (s *Server) throttledBookHandler(ctx context.Context, symbol string) func(marketdata.OrderBookSnapshot) {
-	emitMs := s.cfg.BookEmitMs
-	if emitMs < 0 {
-		emitMs = 250
-	}
-	interval := time.Duration(emitMs) * time.Millisecond
-	if interval <= 0 {
-		interval = time.Millisecond
-	}
-	heatmapEmitMs := s.cfg.HeatmapEmitMs
-	if heatmapEmitMs < 0 {
-		heatmapEmitMs = 500
-	}
-	heatmapInterval := time.Duration(heatmapEmitMs) * time.Millisecond
-	if heatmapInterval <= 0 {
-		heatmapInterval = time.Millisecond
-	}
-
-	var mu sync.Mutex
-	var latest marketdata.OrderBookSnapshot
-	var hasBookPending bool
-	var hasHeatmapPending bool
-
-	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				if !s.cfg.BookEnabled {
-					continue
-				}
-				mu.Lock()
-				if !hasBookPending {
-					mu.Unlock()
-					continue
-				}
-				snapshot := latest
-				hasBookPending = false
-				mu.Unlock()
-
-				envelope := s.engine.OrderBook(snapshot)
-				s.engine.RecordOrderBookOut(snapshot, envelope.TsLocal)
-				if raw, err := envelope.MarshalJSONBytes(); err == nil {
-					s.hub.Broadcast(raw)
-				} else {
-					s.log.Errorf("marshal order book envelope failed symbol=%s err=%v", symbol, err)
-				}
-			}
-		}
-	}()
-
-	go func() {
-		ticker := time.NewTicker(heatmapInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				if !s.cfg.HeatmapEnabled {
-					continue
-				}
-				mu.Lock()
-				if !hasHeatmapPending {
-					mu.Unlock()
-					continue
-				}
-				snapshot := latest
-				hasHeatmapPending = false
-				mu.Unlock()
-
-				envelope := s.engine.HeatmapFrame(snapshot)
-				frame, ok := envelope.Payload.(marketdata.HeatmapFrame)
-				if !ok {
-					s.log.Errorf("unexpected heatmap payload type symbol=%s", symbol)
-					continue
-				}
-				s.engine.RecordHeatmapFrameOut(frame, envelope.TsLocal)
-				if raw, err := envelope.MarshalJSONBytes(); err == nil {
-					s.hub.Broadcast(raw)
-				} else {
-					s.log.Errorf("marshal heatmap frame envelope failed symbol=%s err=%v", symbol, err)
-				}
-			}
-		}
-	}()
-
-	return func(snapshot marketdata.OrderBookSnapshot) {
-		mu.Lock()
-		latest = snapshot
-		hasBookPending = true
-		hasHeatmapPending = true
-		mu.Unlock()
 	}
 }
 
@@ -966,7 +646,7 @@ func (s *Server) handleClientMessage(client *wsClient, payload []byte) {
 	} else if msg.Type == "source_switch" && s.rootCtx != nil {
 		src := strings.ToLower(strings.TrimSpace(msg.Source))
 		if src == config.ExchangeHyperliquid || src == config.ExchangeBinance {
-			go s.switchExchange(s.rootCtx, src)
+			go s.exchanges.Switch(s.rootCtx, src)
 		} else {
 			s.log.Infof("unknown source in source_switch: %s", src)
 		}

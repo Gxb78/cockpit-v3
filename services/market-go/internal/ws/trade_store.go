@@ -30,13 +30,15 @@ type tradeStore struct {
 
 	cache *TradeCache
 	sqlDB *storage.DB
-	cfg   config.Config
-	log   *logx.Logger
+	// cfg is shared by pointer so a runtime exchange switch (which mutates
+	// Exchange/Symbols) is seen here without reconstructing the store.
+	cfg *config.Config
+	log *logx.Logger
 
 	onLoaded func()
 }
 
-func newTradeStore(cfg config.Config, cache *TradeCache, sqlDB *storage.DB, log *logx.Logger, onLoaded func()) *tradeStore {
+func newTradeStore(cfg *config.Config, cache *TradeCache, sqlDB *storage.DB, log *logx.Logger, onLoaded func()) *tradeStore {
 	return &tradeStore{cache: cache, sqlDB: sqlDB, cfg: cfg, log: log, onLoaded: onLoaded}
 }
 
