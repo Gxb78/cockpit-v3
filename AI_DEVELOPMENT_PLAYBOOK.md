@@ -1374,3 +1374,11 @@ if end_time is not None:
 - Test de non-regression: `services/market-go/internal/ws/cors_test.go` (loopback reflete, cross-origin rejete, spoof `localhost.attacker.com` rejete, no-Origin sans header, allowlist explicite, wildcard opt-in, preflight 204); `internal/config/config_test.go` (parsing `MARKET_GO_ALLOWED_ORIGINS`); `tests/test_api_cors.py` (Flask) et `tests/test_orderflow_transport_url.py` + `tests/test_template_render.py` (origine HTTP injectee/independante).
 - Fichiers a surveiller: `services/market-go/internal/ws/server.go` (resolveAllowedOrigin/isLoopbackOrigin), `services/market-go/internal/config/config.go` (AllowedOrigins), `app_parts/01_flask_app.py`, `app_parts/07_routes_pages.py` (marketHttpUrl), `static/js/split/078_v6_local_engine_client.js` (configuredMarketHttpUrl/resolveMarketUrl).
 
+### CONVENTION-20260607-01 - Decomposition du god-object ws.Server (pur refactor incremental)
+
+- Contexte: `internal/ws/server.go` (2000 lignes) concentrait 7 responsabilites. Spec: `docs/superpowers/specs/2026-06-07-ws-server-decomposition-design.md`. Refactor behavior-preserving, un type dedie par responsabilite dans le package `ws`, Server = orchestrateur. Tests verts (Go + Python) entre chaque etape.
+- Regle: chaque composant possede son etat et expose une API etroite; les dependances transverses passent par injection (interface `broadcaster`, accesseurs `func()`), jamais par acces direct aux champs de Server. Le CVD-par-symbole n'est qu'un accumulateur ecrit par la persistence footprint (pas lu par l'historique CVD qui recalcule depuis les trades).
+- Etat (ordre d'extraction): [x] 1 cvdTracker · [ ] 2 tradeStore · [ ] 3 footprintStore · [ ] 4 klineBackfiller · [ ] 5 replayController · [ ] 6 exchangeManager · [ ] 7 Server aminci.
+- Gate par etape: `go build ./... && go vet ./... && go test ./internal/{calc,config,engine,ws}/` (le package `ws` isole; le panic flaky `TestStreamEndpointUpgrades` n'apparait qu'en `go test ./...` complet et est pre-existant) + suite Python orderflow/cors/transport.
+- Fichiers a surveiller: `services/market-go/internal/ws/*.go` (cvd_tracker.go, trade_store.go, footprint_store.go, kline_backfiller.go, replay_controller.go, exchange_manager.go, server.go).
+

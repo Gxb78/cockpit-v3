@@ -53,8 +53,7 @@ type Server struct {
 
 	sqlDB *storage.DB // SQLite for trades + footprints
 
-	cvdMu       sync.Mutex
-	cvdBySymbol map[string]float64 // last CVD per symbol
+	cvd *cvdTracker // running CVD-per-symbol + cvd_init history/broadcast
 
 	// Exchange switching
 	exchangeCancel context.CancelFunc
@@ -68,14 +67,14 @@ func NewServer(cfg config.Config, marketEngine *engine.Engine, logger *logx.Logg
 		dataDir = "data"
 	}
 	s := &Server{
-		cfg:         cfg,
-		engine:      marketEngine,
-		hub:         NewHub(),
-		log:         logger,
-		klineCache:  NewKlineCache(dataDir),
-		tradeCache:  NewTradeCache(dataDir, cfg.TradeRetainDays),
-		cvdBySymbol: make(map[string]float64),
+		cfg:        cfg,
+		engine:     marketEngine,
+		hub:        NewHub(),
+		log:        logger,
+		klineCache: NewKlineCache(dataDir),
+		tradeCache: NewTradeCache(dataDir, cfg.TradeRetainDays),
 	}
+	s.cvd = newCvdTracker(s.hub, s.log, s.tradesSnapshot, s.cachedCandleHistory1m)
 
 	// Initialize SQLite for trade + footprint persistence
 	if dataDir != "" {
@@ -523,22 +522,37 @@ func (s *Server) switchExchange(parent context.Context, exchangeName string) {
 	s.log.Infof("exchange switch complete: %s", exchangeName)
 }
 
-// tryBroadcastCvdInit computes and broadcasts a cvd_init envelope to all
-// connected clients if there's enough data (trades + candle history).
-// Called after trade backfill and after 1m candle backfill is stored.
-func (s *Server) tryBroadcastCvdInit() {
-	history := s.computeSizeCvdHistory("1m")
-	total := 0
-	for _, pts := range history.Series {
-		total += len(pts)
+// tradesSnapshot returns a copy of the live trade buffer under the read lock.
+// Injected into cvdTracker so it can compute CVD history without owning trades.
+func (s *Server) tradesSnapshot() []marketdata.Trade {
+	s.tradesMu.RLock()
+	defer s.tradesMu.RUnlock()
+	out := make([]marketdata.Trade, len(s.trades))
+	copy(out, s.trades)
+	return out
+}
+
+// cachedCandleHistory1m returns the candles from the cached 1m candle_history
+// envelope (used by cvdTracker for OHLCV-based CVD estimation), or nil.
+func (s *Server) cachedCandleHistory1m() []marketdata.Candle {
+	type candlePayload struct {
+		Symbol   string              `json:"symbol"`
+		Interval string              `json:"interval"`
+		Candles  []marketdata.Candle `json:"candles"`
 	}
-	if total == 0 && len(history.DeltaVol) == 0 {
-		return // nothing to send yet
+	type candleEnvelope struct {
+		Type    string        `json:"type"`
+		Payload candlePayload `json:"payload"`
 	}
-	if raw, err := json.Marshal(CvdInitMessage{Type: "cvd_init", Payload: history}); err == nil {
-		s.hub.Broadcast(raw)
-		s.log.Infof("broadcast cvd_init: %d series points, %d delta points", total, len(history.DeltaVol))
+	s.historyMu.RLock()
+	defer s.historyMu.RUnlock()
+	for _, raw := range s.historyRaw {
+		var env candleEnvelope
+		if err := json.Unmarshal(raw, &env); err == nil && env.Type == "candle_history" && env.Payload.Interval == "1m" {
+			return env.Payload.Candles
+		}
 	}
+	return nil
 }
 
 // runBinanceBackfill fetches REST klines for all configured intervals, caching
@@ -569,7 +583,7 @@ func (s *Server) runBinanceBackfill(ctx context.Context, symbol string) {
 		s.log.Infof("binance backfill symbol=%s interval=%s candles=%d", symbol, interval, len(candles))
 
 		if interval == "1m" {
-			s.tryBroadcastCvdInit()
+			s.cvd.broadcastInit()
 		}
 	}
 }
@@ -841,7 +855,7 @@ func (s *Server) runBackfill(ctx context.Context, symbol string) {
 		// Dès que les bougies 1m sont disponibles, on peut calculer et broadcast
 		// le CVD historique (estimation OHLCV pour les périodes sans trades réels).
 		if interval == "1m" {
-			s.tryBroadcastCvdInit()
+			s.cvd.broadcastInit()
 		}
 	}
 }
@@ -1053,7 +1067,7 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	hasTrades := len(s.trades) > 0
 	s.tradesMu.RUnlock()
 	if hasTrades {
-		if raw, err := json.Marshal(CvdInitMessage{Type: "cvd_init", Payload: s.computeSizeCvdHistory("1m")}); err == nil {
+		if raw, err := json.Marshal(CvdInitMessage{Type: "cvd_init", Payload: s.cvd.computeHistory("1m")}); err == nil {
 			_ = client.Send(raw)
 		}
 	}
@@ -1307,165 +1321,6 @@ type clientMsg struct {
 	ExhaustionFactor   float64 `json:"exhaustionFactor"`
 }
 
-type CvdPoint struct {
-	T int64   `json:"t"`
-	V float64 `json:"v"`
-}
-
-type DeltaVolPoint struct {
-	T     int64   `json:"t"`
-	Delta float64 `json:"delta"`
-}
-
-type CvdHistoryPayload struct {
-	Series   map[string][]CvdPoint `json:"series"`
-	DeltaVol []DeltaVolPoint       `json:"deltaVol"`
-	Cvd      map[string]float64    `json:"cvd"`
-	// Metadata pour distinguer estimation vs trades réels
-	Source         string `json:"cvdSource"`      // "ohlcv_estimate" | "real_trades" | "mixed"
-	RealTradeCount int    `json:"realTradeCount"` // nombre de trades réels utilisés
-	EstimatedUntil int64  `json:"estimatedUntil"` // timestamp ms jusqu'auquel c'est estimé (0 = tout réel)
-}
-
-type CvdInitMessage struct {
-	Type    string            `json:"type"`
-	Payload CvdHistoryPayload `json:"payload"`
-}
-
-func (s *Server) computeSizeCvdHistory(timeframe string) CvdHistoryPayload {
-	intervalMs := intervalMs(timeframe)
-
-	s.tradesMu.RLock()
-	tradesCopy := make([]marketdata.Trade, len(s.trades))
-	copy(tradesCopy, s.trades)
-	s.tradesMu.RUnlock()
-
-	// Bucket real trades by interval
-	tradesByBucket := make(map[int64][]marketdata.Trade)
-	for _, t := range tradesCopy {
-		ts := t.TsExchange
-		if ts <= 0 {
-			ts = t.TsLocal
-		}
-		if ts <= 0 {
-			continue
-		}
-		bucketStart := (ts / intervalMs) * intervalMs
-		tradesByBucket[bucketStart] = append(tradesByBucket[bucketStart], t)
-	}
-
-	// Also try to read 1m candle history from the cache to estimate CVD
-	// for periods with no real trades. Unmarshal the last cached envelope.
-	type candlePayload struct {
-		Symbol   string              `json:"symbol"`
-		Interval string              `json:"interval"`
-		Candles  []marketdata.Candle `json:"candles"`
-	}
-	type candleEnvelope struct {
-		Type    string        `json:"type"`
-		Payload candlePayload `json:"payload"`
-	}
-	var historicalCandles []marketdata.Candle
-	s.historyMu.RLock()
-	for _, raw := range s.historyRaw {
-		var env candleEnvelope
-		if err := json.Unmarshal(raw, &env); err == nil && env.Type == "candle_history" && env.Payload.Interval == "1m" {
-			historicalCandles = env.Payload.Candles
-			break
-		}
-	}
-	s.historyMu.RUnlock()
-
-	// Build sorted timeline: union of trade buckets + candle timestamps
-	timeline := make(map[int64]bool)
-	for b := range tradesByBucket {
-		timeline[b] = true
-	}
-	for _, c := range historicalCandles {
-		bucketStart := (c.OpenTime / intervalMs) * intervalMs
-		timeline[bucketStart] = true
-	}
-
-	var sortedBuckets []int64
-	for b := range timeline {
-		sortedBuckets = append(sortedBuckets, b)
-	}
-	sort.Slice(sortedBuckets, func(i, j int) bool {
-		return sortedBuckets[i] < sortedBuckets[j]
-	})
-
-	var runningCvd float64
-	var series []CvdPoint
-	var deltaVol []DeltaVolPoint
-	realBuckets := 0
-	estimatedBuckets := 0
-	var lastEstimatedTs int64
-
-	for _, bStart := range sortedBuckets {
-		bucketTrades := tradesByBucket[bStart]
-		netDelta := 0.0
-
-		if len(bucketTrades) > 0 {
-			// Use real trade data (total delta, no size buckets)
-			realBuckets++
-			for _, t := range bucketTrades {
-				signed := t.Qty
-				if strings.ToLower(t.Side) == "sell" {
-					signed = -t.Qty
-				}
-				netDelta += signed
-			}
-		} else if len(historicalCandles) > 0 {
-			// Estimate from candle OHLCV data — marked as estimated
-			estimatedBuckets++
-			lastEstimatedTs = bStart + intervalMs
-			for _, c := range historicalCandles {
-				cbStart := (c.OpenTime / intervalMs) * intervalMs
-				if cbStart == bStart {
-					range_ := c.High - c.Low
-					if range_ > 0 {
-						ratio := (c.Close - c.Open) / range_
-						if ratio > 0.5 {
-							ratio = 0.5
-						} else if ratio < -0.5 {
-							ratio = -0.5
-						}
-						netDelta = c.Volume * ratio * 2
-					}
-					break
-				}
-			}
-		} else {
-			continue
-		}
-
-		runningCvd += netDelta
-		series = append(series, CvdPoint{T: bStart, V: runningCvd})
-		deltaVol = append(deltaVol, DeltaVolPoint{T: bStart, Delta: netDelta})
-	}
-
-	// Wrap series into a single "total" bucket for backward compat with frontend
-	wSeries := map[string][]CvdPoint{"total": series}
-	wCvd := map[string]float64{"total": runningCvd}
-
-	// Compute metadata
-	source := "real_trades"
-	if estimatedBuckets > 0 && realBuckets > 0 {
-		source = "mixed"
-	} else if estimatedBuckets > 0 && realBuckets == 0 {
-		source = "ohlcv_estimate"
-	}
-
-	return CvdHistoryPayload{
-		Series:         wSeries,
-		DeltaVol:       deltaVol,
-		Cvd:            wCvd,
-		Source:         source,
-		RealTradeCount: len(tradesCopy),
-		EstimatedUntil: lastEstimatedTs,
-	}
-}
-
 func (s *Server) handleClientMessage(client *wsClient, payload []byte) {
 	var msg clientMsg
 	if err := json.Unmarshal(payload, &msg); err != nil {
@@ -1479,7 +1334,7 @@ func (s *Server) handleClientMessage(client *wsClient, payload []byte) {
 			tf = "1m"
 		}
 		s.log.Infof("client requested CVD history for timeframe: %s", tf)
-		history := s.computeSizeCvdHistory(tf)
+		history := s.cvd.computeHistory(tf)
 		respMsg := CvdInitMessage{
 			Type:    "cvd_init",
 			Payload: history,
@@ -1739,7 +1594,7 @@ func (s *Server) backfillTrades(ctx context.Context) {
 	}
 
 	// Broadcast a fresh cvd_init after trade backfill, if enough data exists.
-	s.tryBroadcastCvdInit()
+	s.cvd.broadcastInit()
 }
 
 // loadPersistedTrades loads recent trades from the file cache into s.trades.
@@ -1786,7 +1641,7 @@ func (s *Server) loadPersistedTrades() {
 	}
 
 	if totalLoaded > 0 {
-		s.tryBroadcastCvdInit()
+		s.cvd.broadcastInit()
 	}
 }
 
@@ -1908,11 +1763,7 @@ func (s *Server) persistFootprintCandle(candle marketdata.FootprintCandle) {
 	}
 
 	// Accumulate CVD per symbol
-	s.cvdMu.Lock()
-	lastCVD := s.cvdBySymbol[candle.Symbol]
-	cvd := lastCVD + delta
-	s.cvdBySymbol[candle.Symbol] = cvd
-	s.cvdMu.Unlock()
+	cvd := s.cvd.Accumulate(candle.Symbol, delta)
 
 	// Build price levels
 	levels := make([]storage.PriceLevel, len(candle.Levels))
