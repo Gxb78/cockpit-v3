@@ -1400,4 +1400,11 @@ if end_time is not None:
 - Regle de prevention: Tout nouveau panneau canvas soude a un chart doit (a) lire le viewport via `canvas._v6vp`, (b) creer un `localVp` avec son propre `timeToX` base sur les memes `timeStart`/`timeEnd` sans muter le plot du chart, (c) proposer une degradation gracieuse si le viewport est absent.
 - Fichiers a surveiller: `static/js/split/077_v6_canvas_chart.js`, `static/js/split/076_v6_cvd_panel.js`, `static/js/split/080_v6_layout_shell.js`, `static/js/split/083_v6_chart_viewport.js`.
 
+### LESSON-20260610-01 - Redesign additive DOM + Tape (Phase 4)
+
+- Contexte: Phase 4 du rebuild V6 — redesign premium des panneaux DOM et Tape. Modifications additives uniquement : nouveaux CSS split, JS minimal.
+- Regle: Les panneaux visuels (DOM, Tape) doivent exposer un header premium uniforme via les classes `.v6-panel-tick`, `.v6-panel-title`, `.v6-panel-meta`, `.v6-panel-grp`, `.v6-panel-sp`, `.v6-panel-grab`, `.v6-panel-ib`. Les hooks legacy (`data-dom-stat`, `data-dom-sigma`) sont preserves dans le DOM mais masques via CSS (`display: none`) — jamais supprimes du JS.
+- Regle de prevention: (a) Verifier les vrais noms de classes avant d'ecrire le CSS (ex. `is-wall-major`/`is-wall-soft` pas `is-bid-wall`/`is-ask-wall`). (b) Les couleurs dans les CSS de redesign utilisent exclusivement des tokens `var(--v6-*)` — aucun hex ni rgba hardcode. (c) Le GROUP select doit migrer du footer vers le header sans dupliquer le selecteur : `querySelector('.v6-dom-grouping')` trouve le premier, l'ancien footer GROUP est cache via `.v6-dom-glbl { display: none }`.
+- Fichiers a surveiller: `static/js/split/075_v6_dom_panel.js`, `static/js/split/074_v6_tape_panel.js`, `static/css/split/076_v6_dom_redesign.css`, `static/css/split/077_v6_tape_redesign.css`.
+
 

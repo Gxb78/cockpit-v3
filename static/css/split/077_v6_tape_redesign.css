@@ -1,0 +1,169 @@
+/* ============================================================
+   077_v6_tape_redesign.css
+   Phase 4: Tape panel — premium header, pressure bar,
+   side accent, size bar, big-trade highlight, fade mask.
+   Page-scoped; no overrides; tokens only.
+   ============================================================ */
+
+/* ── Premium tape header ── */
+body[data-current-page="orderflow"] .v6-tape-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  background: linear-gradient(180deg, var(--v6-surface), var(--v6-bg-2));
+  border-bottom: 1px solid var(--v6-hairline);
+  flex-shrink: 0;
+}
+
+/* ── Pressure bar ── */
+body[data-current-page="orderflow"] .v6-tape-pressure-bar {
+  display: flex;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  width: 64px;
+  flex-shrink: 0;
+  background: var(--v6-surface-2);
+  border: 1px solid var(--v6-hairline);
+}
+
+body[data-current-page="orderflow"] .v6-tape-pressure-buy {
+  background: var(--v6-buy);
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+body[data-current-page="orderflow"] .v6-tape-pressure-sell {
+  background: var(--v6-sell);
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+/* ── Column header row ── */
+body[data-current-page="orderflow"] .v6-tape-row.v6-tape-head {
+  color: var(--v6-text-faint);
+  font: 700 8px/1 var(--v6-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--v6-hairline);
+  background: var(--v6-bg-2);
+}
+
+/* ── Tape rows ── */
+body[data-current-page="orderflow"] .v6-tape-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 52px 14px 1fr 64px 40px 48px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  height: 18px;
+  font: 700 9px/1 var(--v6-mono);
+  border-bottom: 1px solid var(--v6-hairline);
+  overflow: hidden;
+}
+
+/* Side accent bar via ::before */
+body[data-current-page="orderflow"] .v6-tape-row.is-buy::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--v6-buy);
+}
+
+body[data-current-page="orderflow"] .v6-tape-row.is-sell::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--v6-sell);
+}
+
+/* Side label color */
+body[data-current-page="orderflow"] .v6-tape-row.is-buy .v6-tape-side {
+  color: var(--v6-buy);
+}
+
+body[data-current-page="orderflow"] .v6-tape-row.is-sell .v6-tape-side {
+  color: var(--v6-sell);
+}
+
+/* ── Size bar inside qty cell ── */
+body[data-current-page="orderflow"] .v6-tape-qty {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+body[data-current-page="orderflow"] .v6-tape-szbar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+  border-radius: 2px;
+}
+
+body[data-current-page="orderflow"] .v6-tape-row.is-buy .v6-tape-szbar {
+  background: var(--v6-buy-soft);
+}
+
+body[data-current-page="orderflow"] .v6-tape-row.is-sell .v6-tape-szbar {
+  background: var(--v6-sell-soft);
+}
+
+/* ── Big-trade highlight via ::after ── */
+body[data-current-page="orderflow"] .v6-tape-row.is-big::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+body[data-current-page="orderflow"] .v6-tape-row.is-big.is-buy::after {
+  background: linear-gradient(90deg, var(--v6-buy-soft), transparent);
+  box-shadow: inset 2px 0 0 var(--v6-buy);
+}
+
+body[data-current-page="orderflow"] .v6-tape-row.is-big.is-sell::after {
+  background: linear-gradient(90deg, var(--v6-sell-soft), transparent);
+  box-shadow: inset 2px 0 0 var(--v6-sell);
+}
+
+body[data-current-page="orderflow"] .v6-tape-row.is-big .v6-tape-qty {
+  font-weight: 900;
+}
+
+/* ── Dim secondary columns ── */
+body[data-current-page="orderflow"] .v6-tape-time,
+body[data-current-page="orderflow"] .v6-tape-exch,
+body[data-current-page="orderflow"] .v6-tape-sym {
+  color: var(--v6-text-mute);
+}
+
+body[data-current-page="orderflow"] .v6-tape-price {
+  color: var(--v6-text);
+}
+
+/* ── Bottom fade mask on the tape body ── */
+body[data-current-page="orderflow"] .v6-tape-shell {
+  position: relative;
+}
+
+body[data-current-page="orderflow"] .v6-tape-shell::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 32px;
+  background: linear-gradient(0deg, var(--v6-bg), transparent);
+  pointer-events: none;
+}
