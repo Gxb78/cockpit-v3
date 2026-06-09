@@ -1407,4 +1407,11 @@ if end_time is not None:
 - Regle de prevention: (a) Verifier les vrais noms de classes avant d'ecrire le CSS (ex. `is-wall-major`/`is-wall-soft` pas `is-bid-wall`/`is-ask-wall`). (b) Les couleurs dans les CSS de redesign utilisent exclusivement des tokens `var(--v6-*)` — aucun hex ni rgba hardcode. (c) Le GROUP select doit migrer du footer vers le header sans dupliquer le selecteur : `querySelector('.v6-dom-grouping')` trouve le premier, l'ancien footer GROUP est cache via `.v6-dom-glbl { display: none }`.
 - Fichiers a surveiller: `static/js/split/075_v6_dom_panel.js`, `static/js/split/074_v6_tape_panel.js`, `static/css/split/076_v6_dom_redesign.css`, `static/css/split/077_v6_tape_redesign.css`.
 
+### LESSON-20260610-02 - Layout picker et gestion des panneaux (Phase 5)
+
+- Contexte: Phase 5 du rebuild V6 — layout picker STANDARD, SYNC toggles, fermeture/re-ajout de panneaux.
+- Regle: Le popover du layout picker est rendu hors de l'arbre `.v6-shell` (append au `document.body`) pour eviter les contraintes overflow/z-index du shell. Il se positionne en `position:fixed` relativement au bouton anchor via `getBoundingClientRect()`. Toujours nettoyer via un listener `click` capture sur `document` pour fermer au clic exterieur.
+- Regle de prevention: (a) Les presets STANDARD sont des fonctions pures qui retournent un nouveau schema — jamais muter le schema courant directement. (b) Le handler `panel-close` filtre `layoutSchema.left` et `layoutSchema.right` puis appelle `store.updateSettings` — il ne touche pas le DOM directement. (c) La section "Add Panel" du picker ne liste que les panels absents des deux cotes du schema pour eviter les doublons. (d) Eviter `arguments.callee` (interdit en strict mode) : nommer les handlers de click pour permettre le re-attachement apres re-rendu du popover.
+- Fichiers a surveiller: `static/js/split/091_v6_layout_picker.js`, `static/js/split/080_v6_layout_shell.js`, `static/css/split/078_v6_layout_picker.css`.
+
 
