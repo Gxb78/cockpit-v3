@@ -1414,4 +1414,11 @@ if end_time is not None:
 - Regle de prevention: (a) Les presets STANDARD sont des fonctions pures qui retournent un nouveau schema — jamais muter le schema courant directement. (b) Le handler `panel-close` filtre `layoutSchema.left` et `layoutSchema.right` puis appelle `store.updateSettings` — il ne touche pas le DOM directement. (c) La section "Add Panel" du picker ne liste que les panels absents des deux cotes du schema pour eviter les doublons. (d) Eviter `arguments.callee` (interdit en strict mode) : nommer les handlers de click pour permettre le re-attachement apres re-rendu du popover.
 - Fichiers a surveiller: `static/js/split/091_v6_layout_picker.js`, `static/js/split/080_v6_layout_shell.js`, `static/css/split/078_v6_layout_picker.css`.
 
+### LESSON-20260610-03 - Flyouts de parametres par panneau (Phase 6)
+
+- Contexte: Phase 6 du rebuild V6 — flyouts de parametres inline pour DOM et Tape, durcissement responsive.
+- Regle: Les flyouts de parametres suivent le meme patron que le layout picker (Phase 5) : rendu dans `document.body` en `position:fixed`, fermeture via `document.addEventListener('click', outsideClose, true)`. Le schema de champs (`PANEL_FIELDS`) est declare comme un objet statique indexe par `panelId` — ajouter un nouveau panneau = ajouter une entree dans l'objet, rien d'autre.
+- Regle de prevention: (a) Toujours passer `store` a `PanelSettings.open` — ne pas utiliser de store global. (b) Les inputs `type="number"` doivent avoir `min`, `max`, `step` corrects pour eviter des valeurs hors range — la validation cote store (`clampInt`) reste le filet de securite. (c) Les regles CSS `!important` dans les media queries de repli etroit (auto-collapse a 900px) sont acceptables car elles overrident un style inline du ResizablePanels module — annoter avec un commentaire.
+- Fichiers a surveiller: `static/js/split/092_v6_panel_settings.js`, `static/js/split/080_v6_layout_shell.js`, `static/css/split/079_v6_panel_settings.css`, `static/css/split/079_v6_responsive.css`.
+
 
