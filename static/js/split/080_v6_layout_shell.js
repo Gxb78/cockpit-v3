@@ -927,8 +927,36 @@
         }
       }
 
+      // panel-close delegation: ✕ buttons in panel headers remove panel from layoutSchema
+      root.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-v6-action]');
+        if (!btn) return;
+        var action = btn.getAttribute('data-v6-action');
+        if (action === 'panel-close') {
+          var closedPanel = btn.closest('[data-v6-panel]');
+          var closedId = closedPanel && closedPanel.getAttribute('data-v6-panel');
+          if (closedId && store) {
+            var curSchema = (store.getState().settings || {}).layoutSchema || DEFAULT_SCHEMA;
+            var nextSchema = Object.assign({}, curSchema, {
+              left: (curSchema.left || []).filter(function (id) { return id !== closedId; }),
+              right: (curSchema.right || []).filter(function (id) { return id !== closedId; })
+            });
+            if (nextSchema.activeRightTab === closedId) {
+              nextSchema.activeRightTab = nextSchema.right[0] || '';
+            }
+            if (nextSchema.activeLeftTab === closedId) {
+              nextSchema.activeLeftTab = nextSchema.left[0] || '';
+            }
+            store.updateSettings({ layoutSchema: nextSchema });
+          }
+        }
+      });
+
       if (V6OF.ResizablePanels) {
         V6OF.ResizablePanels.init(root);
+      }
+      if (V6OF.LayoutPicker) {
+        V6OF.LayoutPicker.init(root, store);
       }
       if (V6OF.WorkspaceManager) {
         V6OF.WorkspaceManager.init(root);
