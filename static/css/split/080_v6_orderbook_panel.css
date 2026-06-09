@@ -1,0 +1,110 @@
+/* ============================================================
+   080_v6_orderbook_panel.css
+   Orderbook panel: premium header, column grid, depth bars,
+   spread row. Page-scoped; no overrides; tokens only.
+   ============================================================ */
+
+/* ── Premium header (shares .v6-panel-tick etc from 076) ── */
+body[data-current-page="orderflow"] .v6-ob-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  background: linear-gradient(180deg, var(--v6-surface), var(--v6-bg-2));
+  border-bottom: 1px solid var(--v6-hairline);
+  flex-shrink: 0;
+}
+
+body[data-current-page="orderflow"] .v6-ob-header:hover .v6-panel-ib {
+  opacity: 1;
+}
+
+/* ── Row grid: 5 columns ── */
+body[data-current-page="orderflow"] .v6-ob-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.4fr 1fr 1fr;
+  align-items: center;
+  height: 17px;
+  padding: 0 6px;
+  font: 700 9px/1 var(--v6-mono);
+  border-bottom: 1px solid var(--v6-hairline);
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── Column header row ── */
+body[data-current-page="orderflow"] .v6-ob-colhead {
+  font: 700 8px/1 var(--v6-mono);
+  color: var(--v6-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: var(--v6-bg-2);
+  height: 20px;
+}
+
+/* ── Depth bar: absolute, side-specific direction ── */
+body[data-current-page="orderflow"] .v6-ob-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+body[data-current-page="orderflow"] .v6-ob-row.is-bid .v6-ob-bar {
+  right: 0;
+  background: linear-gradient(270deg, var(--v6-buy-soft), transparent);
+}
+
+body[data-current-page="orderflow"] .v6-ob-row.is-ask .v6-ob-bar {
+  left: 0;
+  background: linear-gradient(90deg, var(--v6-sell-soft), transparent);
+}
+
+/* ── Cell text alignment ── */
+body[data-current-page="orderflow"] .v6-ob-cell-bid-amt,
+body[data-current-page="orderflow"] .v6-ob-cell-bid-total {
+  text-align: right;
+  color: var(--v6-buy);
+  position: relative;
+}
+
+body[data-current-page="orderflow"] .v6-ob-cell-ask-total,
+body[data-current-page="orderflow"] .v6-ob-cell-ask-amt {
+  text-align: left;
+  color: var(--v6-sell);
+  position: relative;
+}
+
+body[data-current-page="orderflow"] .v6-ob-cell-price {
+  text-align: center;
+  color: var(--v6-text);
+  position: relative;
+  font-weight: 800;
+}
+
+body[data-current-page="orderflow"] .v6-ob-row.is-ask .v6-ob-cell-price {
+  color: var(--v6-sell);
+}
+
+body[data-current-page="orderflow"] .v6-ob-row.is-bid .v6-ob-cell-price {
+  color: var(--v6-buy);
+}
+
+/* ── Spread row ── */
+body[data-current-page="orderflow"] .v6-ob-spread {
+  background: linear-gradient(90deg, transparent, var(--v6-accent-soft), transparent);
+  box-shadow: inset 0 1px 0 var(--v6-accent-line), inset 0 -1px 0 var(--v6-accent-line);
+  height: 20px;
+}
+
+body[data-current-page="orderflow"] .v6-ob-spread .v6-ob-cell-price {
+  color: var(--v6-accent);
+}
+
+body[data-current-page="orderflow"] .v6-ob-spread .v6-ob-cell-price em {
+  font-style: normal;
+  font-size: 8px;
+  color: var(--v6-text-mute);
+  margin-left: 4px;
+}

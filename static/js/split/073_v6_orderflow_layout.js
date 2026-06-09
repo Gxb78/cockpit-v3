@@ -262,6 +262,9 @@
               '</div>',
             '</div>',
           '</section>',
+          '<section class="v6-panel v6-panel-orderbook" data-v6-panel="orderbook" id="v6-panel-orderbook" role="tabpanel" aria-labelledby="v6-rtab-orderbook" aria-label="V6 Orderbook">',
+            '<div class="v6-panel-body v6-ob-body" data-v6-ob-panel></div>',
+          '</section>',
           '<section class="v6-panel v6-panel-chart" data-v6-panel="chart" aria-label="V6 chart">',
             '<div class="v6-panel-head"><span>Chart</span><small class="v6-panel-freshness" data-v6-freshness="chart">No data</small></div>',
             '<canvas class="v6-chart-canvas" data-v6-chart></canvas>',
@@ -1220,6 +1223,7 @@
 
     var tapeList = root.querySelector('[data-v6-tape-list]');
     var domList = root.querySelector('[data-v6-dom-list]');
+    var obPanel = root.querySelector('[data-v6-ob-panel]');
     var cvd = root.querySelector('[data-v6-cvd-panel]');
     var domRenderTasks = [];
 
@@ -1308,6 +1312,13 @@
       });
       // Wire drag-and-drop on the column headers
       if (V6OF.Panels.wireDomDragDrop) V6OF.Panels.wireDomDragDrop(root, store);
+    }
+    if (obPanel && V6OF.Panels && V6OF.Panels.OrderbookPanel) {
+      if (shouldRender(root, 'orderbook', { orderBook: state.orderBook }, force)) {
+        domRenderTasks.push(function () {
+          V6OF.Panels.OrderbookPanel.renderInto(obPanel, state.orderBook, state.settings);
+        });
+      }
     }
     if (cvd && V6OF.Panels && V6OF.Panels.renderCvdInto && settings.showCVD !== false) {
       if (shouldRender(root, 'cvd', cvdSlice, force)) {

@@ -1422,3 +1422,10 @@ if end_time is not None:
 - Fichiers a surveiller: `static/js/split/092_v6_panel_settings.js`, `static/js/split/080_v6_layout_shell.js`, `static/css/split/079_v6_panel_settings.css`, `static/css/split/079_v6_responsive.css`.
 
 
+
+### LESSON-20260610-04 - Panneau Orderbook (nouveau module panneau)
+
+- Contexte: Ajout du panneau Orderbook V6 — grille deux-cotes avec barres de profondeur cumulatives.
+- Regle: Tout nouveau panneau suit le patron etabli par DOM/Tape : (a) `Panels.XxxPanel.renderInto(container, snap, settings)` reconstruit `innerHTML` a chaque appel — pas de virtualisation pour un panneau court (<50 lignes). (b) Le header premium (`.v6-ob-header`) partage les classes `.v6-panel-tick`, `.v6-panel-title`, `.v6-panel-meta` deja stylisees dans `076_v6_dom_redesign.css`. (c) Ajouter l'id du panneau dans `PANEL_SPECS` et `DEFAULT_SCHEMA.right` dans le shell, et dans le HTML template + subscribe block de `073`.
+- Regle de prevention: Les barres de profondeur sont `position:absolute` a l'interieur d'une cellule `position:relative` — ne pas oublier `overflow:hidden` sur la ligne `.v6-ob-row` pour eviter le debordement. Le `maxCum` est calcule sur les deux cotes ensemble pour une echelle coherente.
+- Fichiers a surveiller: `static/js/split/093_v6_orderbook_panel.js`, `static/js/split/073_v6_orderflow_layout.js`, `static/js/split/080_v6_layout_shell.js`, `static/css/split/080_v6_orderbook_panel.css`.

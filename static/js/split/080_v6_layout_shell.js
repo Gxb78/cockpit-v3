@@ -97,6 +97,7 @@
   var PANEL_SPECS = {
     dom: { id: 'dom', label: 'DOM' },
     tape: { id: 'tape', label: 'Tape' },
+    orderbook: { id: 'orderbook', label: 'Book' },
     info: { id: 'info', label: 'Info' },
     indicators: { id: 'indicators', label: 'Indicators', icon: true, glyph: ICONS.indicators },
     settings: { id: 'settings', label: 'Settings', icon: true, glyph: '⚙' }
@@ -105,7 +106,7 @@
   var DEFAULT_SCHEMA = {
     left: [],
     center: ['chart'],
-    right: ['dom', 'tape', 'info', 'indicators', 'settings'],
+    right: ['dom', 'tape', 'orderbook', 'info', 'indicators', 'settings'],
     activeLeftTab: '',
     activeRightTab: 'dom'
   };
