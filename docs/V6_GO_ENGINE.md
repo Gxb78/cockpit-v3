@@ -1131,9 +1131,10 @@ UI state fields:
 
 Default UI limits:
 
-- `heatmapMaxFrames = 360`
+- `heatmapMaxFrames = 3600`
 - Minimum accepted frame buffer: 60
-- Maximum accepted frame buffer: 600
+- Maximum accepted frame buffer: 10000
+- Higher caps retain more L2 snapshots in browser memory and increase canvas draw cost.
 - No infinite heatmap history is kept in the browser.
 
 Rendering model:
@@ -1404,9 +1405,9 @@ Persisted fields:
 | `showHeatmap` | boolean | `true` | — |
 | `showFootprint` | boolean | `true` | — |
 | `maxTrades` | number | `500` | 50–5000 |
-| `maxHeatmapFrames` | number | `360` | 60–600 |
+| `maxHeatmapFrames` | number | `3600` | 60-10000 |
 | `maxFootprintCandles` | number | `120` | 30–240 |
-| `domDepth` | number | `20` | 5–50 |
+| `domDepth` | number | `1000` | 10-5000 |
 | `minQty` | number | `0` | ≥0 |
 | `maxRows` | number | `42` | 8–500 |
 
@@ -1434,9 +1435,9 @@ Behavior:
 ### Buffer Controls
 
 - `Max trades`: dynamic cap on the trade buffer in the engine client.
-- `Max heatmap frames`: controls `heatmapMaxFrames` in the store.
+- `Max heatmap frames`: controls `heatmapMaxFrames` in the store. Higher values keep more L2 snapshots in browser memory and increase canvas draw cost.
 - `Max footprint candles`: controls `footprintMaxCandles` in the store.
-- `DOM depth (UI)`: UI-only filter on displayed book levels. Does NOT change Go engine depth.
+- `DOM depth (UI)`: UI-only filter on displayed book levels. Does NOT change Go engine depth. Presets expose Light 100, Balanced 1000, Deep 2500, and Full 5000.
 
 ### Clear Actions
 

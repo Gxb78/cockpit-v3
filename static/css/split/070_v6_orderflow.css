@@ -16,51 +16,65 @@
 }
 
 .v6-orderflow-root {
-  /* — surfaces (dark obsidian theme) — */
-  --v6-bg:        #131722;
-  --v6-bg-2:      #171b26;
-  --v6-surface:   #1c2030;
-  --v6-surface-2: #1e222d;
-  --v6-surface-3: #2a2e39;
-  --v6-hairline:        rgba(255, 255, 255, 0.08);
-  --v6-hairline-strong: rgba(255, 255, 255, 0.16);
-  --v6-edge:      rgba(255, 255, 255, 0.03);
+  /* ===== "Obsidian Pro" — one cohesive design system =====
+   * Surfaces/text/hairline values are mirrored at runtime by the boot script
+   * (orderflow.html) and hydrateThemeVars() (073) so CSS and runtime agree.
+   * Everything else below is the single source of truth. */
+
+  /* — surfaces (deep obsidian-neutral) — */
+  --v6-bg:        #0a0b0d;
+  --v6-bg-2:      #0e0f12;
+  --v6-surface:   #15171b;
+  --v6-surface-2: #1c1f24;
+  --v6-surface-3: #23262c;
+  --v6-surface-4: #2c374b;
+  --v6-hairline:        rgba(255, 255, 255, 0.06);
+  --v6-hairline-strong: rgba(255, 255, 255, 0.12);
+  --v6-edge:      rgba(255, 255, 255, 0.04);
 
   /* — text — */
-  --v6-text:       #d1d4dc;
-  --v6-text-dim:   #b2b5be;
-  --v6-text-mute:  #868993;
-  --v6-text-faint: #60626a;
+  --v6-text:       #d7d9de;
+  --v6-text-dim:   #9aa0ab;
+  --v6-text-mute:  #7c818c;
+  --v6-text-faint: #565b66;
 
-  /* — accent: cyan — */
-  --v6-accent:      #00b0ff;
-  --v6-accent-2:    #0ea5e9;
-  --v6-accent-soft: rgba(0, 176, 255, 0.08);
-  --v6-accent-line: rgba(0, 176, 255, 0.25);
-  --v6-accent-glow: rgba(0, 176, 255, 0.30);
+  /* — accent: warm amber-orange — */
+  --v6-accent:      #ff7a45;
+  --v6-accent-2:    #e8643c;
+  --v6-accent-soft: rgba(255, 122, 69, 0.14);
+  --v6-accent-line: rgba(255, 122, 69, 0.32);
+  --v6-accent-glow: rgba(255, 122, 69, 0.45);
 
-  /* — semantic — */
-  --v6-buy:       #089981;
-  --v6-buy-soft:  rgba(8, 153, 129, 0.12);
-  --v6-sell:      #f23645;
-  --v6-sell-soft: rgba(242, 54, 69, 0.12);
-  --v6-gold:      #f5c53c;
-  --v6-gold-soft: rgba(245, 197, 60, 0.10);
+  /* — semantic (vivid crypto duo) — */
+  --v6-buy:       #3fb950;
+  --v6-buy-2:     #0a9e66;
+  --v6-buy-soft:  rgba(63, 185, 80, 0.13);
+  --v6-sell:      #f6465d;
+  --v6-sell-2:    #d22f44;
+  --v6-sell-soft: rgba(246, 70, 93, 0.13);
+  --v6-gold:      #f5b73c;
+  --v6-gold-soft: rgba(245, 183, 60, 0.12);
+  --v6-up:        #e9eaed;
+  --v6-down:      #f0703a;
 
   /* — depth — */
-  --v6-shadow:     0 8px 24px -18px rgba(0, 0, 0, 0.15);
-  --v6-shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.06);
+  --v6-shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.40);
+  --v6-shadow:     0 10px 30px rgba(0, 0, 0, 0.50);
+  --v6-shadow-lg:  0 24px 60px rgba(0, 0, 0, 0.60);
   --v6-glow-accent: 0 0 0 1px var(--v6-accent-line);
 
-  /* — geometry (tighter, less rounded) — */
-  --v6-r-lg: 8px;
+  /* — geometry — */
+  --v6-r-lg: 10px;
   --v6-r-md: 6px;
   --v6-r-sm: 4px;
+  --v6-r-xs: 3px;
 
   /* — motion — */
-  --v6-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
-  --v6-fast: 120ms;
-  --v6-med:  240ms;
+  --v6-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --v6-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --v6-fast: 130ms;
+  --v6-med:  200ms;
+  --v6-slow: 320ms;
 
   /* — type — */
   --v6-font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -1032,6 +1046,36 @@
   padding: 3px 8px;
   border-top: 1px solid rgba(150,168,196,0.08);
   background: rgba(6,8,12,0.8);
+}
+.v6-dom-goto-form {
+  display: inline-flex;
+  align-items: center;
+  margin-right: auto;
+}
+.v6-dom-goto-input {
+  min-height: 18px;
+  max-width: 90px;
+  padding: 2px 6px;
+  border: 1px solid rgba(150,168,196,0.15);
+  border-radius: 3px;
+  background: rgba(8,12,20,0.6);
+  color: var(--v6-text);
+  font: 10px var(--v6-mono);
+  font-family: 'JetBrains Mono', var(--v6-mono), monospace;
+  outline: none;
+  transition: all 0.15s;
+}
+.v6-dom-goto-input::placeholder {
+  color: rgba(150,168,196,0.4);
+}
+.v6-dom-goto-input:focus {
+  outline: 2px solid var(--cyan);
+  border-color: transparent;
+}
+.v6-dom-recenter.is-active {
+  color: #3ad7ee;
+  border-color: rgba(58, 215, 238, 0.4);
+  background: rgba(58, 215, 238, 0.15);
 }
 .v6-dom-stat-mid strong { font-size: 12px; }
 .v6-lad-row.is-vwap .v6-lad-price.vwap { background: rgba(58, 215, 238, 0.14); }

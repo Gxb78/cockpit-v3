@@ -23,9 +23,52 @@
   var WORKSPACE_SCHEMA_VERSION = 1;
   var _wsSyncTimer = null;
 
+  var LAYER_PRESETS = {
+    scalping: {
+      chartMode: 'both',
+      showCandles: true,
+      showBubbles: true,
+      showHeatmap: false,
+      showFootprint: false
+    },
+    orderflow: {
+      chartMode: 'both',
+      showCandles: true,
+      showBubbles: false,
+      showHeatmap: false,
+      showFootprint: true
+    },
+    analysis: {
+      chartMode: 'both',
+      showCandles: true,
+      showBubbles: false,
+      showHeatmap: true,
+      showFootprint: false
+    }
+  };
+
+  function layerPresetForWorkspace(name) {
+    if (name === 'Orderflow') return 'orderflow';
+    if (name === 'Analysis') return 'analysis';
+    return 'scalping';
+  }
+
+  function resolveLayerPreset(name, config) {
+    var preset = config && config.layerPreset;
+    if (preset === 'custom') return 'custom';
+    if (!LAYER_PRESETS[preset]) preset = layerPresetForWorkspace(name);
+    return preset;
+  }
+
+  function applyLayerPresetConfig(target, preset) {
+    var layers = LAYER_PRESETS[preset] || LAYER_PRESETS.scalping;
+    return Object.assign(target || {}, layers, { layerPreset: preset });
+  }
+
   var DEFAULT_PRESETS = {
     'Scalping': {
       schemaVersion: WORKSPACE_SCHEMA_VERSION,
+      layerPreset: 'scalping',
       chartMode: 'both',
       showTape: true,
       showDOM: true,
@@ -36,12 +79,16 @@
       showHeatmap: false,
       showFootprint: false,
       rightColWidth: 430,
+      leftColWidth: 320,
       cvdStripHeight: 226,
       maxTrades: 5000,
-      activeTab: 'dom'
+      activeTab: 'dom',
+      activeLeftTab: '',
+      layoutSchema: null
     },
     'Orderflow': {
       schemaVersion: WORKSPACE_SCHEMA_VERSION,
+      layerPreset: 'orderflow',
       chartMode: 'both',
       showTape: false,
       showDOM: true,
@@ -49,15 +96,19 @@
       showVwap: true,
       showCandles: true,
       showBubbles: false,
-      showHeatmap: true,
+      showHeatmap: false,
       showFootprint: true,
       rightColWidth: 460,
+      leftColWidth: 320,
       cvdStripHeight: 260,
       maxTrades: 10000,
-      activeTab: 'dom'
+      activeTab: 'dom',
+      activeLeftTab: '',
+      layoutSchema: null
     },
     'Analysis': {
       schemaVersion: WORKSPACE_SCHEMA_VERSION,
+      layerPreset: 'analysis',
       chartMode: 'both',
       showTape: true,
       showDOM: false,
@@ -66,11 +117,14 @@
       showCandles: true,
       showBubbles: false,
       showHeatmap: true,
-      showFootprint: true,
+      showFootprint: false,
       rightColWidth: 480,
+      leftColWidth: 320,
       cvdStripHeight: 240,
       maxTrades: 5000,
-      activeTab: 'info'
+      activeTab: 'info',
+      activeLeftTab: '',
+      layoutSchema: null
     }
   };
 
@@ -87,6 +141,9 @@
   function normalizeWorkspaceConfig(config) {
     var c = Object.assign({}, config || {});
     c.schemaVersion = WORKSPACE_SCHEMA_VERSION;
+    if (LAYER_PRESETS[c.layerPreset]) {
+      applyLayerPresetConfig(c, c.layerPreset);
+    }
     return c;
   }
 
@@ -723,8 +780,10 @@
       var state = store.getState();
       var settings = state.settings || {};
 
+      var leftCol = root.querySelector('[data-v6-left-col]');
       var rightCol = root.querySelector('.v6-right-col');
       var cvdStrip = root.querySelector('[data-v6-cvd-strip]');
+      var lbody = root.querySelector('[data-v6-lbody]');
       var rbody = root.querySelector('[data-v6-rbody]');
 
       var activeTab = 'dom';
@@ -733,9 +792,18 @@
         if (m) activeTab = m[1];
       }
 
+      var activeLeftTab = '';
+      if (lbody) {
+        var ml = lbody.className.match(/show-(\w+)/);
+        if (ml) activeLeftTab = ml[1];
+      }
+
+      var layoutSchema = settings.layoutSchema || null;
+
       var wList = getWorkspaces();
       wList[name] = {
         schemaVersion: WORKSPACE_SCHEMA_VERSION,
+        layerPreset: settings.layerPreset || (state.ui && state.ui.layerPreset) || 'custom',
         chartMode: settings.chartMode || 'both',
         showTape: settings.showTape !== false,
         showDOM: settings.showDOM !== false,
@@ -746,9 +814,12 @@
         showHeatmap: settings.showHeatmap === true,
         showFootprint: settings.showFootprint === true,
         rightColWidth: rightCol ? rightCol.offsetWidth : 430,
+        leftColWidth: leftCol ? leftCol.offsetWidth : 320,
         cvdStripHeight: cvdStrip ? cvdStrip.offsetHeight : 226,
         maxTrades: settings.maxTrades || 5000,
-        activeTab: activeTab
+        activeTab: activeTab,
+        activeLeftTab: activeLeftTab,
+        layoutSchema: layoutSchema
       };
       saveWorkspaces(wList);
     },
@@ -756,22 +827,26 @@
     applyWorkspace: function (root, name, config) {
       var store = V6OF.getStore ? V6OF.getStore(root) : null;
       if (!store || !config) return;
+      var layerPreset = resolveLayerPreset(name, config);
+      var layerConfig = layerPreset === 'custom' ? config : applyLayerPresetConfig({}, layerPreset);
 
       store.updateSettings({
-        chartMode: config.chartMode || 'both',
+        chartMode: layerConfig.chartMode || config.chartMode || 'both',
         showTape: config.showTape !== false,
         showDOM: config.showDOM !== false,
         showCVD: config.showCVD !== false,
         showVwap: config.showVwap !== false,
-        showCandles: config.showCandles !== false,
-        showBubbles: config.showBubbles !== false,
-        showHeatmap: config.showHeatmap === true,
-        showFootprint: config.showFootprint === true,
-        maxTrades: config.maxTrades || 5000
+        showCandles: layerConfig.showCandles !== false,
+        showBubbles: layerConfig.showBubbles === true,
+        showHeatmap: layerConfig.showHeatmap === true,
+        showFootprint: layerConfig.showFootprint === true,
+        maxTrades: config.maxTrades || 5000,
+        layoutSchema: config.layoutSchema || null
       });
+      if (store.updateUi) store.updateUi({ layerPreset: layerPreset });
 
       if (V6OF.ResizablePanels) {
-        V6OF.ResizablePanels.restoreSizes(root, config.rightColWidth, config.cvdStripHeight);
+        V6OF.ResizablePanels.restoreSizes(root, config.rightColWidth, config.cvdStripHeight, config.leftColWidth);
       }
 
       var rbody = root.querySelector('[data-v6-rbody]');
@@ -780,6 +855,15 @@
         var rtabs = root.querySelectorAll('[data-v6-rtab]');
         Array.prototype.forEach.call(rtabs, function (tab) {
           tab.classList.toggle('is-active', tab.getAttribute('data-v6-rtab') === config.activeTab);
+        });
+      }
+
+      var lbody = root.querySelector('[data-v6-lbody]');
+      if (lbody && config.activeLeftTab) {
+        lbody.className = 'v6-lbody show-' + config.activeLeftTab;
+        var ltabs = root.querySelectorAll('[data-v6-ltab]');
+        Array.prototype.forEach.call(ltabs, function (tab) {
+          tab.classList.toggle('is-active', tab.getAttribute('data-v6-ltab') === config.activeLeftTab);
         });
       }
 

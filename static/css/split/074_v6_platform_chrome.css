@@ -1,0 +1,536 @@
+/* =============================================================================
+ * 074_v6_platform_chrome.css — Platform Chrome (Phase 2)
+ * Near-black top bar + bottom status bar in Hyperliquid/Kata style.
+ * Page-scoped to body[data-current-page="orderflow"].
+ * All colors via var(--v6-*) tokens. No !important.
+ * Loads after 070-073 so wins by source order at equal specificity.
+ * ========================================================================= */
+
+/* ---------------------------------------------------------------------------
+ * TOP HEADER
+ * -------------------------------------------------------------------------- */
+body[data-current-page="orderflow"] .v6-header {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 40px;
+  min-height: 40px;
+  max-height: 40px;
+  background: var(--v6-bg-2);
+  border-bottom: 1px solid var(--v6-hairline);
+  padding: 0;
+  overflow: hidden;
+  font-size: 11px;
+  font-family: var(--v6-font);
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+/* Groups separated by hairline right-border */
+body[data-current-page="orderflow"] .v6-brand,
+body[data-current-page="orderflow"] .v6-timeframes,
+body[data-current-page="orderflow"] .v6-seg,
+body[data-current-page="orderflow"] .v6-source-select {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 10px;
+  border-right: 1px solid var(--v6-hairline);
+  flex-shrink: 0;
+}
+
+/* Workspace holder: collapses to nothing when empty; shows as a group when populated */
+body[data-current-page="orderflow"] .v6-workspace-holder {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  flex-shrink: 0;
+  padding: 0;
+  border-right: none;
+  min-width: 0;
+}
+
+body[data-current-page="orderflow"] .v6-workspace-holder:not(:empty) {
+  padding: 0 10px;
+  border-right: 1px solid var(--v6-hairline);
+}
+
+/* Header context: show only the select, hide label and all management buttons */
+body[data-current-page="orderflow"] .v6-workspace-holder .v6-workspace-lbl,
+body[data-current-page="orderflow"] .v6-workspace-holder .v6-workspace-btn {
+  display: none;
+}
+
+body[data-current-page="orderflow"] .v6-workspace-holder .v6-workspace-widget {
+  display: flex;
+  align-items: center;
+}
+
+body[data-current-page="orderflow"] .v6-workspace-holder .v6-workspace-select {
+  background: transparent;
+  border: none;
+  color: var(--v6-text-dim);
+  font: 700 11px/1 var(--v6-font);
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  max-width: 100px;
+}
+
+body[data-current-page="orderflow"] .v6-workspace-holder .v6-workspace-select:focus {
+  outline: 1px solid var(--v6-accent-line);
+  border-radius: var(--v6-r-xs);
+}
+
+body[data-current-page="orderflow"] .v6-header-actions {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 6px;
+  gap: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * SYMBOL CLUSTER
+ * -------------------------------------------------------------------------- */
+body[data-current-page="orderflow"] .v6-brand {
+  gap: 6px;
+  padding: 0 12px;
+}
+
+body[data-current-page="orderflow"] .v6-brand-mark {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--v6-accent), var(--v6-accent-2));
+  flex-shrink: 0;
+}
+
+body[data-current-page="orderflow"] .v6-symbol-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+body[data-current-page="orderflow"] .v6-symbol-select {
+  background: transparent;
+  border: none;
+  color: var(--v6-text);
+  font: 800 13px/1 var(--v6-font);
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+body[data-current-page="orderflow"] .v6-symbol-select:focus {
+  outline: 1px solid var(--v6-accent-line);
+  border-radius: var(--v6-r-xs);
+}
+
+body[data-current-page="orderflow"] .v6-symbol-meta {
+  font: 700 8px/1 var(--v6-font);
+  color: var(--v6-text-mute);
+  border: 1px solid var(--v6-hairline);
+  border-radius: var(--v6-r-xs);
+  padding: 2px 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+body[data-current-page="orderflow"] .v6-badge {
+  font: 700 9px/1 var(--v6-mono);
+  color: var(--v6-text-faint);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+body[data-current-page="orderflow"] .v6-badge.v6-badge-error {
+  color: var(--v6-sell);
+}
+
+/* ---------------------------------------------------------------------------
+ * TIMEFRAME PILLS
+ * -------------------------------------------------------------------------- */
+body[data-current-page="orderflow"] .v6-timeframes {
+  gap: 2px;
+  padding: 0 8px;
+}
+
+body[data-current-page="orderflow"] .v6-tf-btn {
+  padding: 4px 7px;
+  border-radius: var(--v6-r-sm);
+  background: transparent;
+  border: none;
+  color: var(--v6-text-mute);
+  font: 700 11px/1 var(--v6-font);
+  cursor: pointer;
+  transition: background var(--v6-fast) var(--v6-ease), color var(--v6-fast) var(--v6-ease);
+  white-space: nowrap;
+}
+
+body[data-current-page="orderflow"] .v6-tf-btn:hover {
+  color: var(--v6-text);
+  background: var(--v6-surface);
+}
+
+body[data-current-page="orderflow"] .v6-tf-btn.active,
+body[data-current-page="orderflow"] .v6-tf-btn.is-active {
+  color: var(--v6-text);
+  background: var(--v6-surface-3);
+}
+
+/* ---------------------------------------------------------------------------
+ * CHART-TYPE SEGMENT
+ * -------------------------------------------------------------------------- */
+body[data-current-page="orderflow"] .v6-seg {
+  gap: 2px;
+  padding: 0 8px;
+}
+
+body[data-current-page="orderflow"] .v6-seg-btn {
+  padding: 4px 7px;
+  border-radius: var(--v6-r-sm);
+  background: transparent;
+  border: none;
+  color: var(--v6-text-mute);
+  font: 700 11px/1 var(--v6-font);
+  cursor: pointer;
+  transition: background var(--v6-fast) var(--v6-ease), color var(--v6-fast) var(--v6-ease);
+  white-space: nowrap;
+}
+
+body[data-current-page="orderflow"] .v6-seg-btn:hover {
+  color: var(--v6-text);
+  background: var(--v6-surface);
+}
+
+body[data-current-page="orderflow"] .v6-seg-btn.active,
+body[data-current-page="orderflow"] .v6-seg-btn.is-active {
+  color: var(--v6-bg);
+  background: var(--v6-accent);
+  font-weight: 800;
+}
+
+/* Settings DOM depth presets — inherit seg-btn but don't force amber on active */
+body[data-current-page="orderflow"] .v6-quality-presets .v6-seg-btn.is-active {
+  color: var(--v6-text);
+  background: var(--v6-surface-3);
+}
+
+/* ---------------------------------------------------------------------------
+ * SOURCE SELECT
+ * -------------------------------------------------------------------------- */
+body[data-current-page="orderflow"] .v6-source-select {
+  gap: 2px;
+  padding: 0 8px;
+}
+
+body[data-current-page="orderflow"] .v6-source-btn {
+  padding: 4px 7px;
+  border-radius: var(--v6-r-sm);
+  background: transparent;
+  border: none;
+  color: var(--v6-text-mute);
+  font: 700 10px/1 var(--v6-font);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background var(--v6-fast) var(--v6-ease), color var(--v6-fast) var(--v6-ease);
+}
+
+body[data-current-page="orderflow"] .v6-source-btn:hover {
+  color: var(--v6-text);
+  background: var(--v6-surface);
+}
+
+body[data-current-page="orderflow"] .v6-source-btn.active,
+body[data-current-page="orderflow"] .v6-source-btn.is-active {
+  color: var(--v6-text);
+  background: var(--v6-surface-3);
+}
+
+/* ---------------------------------------------------------------------------
+ * BUILD META — hidden in header chrome; markup + data-testid hook preserved
+ * -------------------------------------------------------------------------- */
+body[data-current-page="orderflow"] .v6-build-meta {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * CONNECTION CONTROL + ENGINE DOT
+ * -------------------------------------------------------------------------- */
+body[data-current-page="orderflow"] .v6-conn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--v6-r-sm);
+  color: var(--v6-text-mute);
+  font: 700 10px/1 var(--v6-font);
+  transition: background var(--v6-fast) var(--v6-ease), color var(--v6-fast) var(--v6-ease);
+  white-space: nowrap;
+}
+
+body[data-current-page="orderflow"] .v6-conn:hover {
+  background: var(--v6-surface);
+  color: var(--v6-text);
+}
+
+body[data-current-page="orderflow"] .v6-engine-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--v6-text-faint);
+  flex-shrink: 0;
+  transition: background var(--v6-med) var(--v6-ease), box-shadow var(--v6-med) var(--v6-ease);
+}
+
+body[data-current-page="orderflow"] .v6-engine-dot.v6-engine-connected {
+  background: var(--v6-buy);
+  box-shadow: 0 0 0 2px var(--v6-buy-soft);
+}
+
+body[data-current-page="orderflow"] .v6-engine-dot.v6-engine-connecting {
+  background: var(--v6-gold);
+  box-shadow: 0 0 0 2px var(--v6-gold-soft);
+}
+
+body[data-current-page="orderflow"] .v6-engine-dot.v6-engine-error {
+  background: var(--v6-sell);
+  box-shadow: 0 0 0 2px var(--v6-sell-soft);
+}
+
+body[data-current-page="orderflow"] .v6-engine-dot.v6-engine-disconnected {
+  background: var(--v6-text-faint);
+  box-shadow: none;
+}
+
+body[data-current-page="orderflow"] .v6-conn-text {
+  font: 700 10px/1 var(--v6-mono);
+  color: var(--v6-text-dim);
+}
+
+/* ---------------------------------------------------------------------------
+ * GEAR BUTTON (global settings)
+ * -------------------------------------------------------------------------- */
+body[data-current-page="orderflow"] .v6-gear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: var(--v6-r-sm);
+  color: var(--v6-text-mute);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background var(--v6-fast) var(--v6-ease), color var(--v6-fast) var(--v6-ease);
+  flex-shrink: 0;
+}
+
+body[data-current-page="orderflow"] .v6-gear:hover {
+  background: var(--v6-surface);
+  color: var(--v6-text);
+}
+
+body[data-current-page="orderflow"] .v6-gear.is-active {
+  background: var(--v6-accent-soft);
+  color: var(--v6-accent);
+}
+
+/* ---------------------------------------------------------------------------
+ * FULLSCREEN SLOT BUTTON
+ * -------------------------------------------------------------------------- */
+body[data-current-page="orderflow"] .v6-fullscreen-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: var(--v6-r-sm);
+  color: var(--v6-text-faint);
+  font-size: 14px;
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* ---------------------------------------------------------------------------
+ * HIDE NOISY HEADER SECTIONS (markup kept, hooks preserved)
+ * -------------------------------------------------------------------------- */
+body[data-current-page="orderflow"] .v6-header-disclosure-toggle,
+body[data-current-page="orderflow"] .v6-header-disclosure-panel {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * LEFT TOOLBAR RAIL
+ * -------------------------------------------------------------------------- */
+body[data-current-page="orderflow"] .v6-left-toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 44px;
+  min-width: 44px;
+  padding: 6px 0;
+  background: var(--v6-bg-2);
+  border-right: 1px solid var(--v6-hairline);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+body[data-current-page="orderflow"] .v6-tool {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: var(--v6-r-sm);
+  color: var(--v6-text-mute);
+  cursor: pointer;
+  transition: background var(--v6-fast) var(--v6-ease), color var(--v6-fast) var(--v6-ease);
+  flex-shrink: 0;
+}
+
+body[data-current-page="orderflow"] .v6-tool svg {
+  width: 16px;
+  height: 16px;
+}
+
+body[data-current-page="orderflow"] .v6-tool:hover {
+  background: var(--v6-surface);
+  color: var(--v6-text);
+}
+
+body[data-current-page="orderflow"] .v6-tool.is-active,
+body[data-current-page="orderflow"] .v6-tool[aria-pressed="true"] {
+  background: var(--v6-accent-soft);
+  color: var(--v6-accent);
+}
+
+body[data-current-page="orderflow"] .v6-tool-sep {
+  width: 20px;
+  height: 1px;
+  background: var(--v6-hairline-strong);
+  margin: 3px 0;
+  flex-shrink: 0;
+}
+
+/* View tools (follow/detach/fit/reset) — icon-only, same 28×28 as plain tools */
+body[data-current-page="orderflow"] .v6-left-toolbar .v6-view-tool {
+  width: 28px;
+  min-width: 28px;
+  max-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  gap: 0;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+body[data-current-page="orderflow"] .v6-left-toolbar .v6-view-tool-label,
+body[data-current-page="orderflow"] .v6-left-toolbar .v6-view-tool-state {
+  display: none;
+  width: 0;
+  overflow: hidden;
+}
+
+body[data-current-page="orderflow"] .v6-left-toolbar .v6-view-tool-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
+
+body[data-current-page="orderflow"] .v6-left-toolbar .v6-view-tool-icon svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+/* ---------------------------------------------------------------------------
+ * STATUS BAR (bottom footer)
+ * -------------------------------------------------------------------------- */
+body[data-current-page="orderflow"] .v6-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 24px;
+  min-height: 24px;
+  max-height: 24px;
+  background: var(--v6-bg-2);
+  border-top: 1px solid var(--v6-hairline);
+  padding: 0 4px;
+  flex-shrink: 0;
+  overflow: hidden;
+  font-family: var(--v6-mono);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+body[data-current-page="orderflow"] .v6-sb-sec {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border-right: 1px solid var(--v6-hairline);
+  height: 100%;
+  white-space: nowrap;
+}
+
+body[data-current-page="orderflow"] .v6-sb-sec:last-child {
+  border-right: none;
+  margin-left: auto;
+}
+
+body[data-current-page="orderflow"] .v6-sb-lbl {
+  font: 700 8px/1 var(--v6-mono);
+  color: var(--v6-text-faint);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+body[data-current-page="orderflow"] .v6-sb-val {
+  font: 700 9px/1 var(--v6-mono);
+  color: var(--v6-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+body[data-current-page="orderflow"] .v6-sb-val strong {
+  font: 700 9px/1 var(--v6-mono);
+  color: var(--v6-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+body[data-current-page="orderflow"] .v6-sb-val.is-engine-config-synced {
+  color: var(--v6-buy);
+}
+
+body[data-current-page="orderflow"] .v6-sb-val.is-engine-config-failed {
+  color: var(--v6-sell);
+}
+
+body[data-current-page="orderflow"] .v6-sb-val.is-engine-config-stale {
+  color: var(--v6-text-faint);
+}

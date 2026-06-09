@@ -1,7 +1,18 @@
 # ---------- Logging ----------
 
 import logging as _logging
+from urllib.parse import urlparse
 from flask import Flask, render_template, request, jsonify
+
+
+def _is_loopback_origin(origin: str) -> bool:
+    """True when an Origin's host is a loopback address. Uses urlparse (not a
+    prefix check) so 'http://localhost.attacker.com' is correctly rejected."""
+    try:
+        host = urlparse(origin).hostname
+    except ValueError:
+        return False
+    return host in ("localhost", "127.0.0.1", "::1")
 
 _logging.basicConfig(
     level=_logging.INFO,
@@ -35,11 +46,14 @@ def add_no_cache_headers(response):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"]  = "no-cache"
         response.headers["Expires"] = "0"
-    # CORS leger pour les API — restreint aux origines locales
+    # CORS leger pour les API — origine reflechie seulement si loopback presente.
+    # Pas de wildcard: une requete sans Origin (meme-origine / non-navigateur)
+    # n'a pas besoin d'en-tete CORS.
     if request.path.startswith("/api/"):
         origin = request.headers.get("Origin", "")
-        if not origin or origin.startswith(("http://localhost", "http://127.0.0.1")):
-            response.headers["Access-Control-Allow-Origin"] = origin or "*"
+        if origin and _is_loopback_origin(origin):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Vary"] = "Origin"
             response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
             response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response

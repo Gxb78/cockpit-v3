@@ -37,16 +37,17 @@
     maxTrades: 5000,
     heatmapMaxFrames: 3600,
     footprintMaxCandles: 1200,
+    footprintHistoryLookbackMinutes: 360,
     domDepth: 1000,
     domRangeLevels: 1000,
-    domWallsOnly: false,
-    domWallRatio: 4,
     domMinNotionalUsd: 100,
     domFollowThresholdTicks: 1,
     domScaleMode: 'book',
     domValueMode: 'coin',
     domGroup: 1,
     domColumns: DEFAULT_DOM_COLUMNS.slice(),
+    domSoftWallPercentile: 0.85,
+    domMajorWallPercentile: 0.95,
     minQty: 0,
     maxRows: 420,
     restTradePrefillLimit: 500,
@@ -55,10 +56,12 @@
     tickSize: 1,
     showLastPrice: true,
     showGrid: true,
-    bgColor: '#ffffff',
+    showSessionZones: true,
+    sessionProfile: 'global',
+    bgColor: '#131722',
     upColor: '#089981',
     downColor: '#f23645',
-    theme: 'light-tv',
+    theme: 'dark-tv',
     indicators: [],
     indicatorSources: [],
     activeTab: 'dom',
@@ -77,10 +80,20 @@
     imbalanceMinVolume: 1.0,
     exhaustionFactor: 0.35,
     footprintValueAreaPct: 70,
-    minWickTicks: 0
+    minWickTicks: 0,
+    markers: [],
+    showVolumeProfile: false,
+    volumeProfileType: 'visible',
+    volumeProfileSide: 'right',
+    volumeProfileStyle: 'volume',
+    volumeProfileValueArea: 70,
+    volumeProfileFixedStart: 0,
+    volumeProfileFixedEnd: 0,
+    volumeProfileShowPocTrail: false
   };
 
   var VALID_CHART_MODES = { heatmap: 1, footprint: 1, both: 1, none: 1 };
+  var VALID_SESSION_PROFILES = { global: 1, rth: 1, eth: 1 };
   // DOM bid/ask value display modes. 'usd' is the legacy alias of 'notional'.
   var VALID_VALUE_MODES = { coin: 1, notional: 1, contracts: 1, ticks: 1 };
   var VALID_THEMES = { 'light-tv': 1, 'dark-tv': 1 };
@@ -106,26 +119,27 @@
     out.showFootprint = typeof raw.showFootprint === 'boolean' ? raw.showFootprint : DEFAULTS.showFootprint;
     out.showLastPrice = typeof raw.showLastPrice === 'boolean' ? raw.showLastPrice : DEFAULTS.showLastPrice;
     out.showGrid = typeof raw.showGrid === 'boolean' ? raw.showGrid : DEFAULTS.showGrid;
-    out.theme = VALID_THEMES[raw.theme] ? raw.theme : DEFAULTS.theme;
+    out.showSessionZones = typeof raw.showSessionZones === 'boolean' ? raw.showSessionZones : DEFAULTS.showSessionZones;
+    out.sessionProfile = VALID_SESSION_PROFILES[raw.sessionProfile] ? raw.sessionProfile : DEFAULTS.sessionProfile;
+    out.theme = 'dark-tv'; // Always enforce dark theme for all orderflow components
     out.bgColor = typeof raw.bgColor === 'string' ? raw.bgColor : DEFAULTS.bgColor;
+    if (out.bgColor === '#ffffff' || out.bgColor === '#f8f9fa') {
+      out.bgColor = '#131722';
+    }
     out.upColor = typeof raw.upColor === 'string' ? raw.upColor : DEFAULTS.upColor;
     out.downColor = typeof raw.downColor === 'string' ? raw.downColor : DEFAULTS.downColor;
-    if (out.theme === 'light-tv') {
-      if (out.bgColor === '#080b12' || out.bgColor === '#131722') out.bgColor = DEFAULTS.bgColor;
-      if (out.upColor === '#3ddc97' || out.upColor === '#00b0ff') out.upColor = DEFAULTS.upColor;
-      if (out.downColor === '#ff5f73' || out.downColor === '#000000') out.downColor = DEFAULTS.downColor;
-    }
     out.maxTrades = clampInt(raw.maxTrades, 50, 5000, DEFAULTS.maxTrades);
     out.heatmapMaxFrames = clampInt(raw.heatmapMaxFrames, 60, 10000, DEFAULTS.heatmapMaxFrames);
-    out.footprintMaxCandles = clampInt(raw.footprintMaxCandles, 30, 3000, DEFAULTS.footprintMaxCandles);
-    out.domDepth = clampInt(raw.domDepth, 5, 5000, DEFAULTS.domDepth);
+    out.footprintMaxCandles = clampInt(raw.footprintMaxCandles, 60, 5000, DEFAULTS.footprintMaxCandles);
+    out.footprintHistoryLookbackMinutes = clampInt(raw.footprintHistoryLookbackMinutes, 1, 10080, DEFAULTS.footprintHistoryLookbackMinutes);
+    out.domDepth = clampInt(raw.domDepth, 10, 5000, DEFAULTS.domDepth);
     out.domRangeLevels = clampInt(raw.domRangeLevels, 250, 5000, DEFAULTS.domRangeLevels);
-    out.domWallsOnly = typeof raw.domWallsOnly === 'boolean' ? raw.domWallsOnly : DEFAULTS.domWallsOnly;
-    out.domWallRatio = clampInt(raw.domWallRatio, 2, 12, DEFAULTS.domWallRatio);
     out.domMinNotionalUsd = Math.max(0, Math.min(10000000, Number(raw.domMinNotionalUsd) || DEFAULTS.domMinNotionalUsd));
     out.domFollowThresholdTicks = clampInt(raw.domFollowThresholdTicks, 1, 20, DEFAULTS.domFollowThresholdTicks);
     out.domScaleMode = raw.domScaleMode === 'visible' ? 'visible' : DEFAULTS.domScaleMode;
     out.domGroup = clampInt(raw.domGroup, 1, 100, DEFAULTS.domGroup);
+    out.domSoftWallPercentile = Math.max(0.5, Math.min(0.99, Number(raw.domSoftWallPercentile) || DEFAULTS.domSoftWallPercentile));
+    out.domMajorWallPercentile = Math.max(out.domSoftWallPercentile, Math.min(0.999, Number(raw.domMajorWallPercentile) || DEFAULTS.domMajorWallPercentile));
     var rawValueMode = raw.domValueMode === 'usd' ? 'notional' : raw.domValueMode;
     out.domValueMode = VALID_VALUE_MODES[rawValueMode] ? rawValueMode : DEFAULTS.domValueMode;
     // Validate domColumns: must be a non-empty array of unique valid keys.
@@ -138,6 +152,17 @@
           validCols.push(k);
         }
       });
+      // Force 'price' column if missing
+      if (!seen['price']) {
+        // Find where price should be (between bid/ask if possible, or just insert it)
+        var bidIdx = validCols.indexOf('bid');
+        var askIdx = validCols.indexOf('ask');
+        if (bidIdx !== -1 && askIdx !== -1 && askIdx > bidIdx) {
+          validCols.splice(askIdx, 0, 'price');
+        } else {
+          validCols.push('price');
+        }
+      }
       if (validCols.length > 0) {
         out.domColumns = validCols;
       } else {
@@ -177,6 +202,21 @@
     out.minWickTicks = clampInt(raw.minWickTicks, 0, 10, DEFAULTS.minWickTicks);
     out.indicatorSources = sanitizeIndicatorSources(raw.indicatorSources);
     out.indicators = sanitizeIndicators(raw.indicators, out.indicatorSources);
+    out.markers = Array.isArray(raw.markers) ? raw.markers.map(function (m) {
+      return {
+        ts: Number(m.ts || 0),
+        text: String(m.text || ''),
+        type: String(m.type || 'user')
+      };
+    }) : [];
+    out.showVolumeProfile = typeof raw.showVolumeProfile === 'boolean' ? raw.showVolumeProfile : DEFAULTS.showVolumeProfile;
+    out.volumeProfileType = ['visible', 'session', 'fixed', 'composite'].indexOf(raw.volumeProfileType) >= 0 ? raw.volumeProfileType : DEFAULTS.volumeProfileType;
+    out.volumeProfileSide = ['left', 'right'].indexOf(raw.volumeProfileSide) >= 0 ? raw.volumeProfileSide : DEFAULTS.volumeProfileSide;
+    out.volumeProfileStyle = ['volume', 'delta', 'split'].indexOf(raw.volumeProfileStyle) >= 0 ? raw.volumeProfileStyle : DEFAULTS.volumeProfileStyle;
+    out.volumeProfileValueArea = clampInt(raw.volumeProfileValueArea, 10, 100, DEFAULTS.volumeProfileValueArea);
+    out.volumeProfileFixedStart = Math.max(0, Number(raw.volumeProfileFixedStart) || 0);
+    out.volumeProfileFixedEnd = Math.max(0, Number(raw.volumeProfileFixedEnd) || 0);
+    out.volumeProfileShowPocTrail = typeof raw.volumeProfileShowPocTrail === 'boolean' ? raw.volumeProfileShowPocTrail : DEFAULTS.volumeProfileShowPocTrail;
     return out;
   }
 

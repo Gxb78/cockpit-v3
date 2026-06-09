@@ -261,3 +261,23 @@ func TestHyperliquidDefaultsToCoinSymbol(t *testing.T) {
 		t.Fatalf("unexpected hyperliquid symbols: %#v", got)
 	}
 }
+
+func TestFromEnvAllowedOriginsDefaultsEmpty(t *testing.T) {
+	if got := FromEnv().AllowedOrigins; len(got) != 0 {
+		t.Fatalf("AllowedOrigins should default empty (loopback-only policy), got %#v", got)
+	}
+}
+
+func TestFromEnvAllowedOriginsParsed(t *testing.T) {
+	t.Setenv("MARKET_GO_ALLOWED_ORIGINS", " https://api.engine.local:8443/ , http://localhost:5001 ,, ")
+	got := FromEnv().AllowedOrigins
+	want := []string{"https://api.engine.local:8443", "http://localhost:5001"}
+	if len(got) != len(want) {
+		t.Fatalf("AllowedOrigins = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("AllowedOrigins[%d] = %q, want %q (trimmed, no trailing slash)", i, got[i], want[i])
+		}
+	}
+}

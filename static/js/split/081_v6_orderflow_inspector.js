@@ -57,7 +57,21 @@
     var tz = (state && (state.exchangeTimeZone || state.marketTimeZone)) ||
       (candle && (candle.exchangeTimeZone || candle.marketTimeZone));
     if (tz) return String(tz);
-    return 'America/New_York';
+
+    var symbol = String((state && state.symbol) || (candle && candle.symbol) || '').toUpperCase();
+    if (symbol) {
+      if (/^(ES|NQ|YM|RTY|MES|MNQ|MYM|MRY|SPY|QQQ|IWM|DIA|SPX|NDX|DJI)/.test(symbol) || 
+          (symbol.indexOf('USDT') === -1 && symbol.indexOf('USD') !== -1 && (symbol.indexOf('ES') === 0 || symbol.indexOf('NQ') === 0))) {
+        return 'America/New_York';
+      }
+      if (/^(DAX|FDAX|GER|DE30)/.test(symbol)) {
+        return 'Europe/Berlin';
+      }
+      if (/^(NK|N225|JP225)/.test(symbol)) {
+        return 'Asia/Tokyo';
+      }
+    }
+    return 'UTC';
   }
 
   function timeZoneConfig(state, candle) {
@@ -537,7 +551,7 @@
     if (!store || !store.setState || !candle) return;
     store.setState(function (prev) {
       var settings = (prev && prev.settings) || {};
-      var maxCandles = Math.max(60, Math.min(3000, num(settings.footprintMaxCandles, 3000)));
+      var maxCandles = Math.max(60, Math.min(5000, num(settings.footprintMaxCandles, 5000)));
       var incomingKey = footprintKey(candle.symbol, candle.timeframe || prev.timeframe, candle);
       var merged = [];
       var replaced = false;

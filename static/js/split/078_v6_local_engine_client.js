@@ -25,26 +25,43 @@
     return proto + '//' + host + ':8765/stream';
   }
 
-  function resolveMarketUrl(path, transport) {
-    var wsUrl = configuredMarketWsUrl();
-    var suffix = path || '';
-    var base;
+  // Normalize an origin URL for a given transport ('ws' or 'http'), stripping the
+  // '/stream' suffix and any query/hash. Shared by both transports.
+  function normalizeOrigin(rawUrl, transport) {
     try {
-      var parsed = new URL(wsUrl, window.location && window.location.href ? window.location.href : undefined);
+      var parsed = new URL(rawUrl, window.location && window.location.href ? window.location.href : undefined);
       var secure = parsed.protocol === 'wss:' || parsed.protocol === 'https:';
       parsed.protocol = transport === 'ws' ? (secure ? 'wss:' : 'ws:') : (secure ? 'https:' : 'http:');
       parsed.pathname = parsed.pathname.replace(/\/stream\/?$/, '') || '/';
       parsed.search = '';
       parsed.hash = '';
-      base = parsed.toString().replace(/\/$/, '');
+      return parsed.toString().replace(/\/$/, '');
     } catch (err) {
-      base = wsUrl.replace(/^ws(s?):/, 'http$1:').replace(/\/stream\/?$/, '');
+      if (transport === 'ws') return rawUrl.replace(/\/stream\/?$/, '');
+      return rawUrl.replace(/^ws(s?):/, 'http$1:').replace(/\/stream\/?$/, '');
     }
+  }
+
+  // HTTP origin for the market engine REST API (footprint history, /replay).
+  // First-class config value: read COCKPIT_CONFIG.marketHttpUrl when present;
+  // otherwise fall back to deriving it from the WS origin (legacy behavior).
+  function configuredMarketHttpUrl() {
+    var cfg = window.COCKPIT_CONFIG || {};
+    if (cfg.marketHttpUrl) return String(cfg.marketHttpUrl).replace(/\/$/, '');
+    return normalizeOrigin(configuredMarketWsUrl(), 'http');
+  }
+
+  function resolveMarketUrl(path, transport) {
+    var suffix = path || '';
+    var base = transport === 'ws'
+      ? normalizeOrigin(configuredMarketWsUrl(), 'ws')
+      : configuredMarketHttpUrl();
     return base + (suffix.charAt(0) === '/' ? suffix : '/' + suffix);
   }
 
   V6OF.register('Transport', 'resolveMarketUrl', resolveMarketUrl, 'resolveMarketUrl');
   V6OF.register('Transport', 'marketWsUrl', configuredMarketWsUrl, 'marketWsUrl');
+  V6OF.register('Transport', 'marketHttpUrl', configuredMarketHttpUrl, 'marketHttpUrl');
 
   var DEFAULT_URL = configuredMarketWsUrl();
   var DEFAULT_MAX_TRADE_BUFFER = 5000;
@@ -263,7 +280,10 @@
       if (store) {
         var patch = { transportStatus: next };
         if (next === 'connected') {
-          patch.dataFreshness = 'live';
+          var connectedState = store.getState ? store.getState() : {};
+          if (connectedState.source !== 'rest-fallback' && connectedState.dataFreshness !== 'rest-fallback') {
+            patch.dataFreshness = 'warming';
+          }
         } else if (next === 'disconnected' || next === 'error') {
           var s = store.getState();
           patch.dataFreshness = (s.dataFreshness === 'rest-fallback') ? 'rest-fallback' : 'offline';
@@ -372,7 +392,7 @@
             patch.selectedHeatmapSymbol = lastFrame ? (lastFrame.symbol || state.selectedHeatmapSymbol || 'BTC') : state.selectedHeatmapSymbol;
           }
           if (nextFootprintCandles.length) {
-            var maxCandles = Math.max(60, Math.min(3000, Number((state.settings && state.settings.footprintMaxCandles) || DEFAULT_MAX_FOOTPRINT_CANDLES)));
+            var maxCandles = Math.max(60, Math.min(5000, Number((state.settings && state.settings.footprintMaxCandles) || DEFAULT_MAX_FOOTPRINT_CANDLES)));
             var fpBefore = (state.footprintCandles || []).length + nextFootprintCandles.length;
             var candles = mergeFootprintCandles(state.footprintCandles || [], nextFootprintCandles, maxCandles);
             if (fpBefore > candles.length) {
@@ -387,6 +407,7 @@
           }
           if (newTrades.length || newDeltaBuckets.length || nextVwap || nextOrderBook || nextHeatmapFrames.length || nextFootprintCandles.length) {
             patch.source = 'live';
+            patch.dataFreshness = 'live';
             patch.lastMessageAt = stats.lastMessageTs || Date.now();
             patch.isStale = false;
             // Always normalize the symbol before writing it to the store.
@@ -864,6 +885,7 @@
             var patch = {
               _candlesByInterval: byIv,
               source: 'live',
+              dataFreshness: 'live',
               isStale: false,
               lastMessageAt: Date.now(),
               symbol: (function (s) { return s === 'BTC' ? 'BTCUSDT' : s; })(msg.payload.symbol || history[history.length - 1].symbol || prev.symbol)
@@ -880,7 +902,29 @@
         notify();
       } else if (msg.type === 'replay_status') {
         if (msg.payload && store) {
-          store.setState({ replay: msg.payload }, 'replay-status');
+          var prevState = store.getState();
+          var prevReplay = prevState.replay || {};
+          var newReplay = msg.payload || {};
+          var events = prevState.replayEvents ? prevState.replayEvents.slice() : [];
+          if (newReplay.clockMs) {
+            var clock = newReplay.clockMs;
+            if (newReplay.state !== prevReplay.state && newReplay.state) {
+              events.push({
+                ts: clock,
+                type: 'replay',
+                text: 'Replay: ' + newReplay.state
+              });
+            }
+            if (newReplay.speed !== prevReplay.speed && newReplay.speed != null && prevReplay.speed != null) {
+              events.push({
+                ts: clock,
+                type: 'replay',
+                text: 'Replay Speed: ' + newReplay.speed + 'x'
+              });
+            }
+            if (events.length > 200) events.shift();
+          }
+          store.setState({ replay: msg.payload, replayEvents: events }, 'replay-status');
         }
         notify();
       } else if (msg.type === 'heartbeat') {
@@ -1059,8 +1103,8 @@
           byIv[interval] = candles;
           var patch = {
             _candlesByInterval: byIv,
-            source: 'live',
-            dataFreshness: (status === 'connected') ? 'live' : 'rest-fallback',
+            source: 'rest-fallback',
+            dataFreshness: 'rest-fallback',
             isStale: false,
             lastMessageAt: Date.now()
           };
@@ -1090,19 +1134,21 @@
       var intervalMsValue = timeframeToMs(tf);
       var from = Number(options.from || options.startTime || 0);
       var to = Number(options.to || options.endTime || 0);
-      if ((!from || !to) && Array.isArray(state.chartCandles) && state.chartCandles.length) {
-        var firstChartCandle = state.chartCandles[0];
-        var lastChartCandle = state.chartCandles[state.chartCandles.length - 1];
-        from = from || Number(firstChartCandle.openTime || 0);
-        to = to || Number(lastChartCandle.closeTime || (Number(lastChartCandle.openTime || 0) + intervalMsValue - 1));
+      if (!from || !to) {
+        var settings = state.settings || {};
+        var lookbackMinutes = Math.max(1, Math.min(10080, Number(options.lookbackMinutes || settings.footprintHistoryLookbackMinutes || 360)));
+        to = to || Date.now();
+        from = from || (to - lookbackMinutes * 60000);
       }
+      var requestedFrom = from;
+      var requestedTo = to;
       var limit = Math.max(1, Math.min(3000, Number(options.limit || DEFAULT_MAX_FOOTPRINT_CANDLES)));
 
       // --- Idempotency guard ---
       // Don't re-fetch the full history if we already have it for this symbol+tf+window.
       // Only bypass when explicitly called with a forced small range (e.g. inspector, limit<=20).
       var isSmallFetch = options.limit && options.limit <= 20;
-      if (!isSmallFetch && _lastFpFetch) {
+      if (!isSmallFetch && !options.force && _lastFpFetch) {
         var sameKey = _lastFpFetch.symbol === symbol && _lastFpFetch.tf === tf;
         var sameWindow = (!from || _lastFpFetch.from <= from) && (!to || _lastFpFetch.to >= to);
         var recentEnough = (Date.now() - _lastFpFetch.ts) < 60000; // 1 min debounce
@@ -1171,8 +1217,14 @@
           if (!candles.length) return;
           
           store.setState(function (prev) {
-            var maxCandles = Math.max(60, Math.min(3000, Number((prev.settings && prev.settings.footprintMaxCandles) || DEFAULT_MAX_FOOTPRINT_CANDLES)));
+            var maxCandles = Math.max(60, Math.min(5000, Number((prev.settings && prev.settings.footprintMaxCandles) || DEFAULT_MAX_FOOTPRINT_CANDLES)));
             var merged = mergeFootprintCandles(prev.footprintCandles || [], candles, maxCandles);
+            if (!isSmallFetch && requestedFrom > 0 && requestedTo > 0) {
+              merged = merged.filter(function (item) {
+                var open = Number(item && item.openTime || 0);
+                return open >= requestedFrom && open <= requestedTo;
+              });
+            }
             var lastCandle = merged[merged.length - 1];
             return {
               footprintCandles: merged,

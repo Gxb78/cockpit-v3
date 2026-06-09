@@ -31,7 +31,7 @@ _KLINES_SYMBOL_WHITELIST = frozenset({"BTCUSDT", "ETHUSDT", "SOLUSDT"})
 _KLINES_INTERVAL_WHITELIST = frozenset({
     "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"
 })
-_KLINES_MAX_LIMIT = 1000
+_KLINES_MAX_LIMIT = 5000
 _KLINES_CACHE_TTL = 300  # 5min
 _KLINES_CACHE_MAX_KEYS = 100
 _klines_cache = {}

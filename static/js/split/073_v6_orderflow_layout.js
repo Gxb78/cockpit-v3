@@ -16,6 +16,24 @@
     };
   }
 
+  function renderRootId(root) {
+    if (!root) return 'global';
+    if (!root._v6RenderRootId) {
+      V6OF._renderRootSeq = (V6OF._renderRootSeq || 0) + 1;
+      root._v6RenderRootId = root.id || ('root-' + V6OF._renderRootSeq);
+    }
+    return root._v6RenderRootId;
+  }
+
+  function queueRender(root, surface, fn) {
+    var scheduler = V6OF.RenderScheduler;
+    if (scheduler && scheduler.queue) {
+      scheduler.queue(surface + ':' + renderRootId(root), fn);
+    } else if (typeof fn === 'function') {
+      fn();
+    }
+  }
+
   // ── REST request cache (TTL per endpoint) ──
   var _restCache = {};
   function fetchJson(url) {
@@ -94,23 +112,9 @@
 
   function hydrateThemeVars(root, settings) {
     if (!root) return;
-    settings = settings || {};
-    var theme = settings.theme === 'dark-tv' ? 'dark-tv' : 'light-tv';
-    var vars = theme === 'dark-tv'
+    var theme = 'dark-tv'; // Always enforce dark theme for all orderflow components
+    var vars = theme !== 'dark-tv'
       ? {
-          '--v6-bg': '#131722',
-          '--v6-bg-2': '#171b22',
-          '--v6-surface': '#1e222d',
-          '--v6-surface-2': '#222733',
-          '--v6-surface-3': '#2a2e39',
-          '--v6-text': '#d1d4dc',
-          '--v6-text-dim': '#b2b5be',
-          '--v6-text-mute': '#868993',
-          '--v6-text-faint': '#5f636e',
-          '--v6-hairline': 'rgba(120, 130, 150, 0.20)',
-          '--v6-hairline-strong': 'rgba(120, 130, 150, 0.32)'
-        }
-      : {
           '--v6-bg': '#f8f9fa',
           '--v6-bg-2': '#f0f3fa',
           '--v6-surface': '#ffffff',
@@ -122,6 +126,19 @@
           '--v6-text-faint': '#9aa0aa',
           '--v6-hairline': 'rgba(19, 23, 34, 0.14)',
           '--v6-hairline-strong': 'rgba(19, 23, 34, 0.24)'
+        }
+      : {
+          '--v6-bg': '#0a0b0d',
+          '--v6-bg-2': '#0e0f12',
+          '--v6-surface': '#15171b',
+          '--v6-surface-2': '#1c1f24',
+          '--v6-surface-3': '#23262c',
+          '--v6-text': '#d7d9de',
+          '--v6-text-dim': '#9aa0ab',
+          '--v6-text-mute': '#7c818c',
+          '--v6-text-faint': '#565b66',
+          '--v6-hairline': 'rgba(255, 255, 255, 0.06)',
+          '--v6-hairline-strong': 'rgba(255, 255, 255, 0.12)'
         };
     root.dataset.v6Theme = theme;
     Object.keys(vars).forEach(function (key) {
@@ -223,6 +240,7 @@
               '<span class="v6-engine-dot" data-v6-engine-dot></span>',
               '<span class="v6-conn-text" data-v6-engine-status-text>Offline</span>',
             '</button>',
+            '<button type="button" class="v6-gear" data-v6-action="global-settings" title="Settings" aria-label="Global settings">⚙</button>',
           '</div>',
         '</header>',
         '<div class="v6-mount-error-region" data-v6-mount-error role="status" aria-live="polite" data-testid="orderflow-mount-error" hidden>',
@@ -278,6 +296,14 @@
                   '</select>',
                 '</label>',
                 '<label class="v6-check"><input type="checkbox" data-v6-setting="showGrid" /><span>Show Grid</span></label>',
+                '<label class="v6-check"><input type="checkbox" data-v6-setting="showSessionZones" /><span>Show Sessions</span></label>',
+                '<label class="v6-field">Sessions',
+                  '<select data-v6-setting="sessionProfile">',
+                    '<option value="global">Asia / Europe / US</option>',
+                    '<option value="rth">US RTH</option>',
+                    '<option value="eth">US ETH</option>',
+                  '</select>',
+                '</label>',
                 '<label class="v6-field">Background',
                   '<input type="color" data-v6-setting="bgColor" />',
                 '</label>',
@@ -286,6 +312,36 @@
                 '</label>',
                 '<label class="v6-field">Down Candle',
                   '<input type="color" data-v6-setting="downColor" />',
+                '</label>',
+              '</div>',
+              // -- Volume Profile --
+              '<div class="v6-settings-section">',
+                '<div class="v6-settings-section-title">Volume Profile</div>',
+                '<label class="v6-check"><input type="checkbox" data-v6-setting="showVolumeProfile" /><span>Show Profile</span></label>',
+                '<label class="v6-check"><input type="checkbox" data-v6-setting="volumeProfileShowPocTrail" /><span>Show POC Trail</span></label>',
+                '<label class="v6-field">Type',
+                  '<select data-v6-setting="volumeProfileType">',
+                    '<option value="visible">Visible Range</option>',
+                    '<option value="session">Session</option>',
+                    '<option value="fixed">Fixed Range</option>',
+                    '<option value="composite">Composite</option>',
+                  '</select>',
+                '</label>',
+                '<label class="v6-field">Style',
+                  '<select data-v6-setting="volumeProfileStyle">',
+                    '<option value="volume">Volume</option>',
+                    '<option value="delta">Delta</option>',
+                    '<option value="split">Split</option>',
+                  '</select>',
+                '</label>',
+                '<label class="v6-field">Side',
+                  '<select data-v6-setting="volumeProfileSide">',
+                    '<option value="left">Left</option>',
+                    '<option value="right">Right</option>',
+                  '</select>',
+                '</label>',
+                '<label class="v6-field">Value Area %',
+                  '<input type="number" min="10" max="100" step="1" data-v6-setting="volumeProfileValueArea" />',
                 '</label>',
               '</div>',
               // -- Toggles --
@@ -350,19 +406,26 @@
                   '<input type="number" min="50" max="5000" step="50" data-v6-setting="maxTrades" />',
                 '</label>',
                 '<label class="v6-field">Max heatmap frames',
-                  '<input type="number" min="60" max="1000" step="10" data-v6-setting="maxHeatmapFrames" />',
+                  '<input type="number" min="60" max="10000" step="60" data-v6-setting="maxHeatmapFrames" />',
                 '</label>',
+                '<div class="v6-setting-note">Higher heatmap frame caps retain more L2 snapshots in browser memory and increase canvas draw cost.</div>',
                 '<label class="v6-field">Max footprint candles',
-                  '<input type="number" min="30" max="300" step="10" data-v6-setting="maxFootprintCandles" />',
+                  '<input type="number" min="60" max="3000" step="60" data-v6-setting="maxFootprintCandles" />',
+                '</label>',
+                '<label class="v6-field">Footprint range (min)',
+                  '<input type="number" min="1" max="10080" step="15" data-v6-setting="footprintHistoryLookbackMinutes" />',
                 '</label>',
                 '<label class="v6-field">DOM depth (UI)',
-                  '<input type="number" min="5" max="50" step="1" data-v6-setting="domDepth" />',
+                  '<input type="number" min="10" max="5000" step="50" data-v6-setting="domDepth" />',
                 '</label>',
+                '<div class="v6-quality-presets" data-v6-dom-depth-presets>',
+                  '<button type="button" class="v6-seg-btn" data-v6-action="dom-depth-preset" data-dom-depth="100">Light</button>',
+                  '<button type="button" class="v6-seg-btn" data-v6-action="dom-depth-preset" data-dom-depth="1000">Balanced</button>',
+                  '<button type="button" class="v6-seg-btn" data-v6-action="dom-depth-preset" data-dom-depth="2500">Deep</button>',
+                  '<button type="button" class="v6-seg-btn" data-v6-action="dom-depth-preset" data-dom-depth="5000">Full</button>',
+                '</div>',
                 '<label class="v6-field">DOM range',
                   '<input type="number" min="25" max="500" step="25" data-v6-setting="domRangeLevels" />',
-                '</label>',
-                '<label class="v6-field">Wall ratio',
-                  '<input type="number" min="2" max="12" step="1" data-v6-setting="domWallRatio" />',
                 '</label>',
                 '<label class="v6-field">Min display ($)',
                   '<input type="number" min="0" max="10000000" step="10" data-v6-setting="domMinNotionalUsd" />',
@@ -376,7 +439,12 @@
                     '<option value="visible">Visible rows</option>',
                   '</select>',
                 '</label>',
-                '<label class="v6-check"><input type="checkbox" data-v6-setting="domWallsOnly" /><span>Walls only</span></label>',
+                '<label class="v6-field">Soft Wall Percentile',
+                  '<input type="number" min="0.5" max="0.99" step="0.01" data-v6-setting="domSoftWallPercentile" />',
+                '</label>',
+                '<label class="v6-field">Major Wall Percentile',
+                  '<input type="number" min="0.5" max="0.999" step="0.005" data-v6-setting="domMajorWallPercentile" />',
+                '</label>',
               '</div>',
               // -- Tape & DOM --
               '<div class="v6-settings-section">',
@@ -393,6 +461,16 @@
                 '<label class="v6-field">REST trade prefill',
                   '<input type="number" min="50" max="5000" step="50" data-v6-setting="restTradePrefillLimit" />',
                 '</label>',
+              '</div>',
+              // -- DOM Columns --
+              '<div class="v6-settings-section">',
+                '<div class="v6-settings-section-title">DOM Columns</div>',
+                '<div class="v6-dom-column-presets" style="display:flex; gap:6px; margin-bottom:8px;">',
+                  '<button type="button" class="v6-btn v6-btn-sm" data-v6-dom-preset="minimal" style="flex:1; padding:2px 0; font-size:9px;">Minimal</button>',
+                  '<button type="button" class="v6-btn v6-btn-sm" data-v6-dom-preset="delta" style="flex:1; padding:2px 0; font-size:9px;">Delta</button>',
+                  '<button type="button" class="v6-btn v6-btn-sm" data-v6-dom-preset="full" style="flex:1; padding:2px 0; font-size:9px;">Full</button>',
+                '</div>',
+                '<div class="v6-settings-columns-list" data-v6-dom-columns-config></div>',
               '</div>',
               // -- Actions --
               '<div class="v6-settings-section v6-settings-actions">',
@@ -572,9 +650,17 @@
     if (domScaleMode && document.activeElement !== domScaleMode) domScaleMode.value = settings.domScaleMode || 'book';
     var inspectorTimeZoneMode = root.querySelector('[data-v6-setting="inspectorTimeZoneMode"]');
     if (inspectorTimeZoneMode && document.activeElement !== inspectorTimeZoneMode) inspectorTimeZoneMode.value = settings.inspectorTimeZoneMode || 'utc';
+    var sessionProfile = root.querySelector('[data-v6-setting="sessionProfile"]');
+    if (sessionProfile && document.activeElement !== sessionProfile) sessionProfile.value = settings.sessionProfile || 'global';
+    var volumeProfileType = root.querySelector('[data-v6-setting="volumeProfileType"]');
+    if (volumeProfileType && document.activeElement !== volumeProfileType) volumeProfileType.value = settings.volumeProfileType || 'visible';
+    var volumeProfileSide = root.querySelector('[data-v6-setting="volumeProfileSide"]');
+    if (volumeProfileSide && document.activeElement !== volumeProfileSide) volumeProfileSide.value = settings.volumeProfileSide || 'right';
+    var volumeProfileStyle = root.querySelector('[data-v6-setting="volumeProfileStyle"]');
+    if (volumeProfileStyle && document.activeElement !== volumeProfileStyle) volumeProfileStyle.value = settings.volumeProfileStyle || 'volume';
 
     // Checkboxes — resolved centrally via SETTINGS_SCHEMA
-    var toggles = ['showTape', 'showDOM', 'showCVD', 'showVwap', 'showHeatmap', 'showFootprint', 'showLastPrice', 'showGrid', 'showVwapBands', 'alertsEnabled', 'showFootprintVA'];
+    var toggles = ['showTape', 'showDOM', 'showCVD', 'showVwap', 'showHeatmap', 'showFootprint', 'showLastPrice', 'showGrid', 'showSessionZones', 'showVwapBands', 'alertsEnabled', 'showFootprintVA', 'showVolumeProfile', 'volumeProfileShowPocTrail'];
     var resolved = V6OF.resolveSettings(settings || {});
     toggles.forEach(function (key) {
       var el = root.querySelector('[data-v6-setting="' + key + '"]');
@@ -587,6 +673,7 @@
       maxTrades: 'maxTrades',
       maxHeatmapFrames: 'heatmapMaxFrames',
       maxFootprintCandles: 'footprintMaxCandles',
+      footprintHistoryLookbackMinutes: 'footprintHistoryLookbackMinutes',
       domDepth: 'domDepth',
       domMinNotionalUsd: 'domMinNotionalUsd',
       domFollowThresholdTicks: 'domFollowThresholdTicks',
@@ -599,6 +686,7 @@
       largeTradeAlertQty: 'largeTradeAlertQty',
       deltaAlertThreshold: 'deltaAlertThreshold',
       imbalanceRatio: 'imbalanceRatio',
+      volumeProfileValueArea: 'volumeProfileValueArea',
       imbalanceStack: 'imbalanceStack',
       imbalanceMinVolume: 'imbalanceMinVolume',
       exhaustionFactor: 'exhaustionFactor',
@@ -606,7 +694,9 @@
       minWickTicks: 'minWickTicks',
       bgColor: 'bgColor',
       upColor: 'upColor',
-      downColor: 'downColor'
+      downColor: 'downColor',
+      domSoftWallPercentile: 'domSoftWallPercentile',
+      domMajorWallPercentile: 'domMajorWallPercentile'
     };
     Object.keys(numberMap).forEach(function (htmlKey) {
       var storeKey = numberMap[htmlKey];
@@ -615,6 +705,78 @@
         el.value = String(settings[storeKey] != null ? settings[storeKey] : '');
       }
     });
+    var domDepth = Math.max(10, Math.min(5000, Math.round(Number(settings.domDepth) || 1000)));
+    var domDepthBtns = root.querySelectorAll('[data-v6-action="dom-depth-preset"]');
+    Array.prototype.forEach.call(domDepthBtns, function (btn) {
+      btn.classList.toggle('is-active', Number(btn.getAttribute('data-dom-depth')) === domDepth);
+    });
+
+    // Sync DOM Columns list & preset buttons active states
+    var colsConfig = root.querySelector('[data-v6-dom-columns-config]');
+    if (colsConfig) {
+      var allColKeys = ['bid', 'price', 'ask', 'buy', 'sell', 'delta', 'imb', 'stack', 'abs'];
+      var activeCols = settings.domColumns || allColKeys;
+      
+      // Order of all keys is: active columns first, then inactive columns in their default order
+      var orderedKeys = activeCols.slice();
+      allColKeys.forEach(function (k) {
+        if (orderedKeys.indexOf(k) === -1) {
+          orderedKeys.push(k);
+        }
+      });
+      
+      var colLabels = {
+        bid: 'BIDS',
+        price: 'PRICE (required)',
+        ask: 'ASKS',
+        buy: 'BUYS',
+        sell: 'SELLS',
+        delta: 'DELTA',
+        imb: 'IMB',
+        stack: 'STK',
+        abs: 'ABS'
+      };
+
+      var html = orderedKeys.map(function (k) {
+        var checked = activeCols.indexOf(k) !== -1 ? ' checked' : '';
+        var disabled = k === 'price' ? ' disabled' : '';
+        return '<div class="v6-column-config-row" data-key="' + k + '" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; font-size:11px;">' +
+          '<label class="v6-check" style="display:flex; align-items:center; gap:6px; cursor:pointer; flex:1;">' +
+            '<input type="checkbox" data-col-toggle="' + k + '"' + checked + disabled + ' />' +
+            '<span>' + colLabels[k] + '</span>' +
+          '</label>' +
+          '<div class="v6-column-order-btns" style="display:flex; gap:4px;">' +
+            '<button type="button" class="v6-btn v6-btn-sm v6-col-up-btn" data-col-up="' + k + '" style="padding:2px 6px; font-size:9px;">&uarr;</button>' +
+            '<button type="button" class="v6-btn v6-btn-sm v6-col-down-btn" data-col-down="' + k + '" style="padding:2px 6px; font-size:9px;">&darr;</button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+      
+      if (colsConfig.innerHTML !== html) {
+        colsConfig.innerHTML = html;
+      }
+    }
+    
+    function arraysEqual(a, b) {
+      if (a === b) return true;
+      if (!a || !b || a.length !== b.length) return false;
+      for (var i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) return false;
+      }
+      return true;
+    }
+    
+    var activeColsList = settings.domColumns || ['bid', 'price', 'ask', 'buy', 'sell', 'delta', 'imb', 'stack', 'abs'];
+    var isMin = arraysEqual(activeColsList, ['bid', 'price', 'ask']);
+    var isDlt = arraysEqual(activeColsList, ['price', 'buy', 'sell', 'delta']);
+    var isFl = arraysEqual(activeColsList, ['bid', 'price', 'ask', 'buy', 'sell', 'delta', 'imb', 'stack', 'abs']);
+    
+    var minBtn = root.querySelector('[data-v6-dom-preset="minimal"]');
+    if (minBtn) minBtn.classList.toggle('is-active', isMin);
+    var dltBtn = root.querySelector('[data-v6-dom-preset="delta"]');
+    if (dltBtn) dltBtn.classList.toggle('is-active', isDlt);
+    var flBtn = root.querySelector('[data-v6-dom-preset="full"]');
+    if (flBtn) flBtn.classList.toggle('is-active', isFl);
   }
 
   function syncPanelVisibility(root, settings) {
@@ -741,6 +903,7 @@
         restDepthCount: Math.min(book.bids ? book.bids.length : 0, book.asks ? book.asks.length : 0)
       };
       if (prev.transportStatus !== 'connected' || prev.dataFreshness === 'warming') {
+        patch.source = 'rest-fallback';
         patch.dataFreshness = 'rest-fallback';
       }
       return patch;
@@ -755,6 +918,7 @@
     store.setState(function (prev) {
       var patch = { trades: trades.slice(-limit), restTradesTs: Date.now() };
       if (prev.transportStatus !== 'connected' || prev.dataFreshness === 'warming') {
+        patch.source = 'rest-fallback';
         patch.dataFreshness = 'rest-fallback';
       }
       return patch;
@@ -766,10 +930,12 @@
     var candles = normalizeIngressCandles(data, source, timeframe);
     if (!candles.length) return [];
     store.setState(function (prev) {
-      var patch = { chartCandles: candles, restKlinesTs: Date.now() };
-      if (prev.transportStatus !== 'connected' || prev.dataFreshness === 'warming') {
-        patch.dataFreshness = 'rest-fallback';
-      }
+      var patch = {
+        chartCandles: candles,
+        restKlinesTs: Date.now(),
+        source: 'rest-fallback',
+        dataFreshness: 'rest-fallback'
+      };
       return patch;
     }, reason || 'rest-klines');
     if (V6OF.chart && V6OF.chart.resetOnDataChange) V6OF.chart.resetOnDataChange();
@@ -830,6 +996,9 @@
       : status === 'error' ? 'Reconnecting…'
       : freshness === 'rest-fallback' ? 'Offline (REST Fallback)'
       : 'Offline';
+    if (freshness === 'rest-fallback') {
+      statusLabel = status === 'connected' ? 'REST Fallback (Engine Connected)' : 'Offline (REST Fallback)';
+    }
     setText(root, '[data-v6-engine-status-text]', statusLabel);
     announceStatus(root, 'Orderflow ' + statusLabel + '. ' + (replayStatusLabel(state && state.replay) || 'Replay idle.'));
 
@@ -903,6 +1072,9 @@
       } else if (state && state.dataFreshness === 'warming') {
         badge.textContent = 'V6 WARMING / Loading source';
         badge.className = 'v6-badge';
+      } else if (state && state.dataFreshness === 'rest-fallback') {
+        badge.textContent = status === 'connected' ? 'V6 REST FALLBACK / Engine connected' : 'V6 REST FALLBACK / Offline';
+        badge.className = status === 'connected' ? 'v6-badge' : 'v6-badge v6-badge-error';
       } else if (status === 'connected') {
         if (state && state.isStale) {
           badge.textContent = 'V6 STALE / No data';
@@ -916,9 +1088,6 @@
         badge.className = 'v6-badge';
       } else if (status === 'error') {
         badge.textContent = 'V6 ERROR / Disconnected';
-        badge.className = 'v6-badge v6-badge-error';
-      } else if (state && state.dataFreshness === 'rest-fallback') {
-        badge.textContent = 'V6 REST FALLBACK / Offline';
         badge.className = 'v6-badge v6-badge-error';
       } else {
         badge.textContent = 'Offline';
@@ -973,6 +1142,7 @@
 
   function render(root, state, force) {
     if (!root || !state) return;
+    var store = V6OF.getStore ? V6OF.getStore(root) : null;
 
     var engineClient = root._v6EngineClient;
     if (engineClient) {
@@ -1051,6 +1221,7 @@
     var tapeList = root.querySelector('[data-v6-tape-list]');
     var domList = root.querySelector('[data-v6-dom-list]');
     var cvd = root.querySelector('[data-v6-cvd-panel]');
+    var domRenderTasks = [];
 
     var tapeSlice = {
       trades: state.trades,
@@ -1071,7 +1242,9 @@
       dataFreshness: state.dataFreshness,
       showDOM: settings.showDOM,
       selectedDomSymbol: state.selectedDomSymbol,
-      symbol: state.symbol
+      symbol: state.symbol,
+      domSoftWallPercentile: settings.domSoftWallPercentile,
+      domMajorWallPercentile: settings.domMajorWallPercentile
     };
 
     var cvdSlice = {
@@ -1095,21 +1268,27 @@
       showCandles: settings.showCandles !== false,
       showBubbles: settings.showBubbles === true,
       showHeatmap: settings.showHeatmap === true,
-      showFootprint: settings.showFootprint === true
+      showFootprint: settings.showFootprint === true,
+      showSessionZones: settings.showSessionZones !== false,
+      sessionProfile: settings.sessionProfile || 'global'
     };
 
     if (tapeList && V6OF.Panels && V6OF.Panels.renderTapeInto && settings.showTape !== false) {
       if (shouldRender(root, 'tape', tapeSlice, force)) {
-        // Incremental, virtualized update: keeps a stable shell and only
-        // rewrites the visible window of rows, preserving scroll position.
-        // A full-innerHTML rebuild thrashed the DOM and reset scroll at high
-        // trade rates (~1000 trades/min).
-        V6OF.Panels.renderTapeInto(tapeList, state.trades, state.settings);
+        domRenderTasks.push(function () {
+          // Incremental, virtualized update: keeps a stable shell and only
+          // rewrites the visible window of rows, preserving scroll position.
+          // A full-innerHTML rebuild thrashed the DOM and reset scroll at high
+          // trade rates (~1000 trades/min).
+          V6OF.Panels.renderTapeInto(tapeList, state.trades, state.settings);
+        });
       }
     }
     if (domList && V6OF.DomPanel && settings.showDOM !== false) {
       if (shouldRender(root, 'dom', domSlice, force)) {
-        V6OF.DomPanel.render(domList, V6OF.DomLadder ? V6OF.DomLadder.snapshot() : null, state);
+        domRenderTasks.push(function () {
+          V6OF.DomPanel.render(domList, V6OF.DomLadder ? V6OF.DomLadder.snapshot() : null, state);
+        });
       }
       // Wire controls on first render
         V6OF.DomPanel.bindControls(domList, function (group) {
@@ -1132,16 +1311,35 @@
     }
     if (cvd && V6OF.Panels && V6OF.Panels.renderCvdInto && settings.showCVD !== false) {
       if (shouldRender(root, 'cvd', cvdSlice, force)) {
-        // Incremental update: stable shell preserves the interval <select>;
-        // only badges and the delta histogram are patched.
-        V6OF.Panels.renderCvdInto(cvd, state);
+        queueRender(root, 'cvd', function () {
+          // Incremental update: stable shell preserves the interval <select>;
+          // only badges and the delta histogram are patched.
+          V6OF.Panels.renderCvdInto(cvd, state);
+        });
       }
     }
-    syncInputs(root, state);
+    if (shouldRender(root, 'inputs', {
+      settings: settings,
+      symbol: state.symbol,
+      timeframe: state.timeframe,
+      dataSource: state.dataSource,
+      source: state.source
+    }, force)) {
+      domRenderTasks.push(function () {
+        syncInputs(root, state);
+      });
+    }
+    if (domRenderTasks.length) {
+      queueRender(root, 'dom', function () {
+        domRenderTasks.forEach(function (task) { task(); });
+      });
+    }
 
     if (V6OF.CanvasChart && V6OF.CanvasChart.draw) {
       if (shouldRender(root, 'chart', chartSlice, force)) {
-        V6OF.CanvasChart.draw(root.querySelector('[data-v6-chart]'), state);
+        queueRender(root, 'chart', function () {
+          V6OF.CanvasChart.draw(root.querySelector('[data-v6-chart]'), state);
+        });
       }
     }
   }
@@ -1167,6 +1365,56 @@
     }
 
     root.addEventListener('click', function (event) {
+      // DOM Columns Presets and order buttons
+      var presetBtn = event.target.closest('[data-v6-dom-preset]');
+      if (presetBtn) {
+        var preset = presetBtn.getAttribute('data-v6-dom-preset');
+        var newCols = [];
+        if (preset === 'minimal') {
+          newCols = ['bid', 'price', 'ask'];
+        } else if (preset === 'delta') {
+          newCols = ['price', 'buy', 'sell', 'delta'];
+        } else if (preset === 'full') {
+          newCols = ['bid', 'price', 'ask', 'buy', 'sell', 'delta', 'imb', 'stack', 'abs'];
+        }
+        if (newCols.length > 0) {
+          store.updateSettings({ domColumns: newCols });
+        }
+        return;
+      }
+
+      var upBtn = event.target.closest('[data-col-up]');
+      if (upBtn) {
+        var key = upBtn.getAttribute('data-col-up');
+        var state = store.getState();
+        var settings = state.settings || {};
+        var cols = settings.domColumns ? settings.domColumns.slice() : ['bid', 'price', 'ask', 'buy', 'sell', 'delta', 'imb', 'stack', 'abs'];
+        var idx = cols.indexOf(key);
+        if (idx > 0) {
+          var tmp = cols[idx - 1];
+          cols[idx - 1] = cols[idx];
+          cols[idx] = tmp;
+          store.updateSettings({ domColumns: cols });
+        }
+        return;
+      }
+
+      var downBtn = event.target.closest('[data-col-down]');
+      if (downBtn) {
+        var key = downBtn.getAttribute('data-col-down');
+        var state = store.getState();
+        var settings = state.settings || {};
+        var cols = settings.domColumns ? settings.domColumns.slice() : ['bid', 'price', 'ask', 'buy', 'sell', 'delta', 'imb', 'stack', 'abs'];
+        var idx = cols.indexOf(key);
+        if (idx !== -1 && idx < cols.length - 1) {
+          var tmp = cols[idx + 1];
+          cols[idx + 1] = cols[idx];
+          cols[idx] = tmp;
+          store.updateSettings({ domColumns: cols });
+        }
+        return;
+      }
+
       var btn = event.target.closest('[data-v6-action]');
       if (!btn) return;
       var action = btn.getAttribute('data-v6-action');
@@ -1197,6 +1445,17 @@
           btn.setAttribute('aria-expanded', String(expanded));
           btn.innerHTML = 'Metrics ' + (expanded ? '▴' : '▾');
         }
+      } else if (action === 'global-settings') {
+        // Open/toggle the Settings panel in the right dock (Phase 2 — reuse existing tab).
+        // openDockTab is defined in 080_v6_layout_shell.js and attached to V6OF.Page.Shell;
+        // call it if available, otherwise fall back to a no-op so no error occurs.
+        if (V6OF.Page && V6OF.Page.Shell && typeof V6OF.Page.Shell.openDockTab === 'function') {
+          V6OF.Page.Shell.openDockTab('settings');
+        } else {
+          // Try the rtab click method as a fallback
+          var settingsTab = root.querySelector('[data-v6-rtab="settings"]');
+          if (settingsTab) { settingsTab.click(); }
+        }
       } else if (action === 'layer') {
         var layerKeys = { candles: 'showCandles', bubbles: 'showBubbles', heatmap: 'showHeatmap', footprint: 'showFootprint' };
         var sKey = layerKeys[btn.getAttribute('data-layer')];
@@ -1204,7 +1463,11 @@
           var r = V6OF.resolveSettings(state.settings || {});
           var patch = {}; patch[sKey] = !r[sKey];
           store.updateSettings(patch);
+          if (store.updateUi) store.updateUi({ layerPreset: 'custom' });
         }
+      } else if (action === 'dom-depth-preset') {
+        var depthPreset = Math.max(10, Math.min(5000, Math.round(Number(btn.getAttribute('data-dom-depth')) || 1000)));
+        store.updateSettings({ domDepth: depthPreset });
       } else if (action === 'timeframe') {
         var interval = btn.getAttribute('data-interval');
         if (interval && interval !== state.timeframe) {
@@ -1362,6 +1625,25 @@
     });
 
     root.addEventListener('change', function (event) {
+      var colToggle = event.target.closest('[data-col-toggle]');
+      if (colToggle) {
+        var colKey = colToggle.getAttribute('data-col-toggle');
+        if (colKey === 'price') return;
+        var settings = store.getState().settings || {};
+        var currentCols = settings.domColumns ? settings.domColumns.slice() : ['bid', 'price', 'ask', 'buy', 'sell', 'delta', 'imb', 'stack', 'abs'];
+        var nextCols;
+        if (colToggle.checked) {
+          if (currentCols.indexOf(colKey) === -1) {
+            currentCols.push(colKey);
+          }
+          nextCols = currentCols;
+        } else {
+          nextCols = currentCols.filter(function (c) { return c !== colKey; });
+        }
+        store.updateSettings({ domColumns: nextCols });
+        return;
+      }
+
       var symbolSelect = event.target.closest('[data-v6-action="symbol-select"]');
       if (symbolSelect) {
         var symbol = symbolSelect.value;
@@ -1423,21 +1705,32 @@
         store.updateSettings({ domScaleMode: input.value === 'visible' ? 'visible' : 'book' });
       } else if (key === 'inspectorTimeZoneMode') {
         store.updateSettings({ inspectorTimeZoneMode: input.value === 'local' || input.value === 'exchange' ? input.value : 'utc' });
+      } else if (key === 'sessionProfile') {
+        store.updateSettings({ sessionProfile: input.value === 'rth' || input.value === 'eth' ? input.value : 'global' });
       } else if (key === 'bgColor') {
         store.updateSettings({ bgColor: input.value || '#080b12' });
       } else if (key === 'upColor') {
         store.updateSettings({ upColor: input.value || '#3ddc97' });
       } else if (key === 'downColor') {
         store.updateSettings({ downColor: input.value || '#ff5f73' });
+      } else if (key === 'volumeProfileType') {
+        store.updateSettings({ volumeProfileType: input.value });
+      } else if (key === 'volumeProfileSide') {
+        store.updateSettings({ volumeProfileSide: input.value });
+      } else if (key === 'volumeProfileStyle') {
+        store.updateSettings({ volumeProfileStyle: input.value });
       } else if (key === 'domGroup') {
         store.updateSettings({ domGroup: Math.max(1, Math.min(100, Number(input.value) || 1)) });
       } else if (key === 'showTape' || key === 'showDOM' || key === 'showCVD' ||
                  key === 'showVwap' || key === 'showHeatmap' || key === 'showFootprint' ||
-                 key === 'showLastPrice' || key === 'showGrid' || key === 'showVwapBands' ||
-                 key === 'alertsEnabled' || key === 'showFootprintVA') {
+                 key === 'showLastPrice' || key === 'showGrid' || key === 'showSessionZones' || key === 'showVwapBands' ||
+                 key === 'alertsEnabled' || key === 'showFootprintVA' || key === 'showVolumeProfile' || key === 'volumeProfileShowPocTrail') {
         var patch = {};
         patch[key] = !!input.checked;
         store.updateSettings(patch);
+        if ((key === 'showCandles' || key === 'showBubbles' || key === 'showHeatmap' || key === 'showFootprint') && store.updateUi) {
+          store.updateUi({ layerPreset: 'custom' });
+        }
       } else if (key === 'deltaIntervalMs') {
         var intervalMs = Number(input.value) || 60000;
         store.setState(function (prev) {
@@ -1466,15 +1759,30 @@
       } else if (key === 'maxTrades') {
         store.updateSettings({ maxTrades: Math.max(50, Math.min(5000, Number(input.value) || 500)) });
       } else if (key === 'maxHeatmapFrames') {
-        store.updateSettings({ heatmapMaxFrames: Math.max(60, Math.min(1000, Number(input.value) || 360)) });
+        store.updateSettings({ heatmapMaxFrames: Math.max(60, Math.min(10000, Math.round(Number(input.value) || 3600))) });
       } else if (key === 'maxFootprintCandles') {
-        store.updateSettings({ footprintMaxCandles: Math.max(30, Math.min(300, Number(input.value) || 120)) });
+        store.updateSettings({ footprintMaxCandles: Math.max(60, Math.min(5000, Math.round(Number(input.value) || 1200))) });
+      } else if (key === 'footprintHistoryLookbackMinutes') {
+        var lookbackMinutes = Math.max(1, Math.min(10080, Math.round(Number(input.value) || 360)));
+        store.updateSettings({ footprintHistoryLookbackMinutes: lookbackMinutes });
+        if (root._v6EngineClient && root._v6EngineClient.fetchFootprintHistory) {
+          root._v6EngineClient.fetchFootprintHistory({
+            symbol: store.getState().symbol || 'BTC',
+            timeframe: store.getState().timeframe || '1m',
+            lookbackMinutes: lookbackMinutes,
+            force: true
+          });
+        }
       } else if (key === 'domDepth') {
-        store.updateSettings({ domDepth: Math.max(5, Math.min(50, Number(input.value) || 20)) });
+        store.updateSettings({ domDepth: Math.max(10, Math.min(5000, Math.round(Number(input.value) || 1000))) });
       } else if (key === 'domMinNotionalUsd') {
         store.updateSettings({ domMinNotionalUsd: Math.max(0, Math.min(10000000, Number(input.value) || 100)) });
       } else if (key === 'domFollowThresholdTicks') {
         store.updateSettings({ domFollowThresholdTicks: Math.max(1, Math.min(20, Math.round(Number(input.value) || 1))) });
+      } else if (key === 'domSoftWallPercentile') {
+        store.updateSettings({ domSoftWallPercentile: Math.max(0.5, Math.min(0.99, Number(input.value) || 0.85)) });
+      } else if (key === 'domMajorWallPercentile') {
+        store.updateSettings({ domMajorWallPercentile: Math.max(0.5, Math.min(0.999, Number(input.value) || 0.95)) });
       } else if (key === 'domGroup') {
         store.updateSettings({ domGroup: Math.max(1, Math.min(100, Math.round(Number(input.value) || 1))) });
       } else if (key === 'vwapBand1') {
@@ -1497,6 +1805,8 @@
         store.updateSettings({ footprintValueAreaPct: Math.max(1, Math.min(100, Number(input.value) || 70)) });
       } else if (key === 'minWickTicks') {
         store.updateSettings({ minWickTicks: Math.max(0, Math.min(10, Math.round(Number(input.value) || 0))) });
+      } else if (key === 'volumeProfileValueArea') {
+        store.updateSettings({ volumeProfileValueArea: Math.max(10, Math.min(100, Math.round(Number(input.value) || 70))) });
       }
     });
 
@@ -1569,6 +1879,47 @@
       var engineClient = bind(root, store);
       ctx.engineClient = engineClient;
       root._v6EngineClient = engineClient;
+      function fetchJournalTradesForStore(st) {
+        if (!st) return;
+        var state = st.getState();
+        var symbol = state.symbol || 'BTCUSDT';
+        var dateStr = (state.replay && state.replay.date) ? state.replay.date : new Date().toISOString().slice(0, 10);
+        fetch('/api/days/lookup?date=' + dateStr + '&instrument=' + encodeURIComponent(symbol))
+          .then(function (res) {
+            if (!res.ok) return null;
+            return res.json();
+          })
+          .then(function (day) {
+            if (!day || !day.id) {
+              st.setState({ journalTrades: [] }, 'journal-trades-empty');
+              return;
+            }
+            return fetch('/api/days/' + day.id + '/trades')
+              .then(function (res) {
+                if (!res.ok) return [];
+                return res.json();
+              })
+              .then(function (trades) {
+                st.setState({ journalTrades: Array.isArray(trades) ? trades : [] }, 'journal-trades-loaded');
+              });
+          })
+          .catch(function (err) {
+            console.warn('[V6] failed to fetch journal trades', err);
+          });
+      }
+
+      var lastSymbol = '';
+      var lastReplayDate = '';
+      ctx.unsubs.push(store.subscribe(function (state) {
+        var symbol = state.symbol || '';
+        var replayDate = (state.replay && state.replay.date) || '';
+        if (symbol !== lastSymbol || replayDate !== lastReplayDate) {
+          lastSymbol = symbol;
+          lastReplayDate = replayDate;
+          fetchJournalTradesForStore(store);
+        }
+      }));
+
       ctx.unsubs.push(store.subscribe(function (state) { render(root, state); }));
       render(root, store.getState(), true);
 
@@ -1653,6 +2004,9 @@
       });
       if (ctx.engineClient && typeof ctx.engineClient.destroy === 'function') {
         try { ctx.engineClient.destroy(); } catch (_) {}
+      }
+      if (V6OF.clearChartCrosshair) {
+        try { V6OF.clearChartCrosshair(root); } catch (_) {}
       }
       delete root._v6EngineClient;
       delete root._v6LayoutContext;

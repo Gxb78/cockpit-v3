@@ -1,4 +1,4 @@
-/* 071_v6_layout_shell.css — Light shell
+/* 071_v6_layout_shell.css â€” Light shell
  * Built by MOVING Layout panels into regions (see 080_v6_layout_shell.js).
  * Uses the design tokens scoped to .v6-orderflow-root (070).
  * Layout: left tool rail | dominant center chart | tabbed right column.
@@ -15,8 +15,8 @@
 
 /* ---- Left tool rail (compact) ---- */
 .v6-left-toolbar {
-  flex: 0 0 34px;
-  width: 34px;
+  flex: 0 0 86px;
+  width: 86px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -47,6 +47,44 @@
               background var(--v6-fast) var(--v6-ease);
 }
 .v6-left-toolbar .v6-tool svg { width: 15px; height: 15px; display: block; pointer-events: none; }
+.v6-left-toolbar .v6-view-tool {
+  width: 78px;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 0 7px;
+  font: 800 10px/1 var(--v6-font);
+  letter-spacing: 0;
+}
+.v6-view-tool-icon {
+  display: inline-flex;
+  flex: 0 0 15px;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.v6-view-tool-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.v6-view-tool-state {
+  width: 5px;
+  height: 5px;
+  margin-left: auto;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.28;
+  pointer-events: none;
+}
+.v6-left-toolbar .v6-view-tool.is-active .v6-view-tool-state {
+  opacity: 1;
+  box-shadow: 0 0 8px currentColor;
+}
+.v6-left-toolbar .v6-view-tool.is-muted {
+  color: var(--v6-text-dim);
+}
 .v6-left-toolbar .v6-tool:hover {
   color: #fff;
   border-color: var(--v6-accent-line);
@@ -75,7 +113,7 @@
   background: var(--v6-hairline-strong);
 }
 
-/* ---- Center column: ONE panel — price chart + CVD indicator sub-pane ----
+/* ---- Center column: ONE panel â€” price chart + CVD indicator sub-pane ----
  * The price chart and the CVD sub-pane live in a single bordered panel so the
  * CVD reads as an integrated indicator (TradingView-style), not a floating box.
  */
@@ -662,7 +700,7 @@
 .v6-inspector-card.is-pos strong { color: var(--v6-buy); }
 .v6-inspector-card.is-neg strong { color: var(--v6-sell); }
 .v6-inspector-card.is-warn strong { color: var(--v6-gold); }
-/* Derived (synthesized) metric: buy/sell split from volume ± delta, not real flow. */
+/* Derived (synthesized) metric: buy/sell split from volume Â± delta, not real flow. */
 .v6-inspector-card.is-derived { opacity: 0.78; }
 .v6-inspector-card.is-derived strong { font-style: italic; }
 .v6-inspector-derived {
@@ -829,7 +867,7 @@
   color: rgba(150, 168, 196, 0.45);
 }
 
-/* Bars — solid fill, higher visibility */
+/* Bars â€” solid fill, higher visibility */
 .v6-ft-bar {
   position: absolute;
   top: 1px;
@@ -866,7 +904,7 @@
   color: rgba(220, 230, 240, 0.9);
 }
 
-/* POC — gold highlight, much more visible */
+/* POC â€” gold highlight, much more visible */
 .v6-ft-row.is-poc {
   background: rgba(245, 197, 60, 0.06) !important;
 }
@@ -963,7 +1001,7 @@
 
 @media (max-width: 1366px) {
   .v6-right-col { flex-basis: 286px; width: 286px; }
-  .v6-left-toolbar { flex-basis: 36px; width: 36px; }
+  .v6-left-toolbar { flex-basis: 86px; width: 86px; }
   .v6-workspace-lbl { display: none; }
 }
 
@@ -983,7 +1021,6 @@
   box-shadow: none;
 }
 
-.v6-left-toolbar [data-v6-tool="follow"] + .v6-tool-sep,
 .v6-left-toolbar [data-v6-tool="horiz"],
 .v6-left-toolbar [data-v6-tool="trend"],
 .v6-left-toolbar [data-v6-tool="rect"] {
@@ -1088,6 +1125,46 @@ body[data-current-page="orderflow"] .v6-ticket {
 
 body[data-current-page="orderflow"] .v6-timeframes {
   gap: 0;
+}
+.v6-center-chart {
+  position: relative;
+}
+.v6-price-zoom-controls {
+  position: absolute;
+  z-index: 12;
+  right: 66px;
+  top: 38px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--v6-hairline);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.10);
+  pointer-events: auto;
+}
+.v6-price-zoom-btn {
+  min-width: 48px;
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: #131722;
+  font: 800 10px/1 var(--v6-font);
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.v6-price-zoom-btn:hover,
+.v6-price-zoom-btn:focus-visible,
+.v6-price-zoom-btn.is-active {
+  border-color: #d1d4dc;
+  background: #f0f3fa;
+  color: #131722;
+}
+.v6-price-zoom-btn.is-active {
+  box-shadow: inset 0 -2px 0 var(--v6-accent);
 }
 
 body[data-current-page="orderflow"] .v6-tf-btn,
@@ -1721,3 +1798,275 @@ body[data-current-page="orderflow"] .v6-dom-row.is-live .v6-dom-cell-price::afte
     grid-template-columns: minmax(76px, 1fr) 78px minmax(76px, 1fr) 58px 58px 58px;
   }
 }
+
+/* ---- Custom Indicator Pane Styles ---- */
+.v6-indicator-panes {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 0 0 auto;
+}
+.v6-custom-indicator-pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--v6-hairline);
+  background: var(--v6-bg);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.v6-custom-indicator-head {
+  position: absolute;
+  z-index: 20;
+  top: 4px;
+  left: 6px;
+  right: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  background: transparent;
+  pointer-events: none;
+}
+.v6-custom-indicator-head * {
+  pointer-events: auto;
+}
+.v6-custom-indicator-canvas {
+  flex: 1 1 auto;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  display: block;
+}
+.v6-indicator-name {
+  color: var(--v6-text-mute);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  user-select: none;
+  background: var(--v6-bg);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+.v6-custom-indicator-pane:hover .v6-indicator-toolbar,
+.v6-custom-indicator-pane:focus-within .v6-indicator-toolbar,
+.v6-custom-indicator-pane .v6-indicator-toolbar.is-open {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Dark theme overrides for indicator toolbar in orderflow */
+.v6-indicator-toolbar {
+  border: 1px solid var(--v6-hairline);
+  background: var(--v6-surface-2) !important;
+  color: var(--v6-text) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+}
+
+.v6-indicator-action {
+  border-right: 1px solid var(--v6-hairline) !important;
+  color: var(--v6-text-mute) !important;
+}
+
+.v6-indicator-action:hover,
+.v6-indicator-action:focus-visible {
+  color: var(--v6-text) !important;
+  background: var(--v6-surface-3) !important;
+}
+
+.v6-indicator-action[data-v6-indicator-action="remove"]:hover,
+.v6-indicator-action[data-v6-indicator-action="remove"]:focus-visible,
+.v6-indicator-action[data-v6-pane-action="remove"]:hover,
+.v6-indicator-action[data-v6-pane-action="remove"]:focus-visible {
+  color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.15) !important;
+}
+
+.v6-cvd-strip.is-meta-open .v6-indicator-action[data-v6-indicator-action="source"],
+.v6-custom-indicator-pane.is-meta-open .v6-indicator-action[data-v6-pane-action="source"] {
+  color: #06b6d4 !important;
+  background: rgba(6, 182, 212, 0.15) !important;
+}
+
+/* ---- Left sidebar column & Resizer layout ---- */
+.v6-left-col {
+  flex: 0 0 320px;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: none;
+  border-right: 1px solid var(--v6-hairline);
+  border-radius: 0;
+  background: var(--v6-bg-2);
+  box-shadow: none;
+  overflow: hidden;
+}
+.v6-left-col.is-hidden {
+  display: none !important;
+}
+
+.v6-ltabs {
+  display: flex;
+  gap: 0;
+  padding: 4px 4px 0;
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--v6-hairline);
+  background: var(--v6-bg-2);
+}
+
+.v6-ltab {
+  appearance: none;
+  flex: 1 1 auto;
+  min-height: 28px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 4px 4px 0 0;
+  background: transparent;
+  color: var(--v6-text-mute);
+  font: 800 10px/1 var(--v6-font);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color var(--v6-fast) var(--v6-ease), background var(--v6-fast) var(--v6-ease);
+}
+.v6-ltab.v6-ltab-icon {
+  flex: 0 0 36px;
+  font-size: 14px;
+}
+.v6-ltab:hover {
+  color: var(--v6-text);
+  background: rgba(255, 255, 255, 0.03);
+}
+.v6-ltab.is-active {
+  color: var(--v6-accent);
+  background: var(--v6-accent-soft);
+  box-shadow: inset 0 -1px 0 var(--v6-accent);
+}
+
+.v6-lbody {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  display: flex;
+}
+.v6-lbody > .v6-panel {
+  display: none;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.v6-lbody.show-dom .v6-panel-dom,
+.v6-lbody.show-tape .v6-panel-tape,
+.v6-lbody.show-info .v6-panel-info,
+.v6-lbody.show-indicators .v6-panel-indicators,
+.v6-lbody.show-cvd .v6-panel-cvd,
+.v6-lbody.show-vwap .v6-panel-vwap,
+.v6-lbody.show-settings .v6-panel-settings {
+  display: flex;
+}
+
+.v6-lbody > .v6-panel > .v6-panel-head {
+  flex: 0 0 auto;
+}
+.v6-lbody > .v6-panel > .v6-panel-body,
+.v6-lbody > .v6-panel > .v6-settings {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.v6-resize-h-left {
+  flex: 0 0 5px;
+  width: 5px;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: 50;
+  align-self: stretch;
+  transition: background var(--v6-fast) var(--v6-ease);
+}
+.v6-resize-h-left::after {
+  content: "";
+  position: absolute;
+  left: 2px; top: 0; bottom: 0;
+  width: 1px;
+  background: var(--v6-hairline);
+  transition: background var(--v6-fast) var(--v6-ease);
+}
+.v6-resize-h-left:hover::after,
+.v6-resize-h-left.is-dragging::after {
+  background: var(--v6-accent);
+}
+.v6-resize-h-left:hover,
+.v6-resize-h-left.is-dragging {
+  background: var(--v6-accent-soft);
+}
+.v6-resize-h-left.is-hidden {
+  display: none !important;
+}
+
+/* Collapsed Left Sidebar Dock in Orderflow page */
+body[data-current-page="orderflow"] .v6-left-dock-collapsed .v6-resize-h-left {
+  display: none;
+}
+body[data-current-page="orderflow"] .v6-left-dock-collapsed .v6-left-col {
+  flex-basis: 36px;
+  width: 36px;
+}
+body[data-current-page="orderflow"] .v6-left-dock-collapsed .v6-lbody {
+  display: none !important;
+}
+body[data-current-page="orderflow"] .v6-left-dock-collapsed .v6-ltabs {
+  flex-direction: column;
+  height: 100%;
+  padding: 6px 2px;
+  gap: 6px;
+  border-bottom: none;
+  background: var(--v6-bg-2);
+}
+body[data-current-page="orderflow"] .v6-left-dock-collapsed .v6-ltab {
+  min-height: 28px;
+  width: 100%;
+  padding: 0;
+  border-radius: var(--v6-r-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+body[data-current-page="orderflow"] .v6-left-dock-collapsed .v6-ltab:not(.v6-ltab-icon) {
+  font-size: 0;
+}
+body[data-current-page="orderflow"] .v6-left-dock-collapsed #v6-lefttab-dom::before {
+  content: "D";
+  font-size: 10px;
+  font-weight: 800;
+}
+body[data-current-page="orderflow"] .v6-left-dock-collapsed #v6-lefttab-tape::before {
+  content: "T";
+  font-size: 10px;
+  font-weight: 800;
+}
+body[data-current-page="orderflow"] .v6-left-dock-collapsed #v6-lefttab-info::before {
+  content: "I";
+  font-size: 10px;
+  font-weight: 800;
+}
+
+/* ---- Drag and Drop Drop Zone Outline Highlights ---- */
+.v6-drag-over {
+  outline: 2px dashed var(--v6-accent) !important;
+  outline-offset: -4px;
+  background: rgba(58, 215, 238, 0.06) !important;
+  border-radius: var(--v6-r-md) !important;
+}
+
+/* NOTE: legacy !important "PREMIUM MODERN CONTOURS" block removed 2026-06-09;
+   the cohesive shell styling now lives in 072_v6_orderflow_refactor.css. */
