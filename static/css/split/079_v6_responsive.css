@@ -1,0 +1,67 @@
+/* ============================================================
+   079_v6_responsive.css
+   Phase 6: Responsive hardening for the V6 orderflow shell.
+   Page-scoped; tokens only.
+   ============================================================ */
+
+/* ── Ensure every flex/grid child never overflows its parent ── */
+body[data-current-page="orderflow"] .v6-main-area,
+body[data-current-page="orderflow"] .v6-center-col,
+body[data-current-page="orderflow"] .v6-right-col,
+body[data-current-page="orderflow"] .v6-left-col,
+body[data-current-page="orderflow"] .v6-left-toolbar {
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ── Right dock: enforce a minimum width so it is never crushed to 0 ── */
+body[data-current-page="orderflow"] .v6-right-col {
+  min-width: 220px;
+}
+
+/* ── Center column must have min-width 0 so the chart shrinks not the dock ── */
+body[data-current-page="orderflow"] .v6-center-col {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* ── At <=1200px: reduce minimum right dock width ── */
+@media (max-width: 1200px) {
+  body[data-current-page="orderflow"] .v6-right-col {
+    min-width: 180px;
+  }
+}
+
+/* ── At <=900px: auto-collapse the right dock.
+   Uses !important to override inline styles set by ResizablePanels. ── */
+@media (max-width: 900px) {
+  body[data-current-page="orderflow"] .v6-shell:not(.v6-dock-collapsed) .v6-right-col {
+    width: 0 !important;
+    min-width: 0 !important;
+    overflow: hidden;
+    flex: 0 0 0 !important;
+  }
+}
+
+/* ── Header: allow wrapping at very narrow widths ── */
+@media (max-width: 800px) {
+  body[data-current-page="orderflow"] .v6-header {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 38px;
+  }
+}
+
+/* ── Status bar: hide low-priority sections at narrow widths ── */
+@media (max-width: 1100px) {
+  body[data-current-page="orderflow"] .v6-status-bar .v6-sb-sec:nth-child(n+4) {
+    display: none;
+  }
+}
+
+/* ── Chart canvas: always fill its container ── */
+body[data-current-page="orderflow"] [data-v6-chart],
+body[data-current-page="orderflow"] .v6-cvd-canvas {
+  width: 100%;
+  max-width: 100%;
+}

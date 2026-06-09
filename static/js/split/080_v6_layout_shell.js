@@ -949,6 +949,12 @@
             }
             store.updateSettings({ layoutSchema: nextSchema });
           }
+        } else if (action === 'panel-settings') {
+          var settingsPanel = btn.closest('[data-v6-panel]');
+          var settingsPanelId = settingsPanel && settingsPanel.getAttribute('data-v6-panel');
+          if (settingsPanelId && V6OF.PanelSettings) {
+            V6OF.PanelSettings.open(btn, settingsPanelId, store);
+          }
         }
       });
 
