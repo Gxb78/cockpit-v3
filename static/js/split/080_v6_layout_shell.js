@@ -695,6 +695,61 @@
       });
 
       cvdStrip = root.querySelector('[data-v6-cvd-strip]') || cvdStrip;
+
+      // openDockTab must be defined unconditionally so the gear button (073)
+      // can call V6OF.Page.Shell.openDockTab even when cvdStrip is absent.
+      function openDockTab(name) {
+        var settings = store && store.getState ? store.getState().settings || {} : {};
+        var currentSchema = settings.layoutSchema || DEFAULT_SCHEMA;
+        var left = currentSchema.left || [];
+        var isLeft = left.indexOf(name) !== -1;
+
+        if (isLeft) {
+          root.classList.remove('v6-left-dock-collapsed');
+          var leftCol = main.querySelector('[data-v6-left-col]');
+          if (leftCol) {
+            var saved = localStorage.getItem('cockpitV6.leftColWidth');
+            if (saved) { var w = parseInt(saved, 10); if (w > 0) { leftCol.style.width = w + 'px'; leftCol.style.flex = '0 0 ' + w + 'px'; } }
+          }
+          var lbody = main.querySelector('[data-v6-lbody]');
+          if (lbody) lbody.className = 'v6-lbody show-' + name;
+          Array.prototype.forEach.call(main.querySelectorAll('[data-v6-ltab]'), function (b) {
+            var active = b.getAttribute('data-v6-ltab') === name;
+            b.classList.toggle('is-active', active);
+            b.setAttribute('aria-selected', String(active));
+          });
+          if (store && store.updateSettings) {
+            var nextSchema = Object.assign({}, currentSchema, { activeLeftTab: name });
+            store.updateSettings({ leftDockCollapsed: false, layoutSchema: nextSchema });
+          }
+        } else {
+          root.classList.remove('v6-dock-collapsed');
+          var rightCol = main.querySelector('[data-v6-right-col]');
+          if (rightCol) {
+            var saved = localStorage.getItem('cockpitV6.rightColWidth');
+            if (saved) { var w = parseInt(saved, 10); if (w > 0) { rightCol.style.width = w + 'px'; rightCol.style.flex = '0 0 ' + w + 'px'; } }
+          }
+          var rbody = main.querySelector('[data-v6-rbody]');
+          if (rbody) rbody.className = 'v6-rbody show-' + name;
+          Array.prototype.forEach.call(main.querySelectorAll('[data-v6-rtab]'), function (b) {
+            var active = b.getAttribute('data-v6-rtab') === name;
+            b.classList.toggle('is-active', active);
+            b.setAttribute('aria-selected', String(active));
+          });
+          if (store && store.updateSettings) {
+            var nextSchema = Object.assign({}, currentSchema, { activeRightTab: name });
+            store.updateSettings({ dockCollapsed: false, layoutSchema: nextSchema, activeTab: name });
+          }
+        }
+        // redrawCvdAndChart is defined inside if(cvdStrip) — guard the call
+        if (typeof redrawCvdAndChart === 'function') redrawCvdAndChart();
+      }
+
+      // Expose unconditionally for cross-module use (e.g. the gear button in 073)
+      if (V6OF.Page && V6OF.Page.Shell) {
+        V6OF.Page.Shell.openDockTab = openDockTab;
+      }
+
       if (cvdStrip) {
         function applyCvdChrome(state) {
           var nextSettings = (state && state.settings) || {};
@@ -725,57 +780,6 @@
               V6OF.CvdPanel.draw(cvdCanvas, current);
             }
           });
-        }
-
-        function openDockTab(name) {
-          var settings = store && store.getState ? store.getState().settings || {} : {};
-          var currentSchema = settings.layoutSchema || DEFAULT_SCHEMA;
-          var left = currentSchema.left || [];
-          var isLeft = left.indexOf(name) !== -1;
-
-          if (isLeft) {
-            root.classList.remove('v6-left-dock-collapsed');
-            var leftCol = main.querySelector('[data-v6-left-col]');
-            if (leftCol) {
-              var saved = localStorage.getItem('cockpitV6.leftColWidth');
-              if (saved) { var w = parseInt(saved, 10); if (w > 0) { leftCol.style.width = w + 'px'; leftCol.style.flex = '0 0 ' + w + 'px'; } }
-            }
-            var lbody = main.querySelector('[data-v6-lbody]');
-            if (lbody) lbody.className = 'v6-lbody show-' + name;
-            Array.prototype.forEach.call(main.querySelectorAll('[data-v6-ltab]'), function (b) {
-              var active = b.getAttribute('data-v6-ltab') === name;
-              b.classList.toggle('is-active', active);
-              b.setAttribute('aria-selected', String(active));
-            });
-            if (store && store.updateSettings) {
-              var nextSchema = Object.assign({}, currentSchema, { activeLeftTab: name });
-              store.updateSettings({ leftDockCollapsed: false, layoutSchema: nextSchema });
-            }
-          } else {
-            root.classList.remove('v6-dock-collapsed');
-            var rightCol = main.querySelector('[data-v6-right-col]');
-            if (rightCol) {
-              var saved = localStorage.getItem('cockpitV6.rightColWidth');
-              if (saved) { var w = parseInt(saved, 10); if (w > 0) { rightCol.style.width = w + 'px'; rightCol.style.flex = '0 0 ' + w + 'px'; } }
-            }
-            var rbody = main.querySelector('[data-v6-rbody]');
-            if (rbody) rbody.className = 'v6-rbody show-' + name;
-            Array.prototype.forEach.call(main.querySelectorAll('[data-v6-rtab]'), function (b) {
-              var active = b.getAttribute('data-v6-rtab') === name;
-              b.classList.toggle('is-active', active);
-              b.setAttribute('aria-selected', String(active));
-            });
-            if (store && store.updateSettings) {
-              var nextSchema = Object.assign({}, currentSchema, { activeRightTab: name });
-              store.updateSettings({ dockCollapsed: false, layoutSchema: nextSchema, activeTab: name });
-            }
-          }
-          redrawCvdAndChart();
-        }
-
-        // Expose for cross-module use (e.g. the gear button in 073 header)
-        if (V6OF.Page && V6OF.Page.Shell) {
-          V6OF.Page.Shell.openDockTab = openDockTab;
         }
 
         function setCvdCollapsed(collapsed) {
