@@ -180,4 +180,196 @@
       '</div>',
     ].join('');
   };
+
+  /**
+   * Canvas renderer for the CVD sub-pane. Time-synced to the chart viewport.
+   *
+   * @param {HTMLCanvasElement} canvas
+   * @param {object} state   - full V6OF store state
+   * @param {object} [vp]    - ChartViewport instance (optional; falls back to bar-only)
+   * @param {object} [opts]  - { crosshairTs, showTimeAxis, timeAxisHeight, accentColor }
+   */
+  Panels.CvdPanel = {};
+  Panels.CvdPanel.draw = function (canvas, state, vp, opts) {
+    if (!canvas) return;
+    opts = opts || {};
+    state = state || {};
+
+    var dpr = window.devicePixelRatio || 1;
+    var rect = canvas.getBoundingClientRect();
+    var W = Math.max(1, rect.width || canvas.clientWidth || 300);
+    var H = Math.max(1, rect.height || canvas.clientHeight || 80);
+    if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
+      canvas.width = Math.round(W * dpr);
+      canvas.height = Math.round(H * dpr);
+    }
+    var ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // Resolve design tokens from the root element.
+    var rootEl = document.getElementById('v6-orderflow-root') || document.body;
+    var cs = getComputedStyle(rootEl);
+    var bg        = cs.getPropertyValue('--v6-bg-2').trim()       || '#0e0f12';
+    var hairline  = cs.getPropertyValue('--v6-hairline').trim()   || 'rgba(255,255,255,0.06)';
+    var textFaint = cs.getPropertyValue('--v6-text-faint').trim() || '#565b66';
+    var textDim   = cs.getPropertyValue('--v6-text-dim').trim()   || '#9aa0ab';
+    var buyColor  = cs.getPropertyValue('--v6-buy').trim()        || '#3fb950';
+    var sellColor = cs.getPropertyValue('--v6-sell').trim()       || '#f6465d';
+    var monoFont  = cs.getPropertyValue('--v6-mono').trim()       || 'JetBrains Mono, monospace';
+
+    var TIME_AXIS_H = opts.showTimeAxis ? (opts.timeAxisHeight || 20) : 0;
+    var GUTTER_LEFT  = 4;
+    var GUTTER_RIGHT = 66; // align with chart price-axis width
+
+    // Clear
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Top separator hairline
+    ctx.fillStyle = hairline;
+    ctx.fillRect(0, 0, W, 1);
+
+    // Resolve buckets
+    var settings = state.settings || {};
+    var selected = Number(settings.deltaIntervalMs || 60000);
+    var bucketsByInterval = state.deltaBucketsByInterval || {};
+    var buckets = bucketsByInterval[String(selected)] || state.deltaBuckets || [];
+    buckets = Array.isArray(buckets) ? buckets : [];
+
+    var plotH = H - TIME_AXIS_H;
+    var plotW = W - GUTTER_LEFT - GUTTER_RIGHT;
+    if (plotH < 4 || plotW < 4 || !buckets.length) {
+      return; // leave bg fill only
+    }
+
+    // ---- Time-synced path (viewport available) ----
+    if (vp && typeof vp.timeToX === 'function' && vp.timeStart && vp.timeEnd > vp.timeStart) {
+      var vpLeft   = GUTTER_LEFT;
+      var vpWidth  = plotW;
+      var timeSpan = vp.timeEnd - vp.timeStart;
+
+      function localTimeToX(ts) {
+        return vpLeft + (ts - vp.timeStart) / timeSpan * vpWidth;
+      }
+
+      var interval = Number(settings.deltaIntervalMs || 60000);
+
+      // Per-bar hairline gridlines
+      ctx.fillStyle = hairline;
+      buckets.forEach(function (b) {
+        var ts = Number(b.ts);
+        if (!ts) return;
+        var x = localTimeToX(ts);
+        if (x < GUTTER_LEFT || x > GUTTER_LEFT + plotW) return;
+        ctx.fillRect(Math.round(x), 0, 1, plotH);
+      });
+
+      // Visible buckets
+      var visibleBuckets = buckets.filter(function (b) {
+        var ts = Number(b.ts);
+        var x = localTimeToX(ts);
+        return x >= GUTTER_LEFT && x <= GUTTER_LEFT + plotW;
+      });
+      if (!visibleBuckets.length) visibleBuckets = buckets.slice(-120);
+
+      var maxAbs = 1;
+      visibleBuckets.forEach(function (b) { maxAbs = Math.max(maxAbs, Math.abs(b.delta)); });
+
+      // Bar width from interval duration in pixels
+      var barPx = Math.max(1, (interval / timeSpan) * plotW);
+      var barW  = Math.max(1, barPx - 1);
+
+      // Draw bars
+      ctx.globalAlpha = 0.75;
+      visibleBuckets.forEach(function (b) {
+        var ts = Number(b.ts);
+        if (!ts) return;
+        var x = localTimeToX(ts);
+        if (x < GUTTER_LEFT - barW || x > GUTTER_LEFT + plotW) return;
+        var pct  = Math.max(0.04, Math.min(1, Math.abs(b.delta) / maxAbs));
+        var barH = Math.max(2, Math.round(pct * (plotH - 4)));
+        var y    = b.delta >= 0 ? plotH - barH : 0;
+        ctx.fillStyle = b.delta >= 0 ? buyColor : sellColor;
+        ctx.fillRect(Math.round(x - barW / 2), y, Math.ceil(barW), barH);
+      });
+      ctx.globalAlpha = 1;
+
+      // Zero line
+      ctx.fillStyle = hairline;
+      ctx.fillRect(GUTTER_LEFT, Math.round(plotH / 2), plotW, 1);
+
+      // Crosshair vertical line
+      var crossTs = opts.crosshairTs;
+      if (crossTs) {
+        var cx = localTimeToX(crossTs);
+        if (cx >= GUTTER_LEFT && cx <= GUTTER_LEFT + plotW) {
+          ctx.fillStyle = 'rgba(255,255,255,0.25)';
+          ctx.fillRect(Math.round(cx), 0, 1, plotH);
+        }
+      }
+
+      // Time axis at bottom of CVD pane
+      if (opts.showTimeAxis && TIME_AXIS_H > 0) {
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, plotH, W, TIME_AXIS_H);
+        ctx.fillStyle = hairline;
+        ctx.fillRect(0, plotH, W, 1);
+        ctx.fillStyle = textFaint;
+        ctx.font = '10px ' + monoFont;
+        ctx.textBaseline = 'middle';
+        var labelEvery = Math.max(1, Math.ceil(30 / barPx));
+        visibleBuckets.forEach(function (b, i) {
+          if (i % labelEvery !== 0) return;
+          var ts = Number(b.ts);
+          if (!ts) return;
+          var x = localTimeToX(ts);
+          if (x < GUTTER_LEFT + 10 || x > GUTTER_LEFT + plotW - 20) return;
+          var d = new Date(ts);
+          var label = d.getUTCHours().toString().padStart(2, '0') + ':' +
+                      d.getUTCMinutes().toString().padStart(2, '0');
+          ctx.fillText(label, x - ctx.measureText(label).width / 2, plotH + TIME_AXIS_H / 2);
+        });
+      }
+
+      // Right gutter — CVD label
+      var latestByInterval = state.latestDeltaByInterval || {};
+      var latest = latestByInterval[String(selected)] || buckets[buckets.length - 1] || null;
+      if (latest) {
+        var gx = W - GUTTER_RIGHT;
+        ctx.fillStyle = bg;
+        ctx.fillRect(gx, 0, GUTTER_RIGHT, plotH);
+        ctx.fillStyle = hairline;
+        ctx.fillRect(gx, 0, 1, plotH);
+        ctx.fillStyle = textDim;
+        ctx.font = '9px ' + monoFont;
+        ctx.textBaseline = 'top';
+        ctx.fillText('CVD', gx + 4, 4);
+        var cvdSign = latest.cvd >= 0 ? '+' : '';
+        var cvdStr  = cvdSign + (Math.abs(latest.cvd) >= 1000 ?
+          (latest.cvd / 1000).toFixed(1) + 'K' : latest.cvd.toFixed(1));
+        ctx.fillStyle = latest.cvd >= 0 ? buyColor : sellColor;
+        ctx.font = '10px ' + monoFont;
+        ctx.fillText(cvdStr, gx + 4, 16);
+      }
+
+    } else {
+      // ---- Fallback: simple bar-only render (no viewport) ----
+      var fbBuckets = buckets.slice(-Math.floor(plotW / 3));
+      var fbMaxAbs  = 1;
+      fbBuckets.forEach(function (b) { fbMaxAbs = Math.max(fbMaxAbs, Math.abs(b.delta)); });
+      var fbBarW = Math.max(1, plotW / Math.max(fbBuckets.length, 1) - 1);
+      ctx.globalAlpha = 0.75;
+      fbBuckets.forEach(function (b, i) {
+        var pct  = Math.max(0.04, Math.min(1, Math.abs(b.delta) / fbMaxAbs));
+        var barH = Math.max(2, Math.round(pct * (plotH - 4)));
+        var x    = GUTTER_LEFT + i * (fbBarW + 1);
+        var y    = b.delta >= 0 ? plotH - barH : 0;
+        ctx.fillStyle = b.delta >= 0 ? buyColor : sellColor;
+        ctx.fillRect(Math.round(x), y, Math.ceil(fbBarW), barH);
+      });
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = hairline;
+      ctx.fillRect(GUTTER_LEFT, Math.round(plotH / 2), plotW, 1);
+    }
+  };
 })();

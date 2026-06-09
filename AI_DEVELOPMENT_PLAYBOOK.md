@@ -1393,4 +1393,11 @@ if end_time is not None:
 - Test de non-regression: `tests/test_playbook_lessons_guardrails.py` (cette verif); `tests/test_user_settings_routes.py` et les suites orderflow; verifier en executant build.py et en verifiant que `_KLINES_MAX_LIMIT` est a `5000` et `max` dans settings est a `5000`.
 - Fichiers a surveiller: `app_parts/23_routes_market.py`, `static/js/split/079_v6_orderflow_settings.js`, `static/js/split/072_v6_orderflow_helpers.js`, `static/js/split/073_v6_orderflow_layout.js`, `static/js/split/078_v6_local_engine_client.js`, `static/js/split/081_v6_orderflow_inspector.js`, `static/css/split/072_v6_orderflow_refactor.css`.
 
+### LESSON-20260609-01 - Partage de viewport entre panneaux canvas co-loques
+
+- Contexte: Phase 3 du rebuild V6 — soudure graphique (chart + CVD sub-pane).
+- Regle: Quand deux canvas adjacents doivent partager un axe temporel, stocker le viewport sur l'element canvas (`canvas._v6vp`) apres creation, pas uniquement dans un global. Les fonctions helper de rendu (`drawGridAndScales`, `drawCrosshair`) qui utilisent `GUTTER_BOTTOM` doivent lire `vp._gutterBottom` en priorite pour respecter la suppression dynamique de la gouttiere. Ne jamais passer la valeur supprimee uniquement dans le `plot.height` sans propager aux fonctions qui peignent dans la zone gouttiere.
+- Regle de prevention: Tout nouveau panneau canvas soude a un chart doit (a) lire le viewport via `canvas._v6vp`, (b) creer un `localVp` avec son propre `timeToX` base sur les memes `timeStart`/`timeEnd` sans muter le plot du chart, (c) proposer une degradation gracieuse si le viewport est absent.
+- Fichiers a surveiller: `static/js/split/077_v6_canvas_chart.js`, `static/js/split/076_v6_cvd_panel.js`, `static/js/split/080_v6_layout_shell.js`, `static/js/split/083_v6_chart_viewport.js`.
+
 
