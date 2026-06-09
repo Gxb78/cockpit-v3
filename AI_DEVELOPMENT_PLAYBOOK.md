@@ -1383,3 +1383,14 @@ if end_time is not None:
 - Gate par etape: `go build ./... && go vet ./... && go test ./internal/{calc,config,engine,ws}/` (le package `ws` isole; le panic flaky `TestStreamEndpointUpgrades` n'apparait qu'en `go test ./...` complet et est pre-existant) + suite Python orderflow/cors/transport.
 - Fichiers a surveiller: `services/market-go/internal/ws/*.go` (cvd_tracker.go, trade_store.go, footprint_store.go, kline_backfiller.go, replay_controller.go, exchange_manager.go, server.go).
 
+### BUG-20260607-01 - [RESOLU] Theme clair/sombre incoherent et limite de bougies d'historique bridee a 1000/3000
+
+- Symptome:
+  1. L'espace de travail Orderflow conservait des elements blancs/clairs (canevas de graphe, barre de dessin gauche, loaders squelettes) incoherents avec le reste de l'UI cockpit v6 sombre, a cause de regles "Light Theme Preservations" forcees en CSS et d'un defaut settings initialise sur `light-tv` avec `#ffffff`.
+  2. Augmenter le nombre max de bougies (`footprintMaxCandles`) au-dela de 3000 etait ignore ou tronque, a la fois cote frontend (clamps a 3000 dans les settings/UI/engine) et cote backend (constante `_KLINES_MAX_LIMIT = 1000` clampant le fetch proxy Binance).
+- Cause racine: Ciel et terre separes: les variables de theme n'etaient pas homogenes (presence de regles overrides hardcodees) + la limite max de bougies etait bridee de maniere redundante a chaque couche (settings schema, store validation, UI input, engine client, backend controller).
+- Regle de prevention: (a) Pour garantir une theme unifie, bannir les overrides CSS `!important` avec des couleurs absolues (ex. `#ffffff`); utiliser des variables de theme (`var(--v6-bg)`, `var(--v6-bg-2)`) et forcer le dataset theme (`root.dataset.v6Theme = 'dark-tv'`) lors de l'hydration. (b) Pour augmenter une limite de donnees d'historique (ex. candles, trades), synchroniser l'augmentation a travers toutes les couches de validation (schema settings, layout input slider clamps, local client, et constante backend `_KLINES_MAX_LIMIT` de pagination).
+- Test de non-regression: `tests/test_playbook_lessons_guardrails.py` (cette verif); `tests/test_user_settings_routes.py` et les suites orderflow; verifier en executant build.py et en verifiant que `_KLINES_MAX_LIMIT` est a `5000` et `max` dans settings est a `5000`.
+- Fichiers a surveiller: `app_parts/23_routes_market.py`, `static/js/split/079_v6_orderflow_settings.js`, `static/js/split/072_v6_orderflow_helpers.js`, `static/js/split/073_v6_orderflow_layout.js`, `static/js/split/078_v6_local_engine_client.js`, `static/js/split/081_v6_orderflow_inspector.js`, `static/css/split/072_v6_orderflow_refactor.css`.
+
+

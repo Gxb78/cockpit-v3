@@ -311,6 +311,59 @@
       drag.clickY = pt.y;
       drag.moved = false;
 
+      var store = storeFor(canvas);
+      var state = store && store.getState();
+      var s = state && state.settings;
+      if (s && s.showVolumeProfile && s.volumeProfileType === 'fixed') {
+        var fStart = s.volumeProfileFixedStart;
+        var fEnd = s.volumeProfileFixedEnd;
+        if (!fStart || !fEnd) {
+          var span = vp.timeEnd - vp.timeStart;
+          fStart = vp.timeStart + span * 0.25;
+          fEnd = vp.timeStart + span * 0.75;
+          fStart = snapTimeToCandle(fStart, state);
+          fEnd = snapTimeToCandle(fEnd, state);
+        }
+        var startX = vp.timeToX(fStart);
+        var endX = vp.timeToX(fEnd);
+        var threshold = 12; // px
+
+        if (Math.abs(pt.x - startX) <= threshold) {
+          drag.active = true;
+          drag.mode = 'vp-fixed-start';
+          drag.clickX = pt.x;
+          drag.fixedStart = fStart;
+          drag.fixedEnd = fEnd;
+          canvas.classList.add('v6-chart-dragging');
+          event.preventDefault();
+          return;
+        }
+        if (Math.abs(pt.x - endX) <= threshold) {
+          drag.active = true;
+          drag.mode = 'vp-fixed-end';
+          drag.clickX = pt.x;
+          drag.fixedStart = fStart;
+          drag.fixedEnd = fEnd;
+          canvas.classList.add('v6-chart-dragging');
+          event.preventDefault();
+          return;
+        }
+        var minX = Math.min(startX, endX);
+        var maxX = Math.max(startX, endX);
+        if (pt.x > minX && pt.x < maxX && pt.y < vp.plot.top + vp.plot.height) {
+          drag.active = true;
+          drag.mode = 'vp-fixed-block';
+          drag.clickX = pt.x;
+          drag.fixedStart = fStart;
+          drag.fixedEnd = fEnd;
+          drag.blockOffsetStart = fStart - vp.xToTime(pt.x);
+          drag.blockOffsetEnd = fEnd - vp.xToTime(pt.x);
+          canvas.classList.add('v6-chart-dragging');
+          event.preventDefault();
+          return;
+        }
+      }
+
       // Detect axis click — zoom the corresponding axis.
       if (isOnPriceAxis(pt.x, pt.y, vp)) {
         drag.active = true;
@@ -368,7 +421,34 @@
         drag.moved = true;
       }
 
-      if (drag.mode === 'price') {
+      if (drag.mode === 'vp-fixed-start') {
+        var t = vp.xToTime(pt.x);
+        var store = storeFor(canvas);
+        if (store) {
+          t = snapTimeToCandle(t, store.getState());
+          if (t < drag.fixedEnd) {
+            drag.fixedStart = t;
+          }
+        }
+      } else if (drag.mode === 'vp-fixed-end') {
+        var t = vp.xToTime(pt.x);
+        var store = storeFor(canvas);
+        if (store) {
+          t = snapTimeToCandle(t, store.getState());
+          if (t > drag.fixedStart) {
+            drag.fixedEnd = t;
+          }
+        }
+      } else if (drag.mode === 'vp-fixed-block') {
+        var store = storeFor(canvas);
+        if (store) {
+          var tCurrent = vp.xToTime(pt.x);
+          var newStart = tCurrent + drag.blockOffsetStart;
+          var newEnd = tCurrent + drag.blockOffsetEnd;
+          drag.fixedStart = snapTimeToCandle(newStart, store.getState());
+          drag.fixedEnd = snapTimeToCandle(newEnd, store.getState());
+        }
+      } else if (drag.mode === 'price') {
         vp.panByPixels(0, dy);
         drag.startY = pt.y;
       } else if (drag.mode === 'pan') {
@@ -442,6 +522,18 @@
       drag.active = false;
       if (drag.moved) drag.lastDragAt = Date.now();
       if (canvas) canvas.classList.remove('v6-chart-dragging');
+
+      if (drag.mode === 'vp-fixed-start' || drag.mode === 'vp-fixed-end' || drag.mode === 'vp-fixed-block') {
+        var store = storeFor(canvas);
+        if (store && drag.fixedStart != null && drag.fixedEnd != null) {
+          store.updateSettings({
+            volumeProfileFixedStart: drag.fixedStart,
+            volumeProfileFixedEnd: drag.fixedEnd
+          });
+        }
+        drag.fixedStart = null;
+        drag.fixedEnd = null;
+      }
     },
 
     // ── Touch handlers (pinch-to-zoom + two-finger pan) ──
@@ -571,6 +663,47 @@
         redrawAll(canvas);
         return;
       } else if (isOnTimeAxis(pt2.x, pt2.y, vp)) {
+        var store = storeFor(canvas);
+        var state = store && store.getState ? store.getState() : {};
+        var settings = state.settings || {};
+        var markers = settings.markers || [];
+
+        // 1. Check if clicked near an existing user marker
+        var clickedMarker = null;
+        for (var i = 0; i < markers.length; i++) {
+          var mx = vp.timeToX(markers[i].ts);
+          if (Math.abs(pt2.x - mx) <= 12) {
+            clickedMarker = markers[i];
+            break;
+          }
+        }
+
+        if (clickedMarker) {
+          var newText = prompt("Modifier le marqueur utilisateur (laisser vide pour supprimer) :", clickedMarker.text);
+          if (newText === null) return; // cancelled
+          var nextMarkers = markers.filter(function (m) { return m.ts !== clickedMarker.ts; });
+          if (newText.trim() !== '') {
+            nextMarkers.push({ ts: clickedMarker.ts, text: newText.trim(), type: 'user' });
+          }
+          store.updateSettings({ markers: nextMarkers });
+          redrawAll(canvas);
+          return;
+        }
+
+        // 2. Ctrl+Click or Alt+Click to add a new user marker
+        if (event.ctrlKey || event.altKey) {
+          var ts = vp.xToTime(pt2.x);
+          ts = snapTimeToCandle(ts, state);
+          var text = prompt("Ajouter un marqueur utilisateur à " + V6OF.format.time(ts) + " :");
+          if (text && text.trim() !== '') {
+            var nextMarkers = markers.slice();
+            nextMarkers.push({ ts: ts, text: text.trim(), type: 'user' });
+            store.updateSettings({ markers: nextMarkers });
+            redrawAll(canvas);
+          }
+          return;
+        }
+
         var factor = event.shiftKey ? 1.25 : 0.8;
         vp.zoomTime(factor, pt2.x);
         redrawAll(canvas);

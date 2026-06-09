@@ -60,3 +60,11 @@ apps/desktop/build/bin/
 *.log
 /orderflow_audit.png
 /v6_orderflow_current.png
+
+.superpowers/
+
+# Playwright MCP session data
+.playwright-mcp/
+
+# Windows shortcuts
+*.lnk

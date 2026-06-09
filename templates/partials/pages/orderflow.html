@@ -12,21 +12,21 @@
         try {
           var root = document.getElementById('v6-orderflow-root');
           var raw = JSON.parse(localStorage.getItem('cockpitV6.orderflow.settings') || '{}');
-          var theme = raw && raw.theme === 'dark-tv' ? 'dark-tv' : 'light-tv';
-          var vars = theme === 'dark-tv'
+          var theme = raw && raw.theme === 'light-tv' ? 'light-tv' : 'dark-tv';
+          var vars = theme !== 'dark-tv'
             ? {
-                '--v6-bg': '#131722', '--v6-bg-2': '#171b22', '--v6-surface': '#1e222d',
-                '--v6-surface-2': '#222733', '--v6-surface-3': '#2a2e39',
-                '--v6-text': '#d1d4dc', '--v6-text-dim': '#b2b5be', '--v6-text-mute': '#868993',
-                '--v6-text-faint': '#5f636e', '--v6-hairline': 'rgba(120, 130, 150, 0.20)',
-                '--v6-hairline-strong': 'rgba(120, 130, 150, 0.32)'
-              }
-            : {
                 '--v6-bg': '#f8f9fa', '--v6-bg-2': '#f0f3fa', '--v6-surface': '#ffffff',
                 '--v6-surface-2': '#f5f7fb', '--v6-surface-3': '#e6e9ef',
                 '--v6-text': '#131722', '--v6-text-dim': '#434651', '--v6-text-mute': '#6b7280',
                 '--v6-text-faint': '#9aa0aa', '--v6-hairline': 'rgba(19, 23, 34, 0.14)',
                 '--v6-hairline-strong': 'rgba(19, 23, 34, 0.24)'
+              }
+            : {
+                '--v6-bg': '#0a0b0d', '--v6-bg-2': '#0e0f12', '--v6-surface': '#15171b',
+                '--v6-surface-2': '#1c1f24', '--v6-surface-3': '#23262c',
+                '--v6-text': '#d7d9de', '--v6-text-dim': '#9aa0ab', '--v6-text-mute': '#7c818c',
+                '--v6-text-faint': '#565b66', '--v6-hairline': 'rgba(255, 255, 255, 0.06)',
+                '--v6-hairline-strong': 'rgba(255, 255, 255, 0.12)'
               };
           if (root) {
             root.dataset.v6Theme = theme;

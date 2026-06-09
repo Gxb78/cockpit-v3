@@ -31,7 +31,8 @@
 
   // ── State ──
   var book         = new Map();  // Map<priceKey, BookLevel>
-  var tickSize     = 1;
+  var nativeTickSize = 1;
+  var tickSize     = 1;          // grouped tick size
   var contractSize = 1;          // instrument contract size (metadata; 1 for base-coin venues)
   var priceGrouping = 25;
   var midPrice     = 0;
@@ -49,6 +50,7 @@
   var droppedUpdates = 0;
   var source       = 'unknown';
   var symbol       = '';
+  var autoCenterEnabled = true;
 
   // ── Helpers ──
 
@@ -107,8 +109,19 @@
     return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
   }
 
-  // ── Wall scoring global ──
-  function computeWallScores() {
+  function computeWallScores(settings) {
+    if (!settings && V6OF.getStore) {
+      var store = V6OF.getStore();
+      var state = store && store.getState ? store.getState() : null;
+      settings = state && state.settings;
+    }
+    var softPct = 0.85;
+    var majorPct = 0.95;
+    if (settings) {
+      if (Number.isFinite(settings.domSoftWallPercentile)) softPct = settings.domSoftWallPercentile;
+      if (Number.isFinite(settings.domMajorWallPercentile)) majorPct = settings.domMajorWallPercentile;
+    }
+
     var bidSizes = [];
     var askSizes = [];
     book.forEach(function (lv) {
@@ -116,23 +129,23 @@
       if (lv.askSize > 0) askSizes.push(lv.askSize);
     });
 
-    var p85b = percentile(bidSizes, 0.85);
-    var p95b = percentile(bidSizes, 0.95);
-    var p85a = percentile(askSizes, 0.85);
-    var p95a = percentile(askSizes, 0.95);
+    var pSoftB = percentile(bidSizes, softPct);
+    var pMajorB = percentile(bidSizes, majorPct);
+    var pSoftA = percentile(askSizes, softPct);
+    var pMajorA = percentile(askSizes, majorPct);
 
     book.forEach(function (lv) {
-      if (lv.bidSize >= p95b && p95b > 0) {
+      if (lv.bidSize >= pMajorB && pMajorB > 0) {
         lv.bidWallScore = 2;
-      } else if (lv.bidSize >= p85b && p85b > 0) {
+      } else if (lv.bidSize >= pSoftB && pSoftB > 0) {
         lv.bidWallScore = 1;
       } else {
         lv.bidWallScore = 0;
       }
 
-      if (lv.askSize >= p95a && p95a > 0) {
+      if (lv.askSize >= pMajorA && pMajorA > 0) {
         lv.askWallScore = 2;
-      } else if (lv.askSize >= p85a && p85a > 0) {
+      } else if (lv.askSize >= pSoftA && pSoftA > 0) {
         lv.askWallScore = 1;
       } else {
         lv.askWallScore = 0;
@@ -168,6 +181,7 @@
   // ── Reset ──
   function reset() {
     book.clear();
+    nativeTickSize = 1;
     tickSize      = 1;
     midPrice      = 0;
     bestBid       = 0;
@@ -182,6 +196,7 @@
     lastSequence  = 0;
     sequenceGapCount = 0;
     droppedUpdates = 0;
+    autoCenterEnabled = true;
   }
 
   function ingestSequence(ob) {
@@ -247,10 +262,85 @@
     symbol = ob.symbol || symbol;
     ingestSequence(ob);
 
-    // --- Tick size : stable, base sur le grouping uniquement ---
-    // Ne JAMAIS recalculer dynamiquement — changerait les priceKeys entre feeds
-    // et rendrait les niveaux orphelins (ASK disparaissent).
-    tickSize = priceGrouping > 0 ? priceGrouping : 1;
+    // Resolve native tick size from snapshot, settings, or dynamic detection
+    var resolvedNativeTick = 1;
+    if (ob && ob.tickSize > 0) {
+      resolvedNativeTick = Number(ob.tickSize);
+    } else if (V6OF.getStore) {
+      var store = V6OF.getStore();
+      var state = store && store.getState ? store.getState() : null;
+      var sTick = state && state.settings && state.settings.tickSize;
+      if (sTick > 0) resolvedNativeTick = Number(sTick);
+    }
+    if (resolvedNativeTick === 1 && ob) {
+      var detected = detectTickSize(ob.bids, ob.asks);
+      if (detected > 0) resolvedNativeTick = detected;
+    }
+    nativeTickSize = resolvedNativeTick;
+
+    // priceGrouping is the DOM bucket size in quote units (e.g. 25 = $25 price
+    // levels), floored at the exchange's native tick so a bucket is never finer
+    // than the book. (Previously nativeTickSize * grouping gave $0.25 levels for
+    // BTC, so "Group 25" was ignored and the same integer price repeated.)
+    var newTickSize = Math.max(nativeTickSize, priceGrouping > 0 ? priceGrouping : nativeTickSize);
+    if (newTickSize !== tickSize) {
+      var oldTickSize = tickSize;
+      tickSize = newTickSize;
+      
+      if (viewMin !== 0 || viewMax !== 0) {
+        var minPrice = viewMin * oldTickSize;
+        var maxPrice = viewMax * oldTickSize;
+        viewMin = Math.round(minPrice / tickSize);
+        viewMax = Math.round(maxPrice / tickSize);
+      }
+      if (dataMin !== 0 || dataMax !== 0) {
+        var minDataPrice = dataMin * oldTickSize;
+        var maxDataPrice = dataMax * oldTickSize;
+        dataMin = Math.round(minDataPrice / tickSize);
+        dataMax = Math.round(maxDataPrice / tickSize);
+      }
+
+      var oldBook = book;
+      book = new Map();
+      oldBook.forEach(function (lv) {
+        var snappedPrice = Math.round(lv.price / tickSize) * tickSize;
+        var pk = makePriceKey(snappedPrice);
+        var entry = book.get(pk);
+        if (!entry) {
+          entry = {
+            priceKey    : pk,
+            tick        : priceToTick(snappedPrice),
+            price       : snappedPrice,
+            bidSize     : 0,
+            askSize     : 0,
+            buyVol      : 0,
+            sellVol     : 0,
+            delta       : 0,
+            prevBidSize : 0,
+            prevAskSize : 0,
+            lastUpdateTs: lv.lastUpdateTs,
+            firstSeenTs : lv.firstSeenTs,
+            maxBidSeen  : 0,
+            maxAskSeen  : 0,
+            bidWallScore: 0,
+            askWallScore: 0,
+            wallScore   : 0
+          };
+          book.set(pk, entry);
+        }
+        entry.bidSize += lv.bidSize;
+        entry.askSize += lv.askSize;
+        entry.buyVol += lv.buyVol;
+        entry.sellVol += lv.sellVol;
+        entry.delta += lv.delta;
+        entry.prevBidSize += lv.prevBidSize;
+        entry.prevAskSize += lv.prevAskSize;
+        entry.lastUpdateTs = Math.max(entry.lastUpdateTs, lv.lastUpdateTs);
+        entry.firstSeenTs = Math.min(entry.firstSeenTs, lv.firstSeenTs);
+        entry.maxBidSeen += lv.maxBidSeen;
+        entry.maxAskSeen += lv.maxAskSeen;
+      });
+    }
 
     // --- Contract size : metadata instrument (defaut 1, conserve la derniere valeur connue) ---
     if (Number(ob.contractSize) > 0) contractSize = Number(ob.contractSize);
@@ -278,6 +368,11 @@
     // On ne touche PAS aux niveaux absents — ils gardent leur ancienne valeur
     // jusqu'a expiration temporelle (STALE_LEVEL_MS sans update)
     function ingest(levels, side) {
+      // Multiple raw levels can snap into the SAME grouped bucket (the whole point
+      // of grouping). The first raw level to hit a bucket in THIS snapshot resets
+      // it; subsequent collisions accumulate — so a $25 bucket sums every 0.01
+      // level inside it instead of showing only the last one.
+      var touched = Object.create(null);
       levels.forEach(function (raw) {
         var price = Number(raw.price);
         var size  = Number(raw.size);
@@ -288,13 +383,14 @@
         var lv = getOrCreate(pk, snappedPrice);
 
         if (side === 'bid') {
-          lv.bidSize = size;
+          lv.bidSize = (touched[pk] ? lv.bidSize : 0) + size;
           if (lv.bidSize > lv.maxBidSeen) lv.maxBidSeen = lv.bidSize;
         } else {
-          lv.askSize = size;
+          lv.askSize = (touched[pk] ? lv.askSize : 0) + size;
           if (lv.askSize > lv.maxAskSeen) lv.maxAskSeen = lv.askSize;
         }
 
+        touched[pk] = true;
         lv.lastUpdateTs = now;
       });
     }
@@ -327,15 +423,17 @@
       dataMax = newDataMax;
     }
 
-    // --- Mettre a jour la fenetre stable (seulement si mid a bouge) ---
-    var midTick = priceToTick(midPrice);
-    updateViewWindow(midTick);
+    // --- Mettre a jour la fenetre stable (seulement si mid a bouge et autoCenterEnabled est actif) ---
+    if (autoCenterEnabled) {
+      var midTick = priceToTick(midPrice);
+      updateViewWindow(midTick);
 
-    // --- S'assurer que la fenetre couvre au moins les donnees ---
-    // (le mid peut etre stable mais de nouveaux niveaux apparaissent aux extremites)
-    var dataMargin = Math.floor(VIEW_HALF_RANGE * 0.1);
-    if (dataMin < viewMin - dataMargin) viewMin = dataMin - Math.floor(VIEW_HALF_RANGE * 0.05);
-    if (dataMax > viewMax + dataMargin) viewMax = dataMax + Math.floor(VIEW_HALF_RANGE * 0.05);
+      // --- S'assurer que la fenetre couvre au moins les donnees ---
+      // (le mid peut etre stable mais de nouveaux niveaux apparaissent aux extremites)
+      var dataMargin = Math.floor(VIEW_HALF_RANGE * 0.1);
+      if (dataMin < viewMin - dataMargin) viewMin = dataMin - Math.floor(VIEW_HALF_RANGE * 0.05);
+      if (dataMax > viewMax + dataMargin) viewMax = dataMax + Math.floor(VIEW_HALF_RANGE * 0.05);
+    }
 
     // --- Pruner les entrees tres loin de la fenetre ---
     var pruneRange  = viewMax - viewMin;
@@ -421,15 +519,78 @@
   function setGrouping(group) {
     if (groupingOptions.indexOf(group) === -1) return;
     if (group === priceGrouping) return;
+
+    var oldTickSize = tickSize;
     priceGrouping = group;
-    reset();
+    tickSize = Math.max(nativeTickSize, priceGrouping > 0 ? priceGrouping : nativeTickSize);
+
+    // Adjust view limits and data limits in ticks to match new grouping scale
+    if (viewMin !== 0 || viewMax !== 0) {
+      var minPrice = viewMin * oldTickSize;
+      var maxPrice = viewMax * oldTickSize;
+      viewMin = Math.round(minPrice / tickSize);
+      viewMax = Math.round(maxPrice / tickSize);
+    }
+    if (dataMin !== 0 || dataMax !== 0) {
+      var minDataPrice = dataMin * oldTickSize;
+      var maxDataPrice = dataMax * oldTickSize;
+      dataMin = Math.round(minDataPrice / tickSize);
+      dataMax = Math.round(maxDataPrice / tickSize);
+    }
+
+    var oldBook = book;
+    book = new Map();
+
+    oldBook.forEach(function (lv) {
+      var snappedPrice = Math.round(lv.price / tickSize) * tickSize;
+      var pk = makePriceKey(snappedPrice);
+      var entry = book.get(pk);
+      if (!entry) {
+        entry = {
+          priceKey    : pk,
+          tick        : priceToTick(snappedPrice),
+          price       : snappedPrice,
+          bidSize     : 0,
+          askSize     : 0,
+          buyVol      : 0,
+          sellVol     : 0,
+          delta       : 0,
+          prevBidSize : 0,
+          prevAskSize : 0,
+          lastUpdateTs: lv.lastUpdateTs,
+          firstSeenTs : lv.firstSeenTs,
+          maxBidSeen  : 0,
+          maxAskSeen  : 0,
+          bidWallScore: 0,
+          askWallScore: 0,
+          wallScore   : 0
+        };
+        book.set(pk, entry);
+      }
+
+      entry.bidSize += lv.bidSize;
+      entry.askSize += lv.askSize;
+      entry.buyVol += lv.buyVol;
+      entry.sellVol += lv.sellVol;
+      entry.delta += lv.delta;
+      entry.prevBidSize += lv.prevBidSize;
+      entry.prevAskSize += lv.prevAskSize;
+      entry.lastUpdateTs = Math.max(entry.lastUpdateTs, lv.lastUpdateTs);
+      entry.firstSeenTs = Math.min(entry.firstSeenTs, lv.firstSeenTs);
+      entry.maxBidSeen += lv.maxBidSeen;
+      entry.maxAskSeen += lv.maxAskSeen;
+    });
+
+    computeWallScores();
   }
 
   // ── Snapshot pour le panel ──
   function snapshot() {
+    computeWallScores();
     // Pour compatibilite : minTick/maxTick pointent vers la fenetre stable
     return {
       book         : book,
+      nativeTickSize: nativeTickSize,
       tickSize     : tickSize,
       contractSize : contractSize,
       priceGrouping: priceGrouping,
@@ -457,6 +618,16 @@
     };
   }
 
+  function setAutoCenterEnabled(enabled) {
+    autoCenterEnabled = !!enabled;
+  }
+
+  function centerWindowOnTick(tick) {
+    if (!Number.isFinite(tick)) return;
+    viewMin = tick - VIEW_HALF_RANGE;
+    viewMax = tick + VIEW_HALF_RANGE;
+  }
+
   // ── API publique ──
   V6OF.register('Data', 'DomLadder', {
     reset             : reset,
@@ -468,7 +639,9 @@
     getGroupingOptions: function () { return groupingOptions.slice(); },
     THROTTLE_MS       : THROTTLE_MS,
     priceToTick       : priceToTick,
-    tickToPrice       : tickToPrice
+    tickToPrice       : tickToPrice,
+    setAutoCenterEnabled: setAutoCenterEnabled,
+    centerWindowOnTick: centerWindowOnTick
   }, 'DomLadder');
 
 })();

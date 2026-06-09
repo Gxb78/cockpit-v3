@@ -392,7 +392,7 @@
             patch.selectedHeatmapSymbol = lastFrame ? (lastFrame.symbol || state.selectedHeatmapSymbol || 'BTC') : state.selectedHeatmapSymbol;
           }
           if (nextFootprintCandles.length) {
-            var maxCandles = Math.max(60, Math.min(3000, Number((state.settings && state.settings.footprintMaxCandles) || DEFAULT_MAX_FOOTPRINT_CANDLES)));
+            var maxCandles = Math.max(60, Math.min(5000, Number((state.settings && state.settings.footprintMaxCandles) || DEFAULT_MAX_FOOTPRINT_CANDLES)));
             var fpBefore = (state.footprintCandles || []).length + nextFootprintCandles.length;
             var candles = mergeFootprintCandles(state.footprintCandles || [], nextFootprintCandles, maxCandles);
             if (fpBefore > candles.length) {
@@ -902,7 +902,29 @@
         notify();
       } else if (msg.type === 'replay_status') {
         if (msg.payload && store) {
-          store.setState({ replay: msg.payload }, 'replay-status');
+          var prevState = store.getState();
+          var prevReplay = prevState.replay || {};
+          var newReplay = msg.payload || {};
+          var events = prevState.replayEvents ? prevState.replayEvents.slice() : [];
+          if (newReplay.clockMs) {
+            var clock = newReplay.clockMs;
+            if (newReplay.state !== prevReplay.state && newReplay.state) {
+              events.push({
+                ts: clock,
+                type: 'replay',
+                text: 'Replay: ' + newReplay.state
+              });
+            }
+            if (newReplay.speed !== prevReplay.speed && newReplay.speed != null && prevReplay.speed != null) {
+              events.push({
+                ts: clock,
+                type: 'replay',
+                text: 'Replay Speed: ' + newReplay.speed + 'x'
+              });
+            }
+            if (events.length > 200) events.shift();
+          }
+          store.setState({ replay: msg.payload, replayEvents: events }, 'replay-status');
         }
         notify();
       } else if (msg.type === 'heartbeat') {
@@ -1112,19 +1134,21 @@
       var intervalMsValue = timeframeToMs(tf);
       var from = Number(options.from || options.startTime || 0);
       var to = Number(options.to || options.endTime || 0);
-      if ((!from || !to) && Array.isArray(state.chartCandles) && state.chartCandles.length) {
-        var firstChartCandle = state.chartCandles[0];
-        var lastChartCandle = state.chartCandles[state.chartCandles.length - 1];
-        from = from || Number(firstChartCandle.openTime || 0);
-        to = to || Number(lastChartCandle.closeTime || (Number(lastChartCandle.openTime || 0) + intervalMsValue - 1));
+      if (!from || !to) {
+        var settings = state.settings || {};
+        var lookbackMinutes = Math.max(1, Math.min(10080, Number(options.lookbackMinutes || settings.footprintHistoryLookbackMinutes || 360)));
+        to = to || Date.now();
+        from = from || (to - lookbackMinutes * 60000);
       }
+      var requestedFrom = from;
+      var requestedTo = to;
       var limit = Math.max(1, Math.min(3000, Number(options.limit || DEFAULT_MAX_FOOTPRINT_CANDLES)));
 
       // --- Idempotency guard ---
       // Don't re-fetch the full history if we already have it for this symbol+tf+window.
       // Only bypass when explicitly called with a forced small range (e.g. inspector, limit<=20).
       var isSmallFetch = options.limit && options.limit <= 20;
-      if (!isSmallFetch && _lastFpFetch) {
+      if (!isSmallFetch && !options.force && _lastFpFetch) {
         var sameKey = _lastFpFetch.symbol === symbol && _lastFpFetch.tf === tf;
         var sameWindow = (!from || _lastFpFetch.from <= from) && (!to || _lastFpFetch.to >= to);
         var recentEnough = (Date.now() - _lastFpFetch.ts) < 60000; // 1 min debounce
@@ -1193,8 +1217,14 @@
           if (!candles.length) return;
           
           store.setState(function (prev) {
-            var maxCandles = Math.max(60, Math.min(3000, Number((prev.settings && prev.settings.footprintMaxCandles) || DEFAULT_MAX_FOOTPRINT_CANDLES)));
+            var maxCandles = Math.max(60, Math.min(5000, Number((prev.settings && prev.settings.footprintMaxCandles) || DEFAULT_MAX_FOOTPRINT_CANDLES)));
             var merged = mergeFootprintCandles(prev.footprintCandles || [], candles, maxCandles);
+            if (!isSmallFetch && requestedFrom > 0 && requestedTo > 0) {
+              merged = merged.filter(function (item) {
+                var open = Number(item && item.openTime || 0);
+                return open >= requestedFrom && open <= requestedTo;
+              });
+            }
             var lastCandle = merged[merged.length - 1];
             return {
               footprintCandles: merged,

@@ -5,32 +5,32 @@
  */
 
 body[data-current-page="orderflow"] .v6-orderflow-root {
-  --v6-bg: #131722;
-  --v6-bg-2: #171b22;
-  --v6-surface: #1e222d;
-  --v6-surface-2: #222733;
-  --v6-surface-3: #2a2e39;
-  --v6-hairline: rgba(120, 130, 150, 0.20);
-  --v6-hairline-strong: rgba(120, 130, 150, 0.32);
-  --v6-text: #d1d4dc;
-  --v6-text-dim: #b2b5be;
-  --v6-text-mute: #868993;
-  --v6-text-faint: #5f636e;
-  --v6-accent: #2962ff;
-  --v6-accent-2: #1e53e5;
-  --v6-accent-soft: rgba(41, 98, 255, 0.14);
-  --v6-accent-line: rgba(41, 98, 255, 0.40);
+  --v6-bg: #05060a;
+  --v6-bg-2: #0b0e14;
+  --v6-surface: #101320;
+  --v6-surface-2: #181c2b;
+  --v6-surface-3: #262b3d;
+  --v6-hairline: rgba(255, 255, 255, 0.04);
+  --v6-hairline-strong: rgba(255, 255, 255, 0.08);
+  --v6-text: #f5f7ff;
+  --v6-text-dim: #9aa0c2;
+  --v6-text-mute: #707590;
+  --v6-text-faint: #484c60;
+  --v6-accent: #4f8cff;
+  --v6-accent-2: #3b82f6;
+  --v6-accent-soft: rgba(79, 140, 255, 0.12);
+  --v6-accent-line: rgba(79, 140, 255, 0.25);
   --v6-buy: #089981;
-  --v6-buy-soft: rgba(8, 153, 129, 0.16);
+  --v6-buy-soft: rgba(8, 153, 129, 0.12);
   --v6-sell: #f23645;
-  --v6-sell-soft: rgba(242, 54, 69, 0.16);
-  --v6-gold: #f2c94c;
-  --v6-gold-soft: rgba(242, 201, 76, 0.14);
-  --v6-r-lg: 6px;
-  --v6-r-md: 5px;
-  --v6-r-sm: 3px;
-  --v6-fast: 90ms;
-  --v6-med: 160ms;
+  --v6-sell-soft: rgba(242, 54, 69, 0.12);
+  --v6-gold: #f5c53c;
+  --v6-gold-soft: rgba(245, 197, 60, 0.10);
+  --v6-r-lg: 12px;
+  --v6-r-md: 8px;
+  --v6-r-sm: 4px;
+  --v6-fast: 150ms;
+  --v6-med: 220ms;
   background: var(--v6-bg);
 }
 
@@ -150,13 +150,13 @@ body[data-current-page="orderflow"] .v6-skel-tools {
   gap: 6px;
   padding: 5px 3px;
   border-right: 1px solid var(--v6-hairline);
-  background: #ffffff;
+  background: #171b26;
 }
 
 body[data-current-page="orderflow"] .v6-skel-tools span {
   width: 29px;
   height: 28px;
-  background: #e6e9ef;
+  background: #1c2030;
   animation: none;
 }
 
@@ -210,7 +210,7 @@ body[data-current-page="orderflow"] .v6-skel-panel-tape {
 body[data-current-page="orderflow"] .v6-skel-panel-chart {
   position: relative;
   overflow: hidden;
-  background: #ffffff;
+  background: #131722;
 }
 
 body[data-current-page="orderflow"] .v6-skel-panel-dom {
@@ -976,31 +976,38 @@ body[data-current-page="orderflow"] .v6-btn:hover {
   }
 }
 
-/* ---- Chart Area and Drawing Toolbar Light Theme Preservations ---- */
+/* ---- Chart Area and Drawing Toolbar Dark Theme Preservations (Forced Dark Mode) ---- */
 
-/* Force chart viewport area to be white background */
+/* Force chart viewport area to be dark background */
 body[data-current-page="orderflow"] .v6-center-chart,
 body[data-current-page="orderflow"] .v6-chart-canvas {
-  background: #ffffff !important;
+  background: #131722 !important;
 }
 
-/* Force left drawing toolbar to be white background with dark icons */
+/* Force left drawing toolbar to be dark background with light icons */
 body[data-current-page="orderflow"] .v6-left-toolbar {
-  background: #ffffff !important;
-  border: 1px solid #d1d4dc !important;
+  background: #171b26 !important;
+  border: 1px solid var(--v6-hairline) !important;
   border-radius: var(--v6-r-sm);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+  box-shadow: none !important;
 }
 
 body[data-current-page="orderflow"] .v6-tool {
-  color: #131722 !important;
+  color: var(--v6-text-mute) !important;
 }
 
 body[data-current-page="orderflow"] .v6-tool:hover,
-body[data-current-page="orderflow"] .v6-tool:focus-visible,
+body[data-current-page="orderflow"] .v6-tool:focus-visible {
+  color: #ffffff !important;
+  border-color: var(--v6-accent-line) !important;
+  background: var(--v6-surface-3) !important;
+}
+
 body[data-current-page="orderflow"] .v6-tool.is-active {
-  color: #131722 !important;
-  background: #f0f3fa !important;
+  color: #ffffff !important;
+  border-color: var(--v6-accent) !important;
+  background: var(--v6-accent-soft) !important;
+  box-shadow: 0 0 0 1px rgba(58, 215, 238, 0.16), 0 0 16px -4px var(--v6-accent-glow) !important;
 }
 
 body[data-current-page="orderflow"] .v6-tool[title]:hover::after {

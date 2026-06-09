@@ -404,9 +404,9 @@
       var ctx = canvas.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = '#131722';
       ctx.fillRect(0, 0, w, h);
-      ctx.strokeStyle = '#e0e3eb';
+      ctx.strokeStyle = 'rgba(120, 130, 150, 0.20)';
       ctx.beginPath();
       ctx.moveTo(0, 0.5);
       ctx.lineTo(w, 0.5);
@@ -448,14 +448,14 @@
       var ph = Math.max(1, h - top - bottom);
       var tx = function (t) { return left + (t - winStart) / (winEnd - winStart) * pw; };
       var ty = function (v) { return top + (max - v) / (max - min) * ph; };
-      ctx.strokeStyle = '#f0f3fa';
+      ctx.strokeStyle = 'rgba(120, 130, 150, 0.10)';
       for (var g = 1; g <= 2; g++) {
         var gy = top + ph * g / 3;
         ctx.beginPath(); ctx.moveTo(left, gy); ctx.lineTo(left + pw, gy); ctx.stroke();
       }
       var zeroY = ty(0);
       if (min < 0 && max > 0) {
-        ctx.strokeStyle = '#d1d4dc';
+        ctx.strokeStyle = 'rgba(120, 130, 150, 0.30)';
         ctx.setLineDash([4, 5]);
         ctx.beginPath(); ctx.moveTo(left, zeroY); ctx.lineTo(left + pw, zeroY); ctx.stroke();
         ctx.setLineDash([]);

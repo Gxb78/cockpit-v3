@@ -1,0 +1,908 @@
+/* ============================================================================
+ * 073_v6_orderflow_pro.css — "OBSIDIAN PRO"
+ * The cohesive, authoritative design layer for the Orderflow V6 terminal.
+ * Loads last; everything is page-scoped to body[data-current-page="orderflow"]
+ * so it wins cleanly without an !important war. Tokens come from 070 (+ runtime
+ * hydrateThemeVars). A Bookmap/ATAS/TradingView-grade dark cockpit: deep
+ * blue-graphite surfaces, one electric-cyan accent, vivid buy/sell, gold for
+ * VWAP/POC. Flush seamless panels (not floating cards), crisp hairlines, real
+ * depth, restrained motion.
+ * ========================================================================== */
+
+body[data-current-page="orderflow"] .v6-orderflow-root {
+  background: var(--v6-bg);
+  font-family: var(--v6-font);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Subtle atmospheric depth: a faint top glow so the chrome reads as a surface. */
+body[data-current-page="orderflow"] .v6-shell {
+  background:
+    radial-gradient(120% 80% at 50% -20%, rgba(56, 189, 248, 0.05), transparent 60%),
+    var(--v6-bg);
+}
+
+/* ============================ 1. CONTAINMENT ============================== */
+/* The flex children MUST be able to shrink below content size, or the chart
+ * canvas pushes the whole layout past the viewport (the bug after the legacy
+ * block was removed). */
+body[data-current-page="orderflow"] .v6-shell,
+body[data-current-page="orderflow"] .v6-main-area {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+/* The shell is a grid with only ROW tracks defined, so its single implicit
+ * column is `auto` (max-content) and grows to the sum of the dock widths,
+ * shoving the right dock off-screen. Pin the column to the container width. */
+body[data-current-page="orderflow"] .v6-shell {
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+}
+body[data-current-page="orderflow"] .v6-main-area { width: 100%; }
+body[data-current-page="orderflow"] .v6-main-area {
+  padding: 0;
+  gap: 0;
+  background: var(--v6-bg);
+}
+body[data-current-page="orderflow"] .v6-left-col,
+body[data-current-page="orderflow"] .v6-right-col,
+body[data-current-page="orderflow"] .v6-center-col,
+body[data-current-page="orderflow"] .v6-center-chart {
+  min-width: 0;
+  min-height: 0;
+}
+body[data-current-page="orderflow"] .v6-center-col {
+  flex: 1 1 0;
+}
+/* Comfortable default dock width (the DOM ladder needs real room); JS resize
+ * sets inline width/flex which overrides this. */
+body[data-current-page="orderflow"] .v6-right-col {
+  flex: 0 0 412px;
+  width: 412px;
+  max-width: 46vw;
+  background: var(--v6-bg-2);
+  border-left: 1px solid var(--v6-hairline);
+}
+body[data-current-page="orderflow"] .v6-left-col {
+  max-width: 34vw;
+  background: var(--v6-bg-2);
+  border-right: 1px solid var(--v6-hairline);
+}
+
+/* ============================== 2. HEADER ================================= */
+body[data-current-page="orderflow"] .v6-header {
+  height: 42px;
+  min-height: 42px;
+  gap: 10px;
+  padding: 0 12px;
+  background: linear-gradient(180deg, var(--v6-bg-2), color-mix(in srgb, var(--v6-bg-2) 88%, #000));
+  border-bottom: 1px solid var(--v6-hairline);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+}
+body[data-current-page="orderflow"] .v6-brand { gap: 9px; }
+body[data-current-page="orderflow"] .v6-brand-mark {
+  width: 22px; height: 22px;
+  border-radius: 7px;
+  background: radial-gradient(130% 130% at 30% 18%, var(--v6-accent), var(--v6-accent-2) 70%);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.25), 0 4px 14px -4px var(--v6-accent-glow);
+}
+body[data-current-page="orderflow"] .v6-brand-mark::after { color: #04121a; font-weight: 900; }
+body[data-current-page="orderflow"] .v6-symbol-select {
+  font: 800 14px/1 var(--v6-font);
+  letter-spacing: -0.01em;
+  color: var(--v6-text);
+}
+body[data-current-page="orderflow"] .v6-symbol-meta {
+  color: var(--v6-text-mute);
+  font: 700 10px/1 var(--v6-mono);
+  letter-spacing: 0.04em;
+}
+
+/* Status badge */
+body[data-current-page="orderflow"] .v6-badge {
+  min-height: 22px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px solid var(--v6-hairline-strong);
+  background: var(--v6-surface);
+  color: var(--v6-text-mute);
+  font: 800 9px/1 var(--v6-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+body[data-current-page="orderflow"] .v6-badge-live {
+  border-color: rgba(14, 203, 129, 0.4);
+  background: var(--v6-buy-soft);
+  color: #4fe0ad;
+}
+body[data-current-page="orderflow"] .v6-badge-error {
+  border-color: rgba(246, 70, 93, 0.45);
+  background: var(--v6-sell-soft);
+  color: #ff7a86;
+}
+
+/* Segmented groups: timeframes / layers / source */
+body[data-current-page="orderflow"] .v6-timeframes {
+  gap: 1px;
+  padding: 2px;
+  border: 1px solid var(--v6-hairline);
+  border-radius: var(--v6-r-md);
+  background: var(--v6-surface);
+}
+body[data-current-page="orderflow"] .v6-seg,
+body[data-current-page="orderflow"] .v6-source-select {
+  padding: 2px;
+  border: 1px solid var(--v6-hairline);
+  border-radius: var(--v6-r-md);
+  background: var(--v6-surface);
+  overflow: hidden;
+}
+body[data-current-page="orderflow"] .v6-tf-btn,
+body[data-current-page="orderflow"] .v6-seg-btn,
+body[data-current-page="orderflow"] .v6-source-btn {
+  min-height: 24px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--v6-r-sm);
+  background: transparent;
+  color: var(--v6-text-mute);
+  font: 800 10px/1 var(--v6-font);
+  letter-spacing: 0.01em;
+  transition: color var(--v6-fast) var(--v6-ease), background var(--v6-fast) var(--v6-ease);
+}
+body[data-current-page="orderflow"] .v6-tf-btn:hover,
+body[data-current-page="orderflow"] .v6-seg-btn:hover,
+body[data-current-page="orderflow"] .v6-source-btn:hover {
+  color: var(--v6-text);
+  background: var(--v6-surface-2);
+}
+body[data-current-page="orderflow"] .v6-tf-btn.active,
+body[data-current-page="orderflow"] .v6-seg-btn.is-active,
+body[data-current-page="orderflow"] .v6-source-btn.active {
+  color: #eaf6ff;
+  background: var(--v6-accent-soft);
+  border-color: var(--v6-accent-line);
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.10);
+}
+/* Layers segment = primary visual switch: filled accent when active. */
+body[data-current-page="orderflow"] .v6-seg-btn.is-active {
+  color: #04121a;
+  background: linear-gradient(180deg, var(--v6-accent), var(--v6-accent-2));
+  border-color: transparent;
+}
+
+/* Connection pill */
+body[data-current-page="orderflow"] .v6-conn {
+  min-height: 26px;
+  padding: 0 11px;
+  gap: 7px;
+  border-radius: 999px;
+  border: 1px solid var(--v6-hairline-strong);
+  background: var(--v6-surface);
+  color: var(--v6-text-dim);
+  font: 800 10px/1 var(--v6-font);
+  letter-spacing: 0.02em;
+}
+body[data-current-page="orderflow"] .v6-conn:hover {
+  border-color: var(--v6-accent-line);
+  background: var(--v6-surface-2);
+  color: var(--v6-text);
+}
+body[data-current-page="orderflow"] .v6-engine-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--v6-text-faint);
+  transition: background var(--v6-med) var(--v6-ease), box-shadow var(--v6-med) var(--v6-ease);
+}
+body[data-current-page="orderflow"] .v6-engine-dot.v6-engine-connected {
+  background: var(--v6-buy);
+  box-shadow: 0 0 0 3px rgba(14, 203, 129, 0.16), 0 0 10px rgba(14, 203, 129, 0.7);
+}
+body[data-current-page="orderflow"] .v6-engine-dot.v6-engine-connecting {
+  background: var(--v6-gold);
+  box-shadow: 0 0 8px rgba(245, 183, 60, 0.6);
+}
+body[data-current-page="orderflow"] .v6-engine-dot.v6-engine-error {
+  background: var(--v6-sell);
+  box-shadow: 0 0 8px rgba(246, 70, 93, 0.6);
+}
+
+body[data-current-page="orderflow"] .v6-build-meta {
+  border-color: var(--v6-hairline);
+  background: var(--v6-surface);
+  color: var(--v6-text-faint);
+}
+
+/* Workspace cluster (Save / Reset / Export / Import / Manage + select) */
+body[data-current-page="orderflow"] .v6-workspace-widget {
+  gap: 4px;
+  padding: 2px 4px;
+  border: 1px solid var(--v6-hairline);
+  border-radius: var(--v6-r-md);
+  background: var(--v6-surface);
+}
+body[data-current-page="orderflow"] .v6-workspace-select {
+  min-height: 22px;
+  border-color: transparent;
+  background-color: transparent;
+  color: var(--v6-text);
+  font: 800 10px/1 var(--v6-font);
+}
+body[data-current-page="orderflow"] .v6-workspace-btn {
+  min-height: 22px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--v6-r-sm);
+  background: transparent;
+  color: var(--v6-text-mute);
+  font: 800 10px/1 var(--v6-font);
+  transition: color var(--v6-fast) var(--v6-ease), background var(--v6-fast) var(--v6-ease);
+}
+body[data-current-page="orderflow"] .v6-workspace-btn:hover {
+  color: var(--v6-text);
+  background: var(--v6-surface-2);
+}
+
+/* ========================= 3. LEFT TOOL RAIL ============================= */
+/* Slim, icon-only rail (TradingView drawing-toolbar feel). Labels hidden, the
+ * title attribute provides tooltips. Fixes the "Det…/Res…" truncation. */
+body[data-current-page="orderflow"] .v6-left-toolbar {
+  flex: 0 0 44px;
+  width: 44px;
+  padding: 6px 0;
+  gap: 3px;
+  align-items: center;
+  background: var(--v6-bg-2);
+  border-right: 1px solid var(--v6-hairline);
+}
+body[data-current-page="orderflow"] .v6-left-toolbar .v6-tool {
+  width: 32px;
+  height: 30px;
+  border-radius: var(--v6-r-sm);
+  color: var(--v6-text-mute);
+  border: 1px solid transparent;
+  transition: color var(--v6-fast) var(--v6-ease), background var(--v6-fast) var(--v6-ease);
+}
+body[data-current-page="orderflow"] .v6-left-toolbar .v6-view-tool {
+  width: 32px;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+}
+body[data-current-page="orderflow"] .v6-view-tool-label { display: none; }
+body[data-current-page="orderflow"] .v6-view-tool-state {
+  position: absolute;
+  top: 4px; right: 4px;
+  margin: 0;
+  width: 4px; height: 4px;
+}
+body[data-current-page="orderflow"] .v6-left-toolbar .v6-tool:hover {
+  color: var(--v6-text);
+  background: var(--v6-surface-2);
+  border-color: var(--v6-hairline);
+}
+body[data-current-page="orderflow"] .v6-left-toolbar .v6-tool.is-active {
+  color: #cdeeff;
+  background: var(--v6-accent-soft);
+  border-color: var(--v6-accent-line);
+}
+body[data-current-page="orderflow"] .v6-left-toolbar .v6-tool.is-active::before {
+  left: -6px;
+  width: 2px; height: 16px; margin-top: -8px;
+  border-radius: 0 2px 2px 0;
+  background: var(--v6-accent);
+  box-shadow: 0 0 8px var(--v6-accent-glow);
+}
+body[data-current-page="orderflow"] .v6-tool-sep {
+  width: 20px;
+  background: var(--v6-hairline-strong);
+  margin: 4px 0;
+}
+
+/* ===================== 4. DOCKS · TABS · RESIZERS ======================== */
+body[data-current-page="orderflow"] .v6-rtabs,
+body[data-current-page="orderflow"] .v6-ltabs {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  height: 34px;
+  min-height: 34px;
+  padding: 0 4px;
+  background: var(--v6-bg-2);
+  border-bottom: 1px solid var(--v6-hairline);
+}
+body[data-current-page="orderflow"] .v6-rtab,
+body[data-current-page="orderflow"] .v6-ltab {
+  position: relative;
+  flex: 0 0 auto;
+  min-height: 0;
+  height: 100%;
+  padding: 0 12px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--v6-text-mute);
+  font: 800 10px/1 var(--v6-font);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color var(--v6-fast) var(--v6-ease);
+}
+body[data-current-page="orderflow"] .v6-rtab:hover,
+body[data-current-page="orderflow"] .v6-ltab:hover { color: var(--v6-text); }
+body[data-current-page="orderflow"] .v6-rtab.is-active,
+body[data-current-page="orderflow"] .v6-ltab.is-active {
+  color: var(--v6-accent);
+  background: transparent;
+  box-shadow: none;
+}
+body[data-current-page="orderflow"] .v6-rtab.is-active::after,
+body[data-current-page="orderflow"] .v6-ltab.is-active::after {
+  content: "";
+  position: absolute;
+  left: 8px; right: 8px; bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--v6-accent);
+  box-shadow: 0 0 8px var(--v6-accent-glow);
+}
+body[data-current-page="orderflow"] .v6-rtab.is-dragging,
+body[data-current-page="orderflow"] .v6-ltab.is-dragging { opacity: 0.4; }
+/* Collapse toggle pushed to the right edge of the tab bar */
+body[data-current-page="orderflow"] .v6-rtabs [data-v6-dock-toggle],
+body[data-current-page="orderflow"] .v6-ltabs [data-v6-left-dock-toggle] {
+  margin-left: auto;
+  color: var(--v6-text-faint);
+}
+body[data-current-page="orderflow"] .v6-rtab.v6-rtab-icon,
+body[data-current-page="orderflow"] .v6-ltab.v6-ltab-icon {
+  padding: 0 9px;
+  font-size: 13px;
+}
+body[data-current-page="orderflow"] .v6-rtab.v6-rtab-icon svg,
+body[data-current-page="orderflow"] .v6-ltab.v6-ltab-icon svg { width: 14px; height: 14px; }
+
+/* Resizers: invisible grab zone with a hairline that lights up on hover. */
+body[data-current-page="orderflow"] .v6-resize-h,
+body[data-current-page="orderflow"] .v6-resize-h-left,
+body[data-current-page="orderflow"] .v6-resize-v {
+  background: transparent;
+  z-index: 50;
+}
+body[data-current-page="orderflow"] .v6-resize-h,
+body[data-current-page="orderflow"] .v6-resize-h-left { flex: 0 0 6px; width: 6px; }
+body[data-current-page="orderflow"] .v6-resize-v { flex: 0 0 6px; height: 6px; }
+body[data-current-page="orderflow"] .v6-resize-h::after,
+body[data-current-page="orderflow"] .v6-resize-h-left::after {
+  left: 50%; transform: translateX(-50%);
+  width: 1px;
+  background: transparent;
+}
+body[data-current-page="orderflow"] .v6-resize-v::after {
+  top: 50%; transform: translateY(-50%);
+  height: 1px;
+  background: transparent;
+}
+body[data-current-page="orderflow"] .v6-resize-h:hover,
+body[data-current-page="orderflow"] .v6-resize-h.is-dragging,
+body[data-current-page="orderflow"] .v6-resize-h-left:hover,
+body[data-current-page="orderflow"] .v6-resize-h-left.is-dragging,
+body[data-current-page="orderflow"] .v6-resize-v:hover,
+body[data-current-page="orderflow"] .v6-resize-v.is-dragging { background: transparent; box-shadow: none; }
+body[data-current-page="orderflow"] .v6-resize-h:hover::after,
+body[data-current-page="orderflow"] .v6-resize-h.is-dragging::after,
+body[data-current-page="orderflow"] .v6-resize-h-left:hover::after,
+body[data-current-page="orderflow"] .v6-resize-h-left.is-dragging::after,
+body[data-current-page="orderflow"] .v6-resize-v:hover::after,
+body[data-current-page="orderflow"] .v6-resize-v.is-dragging::after {
+  background: var(--v6-accent);
+  box-shadow: 0 0 8px var(--v6-accent-glow);
+}
+
+/* Drag-to-dock dropzone highlight */
+body[data-current-page="orderflow"] .v6-drag-over {
+  outline: 1px dashed var(--v6-accent-line);
+  outline-offset: -3px;
+  background: var(--v6-accent-soft);
+}
+
+/* ============================== 5. PANELS ================================ */
+/* Flush panels: fill their dock, no card/shadow. A subtle head, hairline body. */
+body[data-current-page="orderflow"] .v6-rbody,
+body[data-current-page="orderflow"] .v6-lbody { background: var(--v6-bg); }
+body[data-current-page="orderflow"] .v6-rbody > .v6-panel,
+body[data-current-page="orderflow"] .v6-lbody > .v6-panel {
+  border: none;
+  border-radius: 0;
+  background: var(--v6-bg);
+  box-shadow: none;
+}
+body[data-current-page="orderflow"] .v6-panel-head {
+  height: 30px;
+  min-height: 30px;
+  padding: 0 12px;
+  background: var(--v6-bg-2);
+  border-bottom: 1px solid var(--v6-hairline);
+}
+body[data-current-page="orderflow"] .v6-panel-head span {
+  color: var(--v6-text-dim);
+  font: 800 10px/1 var(--v6-font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+body[data-current-page="orderflow"] .v6-panel-head small {
+  color: var(--v6-text-faint);
+  font: 700 8px/1 var(--v6-mono);
+  letter-spacing: 0.04em;
+}
+body[data-current-page="orderflow"] .v6-panel-freshness {
+  padding: 3px 7px;
+  border: 1px solid var(--v6-hairline);
+  border-radius: 999px;
+  background: var(--v6-surface);
+}
+body[data-current-page="orderflow"] .v6-panel-freshness.is-fresh {
+  border-color: rgba(14, 203, 129, 0.28);
+  color: var(--v6-buy);
+}
+body[data-current-page="orderflow"] .v6-panel-freshness.is-stale {
+  border-color: rgba(245, 183, 60, 0.30);
+  color: var(--v6-gold);
+}
+
+/* ============================ 6. CHART AREA ============================== */
+body[data-current-page="orderflow"] .v6-center-col {
+  background: var(--v6-bg);
+}
+body[data-current-page="orderflow"] .v6-center-chart,
+body[data-current-page="orderflow"] .v6-chart-canvas {
+  background: var(--v6-bg);
+}
+/* Floating price-zoom controls → dark glass (were light, clashing) */
+body[data-current-page="orderflow"] .v6-price-zoom-controls {
+  top: 10px; right: 12px;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--v6-hairline-strong);
+  border-radius: var(--v6-r-md);
+  background: color-mix(in srgb, var(--v6-surface) 78%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: var(--v6-shadow);
+}
+body[data-current-page="orderflow"] .v6-price-zoom-btn {
+  min-width: 0;
+  height: 22px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: var(--v6-r-sm);
+  background: transparent;
+  color: var(--v6-text-dim);
+  font: 800 10px/1 var(--v6-font);
+}
+body[data-current-page="orderflow"] .v6-price-zoom-btn:hover,
+body[data-current-page="orderflow"] .v6-price-zoom-btn.is-active {
+  color: var(--v6-text);
+  background: var(--v6-surface-3);
+  border-color: var(--v6-hairline);
+}
+body[data-current-page="orderflow"] .v6-price-zoom-btn.is-active {
+  box-shadow: inset 0 -2px 0 var(--v6-accent);
+}
+
+/* CVD strip = integrated indicator sub-pane below the chart */
+body[data-current-page="orderflow"] .v6-cvd-strip {
+  border-top: 1px solid var(--v6-hairline);
+  background: var(--v6-bg);
+}
+body[data-current-page="orderflow"] .v6-indicator-name {
+  background: color-mix(in srgb, var(--v6-bg) 70%, transparent);
+  color: var(--v6-text-mute);
+}
+body[data-current-page="orderflow"] .v6-indicator-toolbar {
+  border: 1px solid var(--v6-hairline-strong);
+  border-radius: var(--v6-r-sm);
+  background: var(--v6-surface-2);
+  box-shadow: var(--v6-shadow);
+}
+body[data-current-page="orderflow"] .v6-indicator-action { color: var(--v6-text-mute); border-right-color: var(--v6-hairline); }
+body[data-current-page="orderflow"] .v6-indicator-action:hover { color: var(--v6-text); background: var(--v6-surface-3); }
+
+/* ============================ 7. DOM LADDER ============================== */
+body[data-current-page="orderflow"] .v6-dom-header {
+  height: 28px; min-height: 28px;
+  padding: 0 10px;
+  background: var(--v6-bg-2);
+  border-bottom: 1px solid var(--v6-hairline);
+}
+body[data-current-page="orderflow"] .v6-dom-stat { color: var(--v6-text-mute); }
+body[data-current-page="orderflow"] .v6-dom-stat strong { color: var(--v6-text); }
+body[data-current-page="orderflow"] .v6-dom-cols {
+  background: var(--v6-bg-2);
+  border-bottom: 1px solid var(--v6-hairline-strong);
+  color: var(--v6-text-faint);
+}
+body[data-current-page="orderflow"] .v6-dom-body { background: var(--v6-bg); }
+body[data-current-page="orderflow"] .v6-dom-row { border-bottom: 1px solid var(--v6-edge); }
+body[data-current-page="orderflow"] .v6-dom-row:hover { background: var(--v6-surface); }
+body[data-current-page="orderflow"] .v6-dom-cell-price {
+  color: var(--v6-text-dim);
+  font-weight: 800;
+}
+body[data-current-page="orderflow"] .v6-dom-val { color: var(--v6-text-dim); font-weight: 600; }
+body[data-current-page="orderflow"] .has-bid .v6-dom-cell-bid .v6-dom-val { color: #5fe0bf; }
+body[data-current-page="orderflow"] .has-ask .v6-dom-cell-ask .v6-dom-val { color: #ff8a96; }
+
+/* Depth bars — clean gradients toward the spread */
+body[data-current-page="orderflow"] .v6-dom-bar.is-bid {
+  background: linear-gradient(270deg, var(--v6-buy-soft), transparent);
+  opacity: 1;
+}
+body[data-current-page="orderflow"] .v6-dom-bar.is-ask {
+  background: linear-gradient(90deg, var(--v6-sell-soft), transparent);
+  opacity: 1;
+}
+body[data-current-page="orderflow"] .has-bid .v6-dom-bar.is-bid { background: linear-gradient(270deg, rgba(14,203,129,0.28), transparent); }
+body[data-current-page="orderflow"] .has-ask .v6-dom-bar.is-ask { background: linear-gradient(90deg, rgba(246,70,93,0.28), transparent); }
+
+/* Walls — escalating intensity, the orderflow signal */
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-soft.has-bid .v6-dom-bar.is-bid { background: linear-gradient(270deg, rgba(14,203,129,0.5), transparent); }
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-soft.has-ask .v6-dom-bar.is-ask { background: linear-gradient(90deg, rgba(246,70,93,0.5), transparent); }
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-major.has-bid .v6-dom-bar.is-bid {
+  background: linear-gradient(270deg, rgba(14,203,129,0.85), rgba(14,203,129,0.1));
+  box-shadow: inset 0 0 12px rgba(14,203,129,0.25);
+}
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-major.has-ask .v6-dom-bar.is-ask {
+  background: linear-gradient(90deg, rgba(246,70,93,0.85), rgba(246,70,93,0.1));
+  box-shadow: inset 0 0 12px rgba(246,70,93,0.25);
+}
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-major .v6-dom-cell-price { color: var(--v6-text); }
+
+/* Mid / live row — the focal point */
+body[data-current-page="orderflow"] .v6-dom-row.is-mid {
+  background: var(--v6-accent-soft) !important;
+  box-shadow: inset 0 1px 0 var(--v6-accent-line), inset 0 -1px 0 var(--v6-accent-line);
+}
+body[data-current-page="orderflow"] .v6-dom-row.is-mid .v6-dom-cell-price {
+  color: var(--v6-accent);
+  font-weight: 900;
+  text-shadow: 0 0 10px var(--v6-accent-glow);
+}
+body[data-current-page="orderflow"] .v6-dom-row.is-live {
+  background: rgba(14, 203, 129, 0.18) !important;
+  box-shadow: inset 0 1px 0 rgba(14,203,129,0.5), inset 0 -1px 0 rgba(14,203,129,0.5);
+}
+body[data-current-page="orderflow"] .v6-dom-row.is-live .v6-dom-cell-price {
+  background: var(--v6-buy);
+  color: #03140a !important;
+  font-weight: 900;
+}
+body[data-current-page="orderflow"] .v6-dom-footer,
+body[data-current-page="orderflow"] .v6-lad-foot {
+  background: var(--v6-bg-2);
+  border-top: 1px solid var(--v6-hairline);
+}
+body[data-current-page="orderflow"] .v6-dom-recenter,
+body[data-current-page="orderflow"] .v6-dom-goto-input,
+body[data-current-page="orderflow"] .v6-dom-glbl select {
+  border: 1px solid var(--v6-hairline-strong);
+  border-radius: var(--v6-r-sm);
+  background: var(--v6-surface);
+  color: var(--v6-text-dim);
+}
+body[data-current-page="orderflow"] .v6-dom-recenter:hover { color: var(--v6-accent); border-color: var(--v6-accent-line); }
+body[data-current-page="orderflow"] .v6-dom-recenter.is-active {
+  color: var(--v6-accent);
+  border-color: var(--v6-accent-line);
+  background: var(--v6-accent-soft);
+}
+
+/* =============================== 8. TAPE ================================= */
+body[data-current-page="orderflow"] .v6-tape-head {
+  background: var(--v6-bg-2);
+  border-bottom: 1px solid var(--v6-hairline);
+  color: var(--v6-text-faint);
+}
+body[data-current-page="orderflow"] .v6-tape-row { border-bottom: 1px solid var(--v6-edge); }
+body[data-current-page="orderflow"] .v6-tape-row:hover { background: var(--v6-surface); }
+body[data-current-page="orderflow"] .v6-tape-row.is-buy { color: #4fe0ad; }
+body[data-current-page="orderflow"] .v6-tape-row.is-sell { color: #ff7a86; }
+body[data-current-page="orderflow"] .v6-tape-row.is-buy span:nth-child(2),
+body[data-current-page="orderflow"] .v6-tape-row.is-buy span:nth-child(3) { color: var(--v6-buy); }
+body[data-current-page="orderflow"] .v6-tape-row.is-sell span:nth-child(2),
+body[data-current-page="orderflow"] .v6-tape-row.is-sell span:nth-child(3) { color: var(--v6-sell); }
+
+/* ============================ 9. INSPECTOR =============================== */
+body[data-current-page="orderflow"] .v6-inspector-card,
+body[data-current-page="orderflow"] .v6-inspector-meta span,
+body[data-current-page="orderflow"] .v6-info-card {
+  border: 1px solid var(--v6-hairline);
+  border-radius: var(--v6-r-sm);
+  background: var(--v6-surface);
+}
+body[data-current-page="orderflow"] .v6-inspector-card.is-pos strong { color: var(--v6-buy); }
+body[data-current-page="orderflow"] .v6-inspector-card.is-neg strong { color: var(--v6-sell); }
+body[data-current-page="orderflow"] .v6-inspector-card.is-warn strong { color: var(--v6-gold); }
+body[data-current-page="orderflow"] .v6-inspector-section-title { color: var(--v6-text-dim); }
+
+/* ============================== 10. SETTINGS ============================= */
+body[data-current-page="orderflow"] .v6-settings { padding: 4px 14px 16px; }
+body[data-current-page="orderflow"] .v6-settings-section {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--v6-hairline);
+}
+body[data-current-page="orderflow"] .v6-settings-section-title {
+  margin-bottom: 8px;
+  padding-left: 8px;
+  border-left: 2px solid var(--v6-accent);
+  color: var(--v6-text-dim);
+  font: 900 9px/1 var(--v6-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+body[data-current-page="orderflow"] .v6-field { color: var(--v6-text-dim); font: 700 11px/1.2 var(--v6-font); }
+body[data-current-page="orderflow"] .v6-field input,
+body[data-current-page="orderflow"] .v6-field select {
+  border: 1px solid var(--v6-hairline-strong);
+  border-radius: var(--v6-r-sm);
+  background: var(--v6-surface);
+  color: var(--v6-text);
+}
+body[data-current-page="orderflow"] .v6-field input:focus,
+body[data-current-page="orderflow"] .v6-field select:focus {
+  border-color: var(--v6-accent-line);
+  box-shadow: 0 0 0 3px var(--v6-accent-soft);
+  outline: none;
+}
+body[data-current-page="orderflow"] .v6-check span { color: var(--v6-text-dim); font: 700 11px/1.2 var(--v6-font); }
+body[data-current-page="orderflow"] .v6-check input[type="checkbox"] {
+  border: 1px solid var(--v6-hairline-strong);
+  background: var(--v6-surface-2);
+}
+body[data-current-page="orderflow"] .v6-check input[type="checkbox"]:checked {
+  border-color: var(--v6-accent);
+  background: var(--v6-accent-soft);
+}
+body[data-current-page="orderflow"] .v6-check input[type="checkbox"]:checked::after { background: var(--v6-accent); }
+body[data-current-page="orderflow"] .v6-btn {
+  border: 1px solid var(--v6-hairline-strong);
+  border-radius: var(--v6-r-sm);
+  background: var(--v6-surface-2);
+  color: var(--v6-text);
+  transition: border-color var(--v6-fast) var(--v6-ease), background var(--v6-fast) var(--v6-ease);
+}
+body[data-current-page="orderflow"] .v6-btn:hover {
+  border-color: var(--v6-accent-line);
+  background: var(--v6-surface-3);
+  transform: none;
+  box-shadow: none;
+}
+body[data-current-page="orderflow"] .v6-btn-warn { color: var(--v6-gold); border-color: rgba(245,183,60,0.35); }
+body[data-current-page="orderflow"] .v6-btn-danger { color: var(--v6-sell); border-color: rgba(246,70,93,0.35); }
+
+/* ============================ 11. STATUS BAR ============================= */
+body[data-current-page="orderflow"] .v6-status-bar {
+  height: 24px;
+  flex-basis: 24px;
+  gap: 18px;
+  padding: 0 14px;
+  background: linear-gradient(180deg, var(--v6-bg-2), color-mix(in srgb, var(--v6-bg-2) 80%, #000));
+  border-top: 1px solid var(--v6-hairline);
+  color: var(--v6-text-mute);
+}
+body[data-current-page="orderflow"] .v6-sb-lbl { color: var(--v6-text-faint); }
+body[data-current-page="orderflow"] .v6-sb-val { color: var(--v6-text-dim); }
+body[data-current-page="orderflow"] .v6-sb-val strong { color: var(--v6-text); }
+
+/* ============================ 12. SCROLLBARS ============================= */
+body[data-current-page="orderflow"] .v6-orderflow-root ::-webkit-scrollbar { width: 8px; height: 8px; }
+body[data-current-page="orderflow"] .v6-orderflow-root ::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+  background-color: rgba(140, 158, 196, 0.18);
+}
+body[data-current-page="orderflow"] .v6-orderflow-root ::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(140, 158, 196, 0.34);
+}
+
+/* ========================== 13. COLLAPSED DOCK ========================== */
+body[data-current-page="orderflow"] .v6-dock-collapsed .v6-right-col,
+body[data-current-page="orderflow"] .v6-left-dock-collapsed .v6-left-col {
+  flex-basis: 38px !important;
+  width: 38px !important;
+}
+body[data-current-page="orderflow"] .v6-dock-collapsed .v6-rtabs,
+body[data-current-page="orderflow"] .v6-left-dock-collapsed .v6-ltabs {
+  flex-direction: column;
+  height: 100%;
+  padding: 8px 0;
+  gap: 6px;
+  border-bottom: none;
+}
+body[data-current-page="orderflow"] .v6-dock-collapsed .v6-rtab,
+body[data-current-page="orderflow"] .v6-left-dock-collapsed .v6-ltab {
+  width: 100%;
+  height: 30px;
+  padding: 0;
+  justify-content: center;
+}
+body[data-current-page="orderflow"] .v6-dock-collapsed .v6-rtab.is-active::after,
+body[data-current-page="orderflow"] .v6-left-dock-collapsed .v6-ltab.is-active::after {
+  left: 0; right: auto; top: 8px; bottom: auto;
+  width: 2px; height: 14px;
+}
+
+/* ============================ 14. RESPONSIVE ============================= */
+@media (max-width: 1366px) {
+  body[data-current-page="orderflow"] .v6-right-col { flex-basis: 380px; width: 380px; }
+}
+@media (max-width: 1180px) {
+  body[data-current-page="orderflow"] .v6-right-col { flex-basis: 340px; width: 340px; }
+  body[data-current-page="orderflow"] .v6-workspace-holder { display: none; }
+}
+
+/* ===================== 16. HEADER LIVE TICKET (pro density) ============== */
+/* Surface the live BID/SPR/ASK ticket + Last/CVD stats inline in the header —
+ * the disclosure dropdown is replaced by an always-on cluster (desktop). */
+body[data-current-page="orderflow"] .v6-header-disclosure-toggle { display: none; }
+body[data-current-page="orderflow"] .v6-header-disclosure-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  min-width: 0;
+}
+body[data-current-page="orderflow"] .v6-header-live {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: 0;
+}
+body[data-current-page="orderflow"] .v6-header-live .v6-stat { gap: 5px; }
+body[data-current-page="orderflow"] .v6-header-live .v6-stat em {
+  color: var(--v6-text-faint);
+  font: 800 8px/1 var(--v6-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+body[data-current-page="orderflow"] .v6-header-live .v6-stat strong {
+  color: var(--v6-text);
+  font: 800 12px/1 var(--v6-mono);
+  font-variant-numeric: tabular-nums;
+}
+/* Lag/Queue/Drops live in the status bar already — drop them from the header. */
+body[data-current-page="orderflow"] .v6-header-live .v6-stat:nth-child(n+3) { display: none; }
+
+body[data-current-page="orderflow"] .v6-ticket {
+  display: inline-flex;
+  align-items: stretch;
+  height: 28px;
+  border: 1px solid var(--v6-hairline-strong);
+  border-radius: var(--v6-r-md);
+  overflow: hidden;
+  background: var(--v6-surface);
+  font-variant-numeric: tabular-nums;
+}
+body[data-current-page="orderflow"] .v6-ticket-side {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+}
+body[data-current-page="orderflow"] .v6-ticket-side em {
+  font: 800 8px/1 var(--v6-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+body[data-current-page="orderflow"] .v6-ticket-side strong { font: 800 12px/1 var(--v6-mono); color: var(--v6-text); }
+body[data-current-page="orderflow"] .v6-ticket-side.is-sell { background: linear-gradient(180deg, var(--v6-buy-soft), transparent); }
+body[data-current-page="orderflow"] .v6-ticket-side.is-sell em { color: var(--v6-buy); }
+body[data-current-page="orderflow"] .v6-ticket-side.is-buy { background: linear-gradient(180deg, var(--v6-sell-soft), transparent); }
+body[data-current-page="orderflow"] .v6-ticket-side.is-buy em { color: var(--v6-sell); }
+body[data-current-page="orderflow"] .v6-ticket-mid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 9px;
+  border-left: 1px solid var(--v6-hairline);
+  border-right: 1px solid var(--v6-hairline);
+  background: var(--v6-gold-soft);
+}
+body[data-current-page="orderflow"] .v6-ticket-mid em { color: var(--v6-text-faint); font: 800 8px/1 var(--v6-font); letter-spacing: 0.08em; text-transform: uppercase; }
+body[data-current-page="orderflow"] .v6-ticket-mid span { color: var(--v6-gold); font: 800 12px/1 var(--v6-mono); }
+@media (max-width: 1500px) {
+  body[data-current-page="orderflow"] .v6-header-live { display: none; }
+}
+@media (max-width: 1320px) {
+  body[data-current-page="orderflow"] .v6-ticket { display: none; }
+}
+
+/* ===================== 17. CVD / DELTA SUB-PANE ========================== */
+/* Integrated indicator strip under the chart (TradingView-style). Thin top
+ * divider, transparent body, label + hover toolbar top-left. */
+body[data-current-page="orderflow"] .v6-cvd-strip {
+  border-top: 1px solid var(--v6-hairline-strong);
+  background: linear-gradient(180deg, rgba(56,189,248,0.03), transparent 40%);
+}
+body[data-current-page="orderflow"] .v6-cvd-strip-head { top: 5px; left: 8px; gap: 6px; }
+body[data-current-page="orderflow"] .v6-cvd-strip .v6-indicator-name,
+body[data-current-page="orderflow"] .v6-indicator-name {
+  padding: 2px 6px;
+  border-radius: var(--v6-r-xs);
+  background: color-mix(in srgb, var(--v6-bg) 65%, transparent);
+  color: var(--v6-text-dim);
+  font: 800 9px/1 var(--v6-font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+body[data-current-page="orderflow"] .v6-cvd-canvas { background: transparent; }
+
+/* ===================== 18. DOM LADDER — HERO PASS ======================= */
+/* Bookmap-grade depth read: vivid depth bars, escalating walls, a clear
+ * spread band, colored flow columns. Column set is user-driven (settings);
+ * this pass only sharpens colour + depth, never widths. */
+body[data-current-page="orderflow"] .v6-dom-header {
+  background: linear-gradient(180deg, var(--v6-bg-2), color-mix(in srgb, var(--v6-bg-2) 82%, #000));
+}
+body[data-current-page="orderflow"] .v6-dom-stat .is-mid { color: var(--v6-accent); }
+body[data-current-page="orderflow"] .v6-dom-stat .is-bid { color: var(--v6-buy); }
+body[data-current-page="orderflow"] .v6-dom-stat .is-ask { color: var(--v6-sell); }
+
+/* Depth bars — taller, more present, glowing on walls */
+body[data-current-page="orderflow"] .v6-dom-bar { top: 0; bottom: 0; border-radius: 0; }
+body[data-current-page="orderflow"] .has-bid .v6-dom-bar.is-bid {
+  background: linear-gradient(270deg, rgba(14,203,129,0.34), rgba(14,203,129,0.02));
+}
+body[data-current-page="orderflow"] .has-ask .v6-dom-bar.is-ask {
+  background: linear-gradient(90deg, rgba(246,70,93,0.34), rgba(246,70,93,0.02));
+}
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-soft.has-bid .v6-dom-bar.is-bid { background: linear-gradient(270deg, rgba(14,203,129,0.55), rgba(14,203,129,0.06)); }
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-soft.has-ask .v6-dom-bar.is-ask { background: linear-gradient(90deg, rgba(246,70,93,0.55), rgba(246,70,93,0.06)); }
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-major.has-bid .v6-dom-bar.is-bid {
+  background: linear-gradient(270deg, rgba(14,203,129,0.92), rgba(14,203,129,0.12));
+  box-shadow: inset 0 0 14px rgba(14,203,129,0.30);
+}
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-major.has-ask .v6-dom-bar.is-ask {
+  background: linear-gradient(90deg, rgba(246,70,93,0.92), rgba(246,70,93,0.12));
+  box-shadow: inset 0 0 14px rgba(246,70,93,0.30);
+}
+/* Wall price gets a faint gold tick (big resting size = level to watch) */
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-major .v6-dom-cell-price { color: #ffe9b0; }
+
+/* Flow columns: buys green, sells red, delta signed */
+body[data-current-page="orderflow"] .v6-dom-cell-buy { color: rgba(14,203,129,0.72); }
+body[data-current-page="orderflow"] .v6-dom-cell-sell { color: rgba(246,70,93,0.72); }
+body[data-current-page="orderflow"] .v6-dom-cell-delta { color: var(--v6-text-mute); font-weight: 700; }
+body[data-current-page="orderflow"] .has-bid .v6-dom-cell-delta { color: rgba(14,203,129,0.85); }
+body[data-current-page="orderflow"] .has-ask .v6-dom-cell-delta { color: rgba(246,70,93,0.85); }
+
+/* Best bid/ask edges + the spread band around mid */
+body[data-current-page="orderflow"] .v6-dom-row.is-best-bid { box-shadow: inset 2px 0 0 var(--v6-buy); }
+body[data-current-page="orderflow"] .v6-dom-row.is-best-ask { box-shadow: inset 2px 0 0 var(--v6-sell); }
+body[data-current-page="orderflow"] .v6-dom-row.is-mid {
+  background: linear-gradient(90deg, transparent, var(--v6-accent-soft), transparent) !important;
+  box-shadow: inset 0 1px 0 var(--v6-accent-line), inset 0 -1px 0 var(--v6-accent-line);
+}
+body[data-current-page="orderflow"] .v6-dom-row.is-mid .v6-dom-cell-price {
+  color: var(--v6-accent);
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 12px var(--v6-accent-glow);
+}
+body[data-current-page="orderflow"] .v6-dom-marker { color: var(--v6-accent); text-shadow: 0 0 8px var(--v6-accent-glow); }
+
+/* ========================= 15. REDUCED MOTION =========================== */
+@media (prefers-reduced-motion: reduce) {
+  body[data-current-page="orderflow"] .v6-orderflow-root *,
+  body[data-current-page="orderflow"] .v6-orderflow-root *::before,
+  body[data-current-page="orderflow"] .v6-orderflow-root *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

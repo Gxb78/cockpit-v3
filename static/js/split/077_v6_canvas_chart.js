@@ -1,4 +1,4 @@
-﻿// ---------- 077_v6_canvas_chart.js ----------
+// ---------- 077_v6_canvas_chart.js ----------
 // Canvas chart engine: price scale (right), time scale (bottom), grid, crosshair,
 // pan/zoom via V6OF.chart (ChartViewport). Heatmap SD + Footprint render in shared
 // time/price space.
@@ -1650,6 +1650,8 @@
     // }
 
     // Selection is shown by coloring the selected candle yellow in drawCandlesVp.
+    drawVolumeProfile(ctx, vp, plot, state, canvas);
+    drawTimelineBookmarks(ctx, vp, plot, state, canvas);
     drawCrosshair(ctx, vp, plot, baseCandles, canvas);
     if (typeof V6OF.updateViewportToolbarState === 'function') {
       V6OF.updateViewportToolbarState();
@@ -1702,4 +1704,594 @@
     }
   }, 1000);
 
+  function drawTimelineBookmarks(ctx, vp, plot, state, canvas) {
+    var settings = state.settings || {};
+    var r = V6OF.resolveSettings(settings);
+    var bookmarks = [];
+
+    // 1. User Markers
+    var userMarkers = r.markers || [];
+    userMarkers.forEach(function (m) {
+      bookmarks.push({
+        ts: Number(m.ts),
+        text: String(m.text),
+        type: 'user',
+        color: '#06b6d4'
+      });
+    });
+
+    // 2. Setup Tags (Journal Trades)
+    var journalTrades = state.journalTrades || [];
+    journalTrades.forEach(function (t) {
+      var label = (t.strategy || 'Trade') + (t.tags ? ' [' + t.tags + ']' : '');
+      if (t.direction) label = t.direction.toUpperCase() + ': ' + label;
+      if (t.pnl != null) label += ' (' + (t.pnl >= 0 ? '+' : '') + Number(t.pnl).toFixed(0) + '$)';
+      bookmarks.push({
+        ts: Date.parse(t.created_at),
+        text: label,
+        type: 'setup',
+        color: '#a855f7'
+      });
+    });
+
+    // 3. Replay Events
+    var replayEvents = state.replayEvents || [];
+    replayEvents.forEach(function (e) {
+      bookmarks.push({
+        ts: Number(e.ts),
+        text: String(e.text),
+        type: 'replay',
+        color: '#f97316'
+      });
+    });
+
+    // 4. Engine Signals
+    var footprintCandles = state.footprintCandles || [];
+    footprintCandles.forEach(function (c) {
+      var signals = [];
+      if (c.hasBuyAbsorption) signals.push('Buy Absorption');
+      if (c.hasSellAbsorption) signals.push('Sell Absorption');
+      if (c.isExhaustionHigh) signals.push('Exhaustion High');
+      if (c.isExhaustionLow) signals.push('Exhaustion Low');
+      if (c.isUnfinishedHigh) signals.push('Unfinished High');
+      if (c.isUnfinishedLow) signals.push('Unfinished Low');
+      if (signals.length > 0) {
+        bookmarks.push({
+          ts: Number(c.openTime),
+          text: 'Engine: ' + signals.join(', '),
+          type: 'engine',
+          color: '#10b981'
+        });
+      }
+    });
+
+    if (!bookmarks.length) return;
+
+    var by = plot.top + plot.height;
+    var cross = V6OF.getChartCrosshair ? V6OF.getChartCrosshair(canvas) : V6OF._fallbackChartCrosshair;
+    var hoveredBookmark = null;
+
+    ctx.save();
+
+    bookmarks.forEach(function (b) {
+      if (!Number.isFinite(b.ts)) return;
+      var x = vp.timeToX(b.ts);
+      if (x < plot.left || x > plot.left + plot.width) return;
+
+      // Vertical dashed line in chart area
+      ctx.save();
+      ctx.strokeStyle = b.color;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 4]);
+      ctx.globalAlpha = 0.4;
+      ctx.beginPath();
+      ctx.moveTo(x, plot.top);
+      ctx.lineTo(x, by);
+      ctx.stroke();
+      ctx.restore();
+
+      // Line indicator on timeline top
+      ctx.strokeStyle = b.color;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(x, by);
+      ctx.lineTo(x, by + 8);
+      ctx.stroke();
+
+      // Dot on timeline
+      ctx.fillStyle = b.color;
+      ctx.beginPath();
+      ctx.arc(x, by + 4, 3, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.strokeStyle = '#080b12';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      if (cross && cross.visible && Math.abs(cross.x - x) <= 12) {
+        hoveredBookmark = b;
+      }
+    });
+
+    // Draw floating tooltip card on hover
+    if (hoveredBookmark && cross && cross.visible) {
+      var b = hoveredBookmark;
+      var titleText = b.type.toUpperCase() + ' BOOKMARK';
+      var contentText = b.text;
+      var timeText = V6OF.format.time(b.ts);
+      var lines = [titleText, contentText, 'Time: ' + timeText];
+
+      ctx.font = '10px JetBrains Mono, Consolas, monospace';
+      var pw = Math.max(160, Math.max(ctx.measureText(contentText).width + 16, ctx.measureText(titleText).width + 24));
+      var ph = 8 + lines.length * 16 + 4;
+      var px = cross.x + 14;
+      var py = (cross.y != null ? cross.y : by - 60) - ph / 2;
+
+      if (px + pw > plot.left + plot.width) px = cross.x - pw - 14;
+      if (py < plot.top) py = plot.top + 4;
+      if (py + ph > plot.top + plot.height) py = plot.top + plot.height - ph - 4;
+
+      ctx.fillStyle = 'rgba(8, 11, 18, 0.94)';
+      ctx.fillRect(px, py, pw, ph);
+
+      ctx.strokeStyle = b.color;
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(px, py, pw, ph);
+
+      ctx.fillStyle = b.color;
+      ctx.font = 'bold 10px Inter, system-ui, sans-serif';
+      ctx.fillText(titleText, px + 8, py + 16);
+
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = '11px Inter, system-ui, sans-serif';
+      ctx.fillText(contentText, px + 8, py + 32);
+
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '10px JetBrains Mono, Consolas, monospace';
+      ctx.fillText('Time: ' + timeText, px + 8, py + 48);
+    }
+
+    ctx.restore();
+  }
+
+  function findClosestCandleTime(timeMs, candles) {
+    if (!candles || !candles.length) return timeMs;
+    var closest = candles[0];
+    var minDist = Math.abs(candleStartTs(closest) - timeMs);
+    for (var i = 1; i < candles.length; i++) {
+      var dist = Math.abs(candleStartTs(candles[i]) - timeMs);
+      if (dist < minDist) {
+        minDist = dist;
+        closest = candles[i];
+      }
+    }
+    return candleStartTs(closest);
+  }
+
+  function drawVolumeProfile(ctx, vp, plot, state, canvas) {
+    var settings = state.settings || {};
+    if (!settings.showVolumeProfile) return;
+
+    var volumeProfileType = settings.volumeProfileType || 'visible';
+    var volumeProfileSide = settings.volumeProfileSide || 'right';
+    var volumeProfileStyle = settings.volumeProfileStyle || 'volume';
+    var volumeProfileValueArea = settings.volumeProfileValueArea || 70;
+    var volumeProfileFixedStart = settings.volumeProfileFixedStart || 0;
+    var volumeProfileFixedEnd = settings.volumeProfileFixedEnd || 0;
+    var volumeProfileShowPocTrail = settings.volumeProfileShowPocTrail === true;
+
+    // Check if dragging is active in ChartInteractions
+    var drag = V6OF.ChartInteractions && V6OF.ChartInteractions.state && V6OF.ChartInteractions.state.drag;
+    if (drag && drag.active && drag.fixedStart != null && drag.fixedEnd != null) {
+      volumeProfileFixedStart = drag.fixedStart;
+      volumeProfileFixedEnd = drag.fixedEnd;
+    }
+
+    var candles = state.footprintCandles || [];
+    if (!candles.length) return;
+
+    var filteredCandles = [];
+    if (volumeProfileType === 'visible') {
+      for (var i = 0; i < candles.length; i++) {
+        var c = candles[i];
+        var cS = candleStartTs(c);
+        var cE = candleEndTs(c);
+        if (cE >= vp.timeStart && cS <= vp.timeEnd) {
+          filteredCandles.push(c);
+        }
+      }
+    } else if (volumeProfileType === 'session') {
+      var refCandle = null;
+      for (var i = candles.length - 1; i >= 0; i--) {
+        var c = candles[i];
+        if (candleEndTs(c) >= vp.timeStart && candleStartTs(c) <= vp.timeEnd) {
+          refCandle = c;
+          break;
+        }
+      }
+      if (!refCandle) refCandle = candles[candles.length - 1];
+      var refDate = new Date(candleStartTs(refCandle));
+      var refDay = refDate.getUTCDate();
+      var refMonth = refDate.getUTCMonth();
+      var refYear = refDate.getUTCFullYear();
+
+      for (var i = 0; i < candles.length; i++) {
+        var c = candles[i];
+        var d = new Date(candleStartTs(c));
+        if (d.getUTCDate() === refDay && d.getUTCMonth() === refMonth && d.getUTCFullYear() === refYear) {
+          filteredCandles.push(c);
+        }
+      }
+    } else if (volumeProfileType === 'fixed') {
+      var fStart = volumeProfileFixedStart;
+      var fEnd = volumeProfileFixedEnd;
+      if (!fStart || !fEnd) {
+        var span = vp.timeEnd - vp.timeStart;
+        fStart = vp.timeStart + span * 0.25;
+        fEnd = vp.timeStart + span * 0.75;
+        fStart = findClosestCandleTime(fStart, candles);
+        fEnd = findClosestCandleTime(fEnd, candles);
+      }
+      for (var i = 0; i < candles.length; i++) {
+        var c = candles[i];
+        var cS = candleStartTs(c);
+        if (cS >= fStart && cS <= fEnd) {
+          filteredCandles.push(c);
+        }
+      }
+    } else {
+      // composite
+      filteredCandles = candles;
+    }
+
+    if (!filteredCandles.length) return;
+
+    var tick = Number(settings.tickSize || 1);
+    if (!Number.isFinite(tick) || tick <= 0) tick = 1;
+
+    // Dynamic Binning
+    var minPrice = Infinity;
+    var maxPrice = -Infinity;
+    filteredCandles.forEach(function (c) {
+      if (c.low < minPrice) minPrice = c.low;
+      if (c.high > maxPrice) maxPrice = c.high;
+    });
+    if (minPrice === Infinity || maxPrice === -Infinity) return;
+
+    var diff = maxPrice - minPrice;
+    var tickCount = diff / tick;
+    var binFactor = 1;
+    if (tickCount > 200) {
+      binFactor = Math.ceil(tickCount / 200);
+    }
+    var stepSize = tick * binFactor;
+
+    var precision = 0;
+    if (stepSize < 1) {
+      var s = String(stepSize);
+      var dot = s.indexOf('.');
+      if (dot >= 0) precision = s.length - dot - 1;
+    }
+
+    // Aggregating
+    var profile = {}; // key -> { price: number, buyVol: number, sellVol: number, totalVol: number }
+    filteredCandles.forEach(function (c) {
+      var lvs = Array.isArray(c.levels) ? c.levels : [];
+      lvs.forEach(function (lv) {
+        var price = Number(lv.price);
+        if (!Number.isFinite(price)) return;
+        var roundedPrice = Math.round(price / stepSize) * stepSize;
+        var key = roundedPrice.toFixed(precision);
+        if (!profile[key]) {
+          profile[key] = { price: roundedPrice, buyVol: 0, sellVol: 0, totalVol: 0 };
+        }
+        profile[key].buyVol += Number(lv.buyVol || 0);
+        profile[key].sellVol += Number(lv.sellVol || 0);
+        profile[key].totalVol += Number(lv.buyVol || 0) + Number(lv.sellVol || 0);
+      });
+    });
+
+    var levels = Object.values(profile).sort(function (a, b) { return a.price - b.price; });
+    if (!levels.length) return;
+
+    var maxVol = 0;
+    var pocLevel = null;
+    levels.forEach(function (lv) {
+      if (lv.totalVol > maxVol) {
+        maxVol = lv.totalVol;
+        pocLevel = lv;
+      }
+    });
+    if (!pocLevel) return;
+    var pocPrice = pocLevel.price;
+
+    // Value Area Expansion
+    var totalVolume = 0;
+    levels.forEach(function (lv) { totalVolume += lv.totalVol; });
+    var targetVolume = totalVolume * (volumeProfileValueArea / 100);
+
+    var pocIdx = levels.indexOf(pocLevel);
+    var valIdx = pocIdx;
+    var vahIdx = pocIdx;
+    var currentVolume = pocLevel.totalVol;
+
+    while (currentVolume < targetVolume && (valIdx > 0 || vahIdx < levels.length - 1)) {
+      var prevVol = 0;
+      if (valIdx > 0) prevVol = levels[valIdx - 1].totalVol;
+      var nextVol = 0;
+      if (vahIdx < levels.length - 1) nextVol = levels[vahIdx + 1].totalVol;
+
+      if (valIdx > 0 && (vahIdx >= levels.length - 1 || prevVol >= nextVol)) {
+        valIdx--;
+        currentVolume += prevVol;
+      } else if (vahIdx < levels.length - 1) {
+        vahIdx++;
+        currentVolume += nextVol;
+      } else {
+        break;
+      }
+    }
+
+    var valPrice = levels[valIdx] ? levels[valIdx].price : levels[0].price;
+    var vahPrice = levels[vahIdx] ? levels[vahIdx].price : levels[levels.length - 1].price;
+
+    var profileWidth = Math.min(265, Math.max(170, plot.width * 0.23));
+    var left, right;
+    if (volumeProfileSide === 'left') {
+      left = plot.left;
+      right = left + profileWidth;
+    } else {
+      right = plot.left + plot.width;
+      left = right - profileWidth;
+    }
+
+    // Shading container background
+    ctx.save();
+    ctx.fillStyle = settings.theme === 'dark-tv' ? 'rgba(30, 34, 45, 0.45)' : 'rgba(255, 255, 255, 0.6)';
+    ctx.fillRect(left, plot.top, profileWidth, plot.height);
+
+    ctx.strokeStyle = settings.theme === 'dark-tv' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    if (volumeProfileSide === 'left') {
+      ctx.moveTo(right, plot.top);
+      ctx.lineTo(right, plot.top + plot.height);
+    } else {
+      ctx.moveTo(left, plot.top);
+      ctx.lineTo(left, plot.top + plot.height);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    // Render title
+    ctx.save();
+    ctx.fillStyle = settings.theme === 'dark-tv' ? 'rgba(209, 212, 220, 0.45)' : 'rgba(67, 70, 81, 0.55)';
+    ctx.font = '700 9px "JetBrains Mono", Consolas, monospace';
+    ctx.fillText(volumeProfileType.toUpperCase() + ' PROFILE (' + volumeProfileStyle.toUpperCase() + ')', left + 8, plot.top + 16);
+    ctx.restore();
+
+    // Clip profile drawing to plot rect
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(plot.left, plot.top, plot.width, plot.height);
+    ctx.clip();
+
+    var upHex = settings.upColor || '#089981';
+    var downHex = settings.downColor || '#f23645';
+
+    levels.forEach(function (lv) {
+      var y = vp.priceToY(lv.price);
+      if (y < plot.top - 10 || y > plot.top + plot.height + 10) return;
+
+      var yTop = vp.priceToY(lv.price + stepSize);
+      var rowHeight = Math.max(1, Math.abs(y - yTop));
+      var rowPixels = Math.max(1, Math.min(18, rowHeight));
+
+      var totalWidth = maxVol ? (lv.totalVol / maxVol) * profileWidth : 0;
+      if (totalWidth <= 0) return;
+
+      var inValue = lv.price >= valPrice && lv.price <= vahPrice;
+      ctx.save();
+
+      if (volumeProfileStyle === 'volume') {
+        var buyWidth = lv.totalVol ? totalWidth * (lv.buyVol / lv.totalVol) : 0;
+        var sellWidth = lv.totalVol ? totalWidth * (lv.sellVol / lv.totalVol) : 0;
+
+        ctx.globalAlpha = inValue ? 0.55 : 0.20;
+
+        if (volumeProfileSide === 'right') {
+          ctx.fillStyle = downHex;
+          ctx.fillRect(right - totalWidth, y - rowPixels / 2, sellWidth, rowPixels - 0.5);
+          ctx.fillStyle = upHex;
+          ctx.fillRect(right - totalWidth + sellWidth, y - rowPixels / 2, buyWidth, rowPixels - 0.5);
+        } else {
+          ctx.fillStyle = downHex;
+          ctx.fillRect(left, y - rowPixels / 2, sellWidth, rowPixels - 0.5);
+          ctx.fillStyle = upHex;
+          ctx.fillRect(left + sellWidth, y - rowPixels / 2, buyWidth, rowPixels - 0.5);
+        }
+      } else if (volumeProfileStyle === 'delta') {
+        var delta = lv.buyVol - lv.sellVol;
+        var deltaPercent = lv.totalVol ? Math.abs(delta) / maxVol : 0;
+        var deltaWidth = deltaPercent * profileWidth;
+
+        ctx.globalAlpha = inValue ? 0.65 : 0.22;
+
+        if (delta === 0) {
+          ctx.fillStyle = '#64748b'; // Gray for neutral
+          if (volumeProfileSide === 'right') {
+            ctx.fillRect(right - 2, y - rowPixels / 2, 2, rowPixels - 0.5);
+          } else {
+            ctx.fillRect(left, y - rowPixels / 2, 2, rowPixels - 0.5);
+          }
+        } else {
+          ctx.fillStyle = delta > 0 ? upHex : downHex;
+          if (volumeProfileSide === 'right') {
+            ctx.fillRect(right - deltaWidth, y - rowPixels / 2, deltaWidth, rowPixels - 0.5);
+          } else {
+            ctx.fillRect(left, y - rowPixels / 2, deltaWidth, rowPixels - 0.5);
+          }
+        }
+      } else if (volumeProfileStyle === 'split') {
+        var center = left + profileWidth / 2;
+        var maxHalfWidth = (profileWidth - 6) / 2;
+        var buyWidth = maxVol ? (lv.buyVol / maxVol) * maxHalfWidth * 2 : 0;
+        var sellWidth = maxVol ? (lv.sellVol / maxVol) * maxHalfWidth * 2 : 0;
+
+        ctx.globalAlpha = inValue ? 0.55 : 0.20;
+
+        ctx.fillStyle = upHex;
+        ctx.fillRect(center - buyWidth, y - rowPixels / 2, buyWidth, rowPixels - 0.5);
+        ctx.fillStyle = downHex;
+        ctx.fillRect(center, y - rowPixels / 2, sellWidth, rowPixels - 0.5);
+
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.2)';
+        ctx.fillRect(center - 0.5, y - rowPixels / 2, 1, rowPixels - 0.5);
+      }
+
+      ctx.restore();
+    });
+    ctx.restore(); // restore clipping
+
+    // Draw reference lines
+    function drawValLabel(labelX, labelY, text, color, align) {
+      ctx.save();
+      ctx.font = 'bold 9px "JetBrains Mono", Consolas, monospace';
+      var w = ctx.measureText(text).width + 8;
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+      var lx = align === 'right' ? labelX - w : labelX;
+      ctx.fillRect(lx, labelY - 7, w, 14);
+      ctx.fillStyle = color;
+      ctx.fillText(text, lx + 4, labelY + 3);
+      ctx.restore();
+    }
+
+    if (pocPrice >= vp.priceMin && pocPrice <= vp.priceMax) {
+      var pocY = vp.priceToY(pocPrice);
+      ctx.save();
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(plot.left, pocY);
+      ctx.lineTo(plot.left + plot.width, pocY);
+      ctx.stroke();
+      ctx.restore();
+
+      drawValLabel(volumeProfileSide === 'right' ? right : left, pocY, 'POC ' + pocPrice.toFixed(precision), '#f59e0b', volumeProfileSide);
+    }
+
+    if (vahPrice >= vp.priceMin && vahPrice <= vp.priceMax) {
+      var vahY = vp.priceToY(vahPrice);
+      ctx.save();
+      ctx.strokeStyle = '#38d3ee';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(plot.left, vahY);
+      ctx.lineTo(plot.left + plot.width, vahY);
+      ctx.stroke();
+      ctx.restore();
+
+      drawValLabel(volumeProfileSide === 'right' ? right : left, vahY, 'VAH ' + vahPrice.toFixed(precision), '#38d3ee', volumeProfileSide);
+    }
+
+    if (valPrice >= vp.priceMin && valPrice <= vp.priceMax) {
+      var valY = vp.priceToY(valPrice);
+      ctx.save();
+      ctx.strokeStyle = '#fb7185';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(plot.left, valY);
+      ctx.lineTo(plot.left + plot.width, valY);
+      ctx.stroke();
+      ctx.restore();
+
+      drawValLabel(volumeProfileSide === 'right' ? right : left, valY, 'VAL ' + valPrice.toFixed(precision), '#fb7185', volumeProfileSide);
+    }
+
+    // POC Trail (restricted to visible viewport)
+    if (volumeProfileShowPocTrail) {
+      var trailCandles = [];
+      for (var i = 0; i < candles.length; i++) {
+        var c = candles[i];
+        var tS = candleStartTs(c);
+        var tE = candleEndTs(c);
+        if (tE >= vp.timeStart && tS <= vp.timeEnd) {
+          trailCandles.push(c);
+        }
+      }
+      if (trailCandles.length > 1) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(245, 158, 11, 0.65)';
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([2, 3]);
+        ctx.beginPath();
+        var started = false;
+        trailCandles.forEach(function (c) {
+          var pocVal = Number(c.poc);
+          if (!Number.isFinite(pocVal) || pocVal < vp.priceMin || pocVal > vp.priceMax) return;
+          var cx = vp.timeToX((candleStartTs(c) + candleEndTs(c)) / 2);
+          var cy = vp.priceToY(pocVal);
+          if (!started) {
+            ctx.moveTo(cx, cy);
+            started = true;
+          } else {
+            ctx.lineTo(cx, cy);
+          }
+        });
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // Fixed Range Interactive lines
+    if (volumeProfileType === 'fixed') {
+      var fStart = volumeProfileFixedStart;
+      var fEnd = volumeProfileFixedEnd;
+      if (!fStart || !fEnd) {
+        var span = vp.timeEnd - vp.timeStart;
+        fStart = vp.timeStart + span * 0.25;
+        fEnd = vp.timeStart + span * 0.75;
+        fStart = findClosestCandleTime(fStart, candles);
+        fEnd = findClosestCandleTime(fEnd, candles);
+      }
+
+      var startX = vp.timeToX(fStart);
+      var endX = vp.timeToX(fEnd);
+
+      // Range Shading
+      ctx.save();
+      ctx.fillStyle = settings.theme === 'dark-tv' ? 'rgba(245, 158, 11, 0.03)' : 'rgba(245, 158, 11, 0.02)';
+      ctx.fillRect(Math.min(startX, endX), plot.top, Math.abs(endX - startX), plot.height);
+      ctx.restore();
+
+      // Dashed vertical bounds
+      ctx.save();
+      ctx.strokeStyle = 'rgba(245, 158, 11, 0.5)';
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([4, 4]);
+
+      ctx.beginPath();
+      ctx.moveTo(startX, plot.top);
+      ctx.lineTo(startX, plot.top + plot.height);
+      ctx.moveTo(endX, plot.top);
+      ctx.lineTo(endX, plot.top + plot.height);
+      ctx.stroke();
+      ctx.restore();
+
+      // Handles on Bottom Scale
+      var handleY = plot.top + plot.height + 10;
+      ctx.save();
+      [startX, endX].forEach(function (hx) {
+        ctx.fillStyle = '#f59e0b';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(hx, handleY, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+  }
 })();

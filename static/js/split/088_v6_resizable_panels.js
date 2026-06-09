@@ -17,12 +17,13 @@
     };
   }
 
-  var MIN_RIGHT_WIDTH = 420;
+  var MIN_RIGHT_WIDTH = 240;
   var MAX_RIGHT_WIDTH = 760;
   var MIN_CVD_HEIGHT = 120;
   var MAX_CVD_HEIGHT = 420;
 
   var STORAGE_WIDTH_KEY = 'cockpitV6.rightColWidth';
+  var STORAGE_LEFT_WIDTH_KEY = 'cockpitV6.leftColWidth';
   var STORAGE_HEIGHT_KEY = 'cockpitV6.cvdStripHeight';
 
   function applyCvdHeight(root, cvdStrip, height) {
@@ -66,6 +67,7 @@
       var mainArea = root.querySelector('.v6-main-area');
       var centerCol = root.querySelector('.v6-center-col');
       var rightCol = root.querySelector('.v6-right-col');
+      var leftCol = root.querySelector('[data-v6-left-col]');
       var cvdStrip = root.querySelector('[data-v6-cvd-strip]');
       if (!mainArea || !centerCol || !rightCol || !cvdStrip) return;
 
@@ -74,7 +76,14 @@
       if (savedWidth) {
         var w = Math.max(MIN_RIGHT_WIDTH, Math.min(MAX_RIGHT_WIDTH, parseInt(savedWidth, 10)));
         rightCol.style.width = w + 'px';
-        rightCol.style.flex = '0 0 ' + w + 'px';
+        rightCol.style.flex = '0 1 ' + w + 'px';
+      }
+
+      var savedLeftWidth = localStorage.getItem(STORAGE_LEFT_WIDTH_KEY);
+      if (savedLeftWidth && leftCol) {
+        var wl = Math.max(MIN_RIGHT_WIDTH, Math.min(MAX_RIGHT_WIDTH, parseInt(savedLeftWidth, 10)));
+        leftCol.style.width = wl + 'px';
+        leftCol.style.flex = '0 1 ' + wl + 'px';
       }
 
       var savedHeight = localStorage.getItem(STORAGE_HEIGHT_KEY);
@@ -110,8 +119,8 @@
           var nextWidth = Math.max(MIN_RIGHT_WIDTH, Math.min(MAX_RIGHT_WIDTH, startWidth - dx));
           pendingWidth = nextWidth;
           rightCol.style.width = nextWidth + 'px';
-          rightCol.style.flex = '0 0 ' + nextWidth + 'px';
-        redrawCharts(root);
+          rightCol.style.flex = '0 1 ' + nextWidth + 'px';
+          redrawCharts(root);
         });
 
         var onPointerUpH = function (e) {
@@ -121,11 +130,54 @@
           mainArea.classList.remove('v6-resizing-active');
           if (pendingWidth) localStorage.setItem(STORAGE_WIDTH_KEY, pendingWidth);
           try { handleH.releasePointerCapture(e.pointerId); } catch (_) {}
-        redrawCharts(root);
+          redrawCharts(root);
         };
 
         handleH.addEventListener('pointerup', onPointerUpH);
         handleH.addEventListener('pointercancel', onPointerUpH);
+      }
+
+      // 1b. Horizontal Resize (Left Dock Width)
+      var handleHLeft = root.querySelector('[data-v6-resize-h-left]');
+      if (handleHLeft && leftCol) {
+        var isDraggingHLeft = false;
+        var startXLeft = 0;
+        var startWidthLeft = 0;
+        var pendingWidthLeft = 0;
+
+        handleHLeft.addEventListener('pointerdown', function (e) {
+          isDraggingHLeft = true;
+          startXLeft = e.clientX;
+          startWidthLeft = leftCol.offsetWidth;
+          handleHLeft.classList.add('is-dragging');
+          mainArea.classList.add('v6-resizing-active');
+          handleHLeft.setPointerCapture(e.pointerId);
+          e.preventDefault();
+        });
+
+        handleHLeft.addEventListener('pointermove', function (e) {
+          if (!isDraggingHLeft) return;
+          var dx = e.clientX - startXLeft;
+          // Moving right (positive dx) increases left-dock size
+          var nextWidth = Math.max(MIN_RIGHT_WIDTH, Math.min(MAX_RIGHT_WIDTH, startWidthLeft + dx));
+          pendingWidthLeft = nextWidth;
+          leftCol.style.width = nextWidth + 'px';
+          leftCol.style.flex = '0 1 ' + nextWidth + 'px';
+          redrawCharts(root);
+        });
+
+        var onPointerUpHLeft = function (e) {
+          if (!isDraggingHLeft) return;
+          isDraggingHLeft = false;
+          handleHLeft.classList.remove('is-dragging');
+          mainArea.classList.remove('v6-resizing-active');
+          if (pendingWidthLeft) localStorage.setItem(STORAGE_LEFT_WIDTH_KEY, pendingWidthLeft);
+          try { handleHLeft.releasePointerCapture(e.pointerId); } catch (_) {}
+          redrawCharts(root);
+        };
+
+        handleHLeft.addEventListener('pointerup', onPointerUpHLeft);
+        handleHLeft.addEventListener('pointercancel', onPointerUpHLeft);
       }
 
       // 2. Vertical Resize (CVD Strip Height)
@@ -172,15 +224,22 @@
       }
     },
 
-    restoreSizes: function (root, width, height) {
+    restoreSizes: function (root, width, height, leftWidth) {
       if (!root) return;
       var rightCol = root.querySelector('.v6-right-col');
+      var leftCol = root.querySelector('[data-v6-left-col]');
       var cvdStrip = root.querySelector('[data-v6-cvd-strip]');
       if (rightCol && width) {
         var w = Math.max(MIN_RIGHT_WIDTH, Math.min(MAX_RIGHT_WIDTH, width));
         rightCol.style.width = w + 'px';
-        rightCol.style.flex = '0 0 ' + w + 'px';
+        rightCol.style.flex = '0 1 ' + w + 'px';
         localStorage.setItem(STORAGE_WIDTH_KEY, w);
+      }
+      if (leftCol && leftWidth) {
+        var wl = Math.max(MIN_RIGHT_WIDTH, Math.min(MAX_RIGHT_WIDTH, leftWidth));
+        leftCol.style.width = wl + 'px';
+        leftCol.style.flex = '0 1 ' + wl + 'px';
+        localStorage.setItem(STORAGE_LEFT_WIDTH_KEY, wl);
       }
       if (cvdStrip && height) {
         var h = Math.max(MIN_CVD_HEIGHT, Math.min(MAX_CVD_HEIGHT, height));
