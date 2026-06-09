@@ -775,9 +775,18 @@
         function redrawCvdAndChart() {
           requestAnimationFrame(function () {
             var current = store && store.getState ? store.getState() : {};
+            var cvdVisible = cvdStrip &&
+              !cvdStrip.classList.contains('is-collapsed') &&
+              !cvdStrip.classList.contains('is-removed');
+            if (canvas) canvas._v6suppressBottomGutter = !!cvdVisible;
             if (canvas && V6OF.CanvasChart) V6OF.CanvasChart.draw(canvas, current);
-            if (cvdCanvas && V6OF.CvdPanel && !cvdStrip.classList.contains('is-collapsed') && !cvdStrip.classList.contains('is-removed')) {
-              V6OF.CvdPanel.draw(cvdCanvas, current);
+            if (cvdCanvas && V6OF.CvdPanel && cvdVisible) {
+              var sharedVp = canvas && canvas._v6vp;
+              V6OF.CvdPanel.draw(cvdCanvas, current, sharedVp, {
+                crosshairTs: V6OF.chart && V6OF.chart.crosshairTs,
+                showTimeAxis: true,
+                timeAxisHeight: 20
+              });
             }
           });
         }
@@ -854,7 +863,12 @@
             if (!sameSlice('cvdDraw', cvdDrawSlice) && cvdCanvas && V6OF.CvdPanel && !cvdStrip.classList.contains('is-collapsed') && !cvdStrip.classList.contains('is-removed')) {
               queueRender(root, 'cvd', function () {
                 if (cvdStrip.classList.contains('is-collapsed') || cvdStrip.classList.contains('is-removed')) return;
-                V6OF.CvdPanel.draw(cvdCanvas, state);
+                var sharedVp2 = canvas && canvas._v6vp;
+                V6OF.CvdPanel.draw(cvdCanvas, state, sharedVp2, {
+                  crosshairTs: V6OF.chart && V6OF.chart.crosshairTs,
+                  showTimeAxis: true,
+                  timeAxisHeight: 20
+                });
               });
             }
             if (V6OF.Inspector) {

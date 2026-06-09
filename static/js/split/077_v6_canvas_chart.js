@@ -537,9 +537,10 @@
     var tInfo = timeTicks(vp.timeStart, vp.timeEnd, 7);
 
       // Price scale (right gutter)
+    var effectiveGB = (vp && vp._gutterBottom != null) ? vp._gutterBottom : GUTTER_BOTTOM;
     var gx = plot.left + plot.width;
     ctx.fillStyle = settings.bgColor || '#ffffff';
-    ctx.fillRect(gx, plot.top - PAD_TOP, GUTTER_RIGHT, plot.height + PAD_TOP + GUTTER_BOTTOM);
+    ctx.fillRect(gx, plot.top - PAD_TOP, GUTTER_RIGHT, plot.height + PAD_TOP + effectiveGB);
     ctx.strokeStyle = 'rgba(19, 23, 34, 0.18)';
     ctx.beginPath();
     ctx.moveTo(gx + 0.5, plot.top);
@@ -554,10 +555,11 @@
       ctx.fillText(V6OF.format.price(price), gx + 5, y + 3);
     });
 
-    // Time scale (bottom)
+    // Time scale (bottom) — skip when gutter is suppressed (sub-pane owns it)
+    var effectiveGB = (vp && vp._gutterBottom != null) ? vp._gutterBottom : GUTTER_BOTTOM;
     var by = plot.top + plot.height;
     ctx.fillStyle = settings.bgColor || '#ffffff';
-    ctx.fillRect(plot.left, by, plot.width, GUTTER_BOTTOM);
+    ctx.fillRect(plot.left, by, plot.width, effectiveGB);
     ctx.strokeStyle = 'rgba(19, 23, 34, 0.18)';
     ctx.beginPath();
     ctx.moveTo(plot.left, by + 0.5);
@@ -1318,8 +1320,9 @@
     var snappedTs = vp.xToTime(snappedX);
     var timeText = V6OF.timeAxisDate(snappedTs) + ' ' + timeAxisLabel(snappedTs, 1000);
     var tw = 130;
+    var xhairGB = (vp && vp._gutterBottom != null) ? vp._gutterBottom : GUTTER_BOTTOM;
     ctx.fillStyle = 'rgba(56, 211, 238, 0.95)';
-    ctx.fillRect(snappedX - tw / 2, plot.top + plot.height, tw, GUTTER_BOTTOM - 2);
+    if (xhairGB > 2) ctx.fillRect(snappedX - tw / 2, plot.top + plot.height, tw, xhairGB - 2);
     ctx.fillStyle = '#04121a';
     ctx.font = 'bold 9px JetBrains Mono, Consolas, monospace';
     ctx.textAlign = 'center';
@@ -1523,11 +1526,20 @@
 
     // Viewport: persist across frames so pan/zoom survive redraws.
     var vp = V6OF.chart || (V6OF.chart = V6OF.ChartViewport.create());
+    // Expose viewport on the canvas element so sub-panes (CVD) can share it.
+    if (canvas) canvas._v6vp = vp;
+    // Allow caller to suppress the bottom time-axis gutter (e.g. when a
+    // time-synced sub-pane below owns the time-axis row instead).
+    var suppressBottomGutter = canvas && canvas._v6suppressBottomGutter;
+    var effectiveGutterBottom = suppressBottomGutter ? 0 : GUTTER_BOTTOM;
+    // Store on vp so helper functions (drawGridAndScales, drawCrosshair) can
+    // read the effective value without needing an extra parameter.
+    vp._gutterBottom = effectiveGutterBottom;
     var plot = {
       left: PAD_LEFT,
       top: PAD_TOP,
       width: Math.max(1, width - PAD_LEFT - GUTTER_RIGHT),
-      height: Math.max(1, height - PAD_TOP - GUTTER_BOTTOM)
+      height: Math.max(1, height - PAD_TOP - effectiveGutterBottom)
     };
     vp.setPlot(plot);
     vp.syncToData(bounds);
