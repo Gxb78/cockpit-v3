@@ -1,0 +1,222 @@
+/* ============================================================
+   076_v6_dom_redesign.css
+   Phase 4: DOM panel — premium header, two-sided ladder,
+   wall glows, MID band, Sigma footer.
+   Page-scoped; no overrides; tokens only.
+   ============================================================ */
+
+/* ── Premium panel header layout ── */
+body[data-current-page="orderflow"] .v6-dom-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  background: linear-gradient(180deg, var(--v6-surface), var(--v6-bg-2));
+  border-bottom: 1px solid var(--v6-hairline);
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* Hide the legacy stats rows — data-dom-stat hooks remain in DOM */
+body[data-current-page="orderflow"] .v6-dom-hleft,
+body[data-current-page="orderflow"] .v6-dom-hright {
+  display: none;
+}
+
+/* Shared premium header elements (used by DOM; Tape uses v6-tape-header) */
+body[data-current-page="orderflow"] .v6-panel-tick {
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--v6-gold);
+  box-shadow: 0 0 8px var(--v6-gold-soft);
+  flex-shrink: 0;
+}
+
+body[data-current-page="orderflow"] .v6-panel-title {
+  font-weight: 800;
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--v6-text);
+  flex-shrink: 0;
+}
+
+body[data-current-page="orderflow"] .v6-panel-meta {
+  font: 700 8px/1 var(--v6-mono);
+  color: var(--v6-text-mute);
+  background: var(--v6-surface-2);
+  border: 1px solid var(--v6-hairline);
+  border-radius: 5px;
+  padding: 3px 6px;
+  flex-shrink: 0;
+}
+
+body[data-current-page="orderflow"] .v6-panel-grp {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font: 700 8px/1 var(--v6-mono);
+  color: var(--v6-text-mute);
+  background: var(--v6-surface-2);
+  border: 1px solid var(--v6-hairline);
+  border-radius: 6px;
+  padding: 3px 7px;
+  flex-shrink: 0;
+}
+
+body[data-current-page="orderflow"] .v6-panel-grp select {
+  background: transparent;
+  border: none;
+  color: var(--v6-text);
+  font: 700 8px/1 var(--v6-mono);
+  cursor: pointer;
+  outline: none;
+}
+
+body[data-current-page="orderflow"] .v6-panel-sp {
+  flex: 1;
+}
+
+body[data-current-page="orderflow"] .v6-panel-grab {
+  color: var(--v6-text-faint);
+  letter-spacing: -2px;
+  font-size: 12px;
+  cursor: grab;
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+body[data-current-page="orderflow"] .v6-panel-ib {
+  width: 23px;
+  height: 23px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--v6-text-mute);
+  font-size: 12px;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+body[data-current-page="orderflow"] .v6-dom-header:hover .v6-panel-ib,
+body[data-current-page="orderflow"] .v6-tape-header:hover .v6-panel-ib {
+  opacity: 1;
+}
+
+body[data-current-page="orderflow"] .v6-panel-ib:hover {
+  background: var(--v6-surface-3);
+  color: var(--v6-text);
+}
+
+body[data-current-page="orderflow"] .v6-panel-ib-close:hover {
+  background: var(--v6-sell-soft);
+  color: var(--v6-sell);
+}
+
+/* ── DOM ladder rows ── */
+
+/* Bid cell: value right-aligned, depth bar from right edge */
+body[data-current-page="orderflow"] .v6-dom-cell-bid {
+  justify-content: flex-end;
+  color: var(--v6-buy);
+}
+
+body[data-current-page="orderflow"] .v6-dom-cell-ask {
+  justify-content: flex-start;
+  color: var(--v6-sell);
+}
+
+/* Depth bars: use token-based gradients */
+body[data-current-page="orderflow"] .v6-dom-bar.is-bid {
+  background: linear-gradient(270deg, var(--v6-buy-soft), transparent);
+}
+
+body[data-current-page="orderflow"] .v6-dom-bar.is-ask {
+  background: linear-gradient(90deg, var(--v6-sell-soft), transparent);
+}
+
+/* ── Wall rows ── */
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-major .v6-dom-cell-bid .v6-dom-bar.is-bid,
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-major.has-bid .v6-dom-bar.is-bid {
+  background: linear-gradient(270deg, var(--v6-buy), rgba(63, 185, 80, 0.1));
+  box-shadow: inset 0 0 12px var(--v6-buy-soft);
+}
+
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-major .v6-dom-cell-bid .v6-dom-val {
+  color: var(--v6-buy);
+  font-weight: 800;
+}
+
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-major .v6-dom-cell-ask .v6-dom-bar.is-ask,
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-major.has-ask .v6-dom-bar.is-ask {
+  background: linear-gradient(90deg, var(--v6-sell), rgba(246, 70, 93, 0.1));
+  box-shadow: inset 0 0 12px var(--v6-sell-soft);
+}
+
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-major .v6-dom-cell-ask .v6-dom-val {
+  color: var(--v6-sell);
+  font-weight: 800;
+}
+
+/* Soft wall: slightly less intense */
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-soft .v6-dom-cell-bid .v6-dom-bar.is-bid {
+  background: linear-gradient(270deg, rgba(63, 185, 80, 0.6), transparent);
+}
+
+body[data-current-page="orderflow"] .v6-dom-row.is-wall-soft .v6-dom-cell-ask .v6-dom-bar.is-ask {
+  background: linear-gradient(90deg, rgba(246, 70, 93, 0.6), transparent);
+}
+
+/* ── MID band ── */
+body[data-current-page="orderflow"] .v6-dom-row.is-mid {
+  background: linear-gradient(90deg, transparent, var(--v6-accent-soft), transparent);
+  box-shadow: inset 0 1px 0 var(--v6-accent-line), inset 0 -1px 0 var(--v6-accent-line);
+}
+
+body[data-current-page="orderflow"] .v6-dom-row.is-mid .v6-dom-cell-price {
+  color: var(--v6-accent);
+  font-weight: 800;
+  text-shadow: 0 0 10px var(--v6-accent-glow);
+}
+
+/* ── Best bid / ask price color ── */
+body[data-current-page="orderflow"] .v6-dom-row.is-best-bid .v6-dom-cell-price {
+  color: var(--v6-buy);
+}
+
+body[data-current-page="orderflow"] .v6-dom-row.is-best-ask .v6-dom-cell-price {
+  color: var(--v6-sell);
+}
+
+/* ── Sigma footer ── */
+body[data-current-page="orderflow"] .v6-dom-sigma-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 22px;
+  padding: 0 10px;
+  border-top: 1px solid var(--v6-hairline);
+  font: 700 8px/1 var(--v6-mono);
+  color: var(--v6-text-mute);
+  flex-shrink: 0;
+}
+
+body[data-current-page="orderflow"] .v6-dom-sigma-bid strong {
+  color: var(--v6-buy);
+}
+
+body[data-current-page="orderflow"] .v6-dom-sigma-ask strong {
+  color: var(--v6-sell);
+}
+
+/* Hide the old GROUP label in the footer (GROUP moved to header) */
+body[data-current-page="orderflow"] .v6-dom-glbl {
+  display: none;
+}

@@ -165,6 +165,19 @@
     setStat(container, 'gap',    String(domGapCount(snap)));
     setStat(container, 'drop',   String(domDroppedCount(state, snap)));
     syncControls(container, snap.priceGrouping || 25, settings);
+    // Σ BID / Σ ASK footer
+    var sigmaFoot = container.querySelector('[data-v6-dom-sigma]');
+    if (sigmaFoot && snap) {
+      var bids = Array.isArray(snap.bids) ? snap.bids : [];
+      var asks = Array.isArray(snap.asks) ? snap.asks : [];
+      var sumBid = bids.reduce(function (s, l) { return s + (Number(l.qty) || 0); }, 0);
+      var sumAsk = asks.reduce(function (s, l) { return s + (Number(l.qty) || 0); }, 0);
+      var mid = snap.midPrice || snap.price || 0;
+      var bidEl = sigmaFoot.querySelector('[data-dom-sigma="bid"]');
+      var askEl = sigmaFoot.querySelector('[data-dom-sigma="ask"]');
+      if (bidEl) bidEl.textContent = fmt(sumBid, true, mid) || '—';
+      if (askEl) askEl.textContent = fmt(sumAsk, true, mid) || '—';
+    }
   }
 
   // ── Scroll / Follow ─────────────────────────────────────────────────────────
@@ -283,8 +296,13 @@
   // ── Skeleton HTML ─────────────────────────────────────────────────────────────
 
   function buildSkeleton(container, grouping, groupOpts) {
+    var groupSelectHtml = groupOpts.map(function (g) {
+      return '<option value="' + g + '"' + (g === grouping ? ' selected' : '') + '>' + g + '</option>';
+    }).join('');
     container.innerHTML =
+      // ── Premium header ──────────────────────────────────────────────────────
       '<div class="v6-dom-header">' +
+        // Legacy stats (hidden via CSS; data-dom-stat hooks preserved for JS)
         '<div class="v6-dom-hleft">' +
           '<span class="v6-dom-stat v6-dom-source"><em>SRC</em><strong data-dom-stat="source">-</strong></span>' +
           '<span class="v6-dom-stat"><em>AGE</em><strong data-dom-stat="age">-</strong></span>' +
@@ -294,12 +312,22 @@
           '<span class="v6-dom-stat"><em>SEQ</em><strong data-dom-stat="seq">-</strong></span>' +
           '<span class="v6-dom-stat"><em>GAP</em><strong data-dom-stat="gap">0</strong></span>' +
           '<span class="v6-dom-stat"><em>DROP</em><strong data-dom-stat="drop">0</strong></span>' +
-          '</div>' +
+        '</div>' +
         '<div class="v6-dom-hright">' +
           '<span class="v6-dom-stat"><em>DEPTH</em><span data-dom-stat="depth">0/0</span></span>' +
           '<button class="v6-dom-recenter" type="button" title="Follow mid: re-center on the current mid price" aria-label="Follow mid: re-center on the current mid price">Follow mid</button>' +
         '</div>' +
+        // Premium visual layer (shown via CSS; overlays the legacy stats row)
+        '<span class="v6-panel-tick" aria-hidden="true"></span>' +
+        '<span class="v6-panel-title">DOM</span>' +
+        '<span class="v6-panel-meta" data-dom-stat="source">—</span>' +
+        '<label class="v6-panel-grp">GRP <select class="v6-dom-grouping">' + groupSelectHtml + '</select></label>' +
+        '<span class="v6-panel-sp"></span>' +
+        '<span class="v6-panel-grab" aria-hidden="true">&#x2807;</span>' +
+        '<button type="button" class="v6-panel-ib" data-v6-action="panel-settings" title="Settings" aria-label="Panel settings">&#x2699;</button>' +
+        '<button type="button" class="v6-panel-ib v6-panel-ib-close" data-v6-action="panel-close" title="Close" aria-label="Close panel">&#x2715;</button>' +
       '</div>' +
+      // ── Column headers + ladder ──────────────────────────────────────────────
       '<div class="v6-dom-cols"></div>' +
       '<div class="v6-dom-body" role="grid" aria-label="Depth of market price ladder"></div>' +
       '<div class="v6-dom-stale-overlay" data-dom-stale-overlay hidden aria-live="polite">' +
@@ -307,15 +335,16 @@
       '</div>' +
       '<div class="v6-dom-activity-above" data-dom-activity-above hidden aria-live="polite">▲ Activity above window</div>' +
       '<div class="v6-dom-activity-below" data-dom-activity-below hidden aria-live="polite">▼ Activity below window</div>' +
+      // ── Σ BID / Σ ASK footer ──────────────────────────────────────────────────
+      '<div class="v6-dom-sigma-footer" data-v6-dom-sigma>' +
+        '<span class="v6-dom-sigma-bid"><em>Σ BID</em> <strong data-dom-sigma="bid">—</strong></span>' +
+        '<span class="v6-dom-sigma-ask"><em>Σ ASK</em> <strong data-dom-sigma="ask">—</strong></span>' +
+      '</div>' +
+      // ── Controls footer (goto price + value mode; GROUP moved to header) ─────
       '<div class="v6-dom-footer">' +
         '<form class="v6-dom-goto-form" aria-label="Go to price">' +
           '<input type="text" class="v6-dom-goto-input" placeholder="Go to price..." aria-label="Go to price input" />' +
         '</form>' +
-        '<label class="v6-dom-glbl">Group <select class="v6-dom-grouping">' +
-          groupOpts.map(function (g) {
-            return '<option value="' + g + '"' + (g === grouping ? ' selected' : '') + '>' + g + '</option>';
-          }).join('') +
-        '</select></label>' +
         '<label class="v6-dom-glbl v6-dom-value-mode-wrap">Val <select class="v6-dom-value-mode" title="Value display mode">' +
           '<option value="coin">Coin</option>' +
           '<option value="notional">Notional</option>' +
