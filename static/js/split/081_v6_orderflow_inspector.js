@@ -551,7 +551,7 @@
     if (!store || !store.setState || !candle) return;
     store.setState(function (prev) {
       var settings = (prev && prev.settings) || {};
-      var maxCandles = Math.max(60, Math.min(5000, num(settings.footprintMaxCandles, 5000)));
+      var maxCandles = Math.max(60, Math.min(100000, num(settings.footprintMaxCandles, 100000)));
       var incomingKey = footprintKey(candle.symbol, candle.timeframe || prev.timeframe, candle);
       var merged = [];
       var replaced = false;
@@ -1040,6 +1040,12 @@
     var clockEl = el.querySelector('[data-v6-replay-clock]');
     if (stateEl) stateEl.textContent = stateText || 'Idle';
     if (clockEl && detail != null) clockEl.textContent = detail;
+  }
+
+  function fmtUtc(ms) {
+    var n = Number(ms);
+    if (!Number.isFinite(n) || n <= 0) return '--';
+    try { return new Date(n).toISOString().slice(11, 19) + ' UTC'; } catch (_) { return '--'; }
   }
 
   function updateReplayShell(root, state) {

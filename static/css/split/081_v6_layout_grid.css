@@ -1,0 +1,511 @@
+/* ============================================================
+   081_v6_layout_grid.css
+   Multi-chart tiling layout: header "layout" trigger + chart grid
+   presets popover + chart-cell grid inside .v6-center-chart.
+   Page-scoped; no overrides; tokens only.
+   ============================================================ */
+
+/* ── Header trigger button ── */
+body[data-current-page="orderflow"] .v6-header-grid-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 26px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid var(--v6-hairline);
+  color: var(--v6-text-mute);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+
+body[data-current-page="orderflow"] .v6-header-grid-btn:hover {
+  background: var(--v6-surface-2);
+  color: var(--v6-text);
+  border-color: var(--v6-accent-line);
+}
+
+/* ── Popover shell (appended to document.body, not page-scoped) ── */
+.v6-cgp-popover {
+  position: fixed;
+  z-index: 9999;
+  top: 0;
+  left: 0;
+  background: var(--v6-bg-2);
+  border: 1px solid var(--v6-hairline);
+  border-radius: var(--v6-r-lg, 10px);
+  box-shadow: var(--v6-shadow);
+  padding: 12px;
+  width: 240px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.v6-cgp-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.v6-cgp-section-title {
+  font: 700 8px/1 var(--v6-mono);
+  letter-spacing: 0.1em;
+  color: var(--v6-text-faint);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.v6-cgp-sep {
+  height: 1px;
+  background: var(--v6-hairline);
+  margin: 10px 0;
+}
+
+/* ── Preset grid ── */
+.v6-cgp-presets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.v6-cgp-preset {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 4px 6px;
+  border-radius: 7px;
+  border: 1px solid var(--v6-hairline);
+  background: var(--v6-surface-2);
+  color: var(--v6-text-mute);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.v6-cgp-preset:hover {
+  border-color: var(--v6-accent-line);
+  background: var(--v6-surface-3);
+  color: var(--v6-text);
+}
+
+.v6-cgp-preset.is-active {
+  border-color: var(--v6-accent-line);
+  background: var(--v6-accent-soft);
+  color: var(--v6-accent);
+  box-shadow: 0 0 0 1px var(--v6-accent-line) inset;
+}
+
+.v6-cgp-preset-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.v6-cgp-preset-thumb svg {
+  width: 36px;
+  height: 28px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.2;
+}
+
+.v6-cgp-preset-label {
+  font: 700 8px/1 var(--v6-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ── MONITOR section ── */
+.v6-cgp-monitors {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.v6-cgp-monitor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 4px 6px;
+  border-radius: 7px;
+  border: 1px dashed var(--v6-hairline-strong);
+  background: var(--v6-surface-2);
+  color: var(--v6-text-mute);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.v6-cgp-monitor:hover {
+  border-color: var(--v6-accent-line);
+  background: var(--v6-surface-3);
+  color: var(--v6-text);
+}
+
+.v6-cgp-monitor-thumb {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.v6-cgp-monitor-label {
+  font: 700 8px/1 var(--v6-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ── SYNC toggle rows (switch style) ── */
+.v6-cgp-syncs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.v6-cgp-sync-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--v6-r-md, 6px);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--v6-text-mute);
+  font: 700 9px/1 var(--v6-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.v6-cgp-sync-row:hover {
+  background: var(--v6-surface-2);
+  color: var(--v6-text);
+}
+
+.v6-cgp-sync-row.is-active .v6-cgp-sync-label {
+  color: var(--v6-accent);
+}
+
+.v6-cgp-switch {
+  position: relative;
+  display: inline-block;
+  width: 28px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--v6-surface-3);
+  border: 1px solid var(--v6-hairline-strong);
+  flex: 0 0 auto;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.v6-cgp-switch-knob {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--v6-text-faint);
+  transition: transform 0.15s, background 0.15s;
+}
+
+.v6-cgp-sync-row.is-active .v6-cgp-switch {
+  background: var(--v6-accent-soft);
+  border-color: var(--v6-accent-line);
+}
+
+.v6-cgp-sync-row.is-active .v6-cgp-switch-knob {
+  background: var(--v6-accent);
+  transform: translateX(12px);
+}
+
+.v6-cgp-note {
+  margin-top: 8px;
+  font: 500 9px/1.4 var(--v6-font);
+  color: var(--v6-text-faint);
+}
+
+/* ── Chart grid container (replaces single chart panel) ── */
+body[data-current-page="orderflow"] .v6-chart-grid {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  gap: 1px;
+  background: var(--v6-hairline-strong);
+}
+
+body[data-current-page="orderflow"] .v6-chart-grid.v6-grid-single {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+}
+
+body[data-current-page="orderflow"] .v6-chart-grid.v6-grid-vsplit {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr;
+}
+
+body[data-current-page="orderflow"] .v6-chart-grid.v6-grid-hsplit {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+body[data-current-page="orderflow"] .v6-chart-grid.v6-grid-one-plus-two {
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+body[data-current-page="orderflow"] .v6-chart-grid.v6-grid-one-plus-two .v6-chart-cell-primary {
+  grid-row: 1 / span 2;
+}
+
+body[data-current-page="orderflow"] .v6-chart-grid.v6-grid-2x2 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+/* ── Individual chart cell ── */
+body[data-current-page="orderflow"] .v6-chart-grid .v6-chart-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--v6-bg);
+  overflow: hidden;
+}
+
+/* The primary cell keeps the original .v6-panel-chart layout (head + canvas)
+   and must fill the cell. */
+body[data-current-page="orderflow"] .v6-chart-grid .v6-chart-cell-primary {
+  display: flex;
+  flex-direction: column;
+}
+
+body[data-current-page="orderflow"] .v6-chart-grid .v6-chart-cell-primary .v6-panel-chart {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Secondary cells: small header label + canvas filling the rest. */
+body[data-current-page="orderflow"] .v6-chart-grid .v6-chart-cell-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+  flex: 0 0 auto;
+  height: 22px;
+  padding: 0 8px;
+  font: 700 9px/1 var(--v6-mono);
+  letter-spacing: 0.04em;
+  color: var(--v6-text-mute);
+  background: var(--v6-surface);
+  border-bottom: 1px solid var(--v6-hairline);
+}
+
+body[data-current-page="orderflow"] .v6-chart-grid .v6-chart-cell-head .v6-chart-cell-sub {
+  margin-left: auto;
+}
+
+body[data-current-page="orderflow"] .v6-chart-grid .v6-chart-cell-label {
+  text-transform: uppercase;
+  color: var(--v6-text-dim);
+}
+
+body[data-current-page="orderflow"] .v6-chart-grid .v6-chart-cell-sub {
+  color: var(--v6-text-faint);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+body[data-current-page="orderflow"] .v6-chart-grid .v6-grid-cell-canvas {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Body wrapper inside each cell — hosts either the chart canvas or a
+   re-homed panel (DOM/Tape/Orderbook/Info). */
+body[data-current-page="orderflow"] .v6-chart-grid .v6-chart-cell-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+body[data-current-page="orderflow"] .v6-chart-grid .v6-chart-cell-body [data-v6-panel] {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Per-cell module selector ── */
+body[data-current-page="orderflow"] .v6-chart-cell-module-select {
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 4px;
+  border: 1px solid var(--v6-hairline);
+  background: var(--v6-surface-2);
+  color: var(--v6-text-mute);
+  font: 700 9px/1 var(--v6-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  margin-right: 6px;
+  flex: 0 0 auto;
+}
+
+body[data-current-page="orderflow"] .v6-chart-cell-module-select:hover {
+  border-color: var(--v6-accent-line);
+  color: var(--v6-text);
+}
+
+body[data-current-page="orderflow"] .v6-chart-cell-module-select:focus {
+  outline: none;
+  border-color: var(--v6-accent-line);
+  color: var(--v6-accent);
+}
+
+/* Cell 0's selector lives inside .v6-panel-head (which is space-between);
+   keep the label/freshness pair pinned to the right of the selector. */
+body[data-current-page="orderflow"] .v6-chart-grid .v6-chart-cell-primary .v6-panel-head {
+  justify-content: flex-start;
+}
+
+body[data-current-page="orderflow"] .v6-chart-grid .v6-chart-cell-primary .v6-panel-head .v6-panel-freshness {
+  margin-left: auto;
+}
+
+/* ── Per-cell pop-out button ── */
+body[data-current-page="orderflow"] .v6-chart-cell-popout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid var(--v6-hairline);
+  background: var(--v6-surface-2);
+  color: var(--v6-text-mute);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  margin-left: 6px;
+  flex: 0 0 auto;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+body[data-current-page="orderflow"] .v6-chart-cell-popout-btn:hover {
+  border-color: var(--v6-accent-line);
+  color: var(--v6-text);
+  background: var(--v6-surface-3);
+}
+
+body[data-current-page="orderflow"] .v6-chart-cell-popout-btn.is-popped {
+  border-color: var(--v6-accent-line);
+  background: var(--v6-accent-soft);
+  color: var(--v6-accent);
+}
+
+/* The primary cell head is space-between via flex-start override above; the
+   freshness pill already has margin-left:auto, so the pop-out button (which
+   comes after it in DOM order) sits flush at the far right. */
+body[data-current-page="orderflow"] .v6-chart-grid .v6-chart-cell-primary .v6-panel-head .v6-chart-cell-popout-btn {
+  margin-left: 6px;
+}
+
+/* ── Pop-out window shell (rendered by 095_v6_popout.js) ── */
+body[data-current-page="orderflow"] .v6-popout-shell {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--v6-bg);
+  z-index: 1;
+}
+
+body[data-current-page="orderflow"] .v6-popout-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  height: 32px;
+  padding: 0 10px;
+  background: var(--v6-surface);
+  border-bottom: 1px solid var(--v6-hairline);
+  font: 700 11px/1 var(--v6-font);
+  color: var(--v6-text-dim);
+}
+
+body[data-current-page="orderflow"] .v6-popout-tag {
+  margin-left: 6px;
+  font: 700 8px/1 var(--v6-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--v6-text-faint);
+}
+
+body[data-current-page="orderflow"] .v6-popout-close {
+  height: 22px;
+  padding: 0 10px;
+  border-radius: var(--v6-r-sm, 4px);
+  border: 1px solid var(--v6-hairline);
+  background: var(--v6-surface-2);
+  color: var(--v6-text-mute);
+  font: 700 9px/1 var(--v6-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+body[data-current-page="orderflow"] .v6-popout-close:hover {
+  border-color: var(--v6-accent-line);
+  color: var(--v6-text);
+}
+
+body[data-current-page="orderflow"] .v6-popout-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+body[data-current-page="orderflow"] .v6-popout-canvas {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+body[data-current-page="orderflow"] .v6-popout-unsupported {
+  margin: auto;
+  max-width: 360px;
+  padding: 16px;
+  text-align: center;
+  font: 500 12px/1.6 var(--v6-font);
+  color: var(--v6-text-mute);
+}
+
+body[data-current-page="orderflow"] .v6-popout-unsupported strong {
+  color: var(--v6-text);
+}

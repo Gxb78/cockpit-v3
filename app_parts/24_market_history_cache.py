@@ -155,7 +155,7 @@ def _fetch_history_from_binance(symbol, interval, days):
 
     for page in range(max_pages):
         # Construire la querystring pour Binance
-        qs = f"/api/v3/klines?symbol={symbol}&interval={interval}&limit=1000&startTime={current_start}"
+        qs = f"/api/v3/klines?symbol={symbol}&interval={interval}&limit={MAX_PER_REQUEST}&startTime={current_start}"
         batch, err = _fetch_klines_page(qs)
 
         if err or not batch:
@@ -218,8 +218,8 @@ def market_klines_history():
         return jsonify({"error": str(e)}), 400
 
     # Validation
-    if symbol not in _KLINES_SYMBOL_WHITELIST:
-        return jsonify({"error": f"Symbole non supporte: {symbol}. Supportes: {', '.join(sorted(_KLINES_SYMBOL_WHITELIST))}"}), 400
+    if not _is_supported_kline_symbol(symbol):
+        return jsonify({"error": f"Symbole non supporte: {symbol}. Format attendu: crypto quotee USDT/USDC/FDUSD/BTC/ETH/BNB."}), 400
     if interval not in _KLINES_INTERVAL_WHITELIST:
         return jsonify({"error": f"Intervalle non supporte: {interval}"}), 400
 

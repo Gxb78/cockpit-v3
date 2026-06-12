@@ -260,10 +260,10 @@
       var p = vp.plot;
       if (dx) {
         var dt = dx / p.width * timeSpan();
-        // Snap to candle interval to get candle-by-candle movement.
-        var ci = Math.max(1000, vp.candleIntervalMs || 60000);
-        var snapped = Math.round(dt / ci) * ci;
-        vp.setTimeRange(vp.timeStart - snapped, vp.timeEnd - snapped);
+        // Pixel-smooth panning — no candle-interval snapping. Snapping here
+        // caused drag-pan to feel "stuck" until the cumulative delta crossed
+        // half a candle width, then jump a whole candle at once.
+        vp.setTimeRange(vp.timeStart - dt, vp.timeEnd - dt);
         // Any pan disables follow-live (user is exploring history).
         vp.followLive = false;
       }

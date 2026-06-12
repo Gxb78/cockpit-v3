@@ -1,0 +1,593 @@
+/* ============================================================
+   082_v6_dom_clean.css
+   DOM panel rebuilt from dom-exocharts-clone.html.
+   This file loads last and owns the final DOM visual layer.
+   ============================================================ */
+
+body[data-current-page="orderflow"] {
+  --v6-dom-ref-bg: #0f1113;
+  --v6-dom-ref-panel: #111315;
+  --v6-dom-ref-panel-2: #151719;
+  --v6-dom-ref-body: #101214;
+  --v6-dom-ref-price: #15191b;
+  --v6-dom-ref-line: rgba(255,255,255,.055);
+  --v6-dom-ref-line-strong: rgba(255,255,255,.135);
+  --v6-dom-ref-text: #c6cbd0;
+  --v6-dom-ref-muted: #80878e;
+  --v6-dom-ref-green: #2db073;
+  --v6-dom-ref-green-col: rgba(21, 53, 39, .72);
+  --v6-dom-ref-red: #d84b58;
+  --v6-dom-ref-red-col: rgba(64, 28, 31, .70);
+  --v6-dom-ref-purple: #ba55d3;
+  --v6-dom-ref-cyan: #58b7c8;
+  --v6-dom-ref-orange: #ff7e22;
+}
+
+body[data-current-page="orderflow"] .v6-panel-dom > .v6-panel-head {
+  display: none;
+}
+
+body[data-current-page="orderflow"] .v6-panel-dom {
+  background: var(--v6-dom-ref-panel);
+}
+
+body[data-current-page="orderflow"] .v6-panel-dom > .v6-panel-body.v6-dom-body {
+  height: 100%;
+  padding: 0;
+}
+
+body[data-current-page="orderflow"] .v6-orderflow-root:not(.v6-dock-collapsed) .v6-right-col {
+  flex: 0 0 545px !important;
+  width: 545px !important;
+  min-width: 545px;
+}
+
+body[data-current-page="orderflow"] [data-v6-dom-list] {
+  min-width: min(100%, 522px);
+  height: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--v6-dom-ref-panel);
+  color: var(--v6-dom-ref-text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+body[data-current-page="orderflow"] [data-v6-dom-list],
+body[data-current-page="orderflow"] [data-v6-dom-list] * {
+  box-sizing: border-box;
+}
+
+body[data-current-page="orderflow"] .v6-dom-header {
+  height: 29px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 14px;
+  background: var(--v6-dom-ref-panel-2);
+  border-bottom: 1px solid rgba(255,255,255,.065);
+  color: #bfc4c9;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+body[data-current-page="orderflow"] .v6-dom-hleft,
+body[data-current-page="orderflow"] .v6-dom-hright {
+  display: none;
+}
+
+body[data-current-page="orderflow"] .v6-panel-tick {
+  display: none;
+}
+
+body[data-current-page="orderflow"] .v6-panel-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #bfc4c9;
+  font: 600 12px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+body[data-current-page="orderflow"] .v6-panel-title::after {
+  content: "x";
+  color: #a9adb2;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  opacity: .88;
+}
+
+body[data-current-page="orderflow"] .v6-panel-meta {
+  margin-left: auto;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #b3b8bd;
+  opacity: .9;
+  font: 500 11px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+body[data-current-page="orderflow"] .v6-dom-toolbar {
+  display: flex;
+  align-items: center;
+  height: 24px;
+  flex: 0 0 24px;
+  gap: 11px;
+  padding: 0 14px;
+  margin: 0;
+  background: var(--v6-dom-ref-panel);
+  border-bottom: 1px solid rgba(255,255,255,.04);
+  color: #d6d9dc;
+  font: 600 12px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+body[data-current-page="orderflow"] .v6-dom-grouping {
+  width: 42px;
+  border: 0;
+  background: transparent;
+  color: #d6d9dc;
+  font: 600 12px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+  outline: none;
+  appearance: none;
+}
+
+body[data-current-page="orderflow"] .v6-panel-sp,
+body[data-current-page="orderflow"] .v6-panel-grab {
+  display: none;
+}
+
+body[data-current-page="orderflow"] .v6-panel-ib {
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #e9ebed;
+  font: 600 13px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+  opacity: .9;
+}
+
+body[data-current-page="orderflow"] .v6-panel-ib-close {
+  color: #a9adb2;
+}
+
+body[data-current-page="orderflow"] .v6-dom-cols {
+  display: flex;
+  align-items: center;
+  height: 25px;
+  flex: 0 0 25px;
+  overflow: hidden;
+  background: var(--v6-dom-ref-panel);
+  border-bottom: 1px solid rgba(255,255,255,.075);
+  color: #aab0b5;
+  font: 600 12px/25px Inter, ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+  scrollbar-gutter: stable;
+}
+
+body[data-current-page="orderflow"] .v6-dom-col {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 25px;
+  padding: 0 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  color: #aab0b5;
+}
+
+body[data-current-page="orderflow"] .v6-dom-col-vol {
+  justify-content: flex-start;
+}
+
+body[data-current-page="orderflow"] .v6-dom-col-sell {
+  justify-content: flex-end;
+}
+
+body[data-current-page="orderflow"] .v6-dom-col-buy {
+  justify-content: flex-start;
+}
+
+body[data-current-page="orderflow"] .v6-dom-col-bid,
+body[data-current-page="orderflow"] .v6-dom-col-price,
+body[data-current-page="orderflow"] .v6-dom-col-delta {
+  justify-content: flex-end;
+}
+
+body[data-current-page="orderflow"] .v6-dom-col-ask {
+  justify-content: flex-start;
+}
+
+body[data-current-page="orderflow"] .v6-dom-col-bid {
+  border-left: 1px solid var(--v6-dom-ref-line);
+}
+
+body[data-current-page="orderflow"] .v6-dom-col-price,
+body[data-current-page="orderflow"] .v6-dom-col-ask {
+  border-left: 1px solid var(--v6-dom-ref-line);
+}
+
+body[data-current-page="orderflow"] .v6-dom-col-delta {
+  border-left: 1px solid var(--v6-dom-ref-line);
+}
+
+body[data-current-page="orderflow"] .v6-dom-dragicon {
+  display: none;
+}
+
+body[data-current-page="orderflow"] [data-v6-dom-list] > .v6-dom-body {
+  position: relative;
+  overflow-y: auto;
+  overflow-x: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--v6-dom-ref-body);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.18) transparent;
+}
+
+body[data-current-page="orderflow"] .v6-dom-spacer {
+  position: relative;
+  min-width: 522px;
+  background:
+    linear-gradient(90deg, transparent 104px, var(--v6-dom-ref-line) 104px, transparent 105px),
+    linear-gradient(90deg, transparent 208px, var(--v6-dom-ref-line) 208px, transparent 209px),
+    linear-gradient(90deg, transparent 299px, var(--v6-dom-ref-line) 299px, transparent 300px),
+    linear-gradient(90deg, transparent 356px, var(--v6-dom-ref-line) 356px, transparent 357px),
+    linear-gradient(90deg, transparent 447px, var(--v6-dom-ref-line) 447px, transparent 448px),
+    linear-gradient(90deg, rgba(14,44,31,.25) 209px, transparent 300px, rgba(64,25,28,.25) 448px);
+}
+
+body[data-current-page="orderflow"] .v6-dom-row {
+  display: flex;
+  align-items: stretch;
+  min-width: 522px;
+  height: 18px;
+  min-height: 18px;
+  max-height: 18px;
+  font: 500 12px/18px Inter, ui-sans-serif, system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  color: #c9ced2;
+  text-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+
+body[data-current-page="orderflow"] .v6-dom-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 18px;
+  min-width: 0;
+  padding: 0 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  border-bottom: 1px solid rgba(255,255,255,.018);
+}
+
+body[data-current-page="orderflow"] .v6-dom-cell::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: rgba(255,255,255,.018);
+  pointer-events: none;
+}
+
+body[data-current-page="orderflow"] .v6-dom-cell-vol,
+body[data-current-page="orderflow"] .v6-dom-cell-sell,
+body[data-current-page="orderflow"] .v6-dom-cell-buy,
+body[data-current-page="orderflow"] .v6-dom-cell-delta {
+  background: var(--v6-dom-ref-body);
+  color: #c9ced2;
+  font-weight: 500;
+}
+
+body[data-current-page="orderflow"] .v6-dom-cell-vol,
+body[data-current-page="orderflow"] .v6-dom-cell-ask {
+  justify-content: flex-start;
+}
+
+body[data-current-page="orderflow"] .v6-dom-cell-sell,
+body[data-current-page="orderflow"] .v6-dom-cell-bid,
+body[data-current-page="orderflow"] .v6-dom-cell-price,
+body[data-current-page="orderflow"] .v6-dom-cell-delta {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+body[data-current-page="orderflow"] .v6-dom-cell-buy {
+  justify-content: flex-start;
+}
+
+body[data-current-page="orderflow"] .v6-dom-cell-bid {
+  background: var(--v6-dom-ref-green-col);
+  border-left: 1px solid rgba(255,255,255,.035);
+}
+
+body[data-current-page="orderflow"] .v6-dom-cell-ask {
+  background: var(--v6-dom-ref-red-col);
+  border-right: 1px solid rgba(255,255,255,.035);
+}
+
+body[data-current-page="orderflow"] .v6-dom-cell-price {
+  background: var(--v6-dom-ref-price);
+  color: #d5d8db;
+  font-weight: 600;
+}
+
+body[data-current-page="orderflow"] .v6-dom-val,
+body[data-current-page="orderflow"] .v6-dom-cell > span:not(.v6-dom-bar) {
+  position: relative;
+  z-index: 1;
+}
+
+body[data-current-page="orderflow"] .has-bid .v6-dom-cell-bid .v6-dom-val {
+  color: #cfe7d9;
+}
+
+body[data-current-page="orderflow"] .has-ask .v6-dom-cell-ask .v6-dom-val {
+  color: #e4a4aa;
+}
+
+body[data-current-page="orderflow"] .has-delta-pos .v6-dom-cell-delta {
+  color: #d7eee2;
+}
+
+body[data-current-page="orderflow"] .has-delta-neg .v6-dom-cell-delta {
+  color: #e8b0b5;
+}
+
+body[data-current-page="orderflow"] .v6-dom-bar {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  z-index: 0;
+  min-width: 2px;
+  border-radius: 0;
+  opacity: .96;
+  transition: width 100ms ease, background 120ms ease;
+}
+
+body[data-current-page="orderflow"] .v6-dom-bar.is-bid {
+  right: 0;
+  background: linear-gradient(90deg, rgba(45,176,115,.65), rgba(45,176,115,.95));
+  border-left: 1px solid rgba(83,220,155,.15);
+}
+
+body[data-current-page="orderflow"] .v6-dom-bar.is-ask {
+  left: 0;
+  background: linear-gradient(90deg, rgba(216,75,88,.92), rgba(216,75,88,.72));
+  border-right: 1px solid rgba(255,115,125,.13);
+}
+
+body[data-current-page="orderflow"] .v6-dom-cell-bid .v6-dom-val:empty,
+body[data-current-page="orderflow"] .v6-dom-cell-ask .v6-dom-val:empty {
+  display: none;
+}
+
+body[data-current-page="orderflow"] .v6-dom-cell-bid .v6-dom-bar[style*="width:0%"],
+body[data-current-page="orderflow"] .v6-dom-cell-ask .v6-dom-bar[style*="width:0%"],
+body[data-current-page="orderflow"] .v6-dom-cell-bid .v6-dom-bar[style*="width: 0%"],
+body[data-current-page="orderflow"] .v6-dom-cell-ask .v6-dom-bar[style*="width: 0%"] {
+  display: none;
+}
+
+body[data-current-page="orderflow"] .v6-dom-row.is-empty {
+  opacity: .38;
+}
+
+body[data-current-page="orderflow"] .v6-dom-row.is-live .v6-dom-cell-price {
+  background: rgba(231,234,237,.55);
+  color: #101214;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.25), 0 0 18px rgba(255,255,255,.09);
+}
+
+body[data-current-page="orderflow"] .v6-dom-row.is-live::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 8px;
+  height: 2px;
+  background: rgba(231,234,237,.55);
+  box-shadow: 0 0 0 1px rgba(0,0,0,.25), 0 0 18px rgba(255,255,255,.09);
+  pointer-events: none;
+  z-index: 5;
+}
+
+body[data-current-page="orderflow"] .v6-dom-row.is-live .v6-dom-marker,
+body[data-current-page="orderflow"] .v6-dom-row.is-live .v6-dom-live-pill {
+  display: none;
+}
+
+body[data-current-page="orderflow"] .v6-dom-cell-bid.is-depth-add,
+body[data-current-page="orderflow"] .v6-dom-cell-ask.is-depth-add {
+  animation: v6-dom-flash-add 600ms ease-out;
+}
+
+body[data-current-page="orderflow"] .v6-dom-cell-bid.is-depth-cancel,
+body[data-current-page="orderflow"] .v6-dom-cell-ask.is-depth-cancel {
+  animation: v6-dom-flash-cancel 600ms ease-out;
+}
+
+body[data-current-page="orderflow"] .v6-dom-cell-bid.is-depth-refresh,
+body[data-current-page="orderflow"] .v6-dom-cell-ask.is-depth-refresh {
+  animation: v6-dom-flash-refresh 600ms ease-out;
+}
+
+@keyframes v6-dom-flash-add {
+  0% { background-color: rgba(45,176,115,.92); }
+  100% { background-color: transparent; }
+}
+
+@keyframes v6-dom-flash-cancel {
+  0% { background-color: rgba(216,75,88,.92); }
+  100% { background-color: transparent; }
+}
+
+@keyframes v6-dom-flash-refresh {
+  0% { background-color: rgba(231,234,237,.35); }
+  100% { background-color: transparent; }
+}
+
+body[data-current-page="orderflow"] .v6-dom-sigma-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 22px;
+  flex: 0 0 22px;
+  padding: 0 8px;
+  background: linear-gradient(180deg, transparent, rgba(0,0,0,.28)), var(--v6-dom-ref-body);
+  border-top: 1px solid rgba(255,255,255,.04);
+  color: var(--v6-dom-ref-muted);
+  font: 600 10px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+body[data-current-page="orderflow"] .v6-dom-sigma-footer em {
+  color: #aab0b5;
+  font-style: normal;
+}
+
+body[data-current-page="orderflow"] .v6-dom-sigma-bid strong {
+  color: #cfe7d9;
+}
+
+body[data-current-page="orderflow"] .v6-dom-sigma-ask strong {
+  color: #e4a4aa;
+}
+
+body[data-current-page="orderflow"] .v6-dom-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  flex: 0 0 26px;
+  padding: 0 8px;
+  background: var(--v6-dom-ref-panel);
+  border-top: 1px solid rgba(255,255,255,.055);
+}
+
+body[data-current-page="orderflow"] .v6-dom-goto-form {
+  flex: 1 1 auto;
+  display: flex;
+}
+
+body[data-current-page="orderflow"] .v6-dom-goto-input {
+  width: 100%;
+  height: 19px;
+  padding: 0 6px;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 0;
+  background: var(--v6-dom-ref-body);
+  color: var(--v6-dom-ref-text);
+  font: 500 11px/19px Inter, ui-sans-serif, system-ui, sans-serif;
+  outline: none;
+}
+
+body[data-current-page="orderflow"] .v6-dom-goto-input::placeholder {
+  color: var(--v6-dom-ref-muted);
+}
+
+body[data-current-page="orderflow"] .v6-dom-goto-input:focus {
+  border-color: rgba(255,255,255,.22);
+}
+
+body[data-current-page="orderflow"] .v6-dom-glbl.v6-dom-value-mode-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #aab0b5;
+  font: 600 10px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+body[data-current-page="orderflow"] .v6-dom-value-mode {
+  height: 19px;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 0;
+  background: var(--v6-dom-ref-body);
+  color: #d6d9dc;
+  font: 500 10px/17px Inter, ui-sans-serif, system-ui, sans-serif;
+  outline: none;
+}
+
+body[data-current-page="orderflow"] .v6-dom-recenter {
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  margin-left: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #e9ebed;
+  font: 600 13px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+body[data-current-page="orderflow"] .v6-dom-stale-overlay {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 86px;
+  z-index: 8;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 24px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(17,19,21,.94);
+  color: #d6d9dc;
+  font: 600 11px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+  pointer-events: none;
+}
+
+body[data-current-page="orderflow"] .v6-dom-stale-overlay.is-visible {
+  display: flex;
+}
+
+body[data-current-page="orderflow"] .v6-dom-activity-above,
+body[data-current-page="orderflow"] .v6-dom-activity-below {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  background: rgba(17,19,21,.92);
+  border: 1px solid rgba(255,255,255,.10);
+  color: #aab0b5;
+  font: 600 10px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+  pointer-events: none;
+}
+
+body[data-current-page="orderflow"] .v6-dom-activity-above[hidden],
+body[data-current-page="orderflow"] .v6-dom-activity-below[hidden] {
+  display: none;
+}
+
+body[data-current-page="orderflow"] .v6-dom-activity-above {
+  top: 80px;
+}
+
+body[data-current-page="orderflow"] .v6-dom-activity-below {
+  bottom: 48px;
+}
+
+body[data-current-page="orderflow"] .v6-dom-empty {
+  padding: 16px;
+  color: var(--v6-dom-ref-muted);
+  font: 600 12px/1.4 Inter, ui-sans-serif, system-ui, sans-serif;
+}

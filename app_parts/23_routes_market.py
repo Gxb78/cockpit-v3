@@ -10,6 +10,7 @@ import urllib.request
 import json as _json
 import time as _time_mod
 import copy
+import re
 
 BINANCE_BASE_URLS = [
     "https://api.binance.com",
@@ -21,17 +22,18 @@ BINANCE_BASE_URLS = [
 ]
 BINANCE_API = BINANCE_BASE_URLS[0]
 MAX_PER_REQUEST = 1000
-MAX_TOTAL_TRADES = 8000
-_MAX_PAGES = 24
+MAX_TOTAL_TRADES = 100000
+AGGTRADES_MAX_PER_REQUEST = 1000
+_MAX_PAGES = 120
 _AGG_RECENT_WINDOW_MS = 45 * 1000
 
 # === Market Service — klines cache + stale fallback ===
 
-_KLINES_SYMBOL_WHITELIST = frozenset({"BTCUSDT", "ETHUSDT", "SOLUSDT"})
+_KLINES_SYMBOL_RE = re.compile(r"^[A-Z0-9]{2,20}(USDT|USDC|FDUSD|BTC|ETH|BNB)$")
 _KLINES_INTERVAL_WHITELIST = frozenset({
     "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"
 })
-_KLINES_MAX_LIMIT = 5000
+_KLINES_MAX_LIMIT = 100000
 _KLINES_CACHE_TTL = 300  # 5min
 _KLINES_CACHE_MAX_KEYS = 100
 _klines_cache = {}
@@ -206,6 +208,11 @@ def _dedupe_klines(candles):
     return result
 
 
+def _is_supported_kline_symbol(symbol):
+    """Allow present/future spot crypto pairs while rejecting arbitrary input."""
+    return bool(_KLINES_SYMBOL_RE.match(str(symbol or "").upper().strip()))
+
+
 def fetch_klines(symbol, interval, limit, start_time=None, end_time=None, force=False, soft=False):
     """Fetch klines avec cache, stale fallback, pagination dedupee.
 
@@ -216,13 +223,25 @@ def fetch_klines(symbol, interval, limit, start_time=None, end_time=None, force=
     now = _time_mod.time()
 
     # Whitelists
-    if symbol not in _KLINES_SYMBOL_WHITELIST:
-        return {"error": f"Symbole non supporte: {symbol}. Supportes: {', '.join(sorted(_KLINES_SYMBOL_WHITELIST))}"}, 400
+    if not _is_supported_kline_symbol(symbol):
+        return {"error": f"Symbole non supporte: {symbol}. Format attendu: crypto quotee USDT/USDC/FDUSD/BTC/ETH/BNB."}, 400
     if interval not in _KLINES_INTERVAL_WHITELIST:
         return {"error": f"Intervalle non supporte: {interval}"}, 400
 
     # Clamp limit
     limit = max(1, min(limit, _KLINES_MAX_LIMIT))
+
+    # When no startTime is given and more than one page is requested, Binance's
+    # default (no startTime) returns the *most recent* candles, then the
+    # forward-pagination below (current_start = last_open + interval) would
+    # immediately land in the future and return nothing. Anchor the window to
+    # `limit` candles back from now so pagination walks forward through real data.
+    # The anchor is rounded down to a _KLINES_CACHE_TTL bucket so repeated
+    # requests within the cache window produce the same cache_key (otherwise
+    # `now` changes every call and a 50-page fetch never hits the cache).
+    if start_time is None and limit > MAX_PER_REQUEST:
+        bucket_s = (int(now) // _KLINES_CACHE_TTL) * _KLINES_CACHE_TTL
+        start_time = bucket_s * 1000 - limit * _interval_to_ms(interval)
 
     # Cache lookup
     cache_key = _klines_cache_key(symbol, interval, limit, start_time, end_time)
@@ -250,6 +269,11 @@ def fetch_klines(symbol, interval, limit, start_time=None, end_time=None, force=
         batch, err = _fetch_klines_page(path_qs)
         if err:
             upstream_error = err[0].get("error", str(err[0]))
+            # Pagination longue (ex: deep history 50k bougies) : si on a deja
+            # collecte des bougies sur les pages precedentes, on s'arrete la
+            # et on renvoie ce qui a ete recupere plutot que de tout jeter.
+            if all_raw:
+                break
             # Stale fallback: si on a du cache, le retourner avec flag stale
             if cached:
                 resp = copy.deepcopy(cached["response"])
@@ -346,7 +370,7 @@ def market_klines():
     Query params:
       symbol    (str) : paire (defaut BTCUSDT, whitelist)
       interval  (str) : 1m..1M (defaut 1h, whitelist)
-      limit     (int) : nb bougies max (defaut 100, max 1000)
+      limit     (int) : nb bougies max (defaut 100, max 100000)
       startTime (int) : timestamp ms optionnel pour paginer
       endTime   (int) : timestamp ms optionnel (borne stricte)
       force     (int) : bypass cache si 1 (defaut 0)
@@ -379,8 +403,7 @@ def market_klines():
 # Notre format normalisé : {id, time, price, qty, side}
 #   side = "sell" si isBuyerMaker (m=True), "buy" sinon
 
-_SYMBOL_WHITELIST = frozenset({"BTCUSDT", "ETHUSDT", "SOLUSDT"})
-_MAX_TIME_RANGE_MS = 24 * 60 * 60 * 1000  # 24h max par requête
+_MAX_TIME_RANGE_MS = 7 * 24 * 60 * 60 * 1000  # 7j max par requête
 _CACHE_TTL_S = 30  # cache court — les aggTrades sont immutables
 _CACHE_MAX_KEYS = 100
 
@@ -494,7 +517,7 @@ def market_aggtrades():
     """Proxy les aggTrades Binance pour footprint charts, avec pagination backend.
 
     Query params:
-      symbol    (str) : paire (BTCUSDT, ETHUSDT, SOLUSDT)
+      symbol    (str) : paire crypto quotee USDT/USDC/FDUSD/BTC/ETH/BNB
       startTime (int) : timestamp ms debut (optionnel)
       endTime   (int) : timestamp ms fin (optionnel, max 24h apres start)
       limit     (int) : nb trades max (defaut 1000, max {MAX_TOTAL_TRADES})
@@ -503,8 +526,8 @@ def market_aggtrades():
     Retourne un objet avec trades, requested, actual, limits, cache.
     """
     symbol = request.args.get("symbol", "BTCUSDT").upper().strip()
-    if symbol not in _SYMBOL_WHITELIST:
-        return jsonify({"error": f"Symbole non supporte: {symbol}. Supportes: {', '.join(sorted(_SYMBOL_WHITELIST))}"}), 400
+    if not _is_supported_kline_symbol(symbol):
+        return jsonify({"error": f"Symbole non supporte: {symbol}. Format attendu: crypto quotee USDT/USDC/FDUSD/BTC/ETH/BNB."}), 400
 
     # Parser les parametres entiers avec JSON 400 propre
     try:
@@ -549,7 +572,7 @@ def market_aggtrades():
     next_from_id = None
 
     while len(all_trades) < desired and pages_used < _MAX_PAGES:
-        path_qs = f"/api/v3/aggTrades?symbol={symbol}&limit=1000"
+        path_qs = f"/api/v3/aggTrades?symbol={symbol}&limit={AGGTRADES_MAX_PER_REQUEST}"
         if backward_recent:
             window_start = max(0, current_end_time - _AGG_RECENT_WINDOW_MS)
             path_qs += f"&startTime={window_start}&endTime={current_end_time}"
@@ -612,7 +635,7 @@ def market_aggtrades():
             next_from_id = last_id + 1
 
         # Si Batch < 1000, plus de donnees disponibles
-        if len(batch) < 1000 and not backward_recent:
+        if len(batch) < AGGTRADES_MAX_PER_REQUEST and not backward_recent:
             break
 
         if len(all_trades) >= desired:

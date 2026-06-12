@@ -25,7 +25,7 @@
     ],
     tape: [
       { key: 'minQty',       label: 'Min Qty',        min: 0,   max: 500,  step: 1,  type: 'number' },
-      { key: 'maxRows',      label: 'Max Rows',       min: 8,   max: 5000, step: 10, type: 'number' },
+      { key: 'maxRows',      label: 'Max Rows',       min: 8,   max: 100000, step: 100, type: 'number' },
       { key: 'tapeFontSize', label: 'Font Size (px)', min: 8,   max: 20,   step: 1,  type: 'number' }
     ]
   };
@@ -119,7 +119,10 @@
       })(inputs[i]);
     }
 
-    document.body.appendChild(_flyout);
+    // Append inside the orderflow root so the flyout inherits --v6-* tokens
+    // (they're scoped to .v6-orderflow-root, not :root/body).
+    var host = document.querySelector('.v6-orderflow-root') || document.body;
+    host.appendChild(_flyout);
 
     // Position below anchor
     if (anchorEl) {

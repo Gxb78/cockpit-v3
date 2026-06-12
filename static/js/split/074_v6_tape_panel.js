@@ -15,7 +15,7 @@
     trades = Array.isArray(trades) ? trades : [];
     settings = settings || {};
     var minQty = Number(settings.minQty || 0);
-    var maxRows = Math.max(8, Math.min(5000, Number(settings.maxRows || 420)));
+    var maxRows = Math.max(8, Math.min(100000, Number(settings.maxRows || 5000)));
     var rows = [];
     for (var i = 0; i < trades.length && rows.length < maxRows; i++) {
       var trade = trades[i];

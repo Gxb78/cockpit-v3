@@ -47,14 +47,14 @@ class TradePrefillLimitTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout)
 
-    def test_default_prefill_limit_is_500(self):
-        self.assertEqual(self._validate({}), 500)
+    def test_default_prefill_limit_is_100000(self):
+        self.assertEqual(self._validate({}), 100000)
 
     def test_prefill_limit_accepts_valid_value(self):
         self.assertEqual(self._validate({"restTradePrefillLimit": 2000}), 2000)
 
     def test_prefill_limit_is_clamped_and_rounded(self):
-        self.assertEqual(self._validate({"restTradePrefillLimit": 999999}), 5000)
+        self.assertEqual(self._validate({"restTradePrefillLimit": 999999}), 100000)
         self.assertEqual(self._validate({"restTradePrefillLimit": 1}), 50)
         self.assertEqual(self._validate({"restTradePrefillLimit": 123.7}), 124)
 

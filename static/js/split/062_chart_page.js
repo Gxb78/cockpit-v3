@@ -1309,6 +1309,11 @@
 
   // ── FETCH & RENDER ──
 
+  function _chartHistoryLimit(interval) {
+    var map = { '1m': 100000, '3m': 60000, '5m': 60000, '15m': 40000, '30m': 40000, '1h': 20000, '2h': 20000, '4h': 20000, '6h': 12000, '8h': 12000, '12h': 12000, '1d': 5000 };
+    return map[interval] || 20000;
+  }
+
   function _fetchAndRender(keepZoom, _source) {
     if (!candlestickSeries) return;
     if (_isFetching) return;
@@ -1341,8 +1346,7 @@
       try { chart.priceScale('right').applyOptions({ autoScale: false }); } catch(e) {}
     }
 
-    var _chartLimitMap = { '1m': 1000, '3m': 1000, '5m': 1000, '15m': 1000, '30m': 1000, '1h': 1000, '2h': 1000, '4h': 1000, '6h': 1000, '8h': 1000, '12h': 1000, '1d': 1000 };
-    var url = '/api/hyperliquid/klines?market=' + encodeURIComponent(_hyperliquidCoin()) + '&interval=' + currentInterval + '&limit=' + (_chartLimitMap[currentInterval] || 1000);
+    var url = '/api/hyperliquid/klines?market=' + encodeURIComponent(_hyperliquidCoin()) + '&interval=' + currentInterval + '&limit=' + _chartHistoryLimit(currentInterval);
     fetch(url)
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (data) {
@@ -1603,7 +1607,8 @@
             _mainCandles[_mainCandles.length - 1] = latest;
           } else if (latest.time > (last ? last.time : 0)) {
             _mainCandles.push(latest);
-            if (_mainCandles.length > 1000) _mainCandles = _mainCandles.slice(-1000);
+            var maxMainCandles = _chartHistoryLimit(interval);
+            if (_mainCandles.length > maxMainCandles) _mainCandles = _mainCandles.slice(-maxMainCandles);
           }
         }
         lastCandleTime = latest.time * 1000;

@@ -1,0 +1,1279 @@
+/* ============================================================================
+ * 084_v6_exocharts_clean.css — "Exocharts Terminal"
+ *
+ * Single visual system for the Orderflow page. Extracted from the golden master
+ * (terminal-exocharts-photo-perfect-v2.html). No overrides, no competing layers.
+ *
+ * Selector strategy:
+ *   .exo-*  = Exocharts visual classes (this file owns them)
+ *   .v6-*   = functional hooks from existing JS (styled here to match Exocharts)
+ *
+ * All design tokens are scoped to .v6-orderflow-root so nothing leaks.
+ * ========================================================================== */
+
+/* ── Page-level containment ───────────────────────────────────────────────── */
+.page[data-page="orderflow"].active {
+  position: relative;
+  overflow: hidden;
+}
+
+.v6-orderflow-root {
+  /* — Exocharts design tokens (single source of truth) — */
+  --exo-bg:       #090d13;
+  --exo-bg2:      #080c12;
+  --exo-chrome:   #15191d;
+  --exo-chrome2:  #11161a;
+  --exo-panel:    #0a0e14;
+  --exo-panel2:   #0f151b;
+  --exo-surface:  #0d1217;
+  --exo-grid:     #26303a;
+  --exo-line:     #1e2730;
+  --exo-muted:    #7f8b95;
+  --exo-text:     #c8d0d6;
+  --exo-text2:    #a9b3bb;
+  --exo-green:    #48d284;
+  --exo-green2:   #2fb86d;
+  --exo-red:      #d35b66;
+  --exo-red2:     #bd4652;
+  --exo-blue:     #1f4f82;
+  --exo-blue2:    #2b77b5;
+  --exo-yellow:   #d9d241;
+  --exo-orange:   #d7953e;
+  --exo-hairline: rgba(255,255,255,.05);
+  --exo-hairline-strong: rgba(255,255,255,.075);
+  --exo-hairline-soft: rgba(255,255,255,.025);
+
+  /* — geometry — */
+  --exo-row:   15px;
+  --exo-top:   25px;
+  --exo-tab:   24px;
+  --exo-bottom: 24px;
+  --exo-tools: 30px;
+  --exo-dom:   292px;
+
+  /* — typography — */
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+               "Segoe UI", Arial, sans-serif;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--exo-text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+
+  /* — shell chrome — */
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  background: var(--exo-bg);
+  border: 1px solid var(--exo-hairline);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.05);
+}
+
+/* ── Root grid: topbar | workspace | status ────────────────────────────────── */
+.exo-terminal,
+.v6-shell[data-v6-layout="exocharts"] {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: var(--exo-top) 1fr var(--exo-bottom);
+  background: var(--exo-bg);
+  color: var(--exo-text);
+  overflow: hidden;
+}
+
+/* ── Hide v6 skeleton / demo banner in Exocharts mode ─────────────────────── */
+.v6-orderflow-root[data-v6-layout="exocharts"] .v6-initial-skeleton,
+.v6-orderflow-root[data-v6-layout="exocharts"] .v6-demo-banner {
+  display: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * TOPBAR (25px)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+.exo-topbar {
+  height: var(--exo-top);
+  display: flex;
+  align-items: center;
+  background: var(--exo-chrome);
+  border-bottom: 1px solid var(--exo-hairline-strong);
+  color: #cdd3d8;
+  white-space: nowrap;
+  overflow: hidden;
+  line-height: var(--exo-top);
+  /* Frameless desktop: entire topbar is a drag region */
+  -webkit-app-region: drag;
+  --wails-draggable: drag;
+}
+
+.exo-topbar button,
+.exo-topbar select,
+.exo-topbar .exo-page-menu,
+.exo-topbar .exo-clock,
+.exo-topbar .exo-conn-wrap {
+  -webkit-app-region: no-drag;
+  --wails-draggable: no-drag;
+}
+
+.exo-topbar > * {
+  height: 100%;
+  border-right: 1px solid rgba(255,255,255,.055);
+}
+
+/* Elements that should NOT get a right border from the rule above */
+.exo-spacer,
+.exo-window-controls {
+  border-right: 0 !important;
+}
+
+.exo-market {
+  display: inline-flex !important;
+  align-items: center;
+  padding: 0 10px 0 15px;
+  gap: 7px;
+  min-width: 174px;
+  font-weight: 650;
+  color: #d5dde3;
+  font-size: 12px;
+  letter-spacing: .01em;
+}
+
+.exo-market::after {
+  content: '\203A';  /* › */
+  opacity: .9;
+  font-size: 16px;
+  margin-left: 3px;
+  transform: translateY(-1px);
+}
+
+.exo-symbol-select {
+  width: 148px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #d5dde3;
+  font: 650 12px/normal Inter, ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: .01em;
+  text-transform: lowercase;
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+/* Timeframe buttons */
+.exo-tf-btn {
+  height: 100%;
+  min-width: 42px;
+  padding: 0 10px;
+  border: 0;
+  border-right: 1px solid rgba(255,255,255,.055);
+  border-radius: 0;
+  background: transparent;
+  color: #d9dee3;
+  font: 700 11px/normal Inter, ui-sans-serif, system-ui, sans-serif;
+  text-transform: uppercase;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.exo-tf-btn.active {
+  background: #1b2025;
+  color: #fff;
+  box-shadow: inset 0 -2px 0 #2b78b7;
+}
+
+.exo-tf-btn.hidden-tf {
+  display: none;
+}
+
+/* Icon code (command symbol) */
+.exo-top-cmd {
+  width: 38px;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid rgba(255,255,255,.055);
+  color: #eef2f5;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -.08em;
+}
+
+/* Stack icon */
+.exo-top-stack {
+  width: 32px;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid rgba(255,255,255,.055);
+  position: relative;
+}
+
+.exo-top-stack::before,
+.exo-top-stack::after {
+  content: '';
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  height: 6px;
+  border: 1px solid #cfd6dc;
+  transform: skewY(-25deg);
+}
+
+.exo-top-stack::before {
+  top: 8px;
+  background: #d9e0e5;
+}
+
+.exo-top-stack::after {
+  bottom: 8px;
+}
+
+/* Workspace label */
+.exo-top-workspace {
+  min-width: 116px;
+  display: inline-flex !important;
+  align-items: center;
+  padding: 0 10px;
+  border-right: 1px solid rgba(255,255,255,.055);
+  color: #cdd3d8;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* Grid icon */
+.exo-top-grid {
+  width: 38px;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid rgba(255,255,255,.055);
+}
+
+.exo-top-grid::before {
+  content: '';
+  width: 13px;
+  height: 13px;
+  background:
+    linear-gradient(#d4d9dd 0 0) 0 0 / 5px 5px,
+    linear-gradient(#d4d9dd 0 0) 8px 0 / 5px 5px,
+    linear-gradient(#d4d9dd 0 0) 0 8px / 5px 5px,
+    linear-gradient(#d4d9dd 0 0) 8px 8px / 5px 5px;
+  background-repeat: no-repeat;
+}
+
+/* Add Widget */
+.exo-top-widget {
+  display: inline-flex !important;
+  align-items: center;
+  padding: 0 10px;
+  border-right: 1px solid rgba(255,255,255,.055);
+  color: #cdd3d8;
+  cursor: pointer;
+}
+
+/* Camera */
+.exo-top-camera {
+  width: 50px;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid rgba(255,255,255,.055);
+}
+
+.exo-top-camera::before {
+  content: '';
+  width: 15px;
+  height: 11px;
+  border-radius: 2px;
+  background: #dbe1e5;
+}
+
+/* Settings */
+.exo-top-settings {
+  display: inline-flex !important;
+  align-items: center;
+  padding: 0 10px;
+  border-right: 1px solid rgba(255,255,255,.055);
+  color: #cdd3d8;
+  cursor: pointer;
+}
+
+.exo-spacer {
+  flex: 1;
+  border-right: 0 !important;
+}
+
+.exo-clock {
+  display: inline-flex !important;
+  align-items: center;
+  padding: 0 16px;
+  border-right: 0 !important;
+  color: #d0d5da;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+/* Connection controls in topbar */
+.exo-conn-wrap {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-right: 0 !important;
+}
+
+.exo-engine-dot,
+.v6-engine-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  background: #5a626a;
+}
+
+.exo-engine-dot.connected,
+.v6-engine-dot.v6-engine-connected { background: #2ebd75; }
+.exo-engine-dot.connecting,
+.v6-engine-dot.v6-engine-connecting { background: #d9d241; }
+.exo-engine-dot.error,
+.v6-engine-dot.v6-engine-error,
+.v6-engine-dot.v6-engine-disconnected { background: #d85462; }
+
+.exo-conn-icon {
+  font-size: 15px;
+  color: #a9b0b5;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  padding: 0 4px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * WORKSPACE (left tools + chart + DOM)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+.exo-workspace {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: var(--exo-tools) 1fr var(--exo-dom);
+  background: var(--exo-bg2);
+}
+
+/* ── Left tools (drawing toolbar, 30px) ───────────────────────────────────── */
+
+.exo-left-tools {
+  width: var(--exo-tools);
+  background: #11181e;
+  border-right: 1px solid rgba(255,255,255,.055);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+}
+
+.exo-tool {
+  width: 100%;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid rgba(255,255,255,.025);
+  border-radius: 0;
+  background: transparent;
+  color: #b8c2ca;
+  opacity: .9;
+  cursor: pointer;
+}
+
+.exo-tool:first-child {
+  background: #1a2229;
+}
+
+.exo-tool svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.65;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ── Chart area ────────────────────────────────────────────────────────────── */
+
+.exo-chart-pane {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  background: var(--exo-bg2);
+  border-right: 1px solid rgba(137,168,196,.13);
+  overflow: hidden;
+}
+
+.exo-chart-tabs {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: var(--exo-tab);
+  background: #11171d;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+}
+
+.exo-tab-title {
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border-right: 1px solid rgba(255,255,255,.045);
+  color: #c7d0d7;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.exo-tab-close {
+  font-size: 15px;
+  margin-left: 8px;
+  color: #abb4bb;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  line-height: 1;
+}
+
+.exo-chart-stage {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--exo-tab);
+  bottom: 0;
+  overflow: hidden;
+  background: var(--exo-bg2);
+}
+
+.exo-chart-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.v6-chart-canvas {
+  background: var(--exo-bg2);
+}
+
+/* ── DOM panel (right dock, 292px) ─────────────────────────────────────────── */
+
+.exo-dom-panel {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: 24px 20px 22px 1fr;
+  background: #0d1217;
+  border-left: 1px solid rgba(255,255,255,.07);
+  overflow: hidden;
+}
+
+/* Collapsed: only tabs visible */
+.exo-dom-panel.exo-dom-collapsed {
+  grid-template-rows: 24px;
+}
+
+.exo-dom-tabs {
+  height: 24px;
+  background: #151a1f;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  display: flex;
+  align-items: center;
+  padding: 0 9px;
+  gap: 7px;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.exo-dom-toolbar {
+  height: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+  background: #0e1419;
+  color: #d3d8dc;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.exo-dom-grouping {
+  width: 18px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #d3d8dc;
+  font: 600 11px/18px Inter, ui-sans-serif, system-ui, sans-serif;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+}
+
+.exo-dom-gear-btn {
+  font-size: 13px;
+  color: #d3d8dc;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.exo-dom-head {
+  height: 22px;
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+  background: #0f151a;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  color: #9fa9b1;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.exo-dom-body {
+  position: relative;
+  min-height: 0;
+  overflow: hidden auto;
+  background: #0b1015;
+}
+
+/* ── DOM cell overrides (Exocharts visual, keeps v6 structure from 075) ──── */
+
+.exo-dom-body .v6-dom-row {
+  display: flex;
+  min-width: var(--exo-dom);
+}
+
+.exo-dom-body .v6-dom-cell {
+  height: var(--exo-row);
+  line-height: var(--exo-row);
+  padding: 0 4px;
+  overflow: hidden;
+  white-space: nowrap;
+  border-bottom: 1px solid rgba(255,255,255,.014);
+  color: #c8d1d7;
+  text-shadow: 0 1px 0 rgba(0,0,0,.5);
+  font: 500 11px/normal Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Neutral bg for vol/sell/buy/delta */
+.exo-dom-body .v6-dom-cell-vol,
+.exo-dom-body .v6-dom-cell-sell,
+.exo-dom-body .v6-dom-cell-buy,
+.exo-dom-body .v6-dom-cell-delta {
+  background: #0b1015;
+}
+
+/* Price cell — dark center column */
+.exo-dom-body .v6-dom-cell-price {
+  background: #10171d;
+  color: #d9e1e7;
+  font-weight: 700;
+}
+
+/* Bid/Ask depth backgrounds */
+.exo-dom-body .v6-dom-cell-bid {
+  background: rgba(16,43,31,.72);
+}
+
+.exo-dom-body .v6-dom-cell-ask {
+  background: rgba(57,25,29,.82);
+}
+
+/* Bid/Ask depth bars */
+.exo-dom-body .v6-dom-bar {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  min-width: 2px;
+  z-index: 1;
+}
+
+.exo-dom-body .v6-dom-bar.is-bid {
+  right: 0;
+  background: rgba(55,202,121,.48);
+}
+
+.exo-dom-body .v6-dom-bar.is-ask {
+  left: 0;
+  background: rgba(213,84,96,.72);
+}
+
+.exo-dom-body .v6-dom-val {
+  position: relative;
+  z-index: 2;
+}
+
+/* ── Hide non-Exocharts elements from the DOM panel ───────────────────────── */
+.exo-dom-panel .v6-dom-header,
+.exo-dom-panel .v6-dom-footer,
+.exo-dom-panel .v6-dom-sigma-footer,
+.exo-dom-panel .v6-dom-stale-overlay,
+.exo-dom-panel [data-dom-activity-above],
+.exo-dom-panel [data-dom-activity-below],
+.exo-dom-panel .v6-dom-toolbar {
+  display: none !important;
+}
+
+/* Column headers inside .exo-dom-head */
+.exo-dom-head .v6-dom-col,
+.exo-dom-head .v6-dom-draghead {
+  height: 22px;
+  line-height: 22px;
+  padding: 0 4px;
+  background: transparent;
+  border: 0;
+  color: #9fa9b1;
+  font-weight: 700;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+}
+
+.exo-dom-head .v6-dom-dragicon {
+  display: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * STATUS BAR (24px)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+.exo-status {
+  height: var(--exo-bottom);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  overflow: hidden;
+  background: var(--exo-chrome);
+  border-top: 1px solid var(--exo-hairline-strong);
+  color: #aeb6bd;
+  font: 500 10px/normal Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.exo-status .v6-sb-sec {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  padding: 0;
+  color: #aeb6bd;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * HIDDEN: v6 elements not needed in Exocharts layout
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+.exo-terminal .v6-grid,
+.exo-terminal .v6-header,
+.exo-terminal .v6-engine-bar,
+.exo-terminal .v6-panel-head,
+.exo-terminal .v6-header-actions,
+.exo-terminal .v6-header-disclosure-toggle,
+.exo-terminal .v6-header-disclosure-panel,
+.exo-terminal .v6-header-live,
+.exo-terminal .v6-ticket,
+.exo-terminal .v6-badge,
+.exo-terminal .v6-build-meta,
+.exo-terminal .v6-source-select,
+.exo-terminal .v6-seg {
+  display: none !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * ORDERFLOW AS MAIN SHELL — full viewport, hide Journal chrome
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Reset body/html for fullscreen app mode */
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #070b11;
+}
+
+/* When on Orderflow page: hide Journal rail, right panel, AI chat, loading bar */
+body[data-current-page="orderflow"] .skip-link,
+body[data-current-page="orderflow"] #loadingBar,
+body[data-current-page="orderflow"] .rail,
+body[data-current-page="orderflow"] .right-panel,
+body[data-current-page="orderflow"] .side-right,
+body[data-current-page="orderflow"] .ai-chat,
+body[data-current-page="orderflow"] #aiChat,
+body[data-current-page="orderflow"] #aiChatMessages,
+body[data-current-page="orderflow"] .ai-chat-input-area,
+body[data-current-page="orderflow"] .side-right-body {
+  display: none !important;
+}
+
+/* Cockpit container: full viewport, no borders, single column */
+body[data-current-page="orderflow"] .cockpit {
+  position: fixed !important;
+  inset: 0 !important;
+  display: block !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #070b11 !important;
+  overflow: hidden !important;
+  /* Kill any grid-template-columns from Journal/immersive CSS */
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+/* Main area: full */
+body[data-current-page="orderflow"] .main {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  overflow: hidden !important;
+  background: #070b11 !important;
+  grid-column: auto !important;
+  grid-row: auto !important;
+}
+
+/* Hide all pages except Orderflow */
+body[data-current-page="orderflow"] .page {
+  display: none !important;
+}
+
+body[data-current-page="orderflow"] .page[data-page="orderflow"] {
+  display: block !important;
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Orderflow root: full bleed */
+body[data-current-page="orderflow"] #v6-orderflow-root,
+body[data-current-page="orderflow"] .v6-orderflow-root {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Show Journal chrome ONLY when not on Orderflow */
+body:not([data-current-page="orderflow"]) .rail,
+body:not([data-current-page="orderflow"]) .right-panel {
+  /* Reset: these are handled by the main Journal CSS */;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * RESPONSIVE (< 900px)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 900px) {
+  .v6-orderflow-root {
+    --exo-dom: 218px;
+    --exo-row: 13px;
+    --exo-tools: 25px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * INTERACTIVE: Logo, nav popup, resize, settings overlay
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Logo button (top-left) ───────────────────────────────────────────────── */
+.exo-app-logo {
+  width: 42px;
+  height: 100%;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid rgba(255,255,255,.055) !important;
+  border-radius: 0;
+  background: transparent;
+  color: #48d284;
+  cursor: pointer;
+  transition: color .15s, background .15s;
+}
+
+.exo-app-logo:hover {
+  color: #5ce69d;
+  background: rgba(72,210,132,.08);
+}
+
+.exo-app-logo svg {
+  display: block;
+}
+
+/* ── Page navigation dropdown menu ────────────────────────────────────────── */
+.exo-page-menu {
+  position: fixed;
+  min-width: 180px;
+  background: #191e24;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.55);
+  z-index: 1000;
+  padding: 4px;
+  overflow: hidden;
+}
+
+.exo-page-menu[hidden] {
+  display: none;
+}
+
+.exo-page-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #c8d0d6;
+  font: 500 12px/1.4 Inter, ui-sans-serif, system-ui, sans-serif;
+  cursor: pointer;
+  text-align: left;
+  transition: background .1s;
+}
+
+.exo-page-item:hover {
+  background: rgba(255,255,255,.07);
+  color: #fff;
+}
+
+.exo-page-item.exo-active {
+  color: #48d284;
+  background: rgba(72,210,132,.08);
+}
+
+.exo-page-item .exo-page-icon {
+  font-size: 14px;
+  width: 20px;
+  text-align: center;
+}
+
+/* ── Window controls (minimize / maximize / close) ────────────────────────── */
+.exo-window-controls {
+  display: flex;
+  height: 100%;
+  margin-left: 0;
+}
+
+.exo-window-controls button {
+  width: 42px;
+  height: 100%;
+  border: 0;
+  border-left: 1px solid rgba(255,255,255,.04);
+  border-right: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #a9b3bb;
+  font: 12px/normal Arial, sans-serif;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .1s, color .1s;
+}
+
+.exo-window-controls button:hover {
+  background: rgba(255,255,255,.08);
+  color: #eef2f5;
+}
+
+.exo-window-controls [data-window-close]:hover {
+  background: #c42b3b;
+  color: #fff;
+}
+
+/* ── Old logo styles (removed, replaced by .exo-app-logo) ────────────────── */
+.exo-logo {
+  display: none;
+}
+
+/* ── Clickable topbar items ───────────────────────────────────────────────── */
+.exo-top-workspace,
+.exo-top-widget,
+.exo-top-settings,
+.exo-top-camera {
+  cursor: pointer;
+}
+
+.exo-top-workspace:hover,
+.exo-top-widget:hover,
+.exo-top-settings:hover {
+  background: rgba(255,255,255,.03);
+}
+
+/* ── Camera icon fix ──────────────────────────────────────────────────────── */
+.exo-top-camera {
+  position: relative;
+}
+
+.exo-camera-inner {
+  display: block;
+  width: 15px;
+  height: 11px;
+  border-radius: 2px;
+  background: #dbe1e5;
+  position: relative;
+}
+
+.exo-camera-inner::after {
+  content: '';
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #1a1f23;
+  left: 5px;
+  top: 3px;
+}
+
+.exo-camera-inner::before {
+  content: '';
+  position: absolute;
+  width: 5px;
+  height: 2px;
+  background: #dbe1e5;
+  left: 2px;
+  top: -2px;
+  border-radius: 1px 1px 0 0;
+}
+
+.exo-top-camera:hover .exo-camera-inner {
+  background: #e8edf1;
+}
+
+/* ── Resize handle (between chart and DOM) ────────────────────────────────── */
+.exo-resize-handle {
+  width: 4px;
+  min-width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background .15s;
+  position: relative;
+  z-index: 10;
+}
+
+.exo-resize-handle:hover,
+.exo-resize-handle.exo-resizing {
+  background: rgba(100,160,220,.35);
+}
+
+.exo-resize-handle::after {
+  content: '';
+  position: absolute;
+  inset: 20% 0;
+  width: 1px;
+  margin: 0 auto;
+  background: rgba(255,255,255,.06);
+  border-radius: 1px;
+}
+
+.exo-resize-handle:hover::after,
+.exo-resize-handle.exo-resizing::after {
+  background: rgba(255,255,255,.18);
+  width: 2px;
+}
+
+/* ── Old nav popup (removed, replaced by .exo-page-menu) ─────────────────── */
+.exo-nav-popup { display: none !important; }
+
+/* ── Settings overlay (Exocharts mode) ────────────────────────────────────── */
+.v6-orderflow-root .v6-panel-settings {
+  display: none !important;
+}
+
+.v6-orderflow-root.exo-settings-open .v6-panel-settings {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 380px;
+  max-width: 90vw;
+  background: #11161a;
+  border-left: 1px solid rgba(255,255,255,.1);
+  box-shadow: -8px 0 32px rgba(0,0,0,.5);
+  z-index: 500;
+  transform: translateX(0);
+  transition: transform .25s cubic-bezier(.4,0,.2,1);
+  overflow-y: auto;
+  padding: 16px;
+  display: block !important;
+}
+
+.v6-orderflow-root.exo-settings-open::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  z-index: 499;
+}
+
+.exo-settings-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #a9b3bb;
+  font-size: 18px;
+  cursor: pointer;
+  transition: background .1s;
+}
+
+.exo-settings-close:hover {
+  background: rgba(255,255,255,.08);
+  color: #fff;
+}
+
+/* Settings panel content styling for Exocharts overlay */
+.v6-orderflow-root.exo-settings-open .v6-settings {
+  color: #c8d0d6;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: 11px;
+}
+
+.v6-orderflow-root.exo-settings-open .v6-settings label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  color: #a9b3bb;
+}
+
+.v6-orderflow-root.exo-settings-open .v6-settings select,
+.v6-orderflow-root.exo-settings-open .v6-settings input[type="number"],
+.v6-orderflow-root.exo-settings-open .v6-settings input[type="color"] {
+  background: #1a2026;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 3px;
+  color: #d7d9de;
+  font: 11px Inter, ui-sans-serif, system-ui, sans-serif;
+  padding: 2px 6px;
+}
+
+.v6-orderflow-root.exo-settings-open .v6-settings input[type="checkbox"] {
+  accent-color: #48d284;
+}
+
+.exo-settings-section {
+  padding: 12px 0 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #5a6570;
+  border-top: 1px solid rgba(255,255,255,.06);
+  margin-top: 4px;
+}
+
+.exo-settings-section:first-child {
+  border-top: 0;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+/* ── Workspace grid adjustment for resize handle ──────────────────────────── */
+.exo-workspace {
+  grid-template-columns: var(--exo-tools) 1fr 4px var(--exo-dom);
+}
+
+/* ── DOM empty state ──────────────────────────────────────────────────────── */
+.exo-dom-body .v6-dom-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #5a6570;
+  font: 500 11px Inter, ui-sans-serif, system-ui, sans-serif;
+  padding: 20px;
+  text-align: center;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * FLOATING MENU (per-component settings)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+.exo-float-menu {
+  position: absolute;
+  min-width: 180px;
+  max-width: 240px;
+  background: #191e24;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.55);
+  z-index: 600;
+  padding: 6px;
+  font: 11px/1.5 Inter, ui-sans-serif, system-ui, sans-serif;
+  color: #c8d0d6;
+  overflow: hidden;
+}
+
+.exo-float-label {
+  padding: 6px 8px 2px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #7f8b95;
+}
+
+.exo-float-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: rgba(255,255,255,.06);
+}
+
+.exo-float-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 11px;
+  color: #c8d0d6;
+  transition: background .1s;
+}
+
+.exo-float-row:hover {
+  background: rgba(255,255,255,.04);
+}
+
+.exo-float-check {
+  accent-color: #48d284;
+  margin: 0;
+  cursor: pointer;
+}
+
+.exo-float-select {
+  flex: 1;
+  padding: 2px 4px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 3px;
+  background: #11161a;
+  color: #d7d9de;
+  font: 11px Inter, ui-sans-serif, system-ui, sans-serif;
+  outline: none;
+}
+
+.exo-float-select:focus {
+  border-color: rgba(72,210,132,.4);
+}
+
+.exo-float-btn {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  margin-top: 2px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #7f8b95;
+  font: 11px Inter, ui-sans-serif, system-ui, sans-serif;
+  cursor: pointer;
+  text-align: left;
+  transition: background .1s, color .1s;
+}
+
+.exo-float-btn:hover {
+  background: rgba(255,255,255,.06);
+  color: #c8d0d6;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * WIDGET DROPDOWN (indicator list under "Add Widget")
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+.exo-widget-drop {
+  position: absolute;
+  min-width: 170px;
+  background: #13181e;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 4px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.5);
+  z-index: 600;
+  padding: 0;
+  font: 11px/1.6 Inter, ui-sans-serif, system-ui, sans-serif;
+  color: #bcc4cc;
+  overflow: visible;
+}
+
+.exo-widget-head {
+  padding: 5px 10px 2px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #5a6570;
+}
+
+.exo-widget-head + .exo-widget-head {
+  border-top: 1px solid rgba(255,255,255,.05);
+  margin-top: 2px;
+  padding-top: 6px;
+}
+
+.exo-widget-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-size: 11px;
+  color: #bcc4cc;
+  transition: background .08s;
+}
+
+.exo-widget-row:hover {
+  background: rgba(255,255,255,.04);
+}
+
+.exo-widget-row input[type="checkbox"] {
+  accent-color: #48d284;
+  margin: 0;
+  cursor: pointer;
+}

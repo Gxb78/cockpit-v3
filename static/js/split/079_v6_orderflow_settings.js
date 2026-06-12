@@ -20,8 +20,30 @@
   var SETTINGS_SCHEMA_VERSION = 1;
   var _settingsSyncTimer = null;
 
-  var DEFAULT_DOM_COLUMNS = ['bid', 'price', 'ask', 'buy', 'sell', 'delta', 'imb', 'stack', 'abs'];
+  // TradingView-style ladder default: VOL | SELL | BUY | BID | PRICE | ASK | DELTA,
+  // with heatmap-intensity backgrounds on vol/sell/buy/delta. Older builds
+  // shipped narrower defaults (two-sided ladder, 6/9-column "full" set);
+  // LEGACY_DEFAULT_DOM_COLUMN_SETS below lets us recognize a persisted value
+  // that is just one of those old baked-in defaults (never customized by the
+  // user) and migrate it forward.
+  var DEFAULT_DOM_COLUMNS = ['vol', 'sell', 'buy', 'bid', 'price', 'ask', 'delta'];
+  var LEGACY_DEFAULT_DOM_COLUMN_SETS = [
+    ['bid', 'price', 'ask', 'buy', 'sell', 'delta', 'imb', 'stack', 'abs'],
+    ['bid', 'price', 'ask', 'buy', 'sell', 'delta'],
+    ['bid', 'price', 'ask']
+  ];
   var VALID_DOM_KEYS = { vol: 1, sell: 1, buy: 1, bid: 1, price: 1, ask: 1, delta: 1, imb: 1, stack: 1, abs: 1 };
+
+  function isLegacyDefaultDomColumns(cols) {
+    if (!Array.isArray(cols)) return false;
+    return LEGACY_DEFAULT_DOM_COLUMN_SETS.some(function (legacy) {
+      if (legacy.length !== cols.length) return false;
+      for (var i = 0; i < legacy.length; i++) {
+        if (legacy[i] !== cols[i]) return false;
+      }
+      return true;
+    });
+  }
 
   var DEFAULTS = {
     schemaVersion: SETTINGS_SCHEMA_VERSION,
@@ -34,11 +56,11 @@
     showBubbles: false,
     showHeatmap: false,
     showFootprint: false,
-    maxTrades: 5000,
-    heatmapMaxFrames: 3600,
-    footprintMaxCandles: 1200,
-    footprintHistoryLookbackMinutes: 360,
-    domDepth: 1000,
+    maxTrades: 100000,
+    heatmapMaxFrames: 100000,
+    footprintMaxCandles: 100000,
+    footprintHistoryLookbackMinutes: 10080,
+    domDepth: 5000,
     domRangeLevels: 1000,
     domMinNotionalUsd: 100,
     domFollowThresholdTicks: 1,
@@ -49,8 +71,8 @@
     domSoftWallPercentile: 0.85,
     domMajorWallPercentile: 0.95,
     minQty: 0,
-    maxRows: 420,
-    restTradePrefillLimit: 500,
+    maxRows: 5000,
+    restTradePrefillLimit: 100000,
     tapeFontSize: 10,
     deltaIntervalMs: 60000,
     tickSize: 1,
@@ -128,10 +150,10 @@
     }
     out.upColor = typeof raw.upColor === 'string' ? raw.upColor : DEFAULTS.upColor;
     out.downColor = typeof raw.downColor === 'string' ? raw.downColor : DEFAULTS.downColor;
-    out.maxTrades = clampInt(raw.maxTrades, 50, 5000, DEFAULTS.maxTrades);
-    out.heatmapMaxFrames = clampInt(raw.heatmapMaxFrames, 60, 10000, DEFAULTS.heatmapMaxFrames);
-    out.footprintMaxCandles = clampInt(raw.footprintMaxCandles, 60, 5000, DEFAULTS.footprintMaxCandles);
-    out.footprintHistoryLookbackMinutes = clampInt(raw.footprintHistoryLookbackMinutes, 1, 10080, DEFAULTS.footprintHistoryLookbackMinutes);
+    out.maxTrades = clampInt(raw.maxTrades, 50, 100000, DEFAULTS.maxTrades);
+    out.heatmapMaxFrames = clampInt(raw.heatmapMaxFrames, 60, 100000, DEFAULTS.heatmapMaxFrames);
+    out.footprintMaxCandles = clampInt(raw.footprintMaxCandles, 60, 100000, DEFAULTS.footprintMaxCandles);
+    out.footprintHistoryLookbackMinutes = clampInt(raw.footprintHistoryLookbackMinutes, 1, 100000, DEFAULTS.footprintHistoryLookbackMinutes);
     out.domDepth = clampInt(raw.domDepth, 10, 5000, DEFAULTS.domDepth);
     out.domRangeLevels = clampInt(raw.domRangeLevels, 250, 5000, DEFAULTS.domRangeLevels);
     out.domMinNotionalUsd = Math.max(0, Math.min(10000000, Number(raw.domMinNotionalUsd) || DEFAULTS.domMinNotionalUsd));
@@ -143,7 +165,12 @@
     var rawValueMode = raw.domValueMode === 'usd' ? 'notional' : raw.domValueMode;
     out.domValueMode = VALID_VALUE_MODES[rawValueMode] ? rawValueMode : DEFAULTS.domValueMode;
     // Validate domColumns: must be a non-empty array of unique valid keys.
-    if (Array.isArray(raw.domColumns) && raw.domColumns.length > 0) {
+    // If the persisted value is exactly one of the old baked-in defaults
+    // (6 or 9 columns), treat it as "never customized" and migrate to the
+    // new clean BID | PRICE | ASK default rather than preserving it.
+    if (isLegacyDefaultDomColumns(raw.domColumns)) {
+      out.domColumns = DEFAULT_DOM_COLUMNS.slice();
+    } else if (Array.isArray(raw.domColumns) && raw.domColumns.length > 0) {
       var seen = {};
       var validCols = [];
       raw.domColumns.forEach(function (k) {
@@ -173,7 +200,7 @@
     }
     out.minQty = Math.max(0, Number(raw.minQty) || 0);
     out.maxRows = clampInt(raw.maxRows, 8, 5000, DEFAULTS.maxRows);
-    out.restTradePrefillLimit = clampInt(raw.restTradePrefillLimit, 50, 5000, DEFAULTS.restTradePrefillLimit);
+    out.restTradePrefillLimit = clampInt(raw.restTradePrefillLimit, 50, 100000, DEFAULTS.restTradePrefillLimit);
     out.tapeFontSize = clampInt(raw.tapeFontSize, 8, 20, DEFAULTS.tapeFontSize);
     out.deltaIntervalMs = Number(raw.deltaIntervalMs) || DEFAULTS.deltaIntervalMs;
     // Respect the instrument's native tick precision — no 0.01 floor, which

@@ -525,7 +525,8 @@
     ctx.lineTo(gx + 0.5, H);
     ctx.stroke();
 
-    var snap = V6OF.CvdBuckets && V6OF.CvdBuckets.snapshot ? V6OF.CvdBuckets.snapshot() : null;
+    var drawPointLimit = Math.max(1200, Math.min(12000, Math.ceil((W || 900) * 3)));
+    var snap = V6OF.CvdBuckets && V6OF.CvdBuckets.snapshot ? V6OF.CvdBuckets.snapshot(drawPointLimit) : null;
     if (!snap) {
       drawNoData(ctx, plot, gx, H, 'CVD', NaN);
       recordPerf('cvd', perfStart);

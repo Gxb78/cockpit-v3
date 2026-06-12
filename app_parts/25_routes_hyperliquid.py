@@ -17,6 +17,8 @@ HYPERLIQUID_WS_API = "wss://api.hyperliquid.xyz/ws"
 _HL_INTERVAL_WHITELIST = frozenset({
     "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "8h", "12h", "1d", "3d", "1w", "1M"
 })
+_HL_KLINES_MAX_LIMIT = 100000
+_HL_MAX_KLINE_PAGES = 120
 _HL_PRIORITY_MARKETS = ("BTC", "ES", "NASDAQ")
 _HL_CANONICAL_MARKET_ASSETS = {
     "ES": "xyz:SP500",
@@ -533,18 +535,22 @@ def hyperliquid_klines():
         return jsonify({"error": f"Intervalle Hyperliquid non supporte: {interval}"}), 400
 
     try:
-        limit = _hl_parse_int("limit", 1000, 1, 5000)
+        limit = _hl_parse_int("limit", 1000, 1, _HL_KLINES_MAX_LIMIT)
         start_time = _hl_parse_int("startTime")
         end_time = _hl_parse_int("endTime")
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
     if end_time is None:
-        end_time = int(_hl_time.time() * 1000)
+        # Round down to a "candles" TTL bucket so repeated requests within the
+        # cache window reuse the same per-page cache keys (otherwise `now`
+        # changes every call and a multi-page fetch never hits the cache).
+        ttl = _HL_TTLS["candles"]
+        end_time = (int(_hl_time.time()) // ttl) * ttl * 1000
+    interval_ms = _interval_to_ms(interval)
     if start_time is None:
         # Large enough default for history views; the exchange still enforces its own limits.
-        minutes = {"1m": 1, "3m": 3, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "2h": 120, "4h": 240, "8h": 480, "12h": 720, "1d": 1440, "3d": 4320, "1w": 10080, "1M": 43200}[interval]
-        start_time = end_time - (limit * minutes * 60_000)
+        start_time = end_time - (limit * interval_ms)
     if start_time >= end_time:
         return jsonify({"error": "startTime doit etre inferieur a endTime"}), 400
 
@@ -554,16 +560,46 @@ def hyperliquid_klines():
         return jsonify(err[0]), err[1]
     coin = resolved["coin"]
 
-    cache_key = f"hl:candles:{coin}:{interval}:{limit}:{start_time}:{end_time}"
-    raw, err = _hl_info_cached({
-        "type": "candleSnapshot",
-        "req": {"coin": coin, "interval": interval, "startTime": start_time, "endTime": end_time},
-    }, cache_key, _HL_TTLS["candles"], force=force)
-    if err:
-        return jsonify(err[0]), err[1]
+    # Hyperliquid's candleSnapshot caps the number of candles returned per
+    # request. For limit > that cap, walk forward in successive windows
+    # (advancing startTime past the last candle received) until `limit`
+    # candles are collected or the requested range is exhausted.
+    candles_by_open = {}
+    current_start = start_time
+    last_err = None
+    for _page in range(_HL_MAX_KLINE_PAGES):
+        if current_start >= end_time or len(candles_by_open) >= limit:
+            break
+        cache_key = f"hl:candles:{coin}:{interval}:{current_start}:{end_time}"
+        raw, err = _hl_info_cached({
+            "type": "candleSnapshot",
+            "req": {"coin": coin, "interval": interval, "startTime": current_start, "endTime": end_time},
+        }, cache_key, _HL_TTLS["candles"], force=force)
+        if err:
+            last_err = err
+            break
 
-    candles = [_hl_normalize_candle(c) for c in (raw or []) if isinstance(c, dict)]
-    candles.sort(key=lambda c: c["openTime"])
+        batch = [_hl_normalize_candle(c) for c in (raw or []) if isinstance(c, dict)]
+        if not batch:
+            break
+
+        new_count = 0
+        for c in batch:
+            if c["openTime"] not in candles_by_open:
+                candles_by_open[c["openTime"]] = c
+                new_count += 1
+        if new_count == 0:
+            break
+
+        next_start = batch[-1]["openTime"] + interval_ms
+        if next_start <= current_start:
+            break
+        current_start = next_start
+
+    if not candles_by_open and last_err:
+        return jsonify(last_err[0]), last_err[1]
+
+    candles = sorted(candles_by_open.values(), key=lambda c: c["openTime"])
     if len(candles) > limit:
         candles = candles[-limit:]
     return jsonify({

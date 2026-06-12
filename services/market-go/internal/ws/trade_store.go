@@ -18,7 +18,10 @@ import (
 	"cockpit-v6-market-go/internal/storage"
 )
 
-const maxLiveTrades = 50000
+const (
+	maxLiveTrades                 = 100000
+	binanceAggTradesMaxPerRequest = 1000
+)
 
 // tradeStore owns the in-memory live trade buffer plus its file-cache and SQLite
 // persistence, and the recent-trade backfill from the active exchange's REST API.
@@ -218,7 +221,7 @@ type binanceAggTrade struct {
 }
 
 func (t *tradeStore) fetchBinanceRecentTrades(ctx context.Context, symbol string) ([]marketdata.Trade, error) {
-	url := fmt.Sprintf("%s/api/v3/aggTrades?symbol=%s&limit=1000", t.cfg.BinanceRESTURL, symbol)
+	url := fmt.Sprintf("%s/api/v3/aggTrades?symbol=%s&limit=%d", t.cfg.BinanceRESTURL, symbol, binanceAggTradesMaxPerRequest)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err

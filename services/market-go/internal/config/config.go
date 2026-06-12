@@ -7,65 +7,65 @@ import (
 )
 
 const (
-	DefaultHost             = "127.0.0.1"
-	DefaultPort             = 8765
-	DefaultVersion          = "0.6.0-phase6"
-	ExchangeMock            = "mock"
-	ExchangeHyperliquid     = "hyperliquid"
-	ExchangeBinance         = "binance"
-	DefaultHyperliquidWSURL   = "wss://api.hyperliquid.xyz/ws"
-	DefaultHyperliquidHTTPURL = "https://api.hyperliquid.xyz/info"
-	DefaultBinanceWSURL       = "wss://stream.binance.com:9443/stream"
-	DefaultBinanceRESTURL     = "https://api.binance.com"
+	DefaultHost                  = "127.0.0.1"
+	DefaultPort                  = 8765
+	DefaultVersion               = "0.6.0-phase6"
+	ExchangeMock                 = "mock"
+	ExchangeHyperliquid          = "hyperliquid"
+	ExchangeBinance              = "binance"
+	DefaultHyperliquidWSURL      = "wss://api.hyperliquid.xyz/ws"
+	DefaultHyperliquidHTTPURL    = "https://api.hyperliquid.xyz/info"
+	DefaultBinanceWSURL          = "wss://stream.binance.com:9443/stream"
+	DefaultBinanceRESTURL        = "https://api.binance.com"
 	DefaultBinanceFuturesWSURL   = "wss://fstream.binance.com/stream"
 	DefaultBinanceFuturesRESTURL = "https://fapi.binance.com"
-	BinanceMarketSpot         = "spot"
-	BinanceMarketFutures      = "futures"
-	SessionResetUTCDay        = "utc_day"
+	BinanceMarketSpot            = "spot"
+	BinanceMarketFutures         = "futures"
+	SessionResetUTCDay           = "utc_day"
 )
 
 type Config struct {
-	Host                string
-	Port                int
-	Symbols             []string
-	MockMode            bool
-	Version             string
-	Exchange            string
-	HyperliquidWSURL    string
-	DeltaIntervals      []int64
-	SessionReset        string
-	VWAPEnabled         bool
-	VWAPSession         string
-	VWAPEmitMs          int64
-	BookEnabled         bool
-	BookDepth           int
-	BookEmitMs          int64
-	HeatmapEnabled      bool
-	HeatmapEmitMs       int64
-	HeatmapDepth        int
-	HeatmapTickSize     float64
-	HeatmapMaxLevels    int
-	FootprintEnabled    bool
-	FootprintIntervalMs int64
-	FootprintTickSize   float64
-	FootprintEmitMs     int64
-	FootprintMaxLevels  int
-	HyperliquidHTTPURL  string
-	BinanceWSURL        string
-	BinanceRESTURL      string
-	BinanceMarket       string
-	BinanceSnapshotLimit int
-	BackfillEnabled     bool
-	BackfillInterval    string
-	BackfillIntervals   []string
-	BackfillBars        int
-	BackfillDays        int   // how many days of 1m to backfill (default 30)
-	BackfillLookbackMin int
-	KlineRetainDays     int   // max days of klines to keep in cache (default = BackfillDays)
-	TradeRetainDays     int   // max days of trades to keep in cache (default 365)
-	Footprint1mRetainDays  int   // max days of 1m footprints (default 180)
-	FootprintTFRetainDays  int   // max days of TF footprints (default 1825)
-	DataDir             string // directory for persistent caches (klines, etc.)
+	Host                  string
+	Port                  int
+	Symbols               []string
+	MockMode              bool
+	Version               string
+	Exchange              string
+	HyperliquidWSURL      string
+	DeltaIntervals        []int64
+	SessionReset          string
+	VWAPEnabled           bool
+	VWAPSession           string
+	VWAPEmitMs            int64
+	BookEnabled           bool
+	BookDepth             int
+	BookEmitMs            int64
+	HeatmapEnabled        bool
+	HeatmapEmitMs         int64
+	HeatmapDepth          int
+	HeatmapTickSize       float64
+	HeatmapMaxLevels      int
+	FootprintEnabled      bool
+	FootprintIntervalMs   int64
+	FootprintTickSize     float64
+	FootprintEmitMs       int64
+	FootprintMaxLevels    int
+	HyperliquidHTTPURL    string
+	BinanceWSURL          string
+	BinanceRESTURL        string
+	BinanceMarket         string
+	BinanceSnapshotLimit  int
+	BackfillEnabled       bool
+	BackfillInterval      string
+	BackfillIntervals     []string
+	BackfillBars          int
+	BackfillDays          int // how many days of 1m to backfill (default 30)
+	BackfillLookbackMin   int
+	KlineRetainDays       int    // max days of klines to keep in cache (default = BackfillDays)
+	TradeRetainDays       int    // max days of trades to keep in cache (default 365)
+	Footprint1mRetainDays int    // max days of 1m footprints (default 180)
+	FootprintTFRetainDays int    // max days of TF footprints (default 1825)
+	DataDir               string // directory for persistent caches (klines, etc.)
 	// AllowedOrigins is the CORS allowlist for the HTTP API. Empty (default)
 	// means "loopback origins only" (localhost/127.0.0.1, any port). A single
 	// "*" entry restores the permissive wildcard for trusted dev setups.
@@ -74,46 +74,46 @@ type Config struct {
 
 func Default() Config {
 	return Config{
-		Host:                DefaultHost,
-		Port:                DefaultPort,
-		Symbols:             []string{"BTCUSDT"},
-		MockMode:            true,
-		Version:             DefaultVersion,
-		Exchange:            ExchangeMock,
-		HyperliquidWSURL:    DefaultHyperliquidWSURL,
-		DeltaIntervals:      []int64{1000, 5000, 60000},
-		SessionReset:        SessionResetUTCDay,
-		VWAPEnabled:         true,
-		VWAPSession:         SessionResetUTCDay,
-		VWAPEmitMs:          250,
-		BookEnabled:         false,
-		BookDepth:           5000,
-		BookEmitMs:          100,
-		HeatmapEnabled:      false,
-		HeatmapEmitMs:       250,
-		HeatmapDepth:        1000,
-		HeatmapTickSize:     1,
-		HeatmapMaxLevels:    1000,
-		FootprintEnabled:    false,
-		FootprintIntervalMs: 60000,
-		FootprintTickSize:   1,
-		FootprintEmitMs:     250,
-		FootprintMaxLevels:  1000,
-		HyperliquidHTTPURL:  DefaultHyperliquidHTTPURL,
-		BinanceWSURL:        DefaultBinanceWSURL,
-		BinanceRESTURL:      DefaultBinanceRESTURL,
-		BinanceMarket:       BinanceMarketSpot,
-		BinanceSnapshotLimit: 0, // 0 -> client clamps to venue max (spot 5000 / futures 1000)
-		BackfillEnabled:     true,
-		BackfillInterval:    "1m",
-		BackfillIntervals:   []string{"1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "8h", "12h", "1d"},
-		BackfillBars:        10000,
-		BackfillDays:        30,
-		KlineRetainDays:     30,
-		TradeRetainDays:     365,
+		Host:                  DefaultHost,
+		Port:                  DefaultPort,
+		Symbols:               []string{"BTCUSDT"},
+		MockMode:              true,
+		Version:               DefaultVersion,
+		Exchange:              ExchangeMock,
+		HyperliquidWSURL:      DefaultHyperliquidWSURL,
+		DeltaIntervals:        []int64{1000, 5000, 60000},
+		SessionReset:          SessionResetUTCDay,
+		VWAPEnabled:           true,
+		VWAPSession:           SessionResetUTCDay,
+		VWAPEmitMs:            250,
+		BookEnabled:           false,
+		BookDepth:             5000,
+		BookEmitMs:            100,
+		HeatmapEnabled:        false,
+		HeatmapEmitMs:         250,
+		HeatmapDepth:          1000,
+		HeatmapTickSize:       1,
+		HeatmapMaxLevels:      1000,
+		FootprintEnabled:      false,
+		FootprintIntervalMs:   60000,
+		FootprintTickSize:     1,
+		FootprintEmitMs:       250,
+		FootprintMaxLevels:    1000,
+		HyperliquidHTTPURL:    DefaultHyperliquidHTTPURL,
+		BinanceWSURL:          DefaultBinanceWSURL,
+		BinanceRESTURL:        DefaultBinanceRESTURL,
+		BinanceMarket:         BinanceMarketSpot,
+		BinanceSnapshotLimit:  0, // 0 -> client clamps to venue max (spot 5000 / futures 1000)
+		BackfillEnabled:       true,
+		BackfillInterval:      "1m",
+		BackfillIntervals:     []string{"1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "8h", "12h", "1d"},
+		BackfillBars:          100000,
+		BackfillDays:          70,
+		KlineRetainDays:       70,
+		TradeRetainDays:       365,
 		Footprint1mRetainDays: 180,
 		FootprintTFRetainDays: 1825,
-		BackfillLookbackMin: 10080,
+		BackfillLookbackMin:   10080,
 	}
 }
 

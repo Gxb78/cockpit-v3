@@ -410,6 +410,65 @@
   box-shadow: inset 0 -2px 0 var(--v6-accent);
 }
 .v6-rbody { flex: 1 1 auto; min-height: 0; position: relative; display: flex; }
+
+.v6-rtab-add-wrap,
+.v6-ltab-add-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+.v6-rtab-add,
+.v6-ltab-add {
+  flex: 0 0 28px;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--v6-text-mute);
+}
+.v6-rtab-add:hover,
+.v6-ltab-add:hover,
+.v6-rtab-add.is-active,
+.v6-ltab-add.is-active {
+  color: var(--v6-accent);
+  background: var(--v6-accent-soft);
+}
+.v6-tab-add-popover[hidden] {
+  display: none;
+}
+.v6-tab-add-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 120px;
+  padding: 4px;
+  background: var(--v6-surface-2);
+  border: 1px solid var(--v6-hairline-strong);
+  border-radius: var(--v6-r-sm);
+  box-shadow: var(--v6-shadow);
+}
+.v6-ltab-add-wrap .v6-tab-add-popover {
+  right: auto;
+  left: 0;
+}
+.v6-tab-add-item {
+  appearance: none;
+  border: none;
+  border-radius: var(--v6-r-xs);
+  background: transparent;
+  color: var(--v6-text-dim);
+  font: 700 10px/1 var(--v6-font);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: color var(--v6-fast) var(--v6-ease), background var(--v6-fast) var(--v6-ease);
+}
+.v6-tab-add-item:hover {
+  color: var(--v6-text);
+  background: rgba(255, 255, 255, 0.04);
+}
 /* Only the active tab's panel is shown; it fills the column. */
 .v6-rbody > .v6-panel {
   display: none;
@@ -425,6 +484,7 @@
 .v6-rbody.show-dom .v6-panel-dom,
 .v6-rbody.show-tape .v6-panel-tape,
 .v6-rbody.show-info .v6-panel-info,
+.v6-rbody.show-orderbook .v6-panel-orderbook,
 .v6-rbody.show-indicators .v6-panel-indicators,
 .v6-rbody.show-cvd .v6-panel-cvd,
 .v6-rbody.show-vwap .v6-panel-vwap,
@@ -1254,12 +1314,6 @@ body[data-current-page="orderflow"] .v6-rbody.show-cvd .v6-panel-cvd {
   display: none !important;
 }
 
-body[data-current-page="orderflow"] .v6-dom-cols,
-body[data-current-page="orderflow"] .v6-dom-row {
-  display: grid;
-  grid-template-columns: minmax(72px, 1fr) 76px minmax(72px, 1fr) 54px 54px 54px;
-}
-
 body[data-current-page="orderflow"] .v6-dom-table-container {
   display: flex;
   flex-direction: column;
@@ -1270,226 +1324,8 @@ body[data-current-page="orderflow"] [data-v6-dom-footer] {
   display: none !important;
 }
 
-body[data-current-page="orderflow"] .v6-dom-col,
-body[data-current-page="orderflow"] .v6-dom-cell {
-  width: auto;
-}
-
-body[data-current-page="orderflow"] .v6-dom-header {
-  min-height: 40px;
-  height: auto;
-  gap: 6px;
-  padding: 4px 7px;
-  flex-wrap: wrap;
-}
-
-body[data-current-page="orderflow"] .v6-dom-hleft,
-body[data-current-page="orderflow"] .v6-dom-hright {
-  gap: 5px;
-  min-width: 0;
-}
-
-body[data-current-page="orderflow"] .v6-dom-source {
-  min-width: 104px;
-}
-
-body[data-current-page="orderflow"] .v6-dom-source strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 130px;
-}
-
-body[data-current-page="orderflow"] .v6-dom-cols {
-  height: 20px;
-  background: var(--v6-bg-2);
-  border-top: 1px solid var(--v6-hairline);
-  border-bottom: 1px solid var(--v6-hairline-strong);
-}
-
-body[data-current-page="orderflow"] .v6-dom-col {
-  color: var(--v6-text-dim);
-  font-size: 9px;
-  letter-spacing: 0.05em;
-}
-
-body[data-current-page="orderflow"] .v6-dom-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  background: var(--v6-bg);
-  scroll-padding-top: 45%;
-  scroll-padding-bottom: 45%;
-}
-
-body[data-current-page="orderflow"] .v6-dom-row {
-  min-height: 20px;
-  height: 20px;
-  background: var(--v6-bg);
-  border-bottom: 1px solid var(--v6-hairline);
-  transition: background var(--v6-fast) var(--v6-ease);
-}
-
-body[data-current-page="orderflow"] .v6-dom-row:hover {
-  background: var(--v6-surface);
-}
-
-body[data-current-page="orderflow"] .v6-dom-cell {
-  min-width: 0;
-  padding: 0 5px;
-  border-right: 1px solid var(--v6-hairline);
-  font-size: 11px;
-  line-height: 20px;
-  font-weight: 800;
-}
-
-body[data-current-page="orderflow"] .v6-dom-cell-price {
-  justify-content: center;
-  color: var(--v6-text);
-  font-weight: 900;
-  background: var(--v6-bg-2);
-}
-
-body[data-current-page="orderflow"] .v6-dom-bar.is-bid {
-  background: rgba(8, 153, 129, 0.18);
-}
-
-body[data-current-page="orderflow"] .v6-dom-bar.is-ask {
-  background: rgba(242, 54, 69, 0.18);
-}
-
-body[data-current-page="orderflow"] .v6-dom-row.is-mid {
-  background: var(--v6-accent-soft) !important;
-  box-shadow: inset 0 1px 0 var(--v6-accent-line), inset 0 -1px 0 var(--v6-accent-line);
-}
-
-body[data-current-page="orderflow"] .v6-dom-row.is-live {
-  position: relative;
-  background: rgba(112, 160, 128, 0.38) !important;
-  box-shadow: inset 0 1px 0 rgba(205, 236, 214, 0.24), inset 0 -1px 0 rgba(205, 236, 214, 0.22);
-}
-
-body[data-current-page="orderflow"] .v6-dom-row.is-live::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: #8fe2a5;
-}
-
-body[data-current-page="orderflow"] .v6-dom-row.is-live .v6-dom-cell-price {
-  color: #f5fff7;
-  background: rgba(120, 180, 140, 0.22);
-  font-weight: 900;
-}
-
-body[data-current-page="orderflow"] .v6-dom-marker {
-  margin-right: 4px;
-  color: #f5fff7;
-  font-weight: 900;
-}
-
-body[data-current-page="orderflow"] .v6-dom-live-pill {
-  margin-left: 5px;
-  padding: 1px 4px;
-  border-radius: 3px;
-  background: #8fd69e;
-  color: #10170f;
-  font: 900 8px/1 var(--v6-font);
-  letter-spacing: 0.03em;
-}
-
-body[data-current-page="orderflow"] .v6-dom-row.is-best-bid .v6-dom-cell-price,
-body[data-current-page="orderflow"] .v6-dom-row.is-best-ask .v6-dom-cell-price {
-  color: #f2f5ff;
-}
-
-body[data-current-page="orderflow"] .v6-dom-row.is-wall-bid .v6-dom-cell-bid,
-body[data-current-page="orderflow"] .v6-dom-row.is-wall-ask .v6-dom-cell-ask {
-  color: #f4fff8;
-  font-weight: 800;
-}
-
-body[data-current-page="orderflow"] .v6-dom-row.is-wall-bid .v6-dom-bar.is-bid {
-  background: linear-gradient(90deg, transparent, rgba(8, 153, 129, 0.42));
-  border-right: 2px solid var(--v6-buy);
-}
-
-body[data-current-page="orderflow"] .v6-dom-row.is-wall-ask .v6-dom-bar.is-ask {
-  background: linear-gradient(90deg, rgba(242, 54, 69, 0.42), transparent);
-  border-left: 2px solid var(--v6-sell);
-}
-
-body[data-current-page="orderflow"] .v6-dom-row.is-wall-8 .v6-dom-cell-price {
-  color: #fff4bc;
-}
-
-body[data-current-page="orderflow"] .v6-dom-wall-badge {
-  margin-left: 4px;
-  padding: 1px 3px;
-  border-radius: 3px;
-  background: rgba(230, 196, 90, 0.12);
-  color: #e9c760;
-  font: 800 8px/1 var(--v6-font);
-  letter-spacing: 0.02em;
-  vertical-align: middle;
-}
-
-body[data-current-page="orderflow"] .v6-dom-footer {
-  gap: 5px;
-  padding: 5px 7px;
-  background: #171925;
-}
-
-body[data-current-page="orderflow"] .v6-dom-glbl {
-  gap: 4px;
-}
-
-body[data-current-page="orderflow"] .v6-dom-glbl select,
-body[data-current-page="orderflow"] .v6-dom-walls-toggle,
-body[data-current-page="orderflow"] .v6-dom-mode-toggle,
-body[data-current-page="orderflow"] .v6-dom-recenter {
-  min-height: 22px;
-  border: 1px solid rgba(126, 145, 160, 0.18);
-  border-radius: 4px;
-  background: #202231;
-  color: #d7deef;
-  font: 800 10px/1 var(--v6-font);
-}
-
-body[data-current-page="orderflow"] .v6-dom-recenter {
-  min-width: 72px;
-  padding: 0 8px;
-  white-space: nowrap;
-}
-
-body[data-current-page="orderflow"] .v6-dom-walls-toggle {
-  width: 26px;
-  padding: 0;
-  cursor: pointer;
-}
-
-body[data-current-page="orderflow"] .v6-dom-walls-toggle.is-active {
-  border-color: rgba(230, 196, 90, 0.45);
-  background: rgba(230, 196, 90, 0.14);
-  color: #f1d27b;
-}
-
-body[data-current-page="orderflow"] .v6-dom-mode-toggle {
-  width: 26px;
-  padding: 0;
-  cursor: pointer;
-  font-weight: 700;
-}
-
-body[data-current-page="orderflow"] .v6-dom-mode-toggle[data-dom-mode="usd"] {
-  border-color: rgba(76, 175, 80, 0.45);
-  background: rgba(76, 175, 80, 0.14);
-  color: #81c784;
-}
+/* DOM ladder header/cols/rows/cells/bars/walls/live/footer/controls:
+   fully consolidated and re-themed in 082_v6_dom_clean.css (loads last). */
 
 @media (max-width: 1180px) {
   .v6-replay-status {
@@ -1549,53 +1385,6 @@ body[data-current-page="orderflow"] .v6-cvd-collapse:hover {
 
 body[data-current-page="orderflow"] .v6-cvd-canvas {
   background: transparent;
-}
-
-body[data-current-page="orderflow"] .v6-dom-cols,
-body[data-current-page="orderflow"] .v6-dom-row {
-  grid-template-columns: minmax(74px, 1fr) 76px minmax(74px, 1fr) 58px 58px 58px;
-}
-
-body[data-current-page="orderflow"] .v6-dom-cell {
-  padding: 0 4px;
-}
-
-body[data-current-page="orderflow"] .v6-dom-val {
-  color: #dce7ff;
-  font-weight: 900;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
-}
-
-body[data-current-page="orderflow"] .has-bid .v6-dom-cell-bid .v6-dom-val {
-  color: #e2ffe9;
-}
-
-body[data-current-page="orderflow"] .has-ask .v6-dom-cell-ask .v6-dom-val {
-  color: #ffe1ee;
-}
-
-body[data-current-page="orderflow"] .v6-dom-cell-buy {
-  color: #bdf7cf;
-}
-
-body[data-current-page="orderflow"] .v6-dom-cell-sell {
-  color: #ffd3e4;
-}
-
-body[data-current-page="orderflow"] .v6-dom-cell-delta {
-  color: #e3e9f6;
-}
-
-body[data-current-page="orderflow"] .v6-dom-bar {
-  min-width: 2px;
-}
-
-body[data-current-page="orderflow"] .v6-dom-bar.is-bid {
-  background: linear-gradient(90deg, transparent, rgba(8, 153, 129, 0.18));
-}
-
-body[data-current-page="orderflow"] .v6-dom-bar.is-ask {
-  background: linear-gradient(90deg, rgba(242, 54, 69, 0.18), transparent);
 }
 
 /* Fixed DOM ladder: only the ladder body scrolls; header/footer and panel size stay stable. */
@@ -1712,90 +1501,13 @@ body[data-current-page="orderflow"] .v6-right-col {
   width: 430px;
 }
 
-body[data-current-page="orderflow"] .v6-dom-stat-mid {
-  padding: 3px 6px;
-  border: 1px solid rgba(34, 197, 94, 0.42);
-  border-radius: 4px;
-  background: rgba(20, 83, 45, 0.46);
-  box-shadow: inset 0 0 0 1px rgba(187, 247, 208, 0.08);
-}
-
-body[data-current-page="orderflow"] .v6-dom-stat-mid em {
-  color: #bbf7d0;
-}
-
-body[data-current-page="orderflow"] .v6-dom-stat-mid strong,
-body[data-current-page="orderflow"] .v6-dom-stat-mid strong.is-mid {
-  display: inline-block;
-  min-width: 68px;
-  color: #dcfce7;
-  font-size: 14px;
-  font-weight: 950;
-  line-height: 1;
-  text-align: right;
-  text-shadow: 0 0 10px rgba(34, 197, 94, 0.55);
-}
-
-body[data-current-page="orderflow"] .v6-dom-cols,
-body[data-current-page="orderflow"] .v6-dom-row {
-  grid-template-columns: minmax(86px, 1fr) 84px minmax(86px, 1fr) 64px 64px 64px;
-}
-
-/* High-contrast live price row. */
-body[data-current-page="orderflow"] .v6-dom-row.is-live {
-  background: rgba(19, 56, 37, 0.92) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(134, 239, 172, 0.80),
-    inset 0 -1px 0 rgba(134, 239, 172, 0.70),
-    inset 0 0 0 1px rgba(34, 197, 94, 0.45);
-}
-
-body[data-current-page="orderflow"] .v6-dom-row.is-live::before {
-  width: 5px;
-  background: #22c55e;
-  box-shadow: 0 0 10px rgba(34, 197, 94, 0.75);
-}
-
-body[data-current-page="orderflow"] .v6-dom-row.is-live .v6-dom-cell-price {
-  position: relative;
-  justify-content: flex-start;
-  padding-left: 8px;
-  padding-right: 28px;
-  background: #d9ffe7 !important;
-  color: #03140a !important;
-  border-left: 1px solid rgba(34, 197, 94, 0.75);
-  border-right: 1px solid rgba(34, 197, 94, 0.75);
-  font-size: 13px;
-  font-weight: 950;
-  text-shadow: none;
-}
-
-body[data-current-page="orderflow"] .v6-dom-row.is-live .v6-dom-marker,
-body[data-current-page="orderflow"] .v6-dom-row.is-live .v6-dom-live-pill {
-  display: none;
-}
-
-body[data-current-page="orderflow"] .v6-dom-row.is-live .v6-dom-cell-price::after {
-  content: "LIVE";
-  position: absolute;
-  right: 3px;
-  top: 3px;
-  padding: 1px 2px;
-  border-radius: 2px;
-  background: #064e3b;
-  color: #dcfce7;
-  font: 950 6px/1 var(--v6-font);
-}
+/* .v6-dom-row.is-live and .v6-dom-stat-mid: re-themed (or removed) in
+   082_v6_dom_clean.css, which loads last. */
 
 @media (max-width: 1180px) {
   body[data-current-page="orderflow"] .v6-right-col {
     flex-basis: 400px;
     width: 400px;
-  }
-
-  body[data-current-page="orderflow"] .v6-dom-cols,
-  body[data-current-page="orderflow"] .v6-dom-row {
-    grid-template-columns: minmax(76px, 1fr) 78px minmax(76px, 1fr) 58px 58px 58px;
   }
 }
 
@@ -1966,6 +1678,7 @@ body[data-current-page="orderflow"] .v6-dom-row.is-live .v6-dom-cell-price::afte
 .v6-lbody.show-dom .v6-panel-dom,
 .v6-lbody.show-tape .v6-panel-tape,
 .v6-lbody.show-info .v6-panel-info,
+.v6-lbody.show-orderbook .v6-panel-orderbook,
 .v6-lbody.show-indicators .v6-panel-indicators,
 .v6-lbody.show-cvd .v6-panel-cvd,
 .v6-lbody.show-vwap .v6-panel-vwap,

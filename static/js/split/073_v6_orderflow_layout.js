@@ -80,8 +80,36 @@
   function restTradePrefillLimit(settings) {
     settings = settings || {};
     var n = Math.round(Number(settings.restTradePrefillLimit));
-    if (!Number.isFinite(n)) n = 500;
-    return Math.max(50, Math.min(5000, n));
+    if (!Number.isFinite(n)) n = 100000;
+    return Math.max(50, Math.min(100000, n));
+  }
+
+  function restKlinePrefillLimit(tf) {
+    var map = { '1m': 100000, '3m': 60000, '5m': 60000, '15m': 40000, '30m': 40000, '1h': 20000, '2h': 20000, '4h': 20000, '6h': 12000, '8h': 12000, '12h': 12000, '1d': 5000 };
+    return map[tf] || 20000;
+  }
+
+  function tailForRender(list, limit) {
+    list = Array.isArray(list) ? list : [];
+    limit = Math.max(1, Math.floor(Number(limit) || 1));
+    return list.length > limit ? list.slice(list.length - limit) : list;
+  }
+
+  function chartRenderWindow(tf) {
+    var map = { '1m': 18000, '3m': 14000, '5m': 12000, '15m': 9000, '30m': 8000 };
+    return map[String(tf || '1m')] || 7000;
+  }
+
+  function makeChartRenderState(state) {
+    state = state || {};
+    var tf = state.timeframe || '1m';
+    var candleLimit = chartRenderWindow(tf);
+    return Object.assign({}, state, {
+      chartCandles: tailForRender(state.chartCandles, candleLimit),
+      trades: tailForRender(state.trades, 8000),
+      heatmapFrames: tailForRender(state.heatmapFrames, 9000),
+      footprintCandles: tailForRender(state.footprintCandles, candleLimit)
+    });
   }
 
   function uiBuildMetaLabel() {
@@ -125,7 +153,10 @@
           '--v6-text-mute': '#6b7280',
           '--v6-text-faint': '#9aa0aa',
           '--v6-hairline': 'rgba(19, 23, 34, 0.14)',
-          '--v6-hairline-strong': 'rgba(19, 23, 34, 0.24)'
+          '--v6-hairline-strong': 'rgba(19, 23, 34, 0.24)',
+          '--v6-accent-rgb': '255, 122, 69',
+          '--v6-buy-rgb': '63, 185, 80',
+          '--v6-sell-rgb': '246, 70, 93'
         }
       : {
           '--v6-bg': '#0a0b0d',
@@ -138,7 +169,10 @@
           '--v6-text-mute': '#7c818c',
           '--v6-text-faint': '#565b66',
           '--v6-hairline': 'rgba(255, 255, 255, 0.06)',
-          '--v6-hairline-strong': 'rgba(255, 255, 255, 0.12)'
+          '--v6-hairline-strong': 'rgba(255, 255, 255, 0.12)',
+          '--v6-accent-rgb': '255, 122, 69',
+          '--v6-buy-rgb': '63, 185, 80',
+          '--v6-sell-rgb': '246, 70, 93'
         };
     root.dataset.v6Theme = theme;
     Object.keys(vars).forEach(function (key) {
@@ -173,324 +207,220 @@
   }
 
   function shellHtml() {
-    return [
-      '<div class="v6-shell" data-orderflow-slot="v6" role="region" aria-label="Orderflow trading terminal" data-testid="orderflow-v6-slot">',
-        '<div class="v6-demo-banner" data-v6-demo-banner style="display: none;">',
-          '<span>⚠️ Live Engine Offline — Running in Demo Mode (Mock Data)</span>',
+    var tfBtns = [
+      {interval:'1m', label:'1M', cls:'active'},
+      {interval:'3m', label:'3m', cls:'hidden-tf'},
+      {interval:'5m', label:'5m', cls:'hidden-tf'},
+      {interval:'15m', label:'15m', cls:'hidden-tf'},
+      {interval:'30m', label:'30M', cls:''},
+      {interval:'1h', label:'1H', cls:'hidden-tf'},
+      {interval:'2h', label:'2H', cls:'hidden-tf'},
+      {interval:'4h', label:'4H', cls:'hidden-tf'},
+      {interval:'8h', label:'8H', cls:'hidden-tf'},
+      {interval:'12h', label:'12H', cls:'hidden-tf'},
+      {interval:'1d', label:'1D', cls:'hidden-tf'}
+    ];
+    var tfBtnsHtml = tfBtns.map(function(tf) {
+      return '<button type="button" class="exo-tf-btn ' + tf.cls + '" data-v6-action="timeframe" data-interval="' + tf.interval + '">' + tf.label + '</button>';
+    }).join('');
+
+    var drawingToolSvgs = [
+      '<svg viewBox="0 0 16 16"><path d="M4 3l8 5-4 1-2 4z"/></svg>',
+      '<svg viewBox="0 0 16 16"><path d="M3 12L13 3"/><path d="M10 3h3v3"/></svg>',
+      '<svg viewBox="0 0 16 16"><path d="M4 12L12 4"/><circle cx="4" cy="12" r="1.1"/></svg>',
+      '<svg viewBox="0 0 16 16"><path d="M3 8h10"/></svg>',
+      '<svg viewBox="0 0 16 16"><path d="M8 3v10"/><path d="M5 6l3-3 3 3"/></svg>',
+      '<svg viewBox="0 0 16 16"><path d="M3 12L12 4"/><path d="M4 4h3"/></svg>',
+      '<svg viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8"/></svg>',
+      '<svg viewBox="0 0 16 16"><path d="M4 12L12 4"/><path d="M3 13l3-1-2-2z"/></svg>',
+      '<svg viewBox="0 0 16 16"><circle cx="5" cy="5" r="1.3"/><circle cx="11" cy="11" r="1.3"/><path d="M6 10l4-4"/></svg>',
+      '<svg viewBox="0 0 16 16"><path d="M8 13V3"/><path d="M5 10l3 3 3-3"/></svg>',
+      '<svg viewBox="0 0 16 16"><path d="M3 5h10"/><path d="M5 8h8"/><path d="M3 11h10"/></svg>',
+      '<svg viewBox="0 0 16 16"><path d="M10 3L5 8l5 5"/></svg>'
+    ];
+    var toolIconsHtml = drawingToolSvgs.map(function(svg, i) {
+      var titles = ['Cursor','Trend Line','Horizontal','Vertical','Arrow','Ray','Rectangle','Pencil','Circle','Text','Fibonacci','Measure'];
+      var extra = i === 11 ? ' style="margin-top:auto;border-top:1px solid rgba(255,255,255,.045)"' : '';
+      return '<div class="exo-tool" title="' + (titles[i] || 'Tool') + '"' + extra + '>' + svg + '</div>';
+    }).join('');
+
+    var demoBanner = '<div class="v6-demo-banner" data-v6-demo-banner style="display: none;"><span>⚠️ Live Engine Offline — Running in Demo Mode (Mock Data)</span></div>';
+    var mountError = '<div class="v6-mount-error-region" data-v6-mount-error role="status" aria-live="polite" data-testid="orderflow-mount-error" hidden><strong>Engine unavailable</strong><span data-v6-mount-error-text>Unable to connect to the orderflow engine.</span></div>';
+    var liveStatus = '<div class="sr-only" data-v6-live-status role="status" aria-live="polite" aria-atomic="true" data-testid="orderflow-live-status">Orderflow loading.</div>';
+
+    // Hidden settings container — keeps all data-v6-setting inputs for syncInputs()
+    var hiddenSettings = [
+      '<div class="v6-panel v6-panel-settings" data-v6-panel="settings" style="display:none;" aria-hidden="true">',
+        '<div class="v6-settings" data-v6-settings-body>',
+          '<div class="exo-settings-section">Chart</div>',
+          '<label class="v6-field">Mode<select data-v6-setting="chartMode"><option value="both">Both</option><option value="heatmap">Heatmap</option><option value="footprint">Footprint</option><option value="none">None</option></select></label>',
+          '<label class="v6-check"><input type="checkbox" data-v6-setting="showGrid" /><span>Show Grid</span></label>',
+          '<label class="v6-check"><input type="checkbox" data-v6-setting="showSessionZones" /><span>Show Sessions</span></label>',
+          '<label class="v6-field">Sessions<select data-v6-setting="sessionProfile"><option value="global">Asia/Europe/US</option><option value="rth">US RTH</option><option value="eth">US ETH</option></select></label>',
+          '<label class="v6-field">Background<input type="color" data-v6-setting="bgColor" /></label>',
+          '<label class="v6-field">Up Candle<input type="color" data-v6-setting="upColor" /></label>',
+          '<label class="v6-field">Down Candle<input type="color" data-v6-setting="downColor" /></label>',
+          '<div class="exo-settings-section">Volume Profile</div>',
+          '<label class="v6-check"><input type="checkbox" data-v6-setting="showVolumeProfile" /><span>Show Profile</span></label>',
+          '<label class="v6-check"><input type="checkbox" data-v6-setting="volumeProfileShowPocTrail" /><span>Show POC Trail</span></label>',
+          '<label class="v6-field">Type<select data-v6-setting="volumeProfileType"><option value="visible">Visible</option><option value="session">Session</option><option value="fixed">Fixed</option><option value="composite">Composite</option></select></label>',
+          '<label class="v6-field">Style<select data-v6-setting="volumeProfileStyle"><option value="volume">Volume</option><option value="delta">Delta</option><option value="split">Split</option></select></label>',
+          '<label class="v6-field">Side<select data-v6-setting="volumeProfileSide"><option value="left">Left</option><option value="right">Right</option></select></label>',
+          '<label class="v6-field">Value Area %<input type="number" min="10" max="100" step="1" data-v6-setting="volumeProfileValueArea" /></label>',
+          '<label class="v6-check"><input type="checkbox" data-v6-setting="showTape" /><span>Show Tape</span></label>',
+          '<label class="v6-check"><input type="checkbox" data-v6-setting="showDOM" /><span>Show DOM</span></label>',
+          '<label class="v6-check"><input type="checkbox" data-v6-setting="showCVD" /><span>Show Delta/CVD</span></label>',
+          '<label class="v6-check"><input type="checkbox" data-v6-setting="showVwap" /><span>Show VWAP</span></label>',
+          '<label class="v6-check"><input type="checkbox" data-v6-setting="showHeatmap" /><span>Show Heatmap</span></label>',
+          '<label class="v6-check"><input type="checkbox" data-v6-setting="showFootprint" /><span>Show Footprint</span></label>',
+          '<label class="v6-check"><input type="checkbox" data-v6-setting="showLastPrice" /><span>Show Last Price</span></label>',
+          '<div class="exo-settings-section">Studies</div>',
+          '<label class="v6-check"><input type="checkbox" data-v6-setting="showVwapBands" /><span>VWAP bands</span></label>',
+          '<label class="v6-field">VWAP band 1<input type="number" min="0.1" max="5" step="0.1" data-v6-setting="vwapBand1" /></label>',
+          '<label class="v6-field">VWAP band 2<input type="number" min="0.1" max="8" step="0.1" data-v6-setting="vwapBand2" /></label>',
+          '<label class="v6-check"><input type="checkbox" data-v6-setting="alertsEnabled" /><span>Alerts enabled</span></label>',
+          '<label class="v6-field">Large trade alert<input type="number" min="0" step="0.1" data-v6-setting="largeTradeAlertQty" /></label>',
+          '<label class="v6-field">Delta alert<input type="number" min="0" step="1" data-v6-setting="deltaAlertThreshold" /></label>',
+          '<label class="v6-field">Imbalance ratio<input type="number" min="1.5" max="8" step="0.1" data-v6-setting="imbalanceRatio" /></label>',
+          '<label class="v6-field">Imbalance stack<input type="number" min="2" max="6" step="1" data-v6-setting="imbalanceStack" /></label>',
+          '<label class="v6-field">Imbalance min volume<input type="number" min="0" step="0.1" data-v6-setting="imbalanceMinVolume" /></label>',
+          '<label class="v6-field">Exhaustion factor<input type="number" min="0.05" max="1" step="0.05" data-v6-setting="exhaustionFactor" /></label>',
+          '<label class="v6-field">Value area %<input type="number" min="1" max="100" step="1" data-v6-setting="footprintValueAreaPct" /></label>',
+          '<label class="v6-field">Inspector timezone<select data-v6-setting="inspectorTimeZoneMode"><option value="utc">UTC</option><option value="local">Local</option><option value="exchange">Exchange</option></select></label>',
+          '<label class="v6-field">Min wick ticks<input type="number" min="0" max="10" step="1" data-v6-setting="minWickTicks" /></label>',
+          '<label class="v6-check"><input type="checkbox" data-v6-setting="showFootprintVA" /><span>Footprint value area</span></label>',
+          '<div class="exo-settings-section">Buffers</div>',
+          '<label class="v6-field">Max trades<input type="number" min="50" max="100000" step="100" data-v6-setting="maxTrades" /></label>',
+          '<label class="v6-field">Max heatmap frames<input type="number" min="60" max="10000" step="60" data-v6-setting="maxHeatmapFrames" /></label>',
+          '<label class="v6-field">Max footprint candles<input type="number" min="60" max="3000" step="60" data-v6-setting="maxFootprintCandles" /></label>',
+          '<label class="v6-field">Footprint range (min)<input type="number" min="1" max="100000" step="60" data-v6-setting="footprintHistoryLookbackMinutes" /></label>',
+          '<label class="v6-field">DOM depth (UI)<input type="number" min="10" max="5000" step="50" data-v6-setting="domDepth" /></label>',
+          '<label class="v6-field">DOM range<input type="number" min="25" max="500" step="25" data-v6-setting="domRangeLevels" /></label>',
+          '<label class="v6-field">Min display ($)<input type="number" min="0" max="10000000" step="10" data-v6-setting="domMinNotionalUsd" /></label>',
+          '<label class="v6-field">Follow threshold<input type="number" min="1" max="20" step="1" data-v6-setting="domFollowThresholdTicks" /></label>',
+          '<label class="v6-field">DOM scale<select data-v6-setting="domScaleMode"><option value="book">Book</option><option value="visible">Visible</option></select></label>',
+          '<label class="v6-field">Soft Wall %<input type="number" min="0.5" max="0.99" step="0.01" data-v6-setting="domSoftWallPercentile" /></label>',
+          '<label class="v6-field">Major Wall %<input type="number" min="0.5" max="0.999" step="0.005" data-v6-setting="domMajorWallPercentile" /></label>',
+          '<label class="v6-field">Tape font size<input type="number" min="8" max="20" step="1" data-v6-setting="tapeFontSize" /></label>',
+          '<label class="v6-field">Min trade size<input type="number" min="0" step="0.001" data-v6-setting="minQty" /></label>',
+          '<label class="v6-field">Max tape rows<input type="number" min="8" max="5000" step="10" data-v6-setting="maxRows" /></label>',
+          '<label class="v6-field">REST trade prefill<input type="number" min="50" max="100000" step="100" data-v6-setting="restTradePrefillLimit" /></label>',
         '</div>',
-        '<header class="v6-header">',
-          '<div class="v6-brand">',
-            '<span class="v6-brand-mark" aria-hidden="true"></span>',
-            '<div class="v6-symbol-pill">',
-              '<select class="v6-symbol-select" data-v6-action="symbol-select" data-v6-symbol aria-label="Select instrument">',
-                '<option value="BTCUSDT">BTC</option>',
-                '<option value="ETHUSDT">ETH</option>',
-                '<option value="SOLUSDT">SOL</option>',
-              '</select>',
-              '<span class="v6-symbol-meta" data-v6-interval>1m</span>',
-            '</div>',
-            '<span class="v6-badge" data-v6-badge>Not available</span>',
+      '</div>'
+    ].join('');
+
+    return [
+      '<div class="exo-terminal v6-shell" data-orderflow-slot="v6" data-v6-layout="exocharts" role="region" aria-label="Orderflow trading terminal" data-testid="orderflow-v6-slot">',
+        demoBanner,
+        mountError,
+        liveStatus,
+        // Page navigation dropdown (fixed position, outside topbar flow)
+        '<div class="exo-page-menu" data-exo-page-menu hidden>',
+          '<button type="button" class="exo-page-item" data-exo-page="orderflow">',
+            '<span class="exo-page-icon">🔥</span> Orderflow',
+          '</button>',
+          '<button type="button" class="exo-page-item" data-exo-page="today">',
+            '<span class="exo-page-icon">📊</span> Dashboard',
+          '</button>',
+          '<button type="button" class="exo-page-item" data-exo-page="journal">',
+            '<span class="exo-page-icon">📓</span> Journal',
+          '</button>',
+          '<button type="button" class="exo-page-item" data-exo-page="settings">',
+            '<span class="exo-page-icon">⚙</span> Settings',
+          '</button>',
+        '</div>',
+        // ═══ TOPBAR (25px) ═══
+        '<header class="exo-topbar">',
+          // App logo → page navigation menu
+          '<button type="button" class="exo-app-logo" data-exo-logo-menu aria-label="Open navigation" title="COCKPIT V6 — Navigation">',
+            '<svg viewBox="0 0 24 24" width="16" height="16"><rect x="3" y="3" width="8" height="8" rx="1.5" fill="currentColor" opacity=".9"/><rect x="13" y="3" width="8" height="8" rx="1.5" fill="currentColor" opacity=".6"/><rect x="3" y="13" width="8" height="8" rx="1.5" fill="currentColor" opacity=".6"/><rect x="13" y="13" width="8" height="8" rx="1.5" fill="currentColor" opacity=".9"/></svg>',
+          '</button>',
+          '<div class="exo-market">',
+            '<select class="exo-symbol-select" data-v6-action="symbol-select" data-v6-symbol aria-label="Select instrument">',
+              '<option value="BTCUSDT">btc/usd @ binance</option>',
+              '<option value="ETHUSDT">eth/usd @ binance</option>',
+              '<option value="SOLUSDT">sol/usd @ binance</option>',
+            '</select>',
+            '<span style="display:none" data-v6-interval>1m</span>',
           '</div>',
-          '<div class="v6-timeframes" role="group" aria-label="Timeframe">',
-            '<button type="button" class="v6-tf-btn active" data-v6-action="timeframe" data-interval="1m">1m</button>',
-            '<button type="button" class="v6-tf-btn" data-v6-action="timeframe" data-interval="3m">3m</button>',
-            '<button type="button" class="v6-tf-btn" data-v6-action="timeframe" data-interval="5m">5m</button>',
-            '<button type="button" class="v6-tf-btn" data-v6-action="timeframe" data-interval="15m">15m</button>',
-            '<button type="button" class="v6-tf-btn" data-v6-action="timeframe" data-interval="30m">30m</button>',
-            '<button type="button" class="v6-tf-btn" data-v6-action="timeframe" data-interval="1h">1H</button>',
-            '<button type="button" class="v6-tf-btn" data-v6-action="timeframe" data-interval="2h">2H</button>',
-            '<button type="button" class="v6-tf-btn" data-v6-action="timeframe" data-interval="4h">4H</button>',
-            '<button type="button" class="v6-tf-btn" data-v6-action="timeframe" data-interval="8h">8H</button>',
-            '<button type="button" class="v6-tf-btn" data-v6-action="timeframe" data-interval="12h">12H</button>',
-            '<button type="button" class="v6-tf-btn" data-v6-action="timeframe" data-interval="1d">1D</button>',
+          tfBtnsHtml,
+          '<span class="exo-top-cmd">⌘</span>',
+          '<span class="exo-top-stack"></span>',
+          '<span class="exo-top-workspace" data-exo-logo-menu>My workspace</span>',
+          '<span class="exo-top-grid"></span>',
+          '<span class="exo-top-widget" data-v6-action="add-widget">Add Widget</span>',
+          '<span class="exo-top-camera" data-v6-action="screenshot" title="Take screenshot">',
+            '<span class="exo-camera-inner"></span>',
+          '</span>',
+          '<span class="exo-top-settings" data-v6-action="global-settings">Settings</span>',
+          '<div class="exo-spacer"></div>',
+          // Window controls (minimize / maximize / close)
+          '<div class="exo-window-controls">',
+            '<button type="button" data-window-minimize aria-label="Minimize" title="Minimize">─</button>',
+            '<button type="button" data-window-maximize aria-label="Maximize" title="Maximize">□</button>',
+            '<button type="button" data-window-close aria-label="Close" title="Close">×</button>',
           '</div>',
-          '<div class="v6-seg" data-v6-layers role="group" aria-label="Chart layers">',
-            '<button type="button" class="v6-seg-btn" data-v6-action="layer" data-layer="candles">Candles</button>',
-            '<button type="button" class="v6-seg-btn" data-v6-action="layer" data-layer="bubbles">Bubbles</button>',
-            '<button type="button" class="v6-seg-btn" data-v6-action="layer" data-layer="heatmap">Heatmap</button>',
-            '<button type="button" class="v6-seg-btn" data-v6-action="layer" data-layer="footprint">Footprint</button>',
-          '</div>',
-          '<div class="v6-workspace-holder" data-v6-workspace-container></div>',
-          '<div class="v6-source-select">',
-            '<button type="button" class="v6-source-btn" data-v6-action="source" data-source="hyperliquid">HL</button>',
-            '<button type="button" class="v6-source-btn active" data-v6-action="source" data-source="binance">BN</button>',
-          '</div>',
-          '<div class="v6-build-meta" data-testid="orderflow-build-meta" title="UI build metadata">' + uiBuildMetaLabel() + '</div>',
-          '<div class="sr-only" data-v6-live-status role="status" aria-live="polite" aria-atomic="true" data-testid="orderflow-live-status">Orderflow loading.</div>',
-          '<div class="v6-header-disclosure-toggle">',
-            '<button type="button" class="v6-btn v6-btn-sm" data-v6-action="toggle-disclosure" aria-expanded="false" aria-controls="v6-header-disclosure-panel" title="Show/hide live metrics">Metrics ▾</button>',
-          '</div>',
-          '<div class="v6-header-disclosure-panel" id="v6-header-disclosure-panel">',
-            '<div class="v6-header-live">',
-              '<span class="v6-stat"><em>Last</em><strong data-v6-last>--</strong></span>',
-              '<span class="v6-stat"><em>CVD</em><strong data-v6-cvd>--</strong></span>',
-              '<span class="v6-stat"><em>Lag</em><strong data-v6-health-lag>--</strong></span>',
-              '<span class="v6-stat"><em>Queue</em><strong data-v6-health-queue>0</strong></span>',
-              '<span class="v6-stat"><em>Drops</em><strong data-v6-health-drops>0</strong></span>',
-            '</div>',
-            '<div class="v6-ticket" aria-label="Live quote">',
-              '<div class="v6-ticket-side is-sell"><em>BID</em><strong data-v6-ticket-bid>--</strong></div>',
-              '<div class="v6-ticket-mid"><em>SPR</em><span data-v6-ticket-spread>--</span></div>',
-              '<div class="v6-ticket-side is-buy"><em>ASK</em><strong data-v6-ticket-ask>--</strong></div>',
-            '</div>',
-          '</div>',
-          '<div class="v6-header-actions">',
-            '<button type="button" class="v6-btn v6-btn-icon v6-fullscreen-slot" data-v6-action="fullscreen-slot" data-testid="orderflow-fullscreen-slot" aria-label="Fullscreen slot reserved" title="Fullscreen slot reserved" disabled>⛶</button>',
-            '<button type="button" class="v6-conn" data-v6-action="toggle-connection" title="Disconnect or reconnect the auto-connected local engine">',
-              '<span class="v6-engine-dot" data-v6-engine-dot></span>',
-              '<span class="v6-conn-text" data-v6-engine-status-text>Offline</span>',
-            '</button>',
-            '<button type="button" class="v6-gear" data-v6-action="global-settings" title="Settings" aria-label="Global settings">⚙</button>',
+          '<span class="exo-clock">' + (new Date().toLocaleString('en-US', {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', hour12:false}).replace(',','')) + '</span>',
+          '<div class="exo-conn-wrap">',
+            '<span class="exo-engine-dot" data-v6-engine-dot></span>',
+            '<button type="button" class="exo-conn-icon" data-v6-action="toggle-connection" title="Disconnect or reconnect" aria-label="Toggle connection">⚡</button>',
+            '<span style="display:none" data-v6-engine-status-text>Offline</span>',
           '</div>',
         '</header>',
-        '<div class="v6-mount-error-region" data-v6-mount-error role="status" aria-live="polite" data-testid="orderflow-mount-error" hidden>',
-          '<strong>Engine unavailable</strong>',
-          '<span data-v6-mount-error-text>Unable to connect to the orderflow engine.</span>',
+        // ═══ WORKSPACE ═══
+        '<div class="exo-workspace">',
+          // Left drawing tools
+          '<nav class="exo-left-tools" aria-label="Drawing tools">',
+            toolIconsHtml,
+          '</nav>',
+          // Chart
+          '<section class="exo-chart-pane">',
+            '<div class="exo-chart-tabs"><span class="exo-tab-title">Chart <button type="button" class="exo-tab-close" data-v6-action="close-panel" data-panel="chart">×</button></span></div>',
+            '<div class="exo-chart-stage">',
+              '<canvas class="exo-chart-canvas v6-chart-canvas" data-v6-chart></canvas>',
+              '<div class="exo-price-axis"></div>',
+              '<div class="exo-time-axis"></div>',
+            '</div>',
+          '</section>',
+          // Resize handle between chart and DOM
+          '<div class="exo-resize-handle" data-v6-resize-handle title="Drag to resize panels"></div>',
+          // DOM panel
+          '<aside class="exo-dom-panel">',
+            '<div class="exo-dom-tabs"><span>DOM</span><button type="button" class="exo-tab-close" data-v6-action="close-panel" data-panel="dom">×</button></div>',
+            '<div class="exo-dom-toolbar">',
+              '<span>PG</span>',
+              '<select class="exo-dom-grouping" data-v6-dom-grouping></select>',
+              '<button type="button" class="exo-dom-gear-btn" data-v6-action="dom-settings" title="DOM Settings" aria-label="DOM settings">⚙</button>',
+            '</div>',
+            '<div class="exo-dom-head" data-v6-dom-head></div>',
+            '<div class="exo-dom-body" data-v6-dom-list></div>',
+          '</aside>',
         '</div>',
-        '<div class="v6-grid" role="region" aria-label="Orderflow market data panels" data-testid="orderflow-market-panels">',
-          '<section class="v6-panel v6-panel-tape" data-v6-panel="tape" aria-label="V6 tape">',
-            '<div class="v6-panel-head"><span>Tape</span><small class="v6-panel-freshness" data-v6-freshness="tape">No data</small></div>',
-            '<div class="v6-panel-body v6-tape-body">',
-              '<div class="v6-tape-list-container" data-v6-tape-list></div>',
-              '<div class="v6-lad-foot v6-tape-footer" data-v6-tape-footer>',
-                '<label class="v6-lad-group">Min Size ',
-                  '<input type="number" class="v6-tape-minqty-input" data-v6-setting="minQty" value="0" min="0" step="0.01" style="width: 55px;" />',
-                '</label>',
-                '<label class="v6-lad-group">Font Size ',
-                  '<input type="number" class="v6-tape-size-input" data-v6-setting="tapeFontSize" value="10" min="8" max="20" step="1" style="width: 40px;" />',
-                '</label>',
-              '</div>',
-            '</div>',
-          '</section>',
-          '<section class="v6-panel v6-panel-orderbook" data-v6-panel="orderbook" id="v6-panel-orderbook" role="tabpanel" aria-labelledby="v6-rtab-orderbook" aria-label="V6 Orderbook">',
-            '<div class="v6-panel-body v6-ob-body" data-v6-ob-panel></div>',
-          '</section>',
-          '<section class="v6-panel v6-panel-chart" data-v6-panel="chart" aria-label="V6 chart">',
-            '<div class="v6-panel-head"><span>Chart</span><small class="v6-panel-freshness" data-v6-freshness="chart">No data</small></div>',
-            '<canvas class="v6-chart-canvas" data-v6-chart></canvas>',
-          '</section>',
-          '<section class="v6-panel v6-panel-dom" data-v6-panel="dom" aria-label="V6 DOM">',
-            '<div class="v6-panel-head"><span>DOM</span><small class="v6-panel-freshness" data-v6-freshness="dom">No data</small></div>',
-            '<div class="v6-panel-body v6-dom-body">',
-              '<div class="v6-dom-table-container" data-v6-dom-list></div>',
-              '<div class="v6-lad-foot v6-dom-foot" data-v6-dom-footer>',
-                '<span>Spread <strong data-v6-dom-spread>--</strong></span>',
-                '<span>Mid <strong data-v6-dom-mid>--</strong></span>',
-                '<label class="v6-lad-group">Group ',
-                  '<input type="number" class="v6-group-input" data-v6-setting="domGroup" value="1" min="1" max="100" step="1" style="width: 42px;" />',
-                '</label>',
-                '<span class="is-poc" data-v6-dom-poc-wrap style="display: none;">POC <strong data-v6-dom-poc>--</strong></span>',
-                '<span data-v6-dom-time>--</span>',
-              '</div>',
-            '</div>',
-          '</section>',
-          '<section class="v6-panel v6-panel-settings" data-v6-panel="settings" aria-label="V6 settings">',
-            '<div class="v6-panel-head"><span>Settings</span><small>Controls</small></div>',
-            '<div class="v6-settings" data-v6-settings-body>',
-              // -- Chart Mode --
-              '<div class="v6-settings-section">',
-                '<div class="v6-settings-section-title">Chart</div>',
-                '<label class="v6-field">Mode',
-                  '<select data-v6-setting="chartMode">',
-                    '<option value="both">Both</option>',
-                    '<option value="heatmap">Heatmap</option>',
-                    '<option value="footprint">Footprint</option>',
-                    '<option value="none">None</option>',
-                  '</select>',
-                '</label>',
-                '<label class="v6-check"><input type="checkbox" data-v6-setting="showGrid" /><span>Show Grid</span></label>',
-                '<label class="v6-check"><input type="checkbox" data-v6-setting="showSessionZones" /><span>Show Sessions</span></label>',
-                '<label class="v6-field">Sessions',
-                  '<select data-v6-setting="sessionProfile">',
-                    '<option value="global">Asia / Europe / US</option>',
-                    '<option value="rth">US RTH</option>',
-                    '<option value="eth">US ETH</option>',
-                  '</select>',
-                '</label>',
-                '<label class="v6-field">Background',
-                  '<input type="color" data-v6-setting="bgColor" />',
-                '</label>',
-                '<label class="v6-field">Up Candle',
-                  '<input type="color" data-v6-setting="upColor" />',
-                '</label>',
-                '<label class="v6-field">Down Candle',
-                  '<input type="color" data-v6-setting="downColor" />',
-                '</label>',
-              '</div>',
-              // -- Volume Profile --
-              '<div class="v6-settings-section">',
-                '<div class="v6-settings-section-title">Volume Profile</div>',
-                '<label class="v6-check"><input type="checkbox" data-v6-setting="showVolumeProfile" /><span>Show Profile</span></label>',
-                '<label class="v6-check"><input type="checkbox" data-v6-setting="volumeProfileShowPocTrail" /><span>Show POC Trail</span></label>',
-                '<label class="v6-field">Type',
-                  '<select data-v6-setting="volumeProfileType">',
-                    '<option value="visible">Visible Range</option>',
-                    '<option value="session">Session</option>',
-                    '<option value="fixed">Fixed Range</option>',
-                    '<option value="composite">Composite</option>',
-                  '</select>',
-                '</label>',
-                '<label class="v6-field">Style',
-                  '<select data-v6-setting="volumeProfileStyle">',
-                    '<option value="volume">Volume</option>',
-                    '<option value="delta">Delta</option>',
-                    '<option value="split">Split</option>',
-                  '</select>',
-                '</label>',
-                '<label class="v6-field">Side',
-                  '<select data-v6-setting="volumeProfileSide">',
-                    '<option value="left">Left</option>',
-                    '<option value="right">Right</option>',
-                  '</select>',
-                '</label>',
-                '<label class="v6-field">Value Area %',
-                  '<input type="number" min="10" max="100" step="1" data-v6-setting="volumeProfileValueArea" />',
-                '</label>',
-              '</div>',
-              // -- Toggles --
-              '<div class="v6-settings-section">',
-                '<div class="v6-settings-section-title">Panels</div>',
-                '<label class="v6-check"><input type="checkbox" data-v6-setting="showTape" /><span>Show Tape</span></label>',
-                '<label class="v6-check"><input type="checkbox" data-v6-setting="showDOM" /><span>Show DOM</span></label>',
-                '<label class="v6-check"><input type="checkbox" data-v6-setting="showCVD" /><span>Show Delta/CVD</span></label>',
-                '<label class="v6-check"><input type="checkbox" data-v6-setting="showVwap" /><span>Show VWAP</span></label>',
-                '<label class="v6-check"><input type="checkbox" data-v6-setting="showHeatmap" /><span>Show Heatmap</span></label>',
-                '<label class="v6-check"><input type="checkbox" data-v6-setting="showFootprint" /><span>Show Footprint</span></label>',
-                '<label class="v6-check"><input type="checkbox" data-v6-setting="showLastPrice" /><span>Show Last Price</span></label>',
-              '</div>',
-              // -- Studies --
-              '<div class="v6-settings-section">',
-                '<div class="v6-settings-section-title">Studies</div>',
-                '<label class="v6-check"><input type="checkbox" data-v6-setting="showVwapBands" /><span>VWAP bands</span></label>',
-                '<label class="v6-field">VWAP band 1',
-                  '<input type="number" min="0.1" max="5" step="0.1" data-v6-setting="vwapBand1" />',
-                '</label>',
-                '<label class="v6-field">VWAP band 2',
-                  '<input type="number" min="0.1" max="8" step="0.1" data-v6-setting="vwapBand2" />',
-                '</label>',
-                '<label class="v6-check"><input type="checkbox" data-v6-setting="alertsEnabled" /><span>Alerts enabled</span></label>',
-                '<label class="v6-field">Large trade alert',
-                  '<input type="number" min="0" step="0.1" data-v6-setting="largeTradeAlertQty" />',
-                '</label>',
-                '<label class="v6-field">Delta alert',
-                  '<input type="number" min="0" step="1" data-v6-setting="deltaAlertThreshold" />',
-                '</label>',
-                '<label class="v6-field">Imbalance ratio',
-                  '<input type="number" min="1.5" max="8" step="0.1" data-v6-setting="imbalanceRatio" />',
-                '</label>',
-                '<label class="v6-field">Imbalance stack',
-                  '<input type="number" min="2" max="6" step="1" data-v6-setting="imbalanceStack" />',
-                '</label>',
-                '<label class="v6-field">Imbalance min volume',
-                  '<input type="number" min="0" step="0.1" data-v6-setting="imbalanceMinVolume" />',
-                '</label>',
-                '<label class="v6-field">Exhaustion factor',
-                  '<input type="number" min="0.05" max="1" step="0.05" data-v6-setting="exhaustionFactor" />',
-                '</label>',
-                '<label class="v6-field">Value area %',
-                  '<input type="number" min="1" max="100" step="1" data-v6-setting="footprintValueAreaPct" />',
-                '</label>',
-                '<label class="v6-field">Inspector timezone',
-                  '<select data-v6-setting="inspectorTimeZoneMode">',
-                    '<option value="utc">UTC</option>',
-                    '<option value="local">Local</option>',
-                    '<option value="exchange">Exchange</option>',
-                  '</select>',
-                '</label>',
-                '<label class="v6-field">Min wick ticks',
-                  '<input type="number" min="0" max="10" step="1" data-v6-setting="minWickTicks" />',
-                '</label>',
-                '<label class="v6-check"><input type="checkbox" data-v6-setting="showFootprintVA" /><span>Footprint value area</span></label>',
-              '</div>',
-              // -- Buffers --
-              '<div class="v6-settings-section">',
-                '<div class="v6-settings-section-title">Buffers</div>',
-                '<label class="v6-field">Max trades',
-                  '<input type="number" min="50" max="5000" step="50" data-v6-setting="maxTrades" />',
-                '</label>',
-                '<label class="v6-field">Max heatmap frames',
-                  '<input type="number" min="60" max="10000" step="60" data-v6-setting="maxHeatmapFrames" />',
-                '</label>',
-                '<div class="v6-setting-note">Higher heatmap frame caps retain more L2 snapshots in browser memory and increase canvas draw cost.</div>',
-                '<label class="v6-field">Max footprint candles',
-                  '<input type="number" min="60" max="3000" step="60" data-v6-setting="maxFootprintCandles" />',
-                '</label>',
-                '<label class="v6-field">Footprint range (min)',
-                  '<input type="number" min="1" max="10080" step="15" data-v6-setting="footprintHistoryLookbackMinutes" />',
-                '</label>',
-                '<label class="v6-field">DOM depth (UI)',
-                  '<input type="number" min="10" max="5000" step="50" data-v6-setting="domDepth" />',
-                '</label>',
-                '<div class="v6-quality-presets" data-v6-dom-depth-presets>',
-                  '<button type="button" class="v6-seg-btn" data-v6-action="dom-depth-preset" data-dom-depth="100">Light</button>',
-                  '<button type="button" class="v6-seg-btn" data-v6-action="dom-depth-preset" data-dom-depth="1000">Balanced</button>',
-                  '<button type="button" class="v6-seg-btn" data-v6-action="dom-depth-preset" data-dom-depth="2500">Deep</button>',
-                  '<button type="button" class="v6-seg-btn" data-v6-action="dom-depth-preset" data-dom-depth="5000">Full</button>',
-                '</div>',
-                '<label class="v6-field">DOM range',
-                  '<input type="number" min="25" max="500" step="25" data-v6-setting="domRangeLevels" />',
-                '</label>',
-                '<label class="v6-field">Min display ($)',
-                  '<input type="number" min="0" max="10000000" step="10" data-v6-setting="domMinNotionalUsd" />',
-                '</label>',
-                '<label class="v6-field">Follow threshold',
-                  '<input type="number" min="1" max="20" step="1" data-v6-setting="domFollowThresholdTicks" />',
-                '</label>',
-                '<label class="v6-field">DOM scale',
-                  '<select data-v6-setting="domScaleMode">',
-                    '<option value="book">Book window</option>',
-                    '<option value="visible">Visible rows</option>',
-                  '</select>',
-                '</label>',
-                '<label class="v6-field">Soft Wall Percentile',
-                  '<input type="number" min="0.5" max="0.99" step="0.01" data-v6-setting="domSoftWallPercentile" />',
-                '</label>',
-                '<label class="v6-field">Major Wall Percentile',
-                  '<input type="number" min="0.5" max="0.999" step="0.005" data-v6-setting="domMajorWallPercentile" />',
-                '</label>',
-              '</div>',
-              // -- Tape & DOM --
-              '<div class="v6-settings-section">',
-                '<div class="v6-settings-section-title">Tape & DOM</div>',
-                '<label class="v6-field">Tape font size',
-                  '<input type="number" min="8" max="20" step="1" data-v6-setting="tapeFontSize" />',
-                '</label>',
-                '<label class="v6-field">Min trade size',
-                  '<input type="number" min="0" step="0.001" data-v6-setting="minQty" />',
-                '</label>',
-                '<label class="v6-field">Max tape rows',
-                  '<input type="number" min="8" max="500" step="1" data-v6-setting="maxRows" />',
-                '</label>',
-                '<label class="v6-field">REST trade prefill',
-                  '<input type="number" min="50" max="5000" step="50" data-v6-setting="restTradePrefillLimit" />',
-                '</label>',
-              '</div>',
-              // -- DOM Columns --
-              '<div class="v6-settings-section">',
-                '<div class="v6-settings-section-title">DOM Columns</div>',
-                '<div class="v6-dom-column-presets" style="display:flex; gap:6px; margin-bottom:8px;">',
-                  '<button type="button" class="v6-btn v6-btn-sm" data-v6-dom-preset="minimal" style="flex:1; padding:2px 0; font-size:9px;">Minimal</button>',
-                  '<button type="button" class="v6-btn v6-btn-sm" data-v6-dom-preset="delta" style="flex:1; padding:2px 0; font-size:9px;">Delta</button>',
-                  '<button type="button" class="v6-btn v6-btn-sm" data-v6-dom-preset="full" style="flex:1; padding:2px 0; font-size:9px;">Full</button>',
-                '</div>',
-                '<div class="v6-settings-columns-list" data-v6-dom-columns-config></div>',
-              '</div>',
-              // -- Actions --
-              '<div class="v6-settings-section v6-settings-actions">',
-                '<div class="v6-settings-section-title">Actions</div>',
-                '<button type="button" class="v6-btn v6-btn-sm v6-btn-full" data-v6-action="clear-tape">Clear Tape</button>',
-                '<button type="button" class="v6-btn v6-btn-sm v6-btn-full" data-v6-action="clear-heatmap">Clear Heatmap</button>',
-                '<button type="button" class="v6-btn v6-btn-sm v6-btn-full" data-v6-action="clear-footprint">Clear Footprint</button>',
-                '<button type="button" class="v6-btn v6-btn-sm v6-btn-full v6-btn-warn" data-v6-action="clear-all">Clear All UI Buffers</button>',
-                '<button type="button" class="v6-btn v6-btn-sm v6-btn-full v6-btn-danger" data-v6-action="reset-settings">Reset UI Settings</button>',
-              '</div>',
-            '</div>',
-          '</section>',
-          '<section class="v6-panel v6-panel-cvd" data-v6-panel="cvd" aria-label="V6 CVD and delta">',
-            '<div class="v6-panel-head"><span>CVD / Delta</span><small class="v6-panel-freshness" data-v6-freshness="cvd">No data</small></div>',
-            '<div class="v6-panel-body" data-v6-cvd-panel></div>',
-          '</section>',
-        '</div>',
+        // ═══ STATUS BAR (24px) ═══
+        '<footer class="exo-status">',
+          '<div class="v6-sb-sec"><span class="v6-sb-lbl">Engine:</span><span class="v6-sb-val" data-v6-status-url>configured</span></div>',
+          '<div class="v6-sb-sec"><span class="v6-sb-lbl">Reconnects:</span><span class="v6-sb-val" data-v6-status-reconnects>0</span></div>',
+          '<div class="v6-sb-sec"><span class="v6-sb-lbl">Health:</span><span class="v6-sb-val">Lag <strong data-v6-status-lag>--</strong> | Q <strong data-v6-status-queue>0</strong> | Drop <strong data-v6-status-drops>0</strong></span></div>',
+          '<div class="v6-sb-sec"><span class="v6-sb-lbl">Local Time:</span><span class="v6-sb-val" data-v6-status-time>--</span></div>',
+          '<div class="v6-sb-sec"><span class="v6-sb-lbl">Buffer:</span><span class="v6-sb-val">T: <strong data-v6-status-buffer-trades>0</strong> | HM: <strong data-v6-status-buffer-heatmap>0</strong> | FP: <strong data-v6-status-buffer-footprint>0</strong></span></div>',
+        '</footer>',
+        // Hidden settings container (for syncInputs + data-v6-setting persistence)
+        hiddenSettings,
+        // Hidden freshness labels (keep JS hooks alive)
+        '<span style="display:none" data-v6-freshness="tape"></span>',
+        '<span style="display:none" data-v6-freshness="chart"></span>',
+        '<span style="display:none" data-v6-freshness="dom"></span>',
+        '<span style="display:none" data-v6-freshness="cvd"></span>',
+        // Hidden tape list (so render doesn't error)
+        '<div style="display:none" data-v6-tape-list></div>',
+        // Hidden CVD panel (so render doesn't error)
+        '<div style="display:none" data-v6-cvd-panel></div>',
+        // Hidden last/cvd/bid/ask/spread labels
+        '<span style="display:none" data-v6-last>--</span>',
+        '<span style="display:none" data-v6-cvd>--</span>',
+        '<span style="display:none" data-v6-ticket-bid>--</span>',
+        '<span style="display:none" data-v6-ticket-ask>--</span>',
+        '<span style="display:none" data-v6-ticket-spread>--</span>',
       '</div>'
     ].join('');
   }
@@ -717,7 +647,7 @@
     // Sync DOM Columns list & preset buttons active states
     var colsConfig = root.querySelector('[data-v6-dom-columns-config]');
     if (colsConfig) {
-      var allColKeys = ['bid', 'price', 'ask', 'buy', 'sell', 'delta', 'imb', 'stack', 'abs'];
+      var allColKeys = ['vol', 'sell', 'buy', 'bid', 'price', 'ask', 'delta', 'imb', 'stack', 'abs'];
       var activeCols = settings.domColumns || allColKeys;
       
       // Order of all keys is: active columns first, then inactive columns in their default order
@@ -729,6 +659,7 @@
       });
       
       var colLabels = {
+        vol: 'VOL',
         bid: 'BIDS',
         price: 'PRICE (required)',
         ask: 'ASKS',
@@ -769,11 +700,14 @@
       return true;
     }
     
-    var activeColsList = settings.domColumns || ['bid', 'price', 'ask', 'buy', 'sell', 'delta', 'imb', 'stack', 'abs'];
+    var activeColsList = settings.domColumns || ['vol', 'sell', 'buy', 'bid', 'price', 'ask', 'delta'];
+    var isPro = arraysEqual(activeColsList, ['vol', 'sell', 'buy', 'bid', 'price', 'ask', 'delta']);
     var isMin = arraysEqual(activeColsList, ['bid', 'price', 'ask']);
     var isDlt = arraysEqual(activeColsList, ['price', 'buy', 'sell', 'delta']);
     var isFl = arraysEqual(activeColsList, ['bid', 'price', 'ask', 'buy', 'sell', 'delta', 'imb', 'stack', 'abs']);
-    
+
+    var proBtn = root.querySelector('[data-v6-dom-preset="pro"]');
+    if (proBtn) proBtn.classList.toggle('is-active', isPro);
     var minBtn = root.querySelector('[data-v6-dom-preset="minimal"]');
     if (minBtn) minBtn.classList.toggle('is-active', isMin);
     var dltBtn = root.querySelector('[data-v6-dom-preset="delta"]');
@@ -791,6 +725,40 @@
         el.classList.toggle('v6-panel-hidden', !panels[panelName]);
       }
     });
+  }
+
+  // Exocharts layout: sync settings to actual panel visibility
+  function syncExoPanelVisibility(root, settings) {
+    var isExo = root.querySelector('[data-v6-layout="exocharts"]');
+    if (!isExo) return;
+    var r = V6OF.resolveSettings(settings || {});
+    var domBody = root.querySelector('.exo-dom-body');
+    var domHead = root.querySelector('.exo-dom-head');
+    var domToolbar = root.querySelector('.exo-dom-toolbar');
+    var domPanel = root.querySelector('.exo-dom-panel');
+
+    // DOM panel — hide body/head/toolbar, keep tabs
+    if (domBody) {
+      var showDom = r.showDOM !== false;
+      var currentlyHidden = domBody.style.display === 'none';
+      if (currentlyHidden && showDom) {
+        domBody.style.display = '';
+        if (domHead) domHead.style.display = '';
+        if (domToolbar) domToolbar.style.display = '';
+        if (domPanel) domPanel.classList.remove('exo-dom-collapsed');
+        // Update × button
+        var btn = root.querySelector('.exo-dom-tabs .exo-tab-close');
+        if (btn) btn.textContent = '×';
+      } else if (!currentlyHidden && !showDom) {
+        domBody.style.display = 'none';
+        if (domHead) domHead.style.display = 'none';
+        if (domToolbar) domToolbar.style.display = 'none';
+        if (domPanel) domPanel.classList.add('exo-dom-collapsed');
+        // Update × button
+        var btn2 = root.querySelector('.exo-dom-tabs .exo-tab-close');
+        if (btn2) btn2.textContent = '+';
+      }
+    }
   }
 
   function normalizeIngressOrderBook(data, source) {
@@ -919,7 +887,15 @@
     if (!trades.length) return [];
     var limit = restTradePrefillLimit(store.getState ? store.getState().settings : null);
     store.setState(function (prev) {
-      var patch = { trades: trades.slice(-limit), restTradesTs: Date.now() };
+      var settings = prev.settings || {};
+      var maxRows = Math.max(8, Math.min(100000, Number(settings.maxRows || 5000)));
+      var renderLimit = Math.max(1000, Math.min(12000, maxRows * 3));
+      var retained = trades.slice(-limit);
+      var patch = {
+        trades: retained.length > renderLimit ? retained.slice(retained.length - renderLimit) : retained,
+        tradeHistoryCount: retained.length,
+        restTradesTs: Date.now()
+      };
       if (prev.transportStatus !== 'connected' || prev.dataFreshness === 'warming') {
         patch.source = 'rest-fallback';
         patch.dataFreshness = 'rest-fallback';
@@ -1209,6 +1185,7 @@
     });
 
     syncPanelVisibility(root, settings);
+    syncExoPanelVisibility(root, settings);
     renderPanelFreshness(root, state);
 
     // Update Info Panel Tab
@@ -1247,6 +1224,8 @@
       showDOM: settings.showDOM,
       selectedDomSymbol: state.selectedDomSymbol,
       symbol: state.symbol,
+      domColumns: settings.domColumns,
+      domValueMode: settings.domValueMode,
       domSoftWallPercentile: settings.domSoftWallPercentile,
       domMajorWallPercentile: settings.domMajorWallPercentile
     };
@@ -1274,6 +1253,12 @@
       showHeatmap: settings.showHeatmap === true,
       showFootprint: settings.showFootprint === true,
       showSessionZones: settings.showSessionZones !== false,
+      showVwap: settings.showVwap,
+      showVwapBands: settings.showVwapBands,
+      showVolumeProfile: settings.showVolumeProfile,
+      showCVD: settings.showCVD,
+      showLastPrice: settings.showLastPrice,
+      showGrid: settings.showGrid,
       sessionProfile: settings.sessionProfile || 'global'
     };
 
@@ -1349,10 +1334,139 @@
     if (V6OF.CanvasChart && V6OF.CanvasChart.draw) {
       if (shouldRender(root, 'chart', chartSlice, force)) {
         queueRender(root, 'chart', function () {
-          V6OF.CanvasChart.draw(root.querySelector('[data-v6-chart]'), state);
+          V6OF.CanvasChart.draw(root.querySelector('[data-v6-chart]'), makeChartRenderState(state));
         });
       }
     }
+  }
+
+  // ── Floating settings menu (reusable) ──────────────────────────────────
+  function showFloatingMenu(root, anchor, items, store) {
+    // Remove any existing floating menu
+    var existing = root.querySelector('.exo-float-menu');
+    if (existing) existing.remove();
+
+    var menu = document.createElement('div');
+    menu.className = 'exo-float-menu';
+    menu.setAttribute('data-exo-float-menu', '');
+
+    items.forEach(function (item) {
+      if (item.type === 'label') {
+        var lbl = document.createElement('div');
+        lbl.className = 'exo-float-label';
+        lbl.textContent = item.text;
+        menu.appendChild(lbl);
+      } else if (item.type === 'separator') {
+        var sep = document.createElement('div');
+        sep.className = 'exo-float-sep';
+        menu.appendChild(sep);
+      } else if (item.type === 'select') {
+        var row = document.createElement('label');
+        row.className = 'exo-float-row';
+        row.textContent = (item.label || item.key) + ' ';
+        var sel = document.createElement('select');
+        sel.className = 'exo-float-select';
+        sel.setAttribute('data-float-key', item.key);
+        item.options.forEach(function (opt) {
+          var o = document.createElement('option');
+          o.value = opt.value;
+          o.textContent = opt.label;
+          if (opt.value === item.current) o.selected = true;
+          sel.appendChild(o);
+        });
+        sel.addEventListener('change', function () {
+          var patch = {}; patch[item.key] = sel.value;
+          if (store && store.updateSettings) store.updateSettings(patch);
+        });
+        row.appendChild(sel);
+        menu.appendChild(row);
+      } else if (item.type === 'toggle') {
+        var row = document.createElement('label');
+        row.className = 'exo-float-row';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'exo-float-check';
+        cb.setAttribute('data-float-key', item.key);
+        var settings = store && store.getState ? store.getState().settings || {} : {};
+        // Boolean setting (e.g. showVwap) vs column-based (domColumns)
+        if (item.col) {
+          var cols = settings[item.setting];
+          if (!Array.isArray(cols) || cols.length === 0) {
+            cols = ['vol', 'sell', 'buy', 'bid', 'price', 'ask', 'delta'];
+          }
+          if (item.col === 'price') {
+            cb.checked = true;
+            cb.disabled = true;
+          } else {
+            cb.checked = cols.indexOf(item.col) !== -1;
+          }
+          cb.addEventListener('change', function () {
+            var s = store && store.getState ? store.getState().settings || {} : {};
+            var c = s[item.setting];
+            if (!Array.isArray(c) || c.length === 0) {
+              c = ['vol', 'sell', 'buy', 'bid', 'price', 'ask', 'delta'];
+            }
+            if (cb.checked) {
+              if (c.indexOf(item.col) === -1) c.push(item.col);
+            } else {
+              c = c.filter(function (x) { return x !== item.col; });
+            }
+            var patch = {}; patch[item.setting] = c;
+            if (store && store.updateSettings) store.updateSettings(patch);
+          });
+        } else {
+          // Simple boolean setting
+          cb.checked = !!settings[item.setting];
+          cb.addEventListener('change', function () {
+            var patch = {}; patch[item.setting] = cb.checked;
+            if (store && store.updateSettings) store.updateSettings(patch);
+          });
+        }
+        row.appendChild(cb);
+        var span = document.createElement('span');
+        span.textContent = ' ' + item.label;
+        row.appendChild(span);
+        menu.appendChild(row);
+      } else if (item.type === 'button') {
+        var btn = document.createElement('button');
+        btn.className = 'exo-float-btn';
+        btn.textContent = item.text;
+        btn.addEventListener('click', function () {
+          menu.remove();
+          if (item.action === 'global-settings') {
+            root.classList.toggle('exo-settings-open');
+          }
+        });
+        menu.appendChild(btn);
+      }
+    });
+
+    root.appendChild(menu);
+
+    // Position fixed relative to viewport (avoids clipping from overflow:hidden on root)
+    var anchorRect = anchor.getBoundingClientRect();
+    menu.style.position = 'fixed';
+    menu.style.top = (anchorRect.bottom + 4) + 'px';
+    menu.style.left = anchorRect.left + 'px';
+    // Ensure menu stays within viewport
+    var menuRect = menu.getBoundingClientRect();
+    if (menuRect.right > window.innerWidth - 8) {
+      menu.style.left = (window.innerWidth - menuRect.width - 8) + 'px';
+    }
+    if (menuRect.bottom > window.innerHeight - 8) {
+      menu.style.top = (anchorRect.top - menuRect.height - 4) + 'px';
+    }
+
+    // Close on outside click
+    function closeMenu(e) {
+      if (!menu.contains(e.target) && e.target !== anchor && !anchor.contains(e.target)) {
+        menu.remove();
+        document.removeEventListener('click', closeMenu);
+      }
+    }
+    setTimeout(function () {
+      document.addEventListener('click', closeMenu);
+    }, 10);
   }
 
   function bind(root, store) {
@@ -1381,7 +1495,9 @@
       if (presetBtn) {
         var preset = presetBtn.getAttribute('data-v6-dom-preset');
         var newCols = [];
-        if (preset === 'minimal') {
+        if (preset === 'pro') {
+          newCols = ['vol', 'sell', 'buy', 'bid', 'price', 'ask', 'delta'];
+        } else if (preset === 'minimal') {
           newCols = ['bid', 'price', 'ask'];
         } else if (preset === 'delta') {
           newCols = ['price', 'buy', 'sell', 'delta'];
@@ -1427,6 +1543,14 @@
       }
 
       var btn = event.target.closest('[data-v6-action]');
+      // Close settings overlay when clicking the backdrop (outside settings panel)
+      if (!btn && root.classList.contains('exo-settings-open')) {
+        var settingsPanel = root.querySelector('[data-v6-panel="settings"]');
+        if (settingsPanel && !settingsPanel.contains(event.target)) {
+          root.classList.remove('exo-settings-open');
+          return;
+        }
+      }
       if (!btn) return;
       var action = btn.getAttribute('data-v6-action');
       var state = store.getState();
@@ -1457,15 +1581,165 @@
           btn.innerHTML = 'Metrics ' + (expanded ? '▴' : '▾');
         }
       } else if (action === 'global-settings') {
-        // Open/toggle the Settings panel in the right dock (Phase 2 — reuse existing tab).
-        // openDockTab is defined in 080_v6_layout_shell.js and attached to V6OF.Page.Shell;
-        // call it if available, otherwise fall back to a no-op so no error occurs.
-        if (V6OF.Page && V6OF.Page.Shell && typeof V6OF.Page.Shell.openDockTab === 'function') {
+        // Exocharts layout: toggle settings overlay
+        if (root.querySelector('[data-v6-layout="exocharts"]')) {
+          root.classList.toggle('exo-settings-open');
+        } else if (V6OF.Page && V6OF.Page.Shell && typeof V6OF.Page.Shell.openDockTab === 'function') {
           V6OF.Page.Shell.openDockTab('settings');
         } else {
-          // Try the rtab click method as a fallback
           var settingsTab = root.querySelector('[data-v6-rtab="settings"]');
           if (settingsTab) { settingsTab.click(); }
+        }
+      } else if (action === 'screenshot') {
+        // Placeholder: notify user screenshot feature is coming
+        if (typeof toast === 'function') {
+          toast('Screenshot feature coming soon', 'info');
+        }
+      } else if (action === 'dom-settings') {
+        // Floating DOM settings menu
+        showFloatingMenu(root, btn, [
+          { type: 'label', text: 'Value Mode' },
+          { type: 'select', key: 'domValueMode', options: [
+            { value: 'coin', label: 'Coin' },
+            { value: 'notional', label: 'Notional (USD)' },
+            { value: 'contracts', label: 'Contracts' },
+            { value: 'ticks', label: 'Ticks' }
+          ], current: (store.getState().settings || {}).domValueMode || 'coin' },
+          { type: 'separator' },
+          { type: 'label', text: 'Columns' },
+          { type: 'toggle', key: 'col-vol', label: 'Volume', setting: 'domColumns', col: 'vol' },
+          { type: 'toggle', key: 'col-sell', label: 'Sell', setting: 'domColumns', col: 'sell' },
+          { type: 'toggle', key: 'col-buy', label: 'Buy', setting: 'domColumns', col: 'buy' },
+          { type: 'toggle', key: 'col-bid', label: 'Bid', setting: 'domColumns', col: 'bid' },
+          { type: 'toggle', key: 'col-ask', label: 'Ask', setting: 'domColumns', col: 'ask' },
+          { type: 'toggle', key: 'col-delta', label: 'Delta', setting: 'domColumns', col: 'delta' },
+          { type: 'separator' },
+          { type: 'button', text: 'Full Settings...', action: 'global-settings' }
+        ], store);
+      } else if (action === 'add-widget') {
+        // Dropdown list of indicators — opens below button, no scroll, grows naturally
+        var existing = root.querySelector('.exo-widget-drop');
+        if (existing) { existing.remove(); return; }
+
+        var drop = document.createElement('div');
+        drop.className = 'exo-widget-drop';
+        var currentSettings = store.getState().settings || {};
+        var resolved = V6OF.resolveSettings ? V6OF.resolveSettings(currentSettings) : currentSettings;
+
+        function addToggle(key, label, setting) {
+          var row = document.createElement('label');
+          row.className = 'exo-widget-row';
+          var cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.checked = !!resolved[setting];
+          cb.addEventListener('change', function () {
+            var patch = {}; patch[setting] = cb.checked;
+            store.updateSettings(patch);
+          });
+          row.appendChild(cb);
+          row.appendChild(document.createTextNode(' ' + label));
+          drop.appendChild(row);
+        }
+
+        var head = document.createElement('div');
+        head.className = 'exo-widget-head';
+        head.textContent = 'Indicators';
+        drop.appendChild(head);
+
+        addToggle('w-vwap', 'VWAP', 'showVwap');
+        addToggle('w-vwap-bands', 'VWAP Bands', 'showVwapBands');
+        addToggle('w-vol-profile', 'Volume Profile', 'showVolumeProfile');
+        addToggle('w-cvd', 'CVD / Delta', 'showCVD');
+        addToggle('w-heatmap', 'Heatmap', 'showHeatmap');
+        addToggle('w-footprint', 'Footprint', 'showFootprint');
+        addToggle('w-sessions', 'Session Zones', 'showSessionZones');
+        addToggle('w-last-price', 'Last Price Line', 'showLastPrice');
+
+        var head2 = document.createElement('div');
+        head2.className = 'exo-widget-head';
+        head2.textContent = 'Panels';
+        drop.appendChild(head2);
+
+        addToggle('w-tape', 'Tape', 'showTape');
+        addToggle('w-dom', 'DOM', 'showDOM');
+
+        var head3 = document.createElement('div');
+        head3.className = 'exo-widget-head';
+        head3.textContent = 'Chart';
+        drop.appendChild(head3);
+
+        addToggle('w-candles', 'Candles', 'showCandles');
+        addToggle('w-grid', 'Grid', 'showGrid');
+
+        root.appendChild(drop);
+
+        // Position fixed below the button (avoids clipping from overflow:hidden on root)
+        var btnRect = btn.getBoundingClientRect();
+        drop.style.position = 'fixed';
+        drop.style.top = (btnRect.bottom + 2) + 'px';
+        drop.style.left = btnRect.left + 'px';
+        // Flip above if would overflow viewport
+        drop.style.visibility = 'hidden'; // hide while measuring
+        document.body.appendChild(drop); // temporarily in body to measure
+        var dropRect = drop.getBoundingClientRect();
+        document.body.removeChild(drop);
+        root.appendChild(drop);
+        drop.style.visibility = '';
+        if (dropRect.bottom > window.innerHeight - 8) {
+          drop.style.top = (btnRect.top - dropRect.height - 2) + 'px';
+        }
+        if (dropRect.right > window.innerWidth - 8) {
+          drop.style.left = (window.innerWidth - dropRect.width - 8) + 'px';
+        }
+
+        // Close on outside click
+        function closeDrop(e) {
+          if (!drop.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+            drop.remove();
+            document.removeEventListener('click', closeDrop);
+          }
+        }
+        setTimeout(function () { document.addEventListener('click', closeDrop); }, 10);
+      } else if (action === 'close-panel') {
+        var panelName = btn.getAttribute('data-panel');
+        var workspace = root.querySelector('.exo-workspace');
+        if (panelName === 'dom') {
+          var domPanel = root.querySelector('.exo-dom-panel');
+          var domBody = root.querySelector('.exo-dom-body');
+          var domHead = root.querySelector('.exo-dom-head');
+          var domToolbar = root.querySelector('.exo-dom-toolbar');
+          if (domBody) {
+            var hidden = domBody.style.display === 'none';
+            domBody.style.display = hidden ? '' : 'none';
+            if (domHead) domHead.style.display = hidden ? '' : 'none';
+            if (domToolbar) domToolbar.style.display = hidden ? '' : 'none';
+            domPanel.classList.toggle('exo-dom-collapsed', !hidden);
+            // Sync showDOM setting with panel state
+            store.updateSettings({ showDOM: hidden });
+            // Update × button text
+            var domCloseBtn = root.querySelector('.exo-dom-tabs .exo-tab-close');
+            if (domCloseBtn) domCloseBtn.textContent = hidden ? '×' : '+';
+          }
+          // Force chart redraw after layout change
+          var _st1 = V6OF.getStore ? V6OF.getStore(root) : null;
+          if (_st1) setTimeout(function() { render(root, _st1.getState(), true); }, 150);
+        } else if (panelName === 'chart') {
+          var chartStage = root.querySelector('.exo-chart-stage');
+          var leftTools = root.querySelector('.exo-left-tools');
+          var chartTabs = root.querySelector('.exo-chart-tabs');
+          if (chartStage) {
+            var hidden = chartStage.style.display === 'none';
+            chartStage.style.display = hidden ? '' : 'none';
+            if (leftTools) leftTools.style.display = hidden ? '' : 'none';
+            // Update × button text
+            var chartCloseBtn = root.querySelector('.exo-chart-tabs .exo-tab-close');
+            if (chartCloseBtn) chartCloseBtn.textContent = hidden ? '×' : '+';
+            // Keep tabs visible
+            if (chartTabs) chartTabs.style.display = '';
+          }
+          // Force chart redraw after layout change
+          var _st2 = V6OF.getStore ? V6OF.getStore(root) : null;
+          if (_st2) setTimeout(function() { render(root, _st2.getState(), true); }, 150);
         }
       } else if (action === 'layer') {
         var layerKeys = { candles: 'showCandles', bubbles: 'showBubbles', heatmap: 'showHeatmap', footprint: 'showFootprint' };
@@ -1585,9 +1859,10 @@
           }).catch(function(e) { console.warn('[TAPE] REST trades failed', e); });
 
           // 3. Klines → pre-fill the chart
+          var klineLimit = restKlinePrefillLimit(tf);
           var klinesUrl = isHL
-            ? '/api/hyperliquid/klines?market=' + normSymbol + '&interval=' + tf + '&limit=500'
-            : '/api/market/klines?symbol=' + normSymbol + '&interval=' + tf + '&limit=500';
+            ? '/api/hyperliquid/klines?market=' + normSymbol + '&interval=' + tf + '&limit=' + klineLimit
+            : '/api/market/klines?symbol=' + normSymbol + '&interval=' + tf + '&limit=' + klineLimit;
           _cachedFetch(klinesUrl, 60000, true).then(function(data) {
             var candles = applyRestCandles(store, data, source, tf, 'rest-klines');
             if (candles.length) console.log('[CHART] REST klines loaded: ' + candles.length);
@@ -1693,9 +1968,10 @@
             applyRestTrades(store, data, source, normSymbol, 'rest-trades');
           }).catch(function(e) { console.warn('[TAPE] REST trades failed', e); });
 
+          var klineLimit = restKlinePrefillLimit(tf);
           var klinesUrl = isHL
-            ? '/api/hyperliquid/klines?market=' + normSymbol + '&interval=' + tf + '&limit=500'
-            : '/api/market/klines?symbol=' + normSymbol + '&interval=' + tf + '&limit=500';
+            ? '/api/hyperliquid/klines?market=' + normSymbol + '&interval=' + tf + '&limit=' + klineLimit
+            : '/api/market/klines?symbol=' + normSymbol + '&interval=' + tf + '&limit=' + klineLimit;
           _cachedFetch(klinesUrl, 60000).then(function(data) {
             applyRestCandles(store, data, source, tf, 'rest-klines');
           }).catch(function(e) { console.warn('[CHART] REST klines failed', e); });
@@ -1764,17 +2040,17 @@
       } else if (key === 'tapeFontSize') {
         store.updateSettings({ tapeFontSize: Math.max(8, Math.min(20, Number(input.value) || 10)) });
       } else if (key === 'maxRows') {
-        store.updateSettings({ maxRows: Math.max(8, Math.min(500, Number(input.value) || 42)) });
+        store.updateSettings({ maxRows: Math.max(8, Math.min(100000, Number(input.value) || 5000)) });
       } else if (key === 'restTradePrefillLimit') {
-        store.updateSettings({ restTradePrefillLimit: Math.max(50, Math.min(5000, Math.round(Number(input.value) || 500))) });
+        store.updateSettings({ restTradePrefillLimit: Math.max(50, Math.min(100000, Math.round(Number(input.value) || 100000))) });
       } else if (key === 'maxTrades') {
-        store.updateSettings({ maxTrades: Math.max(50, Math.min(5000, Number(input.value) || 500)) });
+        store.updateSettings({ maxTrades: Math.max(50, Math.min(100000, Number(input.value) || 100000)) });
       } else if (key === 'maxHeatmapFrames') {
-        store.updateSettings({ heatmapMaxFrames: Math.max(60, Math.min(10000, Math.round(Number(input.value) || 3600))) });
+        store.updateSettings({ heatmapMaxFrames: Math.max(60, Math.min(100000, Math.round(Number(input.value) || 100000))) });
       } else if (key === 'maxFootprintCandles') {
-        store.updateSettings({ footprintMaxCandles: Math.max(60, Math.min(5000, Math.round(Number(input.value) || 1200))) });
+        store.updateSettings({ footprintMaxCandles: Math.max(60, Math.min(100000, Math.round(Number(input.value) || 100000))) });
       } else if (key === 'footprintHistoryLookbackMinutes') {
-        var lookbackMinutes = Math.max(1, Math.min(10080, Math.round(Number(input.value) || 360)));
+        var lookbackMinutes = Math.max(1, Math.min(100000, Math.round(Number(input.value) || 10080)));
         store.updateSettings({ footprintHistoryLookbackMinutes: lookbackMinutes });
         if (root._v6EngineClient && root._v6EngineClient.fetchFootprintHistory) {
           root._v6EngineClient.fetchFootprintHistory({
@@ -1951,6 +2227,159 @@
         }
         tryWire();
         if (!wired) requestAnimationFrame(tryWire);
+      }
+
+      // ── Exocharts layout: resize handle ──────────────────────────────────
+      var resizeHandle = root.querySelector('[data-v6-resize-handle]');
+      if (resizeHandle) {
+        var domPanel = root.querySelector('.exo-dom-panel');
+        var resizeState = null;
+        resizeHandle.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          resizeState = {
+            startX: e.clientX,
+            startWidth: domPanel ? domPanel.getBoundingClientRect().width : 292
+          };
+          resizeHandle.classList.add('exo-resizing');
+          document.body.style.cursor = 'col-resize';
+          document.body.style.userSelect = 'none';
+        });
+        document.addEventListener('mousemove', function (e) {
+          if (!resizeState) return;
+          var delta = resizeState.startX - e.clientX;
+          var newWidth = Math.max(180, Math.min(600, resizeState.startWidth + delta));
+          root.style.setProperty('--exo-dom', newWidth + 'px');
+          try { localStorage.setItem('cockpitV6.exoDomWidth', String(Math.round(newWidth))); } catch (_) {}
+          // Throttle chart redraw to once per frame
+          if (!resizeState._raf) {
+            resizeState._raf = requestAnimationFrame(function () {
+              resizeState._raf = null;
+              var st = V6OF.getStore ? V6OF.getStore(root) : null;
+              if (st) render(root, st.getState(), true);
+            });
+          }
+        });
+        document.addEventListener('mouseup', function () {
+          if (!resizeState) return;
+          resizeState = null;
+          resizeHandle.classList.remove('exo-resizing');
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+        });
+        // Restore saved width
+        try {
+          var savedWidth = localStorage.getItem('cockpitV6.exoDomWidth');
+          if (savedWidth) {
+            root.style.setProperty('--exo-dom', Math.max(180, Math.min(600, Number(savedWidth))) + 'px');
+          }
+        } catch (_) {}
+      }
+
+      // ── Exocharts layout: logo page navigation menu ───────────────────
+      var logoBtn = root.querySelector('[data-exo-logo-menu]');
+      var pageMenu = root.querySelector('[data-exo-page-menu]');
+      if (logoBtn && pageMenu) {
+        logoBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          e.preventDefault();
+          var isHidden = pageMenu.hidden;
+          pageMenu.hidden = !isHidden;
+          if (!isHidden) {
+            var rect = logoBtn.getBoundingClientRect();
+            pageMenu.style.top = (rect.bottom + 4) + 'px';
+            pageMenu.style.left = rect.left + 'px';
+            // Highlight current page
+            var cp = document.body.getAttribute('data-current-page') || 'orderflow';
+            var items = pageMenu.querySelectorAll('[data-exo-page]');
+            items.forEach(function (item) {
+              item.classList.toggle('exo-active', item.getAttribute('data-exo-page') === cp);
+            });
+          }
+        });
+        // Navigate on page item click
+        pageMenu.addEventListener('click', function (e) {
+          var item = e.target.closest('[data-exo-page]');
+          if (!item) return;
+          var page = item.getAttribute('data-exo-page');
+          pageMenu.hidden = true;
+          if (page && typeof goPage === 'function') {
+            goPage(page);
+          }
+        });
+        // Close on outside click
+        document.addEventListener('click', function (e) {
+          if (!pageMenu.hidden && !pageMenu.contains(e.target) && !e.target.closest('[data-exo-logo-menu]')) {
+            pageMenu.hidden = true;
+          }
+        });
+      }
+
+      // ── Exocharts layout: window controls ─────────────────────────────
+      if (root.querySelector('[data-window-close]')) {
+        function winAction(type) {
+          // Wails
+          if (window.runtime) {
+            if (type === 'min' && window.runtime.WindowMinimise) return window.runtime.WindowMinimise();
+            if (type === 'max' && window.runtime.WindowToggleMaximise) return window.runtime.WindowToggleMaximise();
+            if (type === 'close' && window.runtime.Quit) return window.runtime.Quit();
+          }
+          // Electron
+          if (window.electronAPI) {
+            if (type === 'min' && window.electronAPI.minimize) return window.electronAPI.minimize();
+            if (type === 'max' && window.electronAPI.toggleMaximize) return window.electronAPI.toggleMaximize();
+            if (type === 'close' && window.electronAPI.close) return window.electronAPI.close();
+          }
+          // Tauri
+          if (window.__TAURI__ && window.__TAURI__.window && window.__TAURI__.window.getCurrentWindow) {
+            var tw = window.__TAURI__.window.getCurrentWindow();
+            if (type === 'min') return tw.minimize();
+            if (type === 'max') return tw.toggleMaximize();
+            if (type === 'close') return tw.close();
+          }
+          // Browser fallback
+          if (type === 'close') window.close();
+          if (typeof toast === 'function') toast('Desktop app mode only', 'info');
+        }
+        root.querySelector('[data-window-minimize]').addEventListener('click', function () { winAction('min'); });
+        root.querySelector('[data-window-maximize]').addEventListener('click', function () { winAction('max'); });
+        root.querySelector('[data-window-close]').addEventListener('click', function () { winAction('close'); });
+      }
+
+      // ── Old nav popup cleanup (replaced by exo-page-menu above) ────────
+      var oldNavPopup = root.querySelector('.exo-nav-popup');
+      if (oldNavPopup) oldNavPopup.remove();
+
+      // ── Exocharts layout: settings close button ───────────────────────────
+      var settingsPanel = root.querySelector('[data-v6-panel="settings"]');
+      if (settingsPanel) {
+        var closeBtn = document.createElement('button');
+        closeBtn.className = 'exo-settings-close';
+        closeBtn.innerHTML = '×';
+        closeBtn.title = 'Close settings';
+        closeBtn.addEventListener('click', function () {
+          root.classList.remove('exo-settings-open');
+        });
+        settingsPanel.insertBefore(closeBtn, settingsPanel.firstChild);
+      }
+
+      // ── Clock updater ──────────────────────────────────────────────────
+      var clockEl = root.querySelector('.exo-clock');
+      if (clockEl) {
+        function updateClock() {
+          var now = new Date();
+          var days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+          var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+          var h = now.getHours().toString().padStart(2,'0');
+          var m = now.getMinutes().toString().padStart(2,'0');
+          var s = now.getSeconds().toString().padStart(2,'0');
+          var timeStr = days[now.getDay()] + ' ' + now.getDate() + ' ' + months[now.getMonth()] + '  ' + h + ':' + m;
+          clockEl.textContent = timeStr;
+          var statusTime = root.querySelector('[data-v6-status-time]');
+          if (statusTime) statusTime.textContent = h + ':' + m + ':' + s;
+        }
+        updateClock();
+        var clockInterval = setInterval(updateClock, 10000);
+        ctx.listeners.push({ target: null, type: 'interval', fn: function() { clearInterval(clockInterval); } });
       }
 
       // Initialize and auto-connect the WebSocket engine client on startup

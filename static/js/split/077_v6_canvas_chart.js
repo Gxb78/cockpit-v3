@@ -532,74 +532,101 @@
   // Expose time axis helpers for external handling
   V6OF.timeAxisDate = timeAxisDate;
 
+  // V6 dark-cockpit canvas tokens (mirrors the CSS custom properties in
+  // 072_v6_orderflow_refactor.css — canvas can't read CSS vars, so the same
+  // values are hard-coded here for the axis/grid layer).
+  var AXIS_GRID_LINE   = 'rgba(255, 255, 255, 0.045)';  // faint plot gridlines
+  var AXIS_BORDER_LINE = 'rgba(255, 255, 255, 0.10)';   // gutter separators
+  var AXIS_TEXT        = 'rgba(154, 160, 171, 0.92)';   // --v6-text-dim
+  var AXIS_TEXT_NOW    = '#d7d9de';                     // --v6-text (now line)
+  var AXIS_FONT        = '600 10px JetBrains Mono, Consolas, monospace';
+
   function drawGridAndScales(ctx, vp, plot, settings) {
     var pTicks = priceTicks(vp.priceMin, vp.priceMax, 6);
     var tInfo = timeTicks(vp.timeStart, vp.timeEnd, 7);
-
-      // Price scale (right gutter)
     var effectiveGB = (vp && vp._gutterBottom != null) ? vp._gutterBottom : GUTTER_BOTTOM;
     var gx = plot.left + plot.width;
-    ctx.fillStyle = settings.bgColor || '#ffffff';
+    var by = plot.top + plot.height;
+
+    // ── Plot gridlines (faint, behind candles) ─────────────────────────────
+    ctx.save();
+    ctx.strokeStyle = AXIS_GRID_LINE;
+    ctx.lineWidth = 1;
+    pTicks.forEach(function (price) {
+      var y = Math.round(vp.priceToY(price)) + 0.5;
+      if (y < plot.top || y > plot.top + plot.height) return;
+      ctx.beginPath();
+      ctx.moveTo(plot.left, y);
+      ctx.lineTo(plot.left + plot.width, y);
+      ctx.stroke();
+    });
+    tInfo.ticks.forEach(function (ts) {
+      var x = Math.round(vp.timeToX(ts)) + 0.5;
+      if (x < plot.left || x > plot.left + plot.width) return;
+      ctx.beginPath();
+      ctx.moveTo(x, plot.top);
+      ctx.lineTo(x, plot.top + plot.height);
+      ctx.stroke();
+    });
+    ctx.restore();
+
+    // ── Price scale (right gutter) ─────────────────────────────────────────
+    ctx.fillStyle = settings.bgColor || '#0a0b0d';
     ctx.fillRect(gx, plot.top - PAD_TOP, GUTTER_RIGHT, plot.height + PAD_TOP + effectiveGB);
-    ctx.strokeStyle = 'rgba(19, 23, 34, 0.18)';
+    ctx.strokeStyle = AXIS_BORDER_LINE;
     ctx.beginPath();
-    ctx.moveTo(gx + 0.5, plot.top);
-    ctx.lineTo(gx + 0.5, plot.top + plot.height);
+    ctx.moveTo(gx + 0.5, plot.top - PAD_TOP);
+    ctx.lineTo(gx + 0.5, plot.top + plot.height + effectiveGB);
     ctx.stroke();
-    ctx.fillStyle = 'rgba(19, 23, 34, 0.70)';
-    ctx.font = '10px JetBrains Mono, Consolas, monospace';
+    ctx.fillStyle = AXIS_TEXT;
+    ctx.font = AXIS_FONT;
     ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
     pTicks.forEach(function (price) {
       var y = vp.priceToY(price);
       if (y < plot.top + 4 || y > plot.top + plot.height - 2) return;
-      ctx.fillText(V6OF.format.price(price), gx + 5, y + 3);
+      ctx.fillText(V6OF.format.price(price), gx + 8, y + 1);
     });
+    ctx.textBaseline = 'alphabetic';
 
-    // Time scale (bottom) — skip when gutter is suppressed (sub-pane owns it)
-    var effectiveGB = (vp && vp._gutterBottom != null) ? vp._gutterBottom : GUTTER_BOTTOM;
-    var by = plot.top + plot.height;
-    ctx.fillStyle = settings.bgColor || '#ffffff';
-    ctx.fillRect(plot.left, by, plot.width, effectiveGB);
-    ctx.strokeStyle = 'rgba(19, 23, 34, 0.18)';
-    ctx.beginPath();
-    ctx.moveTo(plot.left, by + 0.5);
-    ctx.lineTo(plot.left + plot.width, by + 0.5);
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(19, 23, 34, 0.70)';
-    ctx.font = '10px JetBrains Mono, Consolas, monospace';
-    ctx.textAlign = 'center';
-    tInfo.ticks.forEach(function (ts, idx) {
-      var x = vp.timeToX(ts);
-      if (x < plot.left + 16 || x > plot.left + plot.width - 16) return;
-      var d = new Date(ts);
-      var dayKey = d.getUTCFullYear() + '-' + d.getUTCMonth() + '-' + d.getUTCDate();
-      var prevDayKey = idx > 0 ? (function () {
-        var pd = new Date(tInfo.ticks[idx - 1]);
-        return pd.getUTCFullYear() + '-' + pd.getUTCMonth() + '-' + pd.getUTCDate();
-      })() : null;
-      var isNewDay = prevDayKey && dayKey !== prevDayKey;
-      
-      var label;
-      // Always show date+time on the first tick (so you always know the day).
-      if (tInfo.step >= 86400000 || isNewDay) {
-        label = V6OF.timeAxisDate(ts);
-      } else if (tInfo.step >= 86400000) {
-        // Step >= 1 day â†’ always show "DD Mon"
-        label = V6OF.timeAxisDate(ts);
-      } else if (false) {
-        // Span covers multiple days â†’ show "DD Mon HH:MM" on day boundaries
-        label = V6OF.timeAxisDate(ts) + ' ' + timeAxisLabel(ts, tInfo.step);
-      } else if (isNewDay) {
-        label = V6OF.timeAxisDate(ts);
-      } else {
-        label = timeAxisLabel(ts, tInfo.step);
-      }
+    // ── Time scale (bottom) — skip when gutter is suppressed (sub-pane owns it) ──
+    if (effectiveGB > 0) {
+      ctx.fillStyle = settings.bgColor || '#0a0b0d';
+      ctx.fillRect(plot.left, by, plot.width + GUTTER_RIGHT, effectiveGB);
+      ctx.strokeStyle = AXIS_BORDER_LINE;
       ctx.beginPath();
-      ctx.moveTo(x, by);
-      ctx.lineTo(x, by + 4);
+      ctx.moveTo(plot.left, by + 0.5);
+      ctx.lineTo(plot.left + plot.width + GUTTER_RIGHT, by + 0.5);
       ctx.stroke();
-      ctx.fillText(label, x, by + 15);
-    });
+      ctx.fillStyle = AXIS_TEXT;
+      ctx.font = AXIS_FONT;
+      ctx.textAlign = 'center';
+      ctx.strokeStyle = AXIS_BORDER_LINE;
+      tInfo.ticks.forEach(function (ts, idx) {
+        var x = vp.timeToX(ts);
+        if (x < plot.left + 16 || x > plot.left + plot.width - 16) return;
+        var d = new Date(ts);
+        var dayKey = d.getUTCFullYear() + '-' + d.getUTCMonth() + '-' + d.getUTCDate();
+        var prevDayKey = idx > 0 ? (function () {
+          var pd = new Date(tInfo.ticks[idx - 1]);
+          return pd.getUTCFullYear() + '-' + pd.getUTCMonth() + '-' + pd.getUTCDate();
+        })() : null;
+        var isNewDay = prevDayKey && dayKey !== prevDayKey;
+
+        var label;
+        // Always show date+time on the first tick (so you always know the day).
+        if (tInfo.step >= 86400000 || isNewDay) {
+          label = V6OF.timeAxisDate(ts);
+        } else {
+          label = timeAxisLabel(ts, tInfo.step);
+        }
+        ctx.beginPath();
+        ctx.moveTo(x + 0.5, by);
+        ctx.lineTo(x + 0.5, by + 4);
+        ctx.stroke();
+        ctx.fillText(label, x, by + 16);
+      });
+    }
     ctx.textAlign = 'left';
   }
 
@@ -626,8 +653,10 @@
     var emit = emitGuess(frames);
     var scaleY = plot.height / vp.priceSpan();
 
-    // Light base
-    ctx.fillStyle = '#e8eaed';
+    // Dark base (matches V6 theme) -- the heatmap cells (viridis colormap)
+    // are drawn on top; areas with no liquidity data stay this dark shade
+    // instead of a jarring light-theme block.
+    ctx.fillStyle = settings.bgColor || '#0a0b0d';
     ctx.fillRect(plot.left, plot.top, plot.width, plot.height);
 
     var startIndex = firstFrameIndexAtOrBefore(frames, vp.timeStart);
@@ -1008,6 +1037,10 @@
         var synthW = Math.max(2, Math.min(plot.left + plot.width, x2 - 1) - synthX);
         ctx.fillStyle = 'rgba(148, 163, 184, 0.08)';
         ctx.fillRect(synthX, plot.top, synthW, plot.height);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(synthX, plot.top, synthW, plot.height);
+        ctx.clip();
         ctx.strokeStyle = 'rgba(148, 163, 184, 0.32)';
         ctx.lineWidth = 1;
         for (var sx = synthX - plot.height; sx < synthX + synthW; sx += 8) {
@@ -1016,6 +1049,7 @@
           ctx.lineTo(sx + plot.height, plot.top);
           ctx.stroke();
         }
+        ctx.restore();
         ctx.setLineDash([3, 3]);
         ctx.strokeStyle = 'rgba(226, 232, 240, 0.7)';
         ctx.beginPath();

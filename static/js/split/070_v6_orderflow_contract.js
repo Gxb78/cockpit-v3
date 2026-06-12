@@ -213,6 +213,7 @@
         timeframe: '1m',
         dataSource: 'binance',
         trades: [],
+        tradeHistoryCount: 0,
         orderBook: null,
         lastOrderBookBySymbol: {},
         orderBookCount: 0,
@@ -231,6 +232,7 @@
         candles: [],
         chartCandles: [],
         deltaBuckets: [],
+        deltaBucketHistoryCount: 0,
         deltaBucketsByInterval: {},
         latestDeltaByInterval: {},
         vwap: null,
@@ -238,13 +240,15 @@
         _candlesByInterval: {},
         lastMessageAt: 0,
         isStale: false,
+        depthHistory: [],
+        depthHistoryCount: 0,
         // ── Workspace bridge (fed by 089_v6_workspace_manager) ──
         activeWorkspace: 'Scalping',
         workspaceList: {},
         // ── Render config ──
         settings: {
           minQty: 0,
-          maxRows: 420,
+          maxRows: 5000,
           showTape: true,
           showDOM: true,
           showCVD: true,
@@ -261,12 +265,12 @@
           upColor: '#089981',
           downColor: '#f23645',
           chartMode: 'both',
-          maxTrades: 5000,
-          heatmapMaxFrames: 3600,
-          footprintMaxCandles: 1200,
-          footprintHistoryLookbackMinutes: 360,
+          maxTrades: 100000,
+          heatmapMaxFrames: 100000,
+          footprintMaxCandles: 100000,
+          footprintHistoryLookbackMinutes: 10080,
           deltaIntervalMs: 60000,
-          domDepth: 1000,
+          domDepth: 5000,
           domRangeLevels: 1000,
           domValueMode: 'coin',
           tickSize: 1,
@@ -318,13 +322,13 @@
     // ── Domain accessors: decompose flat state into architectural domains ──
 
     TRADER_FIELDS: [
-      'symbol','timeframe','dataSource','trades',
+      'symbol','timeframe','dataSource','trades','tradeHistoryCount',
       'orderBook','lastOrderBookBySymbol','orderBookCount','lastOrderBookTs','selectedDomSymbol',
       'heatmapFrames','heatmapFrameCount','lastHeatmapFrame','lastHeatmapTs','selectedHeatmapSymbol',
       'footprintCandles','footprintCandleCount','lastFootprintCandle','lastFootprintTs','selectedFootprintSymbol',
       'candles','chartCandles','_candlesByInterval',
-      'deltaBuckets','deltaBucketsByInterval','latestDeltaByInterval',
-      'vwap','vwapBySymbol'
+      'deltaBuckets','deltaBucketHistoryCount','deltaBucketsByInterval','latestDeltaByInterval',
+      'vwap','vwapBySymbol','depthHistory','depthHistoryCount'
     ],
     getTraderState: function (state) {
       var t = {};

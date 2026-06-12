@@ -15,7 +15,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   } catch (_) { /* fallback silencieux sur les valeurs hardcodees */ }
 
-  document.body.setAttribute("data-current-page", state.currentPage || "today");
+  document.body.setAttribute("data-current-page", state.currentPage || "orderflow");
   state.settings = loadSettingsState();
   state.calendarMetricMode = loadCalendarMetricMode();
   state.journalViewMode = loadJournalViewMode();
@@ -45,9 +45,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   // clicking the restored page would early-return in goPage() and show nothing
   // until you navigate away and back. Apply active classes + fire pageChange.
   (function syncRestoredPage() {
-    var pageName = state.currentPage || "today";
+    var pageName = state.currentPage || "orderflow";
     var targetPage = document.querySelector('.page[data-page="' + pageName + '"]');
-    if (!targetPage) { pageName = "today"; targetPage = document.querySelector('.page[data-page="today"]'); }
+    if (!targetPage) { pageName = "orderflow"; targetPage = document.querySelector('.page[data-page="orderflow"]'); }
     if (!targetPage) return;
     document.body.setAttribute("data-current-page", pageName);
     $$(".page").forEach(function (p) { p.classList.toggle("active", p.dataset.page === pageName); });

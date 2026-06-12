@@ -128,13 +128,24 @@
       '" data-v6-' + sc + 'tab="' + spec.id + '" draggable="true"' + extra + '>' + content + '</button>';
   }
 
-  function tabsHtml(side, panelIds, activeId) {
+  function tabsHtml(side, panelIds, activeId, missingPanels) {
     var sc = side === 'left' ? 'l' : 'r';
     var parts = ['<div class="v6-' + sc + 'tabs" data-v6-' + sc + 'tabs role="tablist" aria-label="Orderflow ' + side + ' tabs">'];
     panelIds.forEach(function (id) {
       var spec = PANEL_SPECS[id];
       if (spec && !spec.icon) parts.push(tabHtml(spec, id === activeId, side));
     });
+    if (missingPanels && missingPanels.length) {
+      parts.push('<div class="v6-' + sc + 'tab-add-wrap">');
+      parts.push('<button type="button" class="v6-' + sc + 'tab v6-' + sc + 'tab-icon v6-' + sc + 'tab-add" data-v6-panel-add-toggle="' + side + '" title="Add panel" aria-label="Add panel" aria-haspopup="true" aria-expanded="false">+</button>');
+      parts.push('<div class="v6-tab-add-popover" data-v6-panel-add-popover="' + side + '" hidden>');
+      missingPanels.forEach(function (id) {
+        var spec = PANEL_SPECS[id];
+        parts.push('<button type="button" class="v6-tab-add-item" data-v6-panel-add="' + id + '" data-v6-panel-add-side="' + side + '">' + spec.label + '</button>');
+      });
+      parts.push('</div>');
+      parts.push('</div>');
+    }
     if (side === 'right') {
       parts.push('<button type="button" class="v6-rtab v6-rtab-icon" data-v6-dock-toggle title="Collapse dock" aria-label="Collapse dock">&#10094;</button>');
     } else {
@@ -268,6 +279,9 @@
     },
     init: function (root) {
       if (!root) return;
+      // Exocharts layout: shellHtml() already produces the final structure —
+      // no TV-style re-homing needed.
+      if (root.querySelector('[data-v6-layout="exocharts"]')) return;
       var shell = root.querySelector('.v6-shell');
       var grid = root.querySelector('.v6-grid');
       if (!shell || !grid) return;
@@ -402,17 +416,29 @@
           return root.querySelector('[data-v6-panel="' + id + '"]') || root.querySelector('.v6-panel-' + id);
         };
 
+        // Panels currently re-homed into a chart-grid cell (by 094) must not
+        // be re-claimed by the dock's tab/body rendering — otherwise the
+        // dock and the grid fight over the same single-instance node.
+        var gridPlaced = V6OF._gridPlacedPanels || {};
+
         var leftPanels = (schema.left || []).filter(function (id) {
+          if (gridPlaced[id]) return false;
           if (id === 'dom') return settings.showDOM !== false;
           if (id === 'tape') return settings.showTape !== false;
           if (id === 'cvd') return settings.showCVD !== false;
           return true;
         });
         var rightPanels = (schema.right || []).filter(function (id) {
+          if (gridPlaced[id]) return false;
           if (id === 'dom') return settings.showDOM !== false;
           if (id === 'tape') return settings.showTape !== false;
           if (id === 'cvd') return settings.showCVD !== false;
           return true;
+        });
+
+        var inSchema = (schema.left || []).concat(schema.right || []);
+        var missingPanels = Object.keys(PANEL_SPECS).filter(function (id) {
+          return inSchema.indexOf(id) === -1 && !PANEL_SPECS[id].icon;
         });
 
         var showLeft = leftPanels.length > 0;
@@ -424,11 +450,11 @@
         if (rightResize) rightResize.classList.toggle('is-hidden', !showRight);
 
         var activeLeft = schema.activeLeftTab || (leftPanels[0] || '');
-        ltabsContainer.innerHTML = showLeft ? tabsHtml('left', leftPanels, activeLeft) : '';
+        ltabsContainer.innerHTML = showLeft ? tabsHtml('left', leftPanels, activeLeft, missingPanels) : '';
         lbody.className = 'v6-lbody show-' + activeLeft;
 
         var activeRight = schema.activeRightTab || (rightPanels[0] || '');
-        rtabsContainer.innerHTML = showRight ? tabsHtml('right', rightPanels, activeRight) : '';
+        rtabsContainer.innerHTML = showRight ? tabsHtml('right', rightPanels, activeRight, missingPanels) : '';
         rbody.className = 'v6-rbody show-' + activeRight;
 
         leftPanels.forEach(function (id) {
@@ -457,7 +483,7 @@
 
         layoutPanels.forEach(function (p) {
           var panelId = p.getAttribute('data-v6-panel');
-          if (!placed[panelId]) p.classList.add('v6-panel-hidden');
+          if (!placed[panelId] && !gridPlaced[panelId]) p.classList.add('v6-panel-hidden');
         });
 
         setupDragAndDrop(root, schema, settings);
@@ -953,9 +979,63 @@
         } else if (action === 'panel-settings') {
           var settingsPanel = btn.closest('[data-v6-panel]');
           var settingsPanelId = settingsPanel && settingsPanel.getAttribute('data-v6-panel');
-          if (settingsPanelId && V6OF.PanelSettings) {
-            V6OF.PanelSettings.open(btn, settingsPanelId, store);
+          if (settingsPanelId && V6OF.UI && V6OF.UI.PanelSettings) {
+            V6OF.UI.PanelSettings.open(btn, settingsPanelId, store);
           }
+        }
+      });
+
+      // "+" panel-add popover: toggle open/closed, and re-add a panel from
+      // DEFAULT_SCHEMA that is missing from the current layoutSchema.
+      root.addEventListener('click', function (e) {
+        var addToggle = e.target.closest('[data-v6-panel-add-toggle]');
+        if (addToggle) {
+          var side = addToggle.getAttribute('data-v6-panel-add-toggle');
+          var popover = root.querySelector('[data-v6-panel-add-popover="' + side + '"]');
+          if (popover) {
+            var willOpen = popover.hasAttribute('hidden');
+            // Close any other open popover first.
+            root.querySelectorAll('[data-v6-panel-add-popover]').forEach(function (p) {
+              p.setAttribute('hidden', '');
+            });
+            root.querySelectorAll('[data-v6-panel-add-toggle]').forEach(function (b) {
+              b.setAttribute('aria-expanded', 'false');
+            });
+            if (willOpen) {
+              popover.removeAttribute('hidden');
+              addToggle.setAttribute('aria-expanded', 'true');
+            }
+          }
+          return;
+        }
+
+        var addItem = e.target.closest('[data-v6-panel-add]');
+        if (addItem) {
+          var panelId = addItem.getAttribute('data-v6-panel-add');
+          var addSide = addItem.getAttribute('data-v6-panel-add-side');
+          if (panelId && addSide && store) {
+            var curSchema = (store.getState().settings || {}).layoutSchema || DEFAULT_SCHEMA;
+            var nextSchema = Object.assign({}, curSchema, {
+              left: (curSchema.left || []).slice(),
+              right: (curSchema.right || []).slice()
+            });
+            var target = addSide === 'left' ? nextSchema.left : nextSchema.right;
+            if (target.indexOf(panelId) === -1) target.push(panelId);
+            if (addSide === 'left') nextSchema.activeLeftTab = panelId;
+            else nextSchema.activeRightTab = panelId;
+            store.updateSettings({ layoutSchema: nextSchema });
+          }
+          return;
+        }
+
+        // Click outside any popover/toggle: close all open popovers.
+        if (!e.target.closest('[data-v6-panel-add-popover]')) {
+          root.querySelectorAll('[data-v6-panel-add-popover]').forEach(function (p) {
+            p.setAttribute('hidden', '');
+          });
+          root.querySelectorAll('[data-v6-panel-add-toggle]').forEach(function (b) {
+            b.setAttribute('aria-expanded', 'false');
+          });
         }
       });
 
@@ -964,6 +1044,9 @@
       }
       if (V6OF.LayoutPicker) {
         V6OF.LayoutPicker.init(root, store);
+      }
+      if (V6OF.ChartLayoutGrid) {
+        V6OF.ChartLayoutGrid.init(root, store);
       }
       if (V6OF.WorkspaceManager) {
         V6OF.WorkspaceManager.init(root);

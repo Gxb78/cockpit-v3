@@ -31,7 +31,7 @@ class MarketAggTradesTests(unittest.TestCase):
         self.assertTrue(resp.is_json)
         self.assertIn("limit", resp.json.get("error", ""))
 
-    def test_limit_is_clamped_to_8000(self):
+    def test_limit_is_clamped_to_100000(self):
         def fake_fetch(_path_qs):
             return [{
                 "id": 1,
@@ -44,7 +44,7 @@ class MarketAggTradesTests(unittest.TestCase):
         app_parts._fetch_binance_agg = fake_fetch
         resp = self.client.get("/api/market/aggtrades?symbol=BTCUSDT&limit=999999")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json["limits"]["maxTrades"], 8000)
+        self.assertEqual(resp.json["limits"]["maxTrades"], 100000)
 
     def test_no_trade_outside_requested_range(self):
         start_ms = 1_700_000_000_000
@@ -63,7 +63,7 @@ class MarketAggTradesTests(unittest.TestCase):
             ], None
 
         app_parts._fetch_binance_agg = fake_fetch
-        url = f"/api/market/aggtrades?symbol=BTCUSDT&startTime={start_ms}&endTime={end_ms}&limit=8000"
+        url = f"/api/market/aggtrades?symbol=BTCUSDT&startTime={start_ms}&endTime={end_ms}&limit=100000"
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
         trades = resp.json["trades"]

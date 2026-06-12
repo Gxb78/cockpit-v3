@@ -64,16 +64,20 @@
   V6OF.register('Transport', 'marketHttpUrl', configuredMarketHttpUrl, 'marketHttpUrl');
 
   var DEFAULT_URL = configuredMarketWsUrl();
-  var DEFAULT_MAX_TRADE_BUFFER = 5000;
+  var MAX_DISPLAY_HISTORY = 100000;
+  var DEFAULT_MAX_TRADE_BUFFER = MAX_DISPLAY_HISTORY;
   var STALE_THRESHOLD_MS = 10000;
-  var MAX_BUCKETS_PER_INTERVAL = 5000;
-  var DEFAULT_MAX_HEATMAP_FRAMES = 10000;
-  var DEFAULT_MAX_FOOTPRINT_CANDLES = 3000;
+  var MAX_BUCKETS_PER_INTERVAL = MAX_DISPLAY_HISTORY;
+  var DEFAULT_MAX_HEATMAP_FRAMES = MAX_DISPLAY_HISTORY;
+  var DEFAULT_MAX_FOOTPRINT_CANDLES = MAX_DISPLAY_HISTORY;
+  var MAX_UI_TRADE_WINDOW = 12000;
+  var MAX_UI_DELTA_BUCKET_WINDOW = 12000;
   var RECONNECT_BASE_MS = 2000;
   var RECONNECT_MAX_MS = 30000;
   var RECONNECT_MAX_ATTEMPTS = 8;
   var BATCH_RENDER_MS = 33;
-  var MAX_DEPTH_HISTORY = 10000;
+  var MAX_DEPTH_HISTORY = MAX_DISPLAY_HISTORY;
+  var DEEP_HISTORY_LIMIT = 100000;
 
   function timeframeToMs(tf) {
     if (!tf) return 60000;
@@ -85,6 +89,14 @@
     if (unit === 'h') return val * 3600000;
     if (unit === 'd') return val * 86400000;
     return 60000;
+  }
+
+  function deepHistoryLimitForInterval(interval) {
+    var tf = String(interval || '1m');
+    if (tf === '1m') return 100000;
+    if (tf === '3m' || tf === '5m') return 60000;
+    if (tf === '15m' || tf === '30m') return 40000;
+    return 20000;
   }
 
   // Normalize symbol: 'BTC' -> 'BTCUSDT', leave 'BTCUSDT' etc. unchanged.
@@ -157,6 +169,7 @@
     var generation = 0;
     var depthHistory = [];
     var pendingDepthPoint = null;
+    var deepHistoryFetched = {};
 
     function pendingQueueDepth() {
       return pendingTrades.length +
@@ -173,6 +186,14 @@
       out.queueDepth = pendingQueueDepth();
       out.lagMs = stats.lastMessageTs ? Math.max(0, Date.now() - stats.lastMessageTs) : 0;
       return out;
+    }
+
+    function renderTradeWindowLimit(settings) {
+      settings = settings || {};
+      var maxRows = Math.max(8, Math.min(100000, Number(settings.maxRows || 5000)));
+      // Keep enough recent trades for tape, chart bubbles and indicators without
+      // copying the full 100k retention buffer on every live batch.
+      return Math.max(1000, Math.min(MAX_UI_TRADE_WINDOW, maxRows * 3));
     }
 
     // ── Footprint signal thresholds (UI → engine) ───────────────────────────
@@ -319,7 +340,7 @@
         if (store) {
           var curSettings = store.getState().settings;
           if (curSettings && Number.isFinite(curSettings.maxTrades) && curSettings.maxTrades > 0) {
-            maxTrades = Math.max(50, Math.min(5000, curSettings.maxTrades));
+            maxTrades = Math.max(50, Math.min(MAX_DISPLAY_HISTORY, curSettings.maxTrades));
           }
         }
         tradeBuffer = newTrades.concat(tradeBuffer);
@@ -333,7 +354,9 @@
         store.setState(function (state) {
           var patch = {};
           if (newTrades.length && !paused) {
-            patch.trades = tradeBuffer.slice();
+            var tradeWindow = renderTradeWindowLimit(state.settings);
+            patch.trades = tradeBuffer.slice(0, tradeWindow);
+            patch.tradeHistoryCount = tradeBuffer.length;
           }
           if (newDeltaBuckets.length) {
             var bucketsByInterval = Object.assign({}, state.deltaBucketsByInterval || {});
@@ -352,7 +375,11 @@
             var selected = String((state.settings && state.settings.deltaIntervalMs) || 60000);
             patch.deltaBucketsByInterval = bucketsByInterval;
             patch.latestDeltaByInterval = latestByInterval;
-            patch.deltaBuckets = bucketsByInterval[selected] || newDeltaBuckets.slice(-MAX_BUCKETS_PER_INTERVAL);
+            var selectedBuckets = bucketsByInterval[selected] || newDeltaBuckets;
+            patch.deltaBuckets = selectedBuckets.length > MAX_UI_DELTA_BUCKET_WINDOW
+              ? selectedBuckets.slice(selectedBuckets.length - MAX_UI_DELTA_BUCKET_WINDOW)
+              : selectedBuckets;
+            patch.deltaBucketHistoryCount = selectedBuckets.length;
           }
           if (nextVwap) {
             var vwapBySymbol = Object.assign({}, state.vwapBySymbol || {});
@@ -375,10 +402,13 @@
             if (depthHistory.length > MAX_DEPTH_HISTORY) {
               depthHistory = depthHistory.slice(depthHistory.length - MAX_DEPTH_HISTORY);
             }
-            patch.depthHistory = depthHistory;
+            patch.depthHistory = depthHistory.length > MAX_UI_DELTA_BUCKET_WINDOW
+              ? depthHistory.slice(depthHistory.length - MAX_UI_DELTA_BUCKET_WINDOW)
+              : depthHistory;
+            patch.depthHistoryCount = depthHistory.length;
           }
           if (nextHeatmapFrames.length) {
-            var maxFrames = Math.max(60, Math.min(10000, Number((state.settings && state.settings.heatmapMaxFrames) || DEFAULT_MAX_HEATMAP_FRAMES)));
+            var maxFrames = Math.max(60, Math.min(MAX_DISPLAY_HISTORY, Number((state.settings && state.settings.heatmapMaxFrames) || DEFAULT_MAX_HEATMAP_FRAMES)));
             var frames = (state.heatmapFrames || []).concat(nextHeatmapFrames);
             if (frames.length > maxFrames) {
               stats.droppedCount += frames.length - maxFrames;
@@ -392,7 +422,7 @@
             patch.selectedHeatmapSymbol = lastFrame ? (lastFrame.symbol || state.selectedHeatmapSymbol || 'BTC') : state.selectedHeatmapSymbol;
           }
           if (nextFootprintCandles.length) {
-            var maxCandles = Math.max(60, Math.min(5000, Number((state.settings && state.settings.footprintMaxCandles) || DEFAULT_MAX_FOOTPRINT_CANDLES)));
+            var maxCandles = Math.max(60, Math.min(MAX_DISPLAY_HISTORY, Number((state.settings && state.settings.footprintMaxCandles) || DEFAULT_MAX_FOOTPRINT_CANDLES)));
             var fpBefore = (state.footprintCandles || []).length + nextFootprintCandles.length;
             var candles = mergeFootprintCandles(state.footprintCandles || [], nextFootprintCandles, maxCandles);
             if (fpBefore > candles.length) {
@@ -468,10 +498,30 @@
     }
 
     function mergeFootprintCandles(existing, incoming, maxCandles) {
+      existing = Array.isArray(existing) ? existing : [];
+      incoming = Array.isArray(incoming) ? incoming : [];
+      if (!incoming.length) {
+        return existing.length > maxCandles ? existing.slice(existing.length - maxCandles) : existing;
+      }
+      if (incoming.length === 1 && existing.length) {
+        var single = incoming[0];
+        var singleKey = footprintKey(single);
+        var lastIdx = existing.length - 1;
+        var lastKey = footprintKey(existing[lastIdx]);
+        if (singleKey && singleKey === lastKey) {
+          var replaced = existing.slice();
+          replaced[lastIdx] = single;
+          return replaced.length > maxCandles ? replaced.slice(replaced.length - maxCandles) : replaced;
+        }
+        if (singleKey && (single.openTime || 0) >= (existing[lastIdx].openTime || 0)) {
+          var appended = existing.concat([single]);
+          return appended.length > maxCandles ? appended.slice(appended.length - maxCandles) : appended;
+        }
+      }
       var byKey = {};
       var indexByKey = {};
       var merged = [];
-      (Array.isArray(existing) ? existing : []).forEach(function (candle) {
+      existing.forEach(function (candle) {
         var key = footprintKey(candle);
         if (!key) return;
         byKey[key] = candle;
@@ -776,14 +826,15 @@
     }
 
     function restKlinesUrl(state, interval) {
+      var limit = deepHistoryLimitForInterval(interval);
       var src = (state && state.dataSource) || 'binance';
       if (src === 'hyperliquid') {
         var coin = ((state && state.symbol) || 'BTC').replace(/USDT$/i, '') || 'BTC';
-        return '/api/hyperliquid/klines?market=' + encodeURIComponent(coin) + '&interval=' + encodeURIComponent(interval) + '&limit=1000';
+        return '/api/hyperliquid/klines?market=' + encodeURIComponent(coin) + '&interval=' + encodeURIComponent(interval) + '&limit=' + limit;
       }
       var symbol = ((state && state.symbol) || 'BTCUSDT').toUpperCase();
       if (symbol === 'BTC') symbol = 'BTCUSDT';
-      return '/api/market/klines?symbol=' + encodeURIComponent(symbol) + '&interval=' + encodeURIComponent(interval) + '&limit=1000&soft=1';
+      return '/api/market/klines?symbol=' + encodeURIComponent(symbol) + '&interval=' + encodeURIComponent(interval) + '&limit=' + limit + '&soft=1';
     }
 
     function handleMessage(event) {
@@ -939,6 +990,7 @@
         if (store) {
           store.setState({ dataSource: newSource }, 'source-switched');
         }
+        fetchDeepHistory('source-switched');
         // Request CVD history for the new exchange
         var activeTf = (store && store.getState().timeframe) || '1m';
         if (ws && status === 'connected') {
@@ -972,7 +1024,12 @@
             depthHistory = depthHistory.slice(depthHistory.length - MAX_DEPTH_HISTORY);
           }
           if (store) {
-            store.setState({ depthHistory: depthHistory }, 'depth-history-init');
+            store.setState({
+              depthHistory: depthHistory.length > MAX_UI_DELTA_BUCKET_WINDOW
+                ? depthHistory.slice(depthHistory.length - MAX_UI_DELTA_BUCKET_WINDOW)
+                : depthHistory,
+              depthHistoryCount: depthHistory.length
+            }, 'depth-history-init');
           }
           console.log('[V6] loaded depth history: ' + depthHistory.length + ' points');
         }
@@ -1122,6 +1179,60 @@
         console.warn('[V6] REST candle fallback failed', err);
       });
     }
+
+    // Merge older REST-fetched candles in front of the existing (live/richer)
+    // candle array, deduped by openTime. Used to extend chart history further
+    // back than the Go engine's candle_history feed provides, so the price
+    // chart can match CVD's much deeper retention (200k points).
+    function mergeDeepHistory(existing, older) {
+      if (!older.length) return existing;
+      if (!existing.length) return older;
+      var seen = {};
+      for (var i = 0; i < existing.length; i++) seen[existing[i].openTime] = true;
+      var prefix = [];
+      for (var j = 0; j < older.length; j++) {
+        if (!seen[older[j].openTime]) prefix.push(older[j]);
+      }
+      if (!prefix.length) return existing;
+      var merged = prefix.concat(existing);
+      merged.sort(function (a, b) { return a.openTime - b.openTime; });
+      return merged;
+    }
+
+    // One-time deep-history backfill per symbol/interval/source: fetches up to
+    // deepHistoryLimitForInterval(interval) candles via REST (independent of the staleness gate
+    // used by fetchCandleHistory) and prepends whatever is older than what's
+    // already loaded. Runs on connect and on timeframe/source switch.
+    function fetchDeepHistory(reason) {
+      if (!store) return;
+      var state = store.getState();
+      var interval = state.timeframe || '1m';
+      var src = state.dataSource || 'binance';
+      var symbol = state.symbol || 'BTC';
+      var key = src + '|' + symbol + '|' + interval;
+      if (deepHistoryFetched[key]) return;
+      deepHistoryFetched[key] = true;
+      var url = restKlinesUrl(state, interval);
+      tryFetch(url, 2).then(function (data) {
+        var raw = [];
+        if (data && Array.isArray(data.candles)) raw = data.candles;
+        var older = normalizeRestCandles(raw, interval);
+        if (!older.length || !store) return null;
+        store.setState(function (prev) {
+          var byIv = Object.assign({}, prev._candlesByInterval || {});
+          var current = byIv[interval] || (((prev.timeframe || '1m') === interval) ? prev.chartCandles : []) || [];
+          var merged = mergeDeepHistory(current, older);
+          if (merged === current) return null;
+          byIv[interval] = merged;
+          var patch = { _candlesByInterval: byIv };
+          if ((prev.timeframe || '1m') === interval) patch.chartCandles = merged;
+          return patch;
+        }, 'deep-history-' + interval);
+        console.log('[V6] deep history loaded:', interval, older.length, 'candles fetched, reason:', reason || '');
+      }).catch(function (err) {
+        console.warn('[V6] deep history fetch failed', err);
+      });
+    }
     // Tracks the last footprint history fetch: {symbol, tf, from, to, ts}
     var _lastFpFetch = null;
 
@@ -1136,13 +1247,13 @@
       var to = Number(options.to || options.endTime || 0);
       if (!from || !to) {
         var settings = state.settings || {};
-        var lookbackMinutes = Math.max(1, Math.min(10080, Number(options.lookbackMinutes || settings.footprintHistoryLookbackMinutes || 360)));
+        var lookbackMinutes = Math.max(1, Math.min(100000, Number(options.lookbackMinutes || settings.footprintHistoryLookbackMinutes || 10080)));
         to = to || Date.now();
         from = from || (to - lookbackMinutes * 60000);
       }
       var requestedFrom = from;
       var requestedTo = to;
-      var limit = Math.max(1, Math.min(3000, Number(options.limit || DEFAULT_MAX_FOOTPRINT_CANDLES)));
+      var limit = Math.max(1, Math.min(MAX_DISPLAY_HISTORY, Number(options.limit || DEFAULT_MAX_FOOTPRINT_CANDLES)));
 
       // --- Idempotency guard ---
       // Don't re-fetch the full history if we already have it for this symbol+tf+window.
@@ -1217,7 +1328,7 @@
           if (!candles.length) return;
           
           store.setState(function (prev) {
-            var maxCandles = Math.max(60, Math.min(5000, Number((prev.settings && prev.settings.footprintMaxCandles) || DEFAULT_MAX_FOOTPRINT_CANDLES)));
+            var maxCandles = Math.max(60, Math.min(MAX_DISPLAY_HISTORY, Number((prev.settings && prev.settings.footprintMaxCandles) || DEFAULT_MAX_FOOTPRINT_CANDLES)));
             var merged = mergeFootprintCandles(prev.footprintCandles || [], candles, maxCandles);
             if (!isSmallFetch && requestedFrom > 0 && requestedTo > 0) {
               merged = merged.filter(function (item) {
@@ -1260,6 +1371,7 @@
         store.setState({ chartCandles: candles, timeframe: interval }, 'switch-tf');
       }
       fetchFootprintHistory({ symbol: state.symbol || 'BTC', timeframe: interval });
+      fetchDeepHistory('switch-tf');
     }
 
     function tryFetch(url, retries) {
@@ -1288,6 +1400,7 @@
         clearReconnectTimer();
         doConnect(generation);
         fetchCandleHistory();
+        fetchDeepHistory('connect');
       },
 
       /**
@@ -1353,6 +1466,14 @@
         return statsSnapshot();
       },
 
+      getTradeHistory: function () {
+        return tradeBuffer.slice();
+      },
+
+      getDepthHistory: function () {
+        return depthHistory.slice();
+      },
+
       /**
        * @returns {boolean}
        */
@@ -1374,7 +1495,12 @@
       resume: function () {
         paused = false;
         if (store && tradeBuffer.length) {
-          store.setState({ trades: tradeBuffer.slice() }, 'resume');
+          var resumeState = store.getState ? store.getState() : {};
+          var resumeLimit = renderTradeWindowLimit(resumeState.settings);
+          store.setState({
+            trades: tradeBuffer.slice(0, resumeLimit),
+            tradeHistoryCount: tradeBuffer.length
+          }, 'resume');
         }
         notify();
       },
@@ -1387,7 +1513,7 @@
         pendingTrades = [];
         pendingDeltaBuckets = [];
         if (store) {
-          store.setState({ trades: [] }, 'clear-tape');
+          store.setState({ trades: [], tradeHistoryCount: 0 }, 'clear-tape');
         }
         notify();
       },
@@ -1424,6 +1550,7 @@
         pendingFootprintCandles = [];
         if (store) {
           store.clearAllBuffers();
+          store.setState({ tradeHistoryCount: 0 }, 'clear-buffer-counts');
         }
         notify();
       },

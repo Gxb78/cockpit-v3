@@ -67,16 +67,27 @@
     return null;
   }
 
+  function trimSeriesArray(arr) {
+    if (arr.length > MAX_POINTS) arr.splice(0, arr.length - MAX_POINTS);
+  }
+
+  function tailCopy(arr, limit) {
+    arr = Array.isArray(arr) ? arr : [];
+    limit = Math.max(0, Math.floor(Number(limit) || 0));
+    if (!limit || arr.length <= limit) return arr.slice();
+    return arr.slice(arr.length - limit);
+  }
+
   function pushPoint(t) {
     BUCKETS.forEach(function (b) {
       cvd[b.key] += curDelta[b.key];
       var arr = series[b.key];
       arr.push({ t: t, v: cvd[b.key] });
-      if (arr.length > MAX_POINTS) arr.shift();
+      trimSeriesArray(arr);
       curDelta[b.key] = 0;
     });
     deltaVol.push({ t: t, delta: curNetDelta });
-    if (deltaVol.length > MAX_POINTS) deltaVol.shift();
+    trimSeriesArray(deltaVol);
     curNetDelta = 0;
   }
 
@@ -104,11 +115,12 @@
   }
 
   // Live "tip" of each series = committed cvd + the forming candle's delta.
-  function snapshot() {
-    var out = { buckets: BUCKETS, series: {}, deltaVol: deltaVol.slice(), tip: {}, interval: INTERVAL_MS, lastTs: lastTs,
+  function snapshot(limit) {
+    limit = Math.max(0, Math.floor(Number(limit) || 0));
+    var out = { buckets: BUCKETS, series: {}, deltaVol: tailCopy(deltaVol, limit), tip: {}, interval: INTERVAL_MS, lastTs: lastTs,
       cvdSource: cvdSource, estimatedUntil: estimatedUntil, realTradeCount: realTradeCount };
     BUCKETS.forEach(function (b) {
-      out.series[b.key] = series[b.key].slice();
+      out.series[b.key] = tailCopy(series[b.key], limit);
       out.tip[b.key] = cvd[b.key] + curDelta[b.key];
     });
     return out;

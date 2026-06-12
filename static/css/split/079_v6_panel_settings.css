@@ -8,6 +8,7 @@
 .v6-ps-flyout {
   position: fixed;
   z-index: 9999;
+  pointer-events: auto;
   background: var(--v6-surface);
   border: 1px solid var(--v6-hairline-strong);
   border-radius: 10px;

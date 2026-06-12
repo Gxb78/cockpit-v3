@@ -22,7 +22,7 @@
     };
   }
 
-  var DOM_ROW_HEIGHT  = 20;  // px
+  var DOM_ROW_HEIGHT  = 15;  // px, matches terminal-exocharts-photo-perfect-v2.html
   var OVERSCAN        = 8;   // rows hors viewport, pour le scroll fluide
   var RENDER_THROTTLE = 50;  // ms
 
@@ -168,10 +168,13 @@
     // Σ BID / Σ ASK footer
     var sigmaFoot = container.querySelector('[data-v6-dom-sigma]');
     if (sigmaFoot && snap) {
-      var bids = Array.isArray(snap.bids) ? snap.bids : [];
-      var asks = Array.isArray(snap.asks) ? snap.asks : [];
-      var sumBid = bids.reduce(function (s, l) { return s + (Number(l.qty) || 0); }, 0);
-      var sumAsk = asks.reduce(function (s, l) { return s + (Number(l.qty) || 0); }, 0);
+      var sumBid = 0, sumAsk = 0;
+      if (snap.book && typeof snap.book.forEach === 'function') {
+        snap.book.forEach(function (lv) {
+          sumBid += Math.max(0, Number(lv && lv.bidSize) || 0);
+          sumAsk += Math.max(0, Number(lv && lv.askSize) || 0);
+        });
+      }
       var mid = snap.midPrice || snap.price || 0;
       var bidEl = sigmaFoot.querySelector('[data-dom-sigma="bid"]');
       var askEl = sigmaFoot.querySelector('[data-dom-sigma="ask"]');
@@ -221,34 +224,147 @@
       smooth ? 660 : 120);
   }
 
-  var COLUMN_WEIGHTS = {
-    bid: 18,
-    price: 16,
-    ask: 18,
-    buy: 9,
-    sell: 9,
-    delta: 10,
-    imb: 8,
-    stack: 5,
-    abs: 7
+  // ── Column registry ──────────────────────────────────────────────────────────
+  // Single source of truth for DOM column layout, header label and cell
+  // rendering. renderRow builds one shared `ctx` per row and calls
+  // cols.map(c => COLUMN_DEFS[c].render(ctx)) — no per-column if/else chain.
+  //
+  // ctx.heat.{vol,sell,buy,delta} are alpha values in [0, HEAT_ALPHA_MAX]
+  // (0 = no background) computed once per render pass by renderVirtual.
+  var COLUMN_DEFS = {
+    vol: {
+      weight: 10,
+      label: 'VOL',
+      render: function (ctx) {
+        var style = 'width:' + ctx.widths.vol + '; flex-shrink:0;';
+        var alpha = ctx.heat.vol || 0;
+        if (alpha > 0) style += ' background: rgba(var(--v6-accent-rgb), ' + alpha.toFixed(3) + ');';
+        var raw = (Number(ctx.lv.buyVol) || 0) + (Number(ctx.lv.sellVol) || 0);
+        return '<div class="v6-dom-cell v6-dom-cell-vol" style="' + style + '">' + fmtMode(raw, false, ctx.vctx) + '</div>';
+      }
+    },
+    sell: {
+      weight: 9,
+      label: 'SELL',
+      render: function (ctx) {
+        var style = 'width:' + ctx.widths.sell + '; flex-shrink:0;';
+        var alpha = ctx.heat.sell || 0;
+        if (alpha > 0) style += ' background: rgba(var(--v6-sell-rgb), ' + alpha.toFixed(3) + ');';
+        return '<div class="v6-dom-cell v6-dom-cell-sell" style="' + style + '">' + fmtMode(ctx.lv.sellVol, false, ctx.vctx) + '</div>';
+      }
+    },
+    buy: {
+      weight: 9,
+      label: 'BUY',
+      render: function (ctx) {
+        var style = 'width:' + ctx.widths.buy + '; flex-shrink:0;';
+        var alpha = ctx.heat.buy || 0;
+        if (alpha > 0) style += ' background: rgba(var(--v6-buy-rgb), ' + alpha.toFixed(3) + ');';
+        return '<div class="v6-dom-cell v6-dom-cell-buy" style="' + style + '">' + fmtMode(ctx.lv.buyVol, false, ctx.vctx) + '</div>';
+      }
+    },
+    bid: {
+      weight: 18,
+      label: 'BID',
+      render: function (ctx) {
+        var style = 'width:' + ctx.widths.bid + '; flex-shrink:0;';
+        return '<div class="v6-dom-cell v6-dom-cell-bid' + ctx.bidChangeClass + '" style="' + style + '" role="gridcell" tabindex="0" aria-label="' + escAttr('Bid size ' + ctx.bidText + ' at price ' + ctx.priceText) + '">' +
+          '<div class="v6-dom-bar is-bid" style="width:' + ctx.bidPct + '%"></div>' +
+          '<span class="v6-dom-val">' + (ctx.bidText === '0' ? '' : ctx.bidText) + '</span>' +
+        '</div>';
+      }
+    },
+    price: {
+      weight: 16,
+      label: 'PRICE',
+      render: function (ctx) {
+        var style = 'width:' + ctx.widths.price + '; flex-shrink:0;';
+        return '<div class="v6-dom-cell v6-dom-cell-price" style="' + style + '" role="gridcell" tabindex="0" aria-label="' + escAttr(ctx.rowLabel) + '">' + ctx.marker + ctx.priceText + ctx.liveBadge + '</div>';
+      }
+    },
+    ask: {
+      weight: 18,
+      label: 'ASK',
+      render: function (ctx) {
+        var style = 'width:' + ctx.widths.ask + '; flex-shrink:0;';
+        return '<div class="v6-dom-cell v6-dom-cell-ask' + ctx.askChangeClass + '" style="' + style + '" role="gridcell" tabindex="0" aria-label="' + escAttr('Ask size ' + ctx.askText + ' at price ' + ctx.priceText) + '">' +
+          '<div class="v6-dom-bar is-ask" style="width:' + ctx.askPct + '%"></div>' +
+          '<span class="v6-dom-val">' + (ctx.askText === '0' ? '' : ctx.askText) + '</span>' +
+        '</div>';
+      }
+    },
+    delta: {
+      weight: 10,
+      label: 'DELTA',
+      render: function (ctx) {
+        var style = 'width:' + ctx.widths.delta + '; flex-shrink:0;';
+        var alpha = ctx.heat.delta || 0;
+        if (alpha > 0) {
+          var rgbVar = (Number(ctx.lv.delta) || 0) >= 0 ? '--v6-buy-rgb' : '--v6-sell-rgb';
+          style += ' background: rgba(var(' + rgbVar + '), ' + alpha.toFixed(3) + ');';
+        }
+        return '<div class="v6-dom-cell v6-dom-cell-delta" style="' + style + '">' + fmtModeSigned(ctx.lv.delta, ctx.vctx) + '</div>';
+      }
+    },
+    imb: {
+      weight: 8,
+      label: 'IMB',
+      render: function (ctx) {
+        var style = 'width:' + ctx.widths.imb + '; flex-shrink:0;';
+        return '<div class="v6-dom-cell v6-dom-cell-imb ' + ctx.imSide + '" style="' + style + '">' + ctx.imText + '</div>';
+      }
+    },
+    stack: {
+      weight: 5,
+      label: 'STK',
+      render: function (ctx) {
+        var style = 'width:' + ctx.widths.stack + '; flex-shrink:0;';
+        return '<div class="v6-dom-cell v6-dom-cell-stack ' + ctx.imSide + '" style="' + style + '">' + ctx.stackText + '</div>';
+      }
+    },
+    abs: {
+      weight: 7,
+      label: 'ABS',
+      render: function (ctx) {
+        var style = 'width:' + ctx.widths.abs + '; flex-shrink:0;';
+        return '<div class="v6-dom-cell v6-dom-cell-abs ' + ctx.absSide + '" style="' + style + '">' + ctx.absText + '</div>';
+      }
+    }
   };
 
-  var COLUMN_LABELS = {
-    bid: 'BIDS',
-    price: 'PRICE',
-    ask: 'ASKS',
-    buy: 'BUYS',
-    sell: 'SELLS',
-    delta: 'DELTA',
-    imb: 'IMB',
-    stack: 'STK',
-    abs: 'ABS'
+  // Per-column header alignment (text-align/justify-content/padding), kept
+  // separate from COLUMN_DEFS since it only applies to the header row.
+  var COLUMN_HEADER_STYLE = {
+    vol:   ' text-align: right; justify-content: flex-end;',
+    sell:  ' text-align: right; justify-content: flex-end;',
+    buy:   ' text-align: right; justify-content: flex-end;',
+    bid:   ' text-align: right; justify-content: flex-end; padding-right: 5px;',
+    price: ' justify-content: center;',
+    ask:   ' text-align: left; justify-content: flex-start; padding-left: 5px;',
+    delta: ' text-align: right; justify-content: flex-end;',
+    imb:   ' text-align: right; justify-content: flex-end;',
+    stack: ' text-align: center; justify-content: center;',
+    abs:   ' text-align: center; justify-content: center;'
+  };
+
+  var DOM_REFERENCE_COLUMN_WIDTHS = {
+    vol: 38,
+    sell: 42,
+    buy: 42,
+    bid: 42,
+    price: 48,
+    ask: 42,
+    delta: 48
   };
 
   function getDomColumns(settings) {
     var cols = settings && settings.domColumns;
     if (!Array.isArray(cols) || cols.length === 0) {
-      return ['bid', 'price', 'ask', 'buy', 'sell', 'delta', 'imb', 'stack', 'abs'];
+      // Default: TradingView-style ladder with volume/heatmap columns.
+      // Settings (079) DEFAULT_DOM_COLUMNS is the source of truth for new
+      // installs; this is only a defensive fallback for raw/unvalidated
+      // settings objects.
+      return ['vol', 'sell', 'buy', 'bid', 'price', 'ask', 'delta'];
     }
     if (cols.indexOf('price') === -1) {
       var bidIdx = cols.indexOf('bid');
@@ -264,14 +380,24 @@
   }
 
   function getColumnWidths(cols) {
+    var hasOnlyReferenceCols = cols.length > 0 && cols.every(function (c) {
+      return DOM_REFERENCE_COLUMN_WIDTHS[c] != null;
+    });
+    if (hasOnlyReferenceCols) {
+      var fixed = {};
+      cols.forEach(function (c) {
+        fixed[c] = DOM_REFERENCE_COLUMN_WIDTHS[c] + 'px';
+      });
+      return fixed;
+    }
     var sum = 0;
     cols.forEach(function (c) {
-      sum += COLUMN_WEIGHTS[c] || 10;
+      sum += (COLUMN_DEFS[c] && COLUMN_DEFS[c].weight) || 10;
     });
     if (sum === 0) sum = 100;
     var widths = {};
     cols.forEach(function (c) {
-      widths[c] = (((COLUMN_WEIGHTS[c] || 10) / sum) * 100).toFixed(2) + '%';
+      widths[c] = ((((COLUMN_DEFS[c] && COLUMN_DEFS[c].weight) || 10) / sum) * 100).toFixed(2) + '%';
     });
     return widths;
   }
@@ -279,13 +405,8 @@
   function renderHeadersHtml(cols, widths) {
     return cols.map(function (c) {
       var style = 'width:' + widths[c] + '; flex-shrink:0;';
-      if (c === 'bid') style += ' text-align: right; justify-content: flex-end; padding-right: 5px;';
-      else if (c === 'price') style += ' justify-content: center;';
-      else if (c === 'ask') style += ' text-align: left; justify-content: flex-start; padding-left: 5px;';
-      else if (c === 'buy' || c === 'sell' || c === 'delta' || c === 'imb') style += ' text-align: right; justify-content: flex-end;';
-      else if (c === 'stack' || c === 'abs') style += ' text-align: center; justify-content: center;';
-
-      var label = COLUMN_LABELS[c] || c.toUpperCase();
+      style += COLUMN_HEADER_STYLE[c] || '';
+      var label = (COLUMN_DEFS[c] && COLUMN_DEFS[c].label) || c.toUpperCase();
       return '<div class="v6-dom-col v6-dom-col-' + c + ' v6-dom-draghead" style="' + style + '" data-col="' + c + '" draggable="true">' +
         label +
         '<span class="v6-dom-dragicon">&#9776;</span>' +
@@ -321,11 +442,15 @@
         '<span class="v6-panel-tick" aria-hidden="true"></span>' +
         '<span class="v6-panel-title">DOM</span>' +
         '<span class="v6-panel-meta" data-dom-stat="source">—</span>' +
-        '<label class="v6-panel-grp">GRP <select class="v6-dom-grouping">' + groupSelectHtml + '</select></label>' +
         '<span class="v6-panel-sp"></span>' +
         '<span class="v6-panel-grab" aria-hidden="true">&#x2807;</span>' +
         '<button type="button" class="v6-panel-ib" data-v6-action="panel-settings" title="Settings" aria-label="Panel settings">&#x2699;</button>' +
         '<button type="button" class="v6-panel-ib v6-panel-ib-close" data-v6-action="panel-close" title="Close" aria-label="Close panel">&#x2715;</button>' +
+      '</div>' +
+      '<div class="v6-dom-toolbar">' +
+        '<span>PG</span>' +
+        '<select class="v6-dom-grouping" aria-label="Price grouping">' + groupSelectHtml + '</select>' +
+        '<button class="v6-dom-recenter" type="button" title="Follow mid: re-center on the current mid price" aria-label="Follow mid: re-center on the current mid price">&#x2699;</button>' +
       '</div>' +
       // ── Column headers + ladder ──────────────────────────────────────────────
       '<div class="v6-dom-cols"></div>' +
@@ -355,8 +480,10 @@
   }
 
   function setStat(container, name, value) {
-    var el = container.querySelector('[data-dom-stat="' + name + '"]');
-    if (el && el.textContent !== String(value)) el.textContent = String(value);
+    var els = container.querySelectorAll('[data-dom-stat="' + name + '"]');
+    els.forEach(function (el) {
+      if (el && el.textContent !== String(value)) el.textContent = String(value);
+    });
   }
 
   function setStaleOverlay(container, visible, text) {
@@ -369,7 +496,10 @@
   }
 
   function syncControls(container, grouping, settings) {
-    var sel = container.querySelector('.v6-dom-grouping');
+    // In Exocharts layout, grouping select is in the parent .exo-dom-toolbar
+    var isExo = container.classList.contains && container.classList.contains('exo-dom-body');
+    var searchRoot = isExo ? (container.parentElement || container) : container;
+    var sel = searchRoot.querySelector('.v6-dom-grouping') || searchRoot.querySelector('.exo-dom-grouping');
     if (sel && document.activeElement !== sel && String(sel.value) !== String(grouping)) sel.value = grouping;
     var modeSel = container.querySelector('.v6-dom-value-mode');
     if (modeSel && document.activeElement !== modeSel) {
@@ -521,7 +651,7 @@
     return body ? (q >= 0 ? '+' : '-') + body : '';
   }
 
-  function renderRow(lv, y, maxBid, maxAsk, liveTick, midTick, bestBidTick, bestAskTick, live, vctx, sizeThreshold, analytics, cols, widths) {
+  function renderRow(lv, y, maxBid, maxAsk, liveTick, midTick, bestBidTick, bestAskTick, live, vctx, sizeThreshold, analytics, cols, widths, heat) {
     var isLive    = lv.tick === liveTick;
     var isMid     = lv.tick === midTick;
     var isBestBid = lv.tick === bestBidTick;
@@ -540,6 +670,8 @@
     if (hasBid)    cls += ' has-bid';
     if (hasAsk)    cls += ' has-ask';
     if (isEmpty)   cls += ' is-empty';
+    if ((Number(lv.delta) || 0) > 0) cls += ' has-delta-pos';
+    else if ((Number(lv.delta) || 0) < 0) cls += ' has-delta-neg';
     if (lv.wallScore >= 2) cls += ' is-wall-major';
     else if (lv.wallScore >= 1) cls += ' is-wall-soft';
 
@@ -559,42 +691,30 @@
     var askText   = fmtMode(lv.askSize, false, vctx, sizeThreshold) || '0';
     var rowLabel  = 'Price ' + priceText + ', bid ' + bidText + ', ask ' + askText;
 
+    var ctx = {
+      lv: lv,
+      widths: widths,
+      vctx: vctx,
+      heat: heat || {},
+      bidChangeClass: bidChangeClass,
+      askChangeClass: askChangeClass,
+      bidPct: bidPct,
+      askPct: askPct,
+      bidText: bidText,
+      askText: askText,
+      priceText: priceText,
+      marker: marker,
+      liveBadge: liveBadge,
+      rowLabel: rowLabel,
+      imSide: imSide,
+      imText: imText,
+      stackText: stackText,
+      absSide: absSide,
+      absText: absText
+    };
+
     var cellsHtml = cols.map(function (c) {
-      var style = 'width:' + widths[c] + '; flex-shrink:0;';
-      if (c === 'bid') {
-        return '<div class="v6-dom-cell v6-dom-cell-bid' + bidChangeClass + '" style="' + style + '" role="gridcell" tabindex="0" aria-label="' + escAttr('Bid size ' + bidText + ' at price ' + priceText) + '">' +
-          '<div class="v6-dom-bar is-bid" style="width:' + bidPct + '%"></div>' +
-          '<span class="v6-dom-val">' + (bidText === '0' ? '' : bidText) + '</span>' +
-        '</div>';
-      }
-      if (c === 'price') {
-        return '<div class="v6-dom-cell v6-dom-cell-price" style="' + style + '" role="gridcell" tabindex="0" aria-label="' + escAttr(rowLabel) + '">' + marker + priceText + liveBadge + '</div>';
-      }
-      if (c === 'ask') {
-        return '<div class="v6-dom-cell v6-dom-cell-ask' + askChangeClass + '" style="' + style + '" role="gridcell" tabindex="0" aria-label="' + escAttr('Ask size ' + askText + ' at price ' + priceText) + '">' +
-          '<div class="v6-dom-bar is-ask" style="width:' + askPct + '%"></div>' +
-          '<span class="v6-dom-val">' + (askText === '0' ? '' : askText) + '</span>' +
-        '</div>';
-      }
-      if (c === 'buy') {
-        return '<div class="v6-dom-cell v6-dom-cell-buy" style="' + style + '">' + fmtMode(lv.buyVol, false, vctx) + '</div>';
-      }
-      if (c === 'sell') {
-        return '<div class="v6-dom-cell v6-dom-cell-sell" style="' + style + '">' + fmtMode(lv.sellVol, false, vctx) + '</div>';
-      }
-      if (c === 'delta') {
-        return '<div class="v6-dom-cell v6-dom-cell-delta" style="' + style + '">' + fmtModeSigned(lv.delta, vctx) + '</div>';
-      }
-      if (c === 'imb') {
-        return '<div class="v6-dom-cell v6-dom-cell-imb ' + imSide + '" style="' + style + '">' + imText + '</div>';
-      }
-      if (c === 'stack') {
-        return '<div class="v6-dom-cell v6-dom-cell-stack ' + imSide + '" style="' + style + '">' + stackText + '</div>';
-      }
-      if (c === 'abs') {
-        return '<div class="v6-dom-cell v6-dom-cell-abs ' + absSide + '" style="' + style + '">' + absText + '</div>';
-      }
-      return '';
+      return COLUMN_DEFS[c] ? COLUMN_DEFS[c].render(ctx) : '';
     }).join('');
 
     return '<div class="' + cls + '"' +
@@ -602,6 +722,18 @@
       ' data-price-key="' + lv.priceKey + '" role="row" aria-label="' + escAttr(rowLabel) + '">' +
       cellsHtml +
       '</div>';
+  }
+
+  // Heatmap intensity → background alpha. 0 = no background (ratio <= 0);
+  // otherwise mapped into [HEAT_ALPHA_MIN, HEAT_ALPHA_MAX] so the cell tint
+  // never approaches the solid is-live price-cell fill.
+  var HEAT_ALPHA_MIN = 0.05;
+  var HEAT_ALPHA_MAX = 0.35;
+
+  function heatAlpha(ratio) {
+    if (!(ratio > 0)) return 0;
+    var clamped = Math.min(1, ratio);
+    return HEAT_ALPHA_MIN + clamped * (HEAT_ALPHA_MAX - HEAT_ALPHA_MIN);
   }
 
   // ── Render virtuel ────────────────────────────────────────────────────────────
@@ -716,11 +848,19 @@
     // book: stable viewMin/viewMax, visible: rows currently rendered in the scroll window.
     var scaleMinTick = (settings && settings.domScaleMode) === 'visible' ? endTick : minTick;
     var scaleMaxTick = (settings && settings.domScaleMode) === 'visible' ? startTick : maxTick;
-    var maxBid = 1, maxAsk = 1;
+    var maxBid = 1, maxAsk = 1, maxVol = 1, maxSell = 1, maxBuy = 1, maxAbsDelta = 1;
     book.forEach(function (lv) {
       if (lv.tick < scaleMinTick || lv.tick > scaleMaxTick) return;
       if (lv.bidSize > maxBid) maxBid = lv.bidSize;
       if (lv.askSize > maxAsk) maxAsk = lv.askSize;
+      var bv = Number(lv.buyVol) || 0;
+      var sv = Number(lv.sellVol) || 0;
+      var vol = bv + sv;
+      if (vol > maxVol) maxVol = vol;
+      if (sv > maxSell) maxSell = sv;
+      if (bv > maxBuy) maxBuy = bv;
+      var ad = Math.abs(Number(lv.delta) || 0);
+      if (ad > maxAbsDelta) maxAbsDelta = ad;
     });
 
     // 6. Parametres de rendu
@@ -757,7 +897,13 @@
           wallScore: 0, bidWallScore: 0, askWallScore: 0
         };
       }
-      html += renderRow(lv, y, maxBid, maxAsk, liveTick, midTick, bestBidTick, bestAskTick, live, vctx, sizeThreshold, analyticsByTick[tick], cols, widths);
+      var heat = {
+        vol: heatAlpha(((Number(lv.buyVol) || 0) + (Number(lv.sellVol) || 0)) / maxVol),
+        sell: heatAlpha((Number(lv.sellVol) || 0) / maxSell),
+        buy: heatAlpha((Number(lv.buyVol) || 0) / maxBuy),
+        delta: heatAlpha(Math.abs(Number(lv.delta) || 0) / maxAbsDelta)
+      };
+      html += renderRow(lv, y, maxBid, maxAsk, liveTick, midTick, bestBidTick, bestAskTick, live, vctx, sizeThreshold, analyticsByTick[tick], cols, widths, heat);
     }
 
     virt.spacer.innerHTML = html;
@@ -814,10 +960,28 @@
     var groupOpts = V6OF.DomLadder && V6OF.DomLadder.getGroupingOptions
       ? V6OF.DomLadder.getGroupingOptions() : [1, 5, 10, 25, 50, 100, 250];
 
+    // Detect Exocharts layout (container IS .exo-dom-body, headers live in .exo-dom-head)
+    var isExo = container.classList.contains && container.classList.contains('exo-dom-body');
+    var exoHead = isExo ? container.parentElement && container.parentElement.querySelector('.exo-dom-head') : null;
+
     // Skeleton (une seule fois)
     if (!container._domBuilt) {
       var grouping = (snap && snap.priceGrouping) || 25;
-      buildSkeleton(container, grouping, groupOpts);
+      if (isExo) {
+        // Minimal: just ensure the body is a scrollable container for rows
+        container.innerHTML = '';
+        container.style.overflowY = 'auto';
+        // Populate the grouping select (in parent .exo-dom-toolbar)
+        var groupingSelect = container.parentElement && container.parentElement.querySelector('.exo-dom-grouping');
+        if (groupingSelect && !groupingSelect._populated) {
+          groupingSelect.innerHTML = groupOpts.map(function (g) {
+            return '<option value="' + g + '"' + (g === grouping ? ' selected' : '') + '>' + g + '</option>';
+          }).join('');
+          groupingSelect._populated = true;
+        }
+      } else {
+        buildSkeleton(container, grouping, groupOpts);
+      }
       container._domBuilt = true;
     }
 
@@ -825,7 +989,7 @@
     var widths = getColumnWidths(cols);
 
     // Update header columns dynamically
-    var colsContainer = container.querySelector('.v6-dom-cols');
+    var colsContainer = isExo ? exoHead : container.querySelector('.v6-dom-cols');
     if (colsContainer) {
       var headerHtml = renderHeadersHtml(cols, widths);
       if (colsContainer.innerHTML !== headerHtml) {
@@ -833,7 +997,7 @@
       }
     }
 
-    var body = container.querySelector('.v6-dom-body');
+    var body = isExo ? container : container.querySelector('.v6-dom-body');
 
     // ── Etat "pas encore de book" ──
     // NOTE: on ne detruit PLUS le DOM virtuel. On garde le dernier rendu visible.
@@ -948,12 +1112,16 @@
   function bindControls(container, onGroupChange, onRecenter, onSettingsPatch) {
     if (!container || container._domControlsBound) return;
     container._domControlsBound = true;
+    var isExo = container.classList.contains && container.classList.contains('exo-dom-body');
+    // In Exocharts layout, the toolbar (grouping select) is a sibling of container,
+    // so we delegate events from the parent .exo-dom-panel instead.
+    var eventTarget = isExo ? (container.parentElement || container) : container;
 
     // Grouping + mode
-    container.addEventListener('change', function (event) {
+    eventTarget.addEventListener('change', function (event) {
       var target = event.target;
       if (!target) return;
-      if (target.classList.contains('v6-dom-grouping') && onGroupChange) {
+      if ((target.classList.contains('v6-dom-grouping') || target.classList.contains('exo-dom-grouping')) && onGroupChange) {
         autoCenter   = true;
         userScrolled = false;
         container._domHasCentered = false;
@@ -993,7 +1161,7 @@
           var live = container._domLastLive || 0;
           var settings = (container._domLastState && container._domLastState.settings) || {};
 
-          var body = container.querySelector('.v6-dom-body');
+          var body = getBody(container);
           if (body) {
             body._domNeedsJump = tick;
             renderVirtual(body, snap, live, settings);
@@ -1005,11 +1173,16 @@
       });
     }
 
+    // Helper: in Exocharts layout the container IS the scrollable body
+    function getBody(ctn) {
+      return (ctn.classList.contains && ctn.classList.contains('exo-dom-body')) ? ctn : ctn.querySelector('.v6-dom-body');
+    }
+
     // Bouton C (recenter) + bouton mode coin/$
     container.addEventListener('click', function (event) {
       var target = event.target;
       if (!target) return;
-      if (target.classList.contains('v6-dom-recenter')) {
+      if (target.closest('.v6-dom-recenter')) {
         autoCenter   = true;
         userScrolled = false;
         container._domHasCentered = false;
@@ -1017,7 +1190,7 @@
           V6OF.DomLadder.setAutoCenterEnabled(true);
         }
         if (onRecenter) onRecenter();
-        var body = container.querySelector('.v6-dom-body');
+        var body = getBody(container);
         if (body && container._domLastSnap) {
           var s = container._domLastSnap;
           centerOnTick(body, s.midTick, s.maxTick, true);
@@ -1027,13 +1200,13 @@
           });
         }
       }
-      if (target.classList.contains('v6-dom-value-mode') && onSettingsPatch) {
+      if (target.closest('.v6-dom-value-mode') && onSettingsPatch) {
         onSettingsPatch({ domValueMode: normalizeValueMode(target.value) });
       }
     });
 
     // Scroll → re-render virtuel + detection user scroll
-    var body = container.querySelector('.v6-dom-body');
+    var body = getBody(container);
     if (body) {
       body.addEventListener('scroll', function () {
         // suppressScrollUntil covers programmatic scrolls (centerOnTick / follow).

@@ -157,6 +157,8 @@
     next.lastFootprintCandle = next.lastFootprintCandle || null;
     next.lastFootprintTs = Number.isFinite(next.lastFootprintTs) ? next.lastFootprintTs : 0;
     next.selectedFootprintSymbol = next.selectedFootprintSymbol || empty.selectedFootprintSymbol;
+    next.tradeHistoryCount = Number.isFinite(next.tradeHistoryCount) ? next.tradeHistoryCount : (next.trades ? next.trades.length : 0);
+    next.deltaBucketHistoryCount = Number.isFinite(next.deltaBucketHistoryCount) ? next.deltaBucketHistoryCount : (next.deltaBuckets ? next.deltaBuckets.length : 0);
     next.vwap = next.vwap || null;
     next.vwapBySymbol = cloneObjectMap(next.vwapBySymbol || empty.vwapBySymbol);
     next.lastMessageAt = Number.isFinite(next.lastMessageAt) ? next.lastMessageAt : 0;
@@ -170,6 +172,7 @@
     next.symbol = next.symbol || empty.symbol;
     next.timeframe = next.timeframe || empty.timeframe;
     next.depthHistory = Array.isArray(next.depthHistory) ? next.depthHistory : [];
+    next.depthHistoryCount = Number.isFinite(next.depthHistoryCount) ? next.depthHistoryCount : next.depthHistory.length;
     return next;
   }
 
@@ -214,8 +217,9 @@
     lastFootprintTs: 'trader', selectedFootprintSymbol: 'trader',
     candles: 'trader', chartCandles: 'trader', _candlesByInterval: 'trader',
     deltaBuckets: 'trader', deltaBucketsByInterval: 'trader', latestDeltaByInterval: 'trader',
+    tradeHistoryCount: 'trader', deltaBucketHistoryCount: 'trader',
     vwap: 'trader', vwapBySymbol: 'trader',
-    depthHistory: 'trader', restTradesTs: 'trader', restKlinesTs: 'trader', restDepthTs: 'trader',
+    depthHistory: 'trader', depthHistoryCount: 'trader', restTradesTs: 'trader', restKlinesTs: 'trader', restDepthTs: 'trader',
     // render
     settings: 'render', ui: 'render',
     // transport
