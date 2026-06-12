@@ -498,3 +498,50 @@ function createResizeObserverRaf(callback) {
   };
   return observer;
 }
+
+/**
+ * ColorRamp: Smooth color interpolation for heatmap rendering.
+ * Pre-computes 256-entry lookup table for fast O(1) color lookup.
+ * @param {string} coldColor - CSS color (low intensity)
+ * @param {string} hotColor - CSS color (high intensity)
+ */
+function ColorRamp(coldColor, hotColor) {
+  this.coldColor = coldColor;
+  this.hotColor = hotColor;
+  this.lut = this._buildLUT();
+}
+
+ColorRamp.prototype._parseColor = function(color) {
+  var canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 1;
+  var ctx = canvas.getContext('2d');
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, 1, 1);
+  var data = ctx.getImageData(0, 0, 1, 1).data;
+  return { r: data[0], g: data[1], b: data[2] };
+};
+
+ColorRamp.prototype._buildLUT = function() {
+  var cold = this._parseColor(this.coldColor);
+  var hot = this._parseColor(this.hotColor);
+  var lut = [];
+  for (var i = 0; i < 256; i++) {
+    var t = i / 255;
+    var r = Math.round(cold.r + (hot.r - cold.r) * t);
+    var g = Math.round(cold.g + (hot.g - cold.g) * t);
+    var b = Math.round(cold.b + (hot.b - cold.b) * t);
+    lut.push('rgb(' + r + ',' + g + ',' + b + ')');
+  }
+  return lut;
+};
+
+ColorRamp.prototype.getColor = function(intensity) {
+  var idx = Math.min(255, Math.max(0, Math.round(intensity * 255)));
+  return this.lut[idx];
+};
+
+ColorRamp.prototype.getColorWithAlpha = function(intensity, alpha) {
+  var color = this.getColor(intensity);
+  var match = color.match(/\d+/g);
+  return 'rgba(' + match[0] + ',' + match[1] + ',' + match[2] + ',' + alpha + ')';
+};

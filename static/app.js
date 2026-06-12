@@ -211,7 +211,26 @@ async function api(path,opts={}){const res=await fetch(path,{headers:opts.body?{
  * Returns an object with observe(el) and disconnect() methods.
  * @param {Function} callback - Called when resize detected (batched per frame)
  * @returns {Object} - { observe(el), disconnect() }
- */function createResizeObserverRaf(callback){if("undefined"==typeof ResizeObserver)return{observe:function(){},disconnect:function(){}};var rafId=null,observer=new ResizeObserver(function(){rafId||(rafId=requestAnimationFrame(function(){rafId=null,callback()}))}),originalDisconnect=observer.disconnect.bind(observer);return observer.disconnect=function(){rafId&&cancelAnimationFrame(rafId),originalDisconnect()},observer}function prettify(s){return STRATEGY_LABELS[s]||String(s).replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase())}function defaultSettingsState(){return{profile:{pseudo:"trader"},custom_strategies:[],custom_tags:[],preferences:{animations:!0,dark_mode:!1,theme:"default"}}}function normalizeStrategyValue(text){return String(text||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"")}function uniqueStrategyValue(label,takenValues){const base=normalizeStrategyValue(label)||"custom_strategy";if(!takenValues.has(base))return base;let i=2;for(;takenValues.has(`${base}_${i}`);)i+=1;return`${base}_${i}`}function normalizeCustomStrategies(rawList){if(!Array.isArray(rawList))return[];const out=[],taken=new Set(DEFAULT_STRATEGY_VALUES),takenLabels=new Set;return rawList.forEach(item=>{const label=("string"==typeof item?item:item?.label||"").trim();if(!label)return;
+ */function createResizeObserverRaf(callback){if("undefined"==typeof ResizeObserver)return{observe:function(){},disconnect:function(){}};var rafId=null,observer=new ResizeObserver(function(){rafId||(rafId=requestAnimationFrame(function(){rafId=null,callback()}))}),originalDisconnect=observer.disconnect.bind(observer);return observer.disconnect=function(){rafId&&cancelAnimationFrame(rafId),originalDisconnect()},observer}
+/**
+ * ColorRamp: Smooth color interpolation for heatmap rendering.
+ * Pre-computes 256-entry lookup table for fast O(1) color lookup.
+ * @param {string} coldColor - CSS color (low intensity)
+ * @param {string} hotColor - CSS color (high intensity)
+ */function ColorRamp(coldColor,hotColor){this.coldColor=coldColor,this.hotColor=hotColor,this.lut=this._buildLUT()}// Add to 001_utilities.js: ColorRamp for smooth heatmap gradient
+/**
+ * ColorRamp: Smooth color interpolation from cold to hot.
+ * Pre-computes 256-entry lookup table for O(1) lookup.
+ *
+ * @constructor
+ * @param {string} coldColor - RGB hex or CSS color (cold = low intensity)
+ * @param {string} hotColor - RGB hex or CSS color (hot = high intensity)
+ */
+function ColorRamp(coldColor,hotColor){this.cold=this._parseColor(coldColor),this.hot=this._parseColor(hotColor),this.lut=this._buildLUT(256)}
+/**
+ * Parse color to {r, g, b} (0-255).
+ * @private
+ */function prettify(s){return STRATEGY_LABELS[s]||String(s).replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase())}function defaultSettingsState(){return{profile:{pseudo:"trader"},custom_strategies:[],custom_tags:[],preferences:{animations:!0,dark_mode:!1,theme:"default"}}}function normalizeStrategyValue(text){return String(text||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"")}function uniqueStrategyValue(label,takenValues){const base=normalizeStrategyValue(label)||"custom_strategy";if(!takenValues.has(base))return base;let i=2;for(;takenValues.has(`${base}_${i}`);)i+=1;return`${base}_${i}`}function normalizeCustomStrategies(rawList){if(!Array.isArray(rawList))return[];const out=[],taken=new Set(DEFAULT_STRATEGY_VALUES),takenLabels=new Set;return rawList.forEach(item=>{const label=("string"==typeof item?item:item?.label||"").trim();if(!label)return;
 // Deduplicate labels (deux strategies ne peuvent pas avoir le meme nom)
 for(var finalLabel=label,li=2;takenLabels.has(finalLabel);)finalLabel=label+" "+li,li+=1;takenLabels.add(finalLabel);const preferred=normalizeStrategyValue("object"==typeof item?item?.value:""),value=preferred&&!taken.has(preferred)?preferred:uniqueStrategyValue(label,taken);taken.add(value),out.push({value:value,label:finalLabel})}),out}function collectUiState(){return{calendarMetricMode:state.calendarMetricMode,journalViewMode:state.journalViewMode,journalLayoutMode:state.journalLayoutMode,journalRangeMode:state.journalRangeMode,journalTableSortKey:state.journalTableSortKey,journalTableSortDir:state.journalTableSortDir,breakdownSortMode:state.breakdownSortMode}}function applyServerUiState(obj){if(obj&&"object"==typeof obj){
 // Map: state key → { lsKey, validSet }
@@ -225,7 +244,25 @@ if(null==localStorage.getItem(m.lsKey)){var val=obj[m.stateKey];val&&m.valid.has
 // Snapshot pour detecter les modifications utilisateur pendant le fetch
 var localSnapshot=JSON.stringify(state.settings);return fetch("/api/user/profile",{credentials:"same-origin"}).then(function(r){return r.ok?r.json():null}).then(function(data){if(data&&data.profile&&(JSON.stringify(state.settings)===localSnapshot&&0!==Object.keys(data.profile).length)){var merged=Object.assign({},defaultSettingsState(),data.profile);merged.custom_strategies=normalizeCustomStrategies(merged.custom_strategies||[]),state.settings=sanitizeSettings(merged),applySettingsState(),renderSettingsPage(),applyServerUiState(merged.ui_state);try{localStorage.setItem(SETTINGS_STORAGE_KEY,JSON.stringify(state.settings))}catch(_){}}
 // Ne pas ecraser si l'utilisateur a modifie entre temps
-}).catch(function(){}),state.settings}function saveSettingsState(){if(state.settings){try{localStorage.setItem(SETTINGS_STORAGE_KEY,JSON.stringify(state.settings))}catch(_){}fetch("/api/user/profile",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify(state.settings)}).catch(function(){toast("Erreur lors de la sauvegarde des réglages","error")})}}document.addEventListener("DOMContentLoaded",function(){var btn=document.getElementById("toastClose");btn&&btn.addEventListener("click",function(){clearTimeout(_toastTimer),_toastHide()})});var _uiStateSaveTimer=null;function saveUiState(){clearTimeout(_uiStateSaveTimer),_uiStateSaveTimer=setTimeout(function(){state.settings&&(state.settings.ui_state=collectUiState(),saveSettingsState())},2e3)}function applyProfileSetting(){const pseudo=state.settings?.profile?.pseudo||"trader",h=(new Date).getHours(),salutation=h<6?"Bonne nuit":h<12?"Bonjour":h<18?"Bon après-midi":h<22?"Bonsoir":"Bonne nuit",greeting=$("#todayGreeting");greeting&&(greeting.textContent=pseudo);const sal=$("#todaySalutation");sal&&(sal.textContent=salutation)}function applyVisualSettings(){const prefersDark=!1!==state.settings?.preferences?.dark_mode,prefersAnimations=!1!==state.settings?.preferences?.animations,theme=state.settings?.preferences?.theme||"default";document.body.classList.toggle("light-mode",!prefersDark),document.body.classList.toggle("reduce-motion",!prefersAnimations),
+}).catch(function(){}),state.settings}function saveSettingsState(){if(state.settings){try{localStorage.setItem(SETTINGS_STORAGE_KEY,JSON.stringify(state.settings))}catch(_){}fetch("/api/user/profile",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify(state.settings)}).catch(function(){toast("Erreur lors de la sauvegarde des réglages","error")})}}document.addEventListener("DOMContentLoaded",function(){var btn=document.getElementById("toastClose");btn&&btn.addEventListener("click",function(){clearTimeout(_toastTimer),_toastHide()})}),ColorRamp.prototype._parseColor=function(color){var canvas=document.createElement("canvas");canvas.width=canvas.height=1;var ctx=canvas.getContext("2d");ctx.fillStyle=color,ctx.fillRect(0,0,1,1);var data=ctx.getImageData(0,0,1,1).data;return{r:data[0],g:data[1],b:data[2]}},ColorRamp.prototype._buildLUT=function(){for(var cold=this._parseColor(this.coldColor),hot=this._parseColor(this.hotColor),lut=[],i=0;i<256;i++){var t=i/255,r=Math.round(cold.r+(hot.r-cold.r)*t),g=Math.round(cold.g+(hot.g-cold.g)*t),b=Math.round(cold.b+(hot.b-cold.b)*t);lut.push("rgb("+r+","+g+","+b+")")}return lut},ColorRamp.prototype.getColor=function(intensity){var idx=Math.min(255,Math.max(0,Math.round(255*intensity)));return this.lut[idx]},ColorRamp.prototype.getColorWithAlpha=function(intensity,alpha){var match=this.getColor(intensity).match(/\d+/g);return"rgba("+match[0]+","+match[1]+","+match[2]+","+alpha+")"},ColorRamp.prototype._parseColor=function(color){var ctx=document.createElement("canvas").getContext("2d");ctx.fillStyle=color,ctx.fillRect(0,0,1,1);var data=ctx.getImageData(0,0,1,1).data;return{r:data[0],g:data[1],b:data[2]}},
+/**
+ * Build lookup table (LUT) for fast interpolation.
+ * @private
+ */
+ColorRamp.prototype._buildLUT=function(size){for(var lut=[],i=0;i<size;i++){var t=i/(size-1),r=Math.round(this.cold.r+(this.hot.r-this.cold.r)*t),g=Math.round(this.cold.g+(this.hot.g-this.cold.g)*t),b=Math.round(this.cold.b+(this.hot.b-this.cold.b)*t);lut.push("rgb("+r+","+g+","+b+")")}return lut},
+/**
+ * Get interpolated color for intensity (0-1).
+ * @param {number} intensity - 0 (cold) to 1 (hot)
+ * @returns {string} - CSS rgb() color
+ */
+ColorRamp.prototype.getColor=function(intensity){var idx=Math.min(255,Math.max(0,Math.round(255*intensity)));return this.lut[idx]},
+/**
+ * Get RGBA color with opacity.
+ * @param {number} intensity - 0-1
+ * @param {number} alpha - 0-1
+ * @returns {string} - CSS rgba() color
+ */
+ColorRamp.prototype.getColorWithAlpha=function(intensity,alpha){var idx=Math.min(255,Math.max(0,Math.round(255*intensity))),rgb=this.lut[idx].match(/\d+/g);return"rgba("+rgb[0]+","+rgb[1]+","+rgb[2]+","+alpha+")"};var _uiStateSaveTimer=null;function saveUiState(){clearTimeout(_uiStateSaveTimer),_uiStateSaveTimer=setTimeout(function(){state.settings&&(state.settings.ui_state=collectUiState(),saveSettingsState())},2e3)}function applyProfileSetting(){const pseudo=state.settings?.profile?.pseudo||"trader",h=(new Date).getHours(),salutation=h<6?"Bonne nuit":h<12?"Bonjour":h<18?"Bon après-midi":h<22?"Bonsoir":"Bonne nuit",greeting=$("#todayGreeting");greeting&&(greeting.textContent=pseudo);const sal=$("#todaySalutation");sal&&(sal.textContent=salutation)}function applyVisualSettings(){const prefersDark=!1!==state.settings?.preferences?.dark_mode,prefersAnimations=!1!==state.settings?.preferences?.animations,theme=state.settings?.preferences?.theme||"default";document.body.classList.toggle("light-mode",!prefersDark),document.body.classList.toggle("reduce-motion",!prefersAnimations),
 // Appliquer le theme (default, claude, etc.)
 document.body.classList.remove("theme-default","theme-claude"),document.body.classList.add("theme-"+theme);
 // Sync checkbox Settings si visible
@@ -2280,7 +2317,107 @@ if(opts.showTimeAxis&&TIME_AXIS_H>0){ctx.fillStyle=bg,ctx.fillRect(0,plotH,W,TIM
 // Right gutter — CVD label
 var latest=(state.latestDeltaByInterval||{})[String(selected)]||buckets[buckets.length-1]||null;if(latest){var gx=W-66;ctx.fillStyle=bg,ctx.fillRect(gx,0,66,plotH),ctx.fillStyle=hairline,ctx.fillRect(gx,0,1,plotH),ctx.fillStyle=textDim,ctx.font="9px "+monoFont,ctx.textBaseline="top",ctx.fillText("CVD",gx+4,4);var cvdStr=(latest.cvd>=0?"+":"")+(Math.abs(latest.cvd)>=1e3?(latest.cvd/1e3).toFixed(1)+"K":latest.cvd.toFixed(1));ctx.fillStyle=latest.cvd>=0?buyColor:sellColor,ctx.font="10px "+monoFont,ctx.fillText(cvdStr,gx+4,16)}}else{
 // ---- Fallback: simple bar-only render (no viewport) ----
-var fbBuckets=buckets.slice(-Math.floor(plotW/3)),fbMaxAbs=1;fbBuckets.forEach(function(b){fbMaxAbs=Math.max(fbMaxAbs,Math.abs(b.delta))});var fbBarW=Math.max(1,plotW/Math.max(fbBuckets.length,1)-1);ctx.globalAlpha=.75,fbBuckets.forEach(function(b,i){var pct=Math.max(.04,Math.min(1,Math.abs(b.delta)/fbMaxAbs)),barH=Math.max(2,Math.round(pct*(plotH-4))),x=4+i*(fbBarW+1),y=b.delta>=0?plotH-barH:0;ctx.fillStyle=b.delta>=0?buyColor:sellColor,ctx.fillRect(Math.round(x),y,Math.ceil(fbBarW),barH)}),ctx.globalAlpha=1,ctx.fillStyle=hairline,ctx.fillRect(4,Math.round(plotH/2),plotW,1)}}}}(),// ---------- 077_v6_canvas_chart.js ----------
+var fbBuckets=buckets.slice(-Math.floor(plotW/3)),fbMaxAbs=1;fbBuckets.forEach(function(b){fbMaxAbs=Math.max(fbMaxAbs,Math.abs(b.delta))});var fbBarW=Math.max(1,plotW/Math.max(fbBuckets.length,1)-1);ctx.globalAlpha=.75,fbBuckets.forEach(function(b,i){var pct=Math.max(.04,Math.min(1,Math.abs(b.delta)/fbMaxAbs)),barH=Math.max(2,Math.round(pct*(plotH-4))),x=4+i*(fbBarW+1),y=b.delta>=0?plotH-barH:0;ctx.fillStyle=b.delta>=0?buyColor:sellColor,ctx.fillRect(Math.round(x),y,Math.ceil(fbBarW),barH)}),ctx.globalAlpha=1,ctx.fillStyle=hairline,ctx.fillRect(4,Math.round(plotH/2),plotW,1)}}}}(),// 076_v6_grid_system.js
+// Pixel-perfect grid system for chart rendering.
+// Provides grid snapping, cell calculations, and alignment helpers
+// for candles, footprint, heatmap, bubbles, CVD, and crosshair layers.
+function(){"use strict";var V6OF=window.V6OF=window.V6OF||{};
+/**
+   * GridSystem: Manages pixel-perfect grid for chart rendering.
+   * All visual elements snap to grid for alignment and consistency.
+   *
+   * @constructor
+   * @param {number} canvasWidth - Canvas width in CSS pixels
+   * @param {number} canvasHeight - Canvas height in CSS pixels
+   * @param {number} cellWidth - Width of each grid cell (time axis)
+   * @param {number} cellHeight - Height of each grid cell (price axis)
+   * @param {number} [dpr=1] - Device pixel ratio (for HiDPI)
+   */function GridSystem(canvasWidth,canvasHeight,cellWidth,cellHeight,dpr){this.canvasWidth=Math.max(1,canvasWidth),this.canvasHeight=Math.max(1,canvasHeight),this.cellWidth=Math.max(1,cellWidth),this.cellHeight=Math.max(1,cellHeight),this.dpr=dpr||window.devicePixelRatio||1}
+/**
+   * Snap a coordinate to the nearest grid point.
+   * @param {number} x - X coordinate (CSS pixels)
+   * @param {number} y - Y coordinate (CSS pixels)
+   * @returns {{x: number, y: number}} - Snapped coordinates
+   */GridSystem.prototype.snapToGrid=function(x,y){return{x:Math.round(x/this.cellWidth)*this.cellWidth,y:Math.round(y/this.cellHeight)*this.cellHeight}},
+/**
+   * Snap a width to grid cell width.
+   * @param {number} w - Width to snap
+   * @returns {number} - Snapped width
+   */
+GridSystem.prototype.snapWidth=function(w){return Math.round(w/this.cellWidth)*this.cellWidth},
+/**
+   * Snap a height to grid cell height.
+   * @param {number} h - Height to snap
+   * @returns {number} - Snapped height
+   */
+GridSystem.prototype.snapHeight=function(h){return Math.round(h/this.cellHeight)*this.cellHeight},
+/**
+   * Get grid cell bounds at (row, col) index.
+   * @param {number} colIndex - Column index (time)
+   * @param {number} rowIndex - Row index (price)
+   * @returns {{x: number, y: number, width: number, height: number}} - Cell bounds
+   */
+GridSystem.prototype.getCellAt=function(colIndex,rowIndex){return{x:colIndex*this.cellWidth,y:rowIndex*this.cellHeight,width:this.cellWidth,height:this.cellHeight}},
+/**
+   * Get center of a grid cell.
+   * @param {number} colIndex - Column index
+   * @param {number} rowIndex - Row index
+   * @returns {{x: number, y: number}} - Cell center
+   */
+GridSystem.prototype.getCellCenter=function(colIndex,rowIndex){return{x:colIndex*this.cellWidth+this.cellWidth/2,y:rowIndex*this.cellHeight+this.cellHeight/2}},
+/**
+   * Get all grid lines (for debug rendering).
+   * @returns {{vertical: number[], horizontal: number[]}} - X and Y coordinates of grid lines
+   */
+GridSystem.prototype.getGridLines=function(){var x,y,vertical=[],horizontal=[];for(x=0;x<=this.canvasWidth;x+=this.cellWidth)vertical.push(x);for(y=0;y<=this.canvasHeight;y+=this.cellHeight)horizontal.push(y);return{vertical:vertical,horizontal:horizontal}},
+/**
+   * Get price from pixel Y coordinate (inverse of Y mapping).
+   * Requires viewport context (min/max price, height).
+   * @param {number} pixelY - Pixel Y (0 = top)
+   * @param {number} minPrice - Minimum price (bottom)
+   * @param {number} maxPrice - Maximum price (top)
+   * @returns {number} - Price at pixel Y
+   */
+GridSystem.prototype.getPriceFromPixelY=function(pixelY,minPrice,maxPrice){var priceDiff=maxPrice-minPrice;return maxPrice-pixelY/this.canvasHeight*priceDiff},
+/**
+   * Get pixel Y from price (map price to canvas Y).
+   * @param {number} price - Price level
+   * @param {number} minPrice - Minimum price (bottom)
+   * @param {number} maxPrice - Maximum price (top)
+   * @returns {number} - Pixel Y coordinate
+   */
+GridSystem.prototype.getPixelYFromPrice=function(price,minPrice,maxPrice){return(1-(price-minPrice)/(maxPrice-minPrice))*this.canvasHeight},
+/**
+   * Get time from pixel X coordinate.
+   * @param {number} pixelX - Pixel X
+   * @param {number} totalCandles - Total number of candles in chart
+   * @returns {number} - Time index (candle index)
+   */
+GridSystem.prototype.getTimeFromPixelX=function(pixelX,totalCandles){var candleIndex=Math.round(pixelX/this.cellWidth);return Math.max(0,Math.min(candleIndex,totalCandles-1))},
+/**
+   * Get pixel X from time index.
+   * @param {number} candleIndex - Candle index
+   * @returns {number} - Pixel X coordinate
+   */
+GridSystem.prototype.getPixelXFromTime=function(candleIndex){return candleIndex*this.cellWidth},
+/**
+   * Check if a coordinate is within canvas bounds.
+   * @param {number} x - X coordinate
+   * @param {number} y - Y coordinate
+   * @returns {boolean}
+   */
+GridSystem.prototype.isWithinBounds=function(x,y){return x>=0&&x<=this.canvasWidth&&y>=0&&y<=this.canvasHeight},
+/**
+   * Get visible grid cells range (for culling).
+   * @param {number} visibleColStart - First visible column
+   * @param {number} visibleColEnd - Last visible column
+   * @param {number} visibleRowStart - First visible row
+   * @param {number} visibleRowEnd - Last visible row
+   * @returns {{cols: {start: number, end: number}, rows: {start: number, end: number}}}
+   */
+GridSystem.prototype.getVisibleCellRange=function(visibleColStart,visibleColEnd,visibleRowStart,visibleRowEnd){return{cols:{start:Math.max(0,Math.floor(visibleColStart/this.cellWidth)),end:Math.ceil(visibleColEnd/this.cellWidth)},rows:{start:Math.max(0,Math.floor(visibleRowStart/this.cellHeight)),end:Math.ceil(visibleRowEnd/this.cellHeight)}}},
+// Export
+V6OF.register?V6OF.register("Core","GridSystem",GridSystem):(V6OF.Core=V6OF.Core||{},V6OF.Core.GridSystem=GridSystem)}(),// ---------- 077_v6_canvas_chart.js ----------
 // Canvas chart engine: price scale (right), time scale (bottom), grid, crosshair,
 // pan/zoom via V6OF.chart (ChartViewport). Heatmap SD + Footprint render in shared
 // time/price space.
