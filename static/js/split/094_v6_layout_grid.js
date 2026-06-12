@@ -189,78 +189,27 @@
     }
   }
 
-  // Anchor the popover under `anchorEl`, right-aligned, then clamp it fully
-  // inside the viewport so it never overflows or overlaps the right dock.
-  function positionPopover(anchorEl) {
-    if (!_popover) return;
-    var pop = _popover;
-    pop.style.visibility = 'hidden';
-    pop.style.top = '0px';
-    pop.style.left = '0px';
-
-    var margin = 8;
-    var anchorRect = anchorEl ? anchorEl.getBoundingClientRect() : { bottom: margin, right: window.innerWidth - margin, left: margin };
-    var popRect = pop.getBoundingClientRect();
-
-    var top = anchorRect.bottom + 6;
-    var left = anchorRect.right - popRect.width;
-
-    var maxLeft = window.innerWidth - popRect.width - margin;
-    var maxTop = window.innerHeight - popRect.height - margin;
-    if (left > maxLeft) left = maxLeft;
-    if (left < margin) left = margin;
-    if (top > maxTop) top = Math.max(margin, anchorRect.top - popRect.height - 6);
-    if (top < margin) top = margin;
-
-    pop.style.top = top + 'px';
-    pop.style.left = left + 'px';
-    pop.style.visibility = '';
-  }
-
-  function outsideClose(e) {
-    if (_popover && !_popover.contains(e.target) && !(e.target.closest && e.target.closest('[data-v6-action="layout-grid-picker"]'))) {
-      closePopover();
-    }
-  }
-
-  function escClose(e) {
-    if (e.key === 'Escape' || e.key === 'Esc') closePopover();
-  }
-
   function openPopover(anchorEl) {
     closePopover();
-    var div = document.createElement('div');
-    div.innerHTML = popoverHtml(getLayout());
-    _popover = div.firstElementChild;
+    // Use centralized popover helper (000_popover_helper.js)
+    _popover = V6OF.UI.PopoverHelper.create(popoverHtml(getLayout()));
     _popover.addEventListener('click', handlePopoverClick);
-    // Mount inside the orderflow root so the design tokens (--v6-*, defined on
-    // .v6-orderflow-root) resolve — on document.body they're undefined and the
-    // popover renders transparent/unstyled. position:fixed keeps viewport coords.
-    (_root || document.body).appendChild(_popover);
-
-    positionPopover(anchorEl);
     _popoverAnchor = anchorEl || null;
-
-    setTimeout(function () {
-      document.addEventListener('click', outsideClose, true);
-      document.addEventListener('keydown', escClose, true);
-      window.addEventListener('resize', onPopoverViewportChange);
-      window.addEventListener('scroll', onPopoverViewportChange, true);
-    }, 0);
-  }
-
-  function onPopoverViewportChange() {
-    if (_popover) positionPopover(_popoverAnchor);
+    // Reposition on viewport change
+    var onViewportChange = function() { if (_popover) V6OF.UI.PopoverHelper.position(_popover, _popoverAnchor); };
+    // Open with root for design token scoping
+    V6OF.UI.PopoverHelper.open(_popover, _root, function() { _popover = null; }, '[data-v6-action="layout-grid-picker"]');
+    V6OF.UI.PopoverHelper.position(_popover, anchorEl);
+    window.addEventListener('resize', onViewportChange);
+    window.addEventListener('scroll', onViewportChange, true);
   }
 
   function closePopover() {
-    if (_popover && _popover.parentNode) _popover.parentNode.removeChild(_popover);
-    _popover = null;
+    if (_popover) {
+      V6OF.UI.PopoverHelper.close(_popover);
+      _popover = null;
+    }
     _popoverAnchor = null;
-    document.removeEventListener('click', outsideClose, true);
-    document.removeEventListener('keydown', escClose, true);
-    window.removeEventListener('resize', onPopoverViewportChange);
-    window.removeEventListener('scroll', onPopoverViewportChange, true);
   }
 
   // ---------------------------------------------------------------------
@@ -587,10 +536,9 @@
   }
 
   function setupResizeObserver() {
-    if (_resizeObserver || typeof ResizeObserver === 'undefined') return;
-    _resizeObserver = new ResizeObserver(function () {
-      requestAnimationFrame(redrawAll);
-    });
+    if (_resizeObserver) return;
+    // Use centralized RAF-batched ResizeObserver from 001_utilities.js
+    _resizeObserver = createResizeObserverRaf(redrawAll);
     if (_gridEl) _resizeObserver.observe(_gridEl);
   }
 

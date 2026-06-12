@@ -161,39 +161,18 @@
 
   function openPopover(anchorEl) {
     closePopover();
-    var schema = getSchema();
-    var div = document.createElement('div');
-    div.innerHTML = popoverHtml(schema);
-    _popover = div.firstElementChild;
+    // Use centralized popover helper (000_popover_helper.js)
+    _popover = V6OF.UI.PopoverHelper.create(popoverHtml(getSchema()));
     _popover.addEventListener('click', handlePopoverClick);
-
-    document.body.appendChild(_popover);
-
-    // Position below anchor
-    if (anchorEl) {
-      var rect = anchorEl.getBoundingClientRect();
-      _popover.style.top = (rect.bottom + 4 + window.scrollY) + 'px';
-      _popover.style.left = Math.max(8, rect.left + window.scrollX - 60) + 'px';
-    }
-
-    // Close on outside click
-    setTimeout(function () {
-      document.addEventListener('click', outsideClose, true);
-    }, 0);
-  }
-
-  function outsideClose(e) {
-    if (_popover && !_popover.contains(e.target)) {
-      closePopover();
-    }
+    V6OF.UI.PopoverHelper.open(_popover, document.body, function() { _popover = null; });
+    V6OF.UI.PopoverHelper.position(_popover, anchorEl);
   }
 
   function closePopover() {
-    if (_popover && _popover.parentNode) {
-      _popover.parentNode.removeChild(_popover);
+    if (_popover) {
+      V6OF.UI.PopoverHelper.close(_popover);
+      _popover = null;
     }
-    _popover = null;
-    document.removeEventListener('click', outsideClose, true);
   }
 
   V6OF.register('UI', 'LayoutPicker', {

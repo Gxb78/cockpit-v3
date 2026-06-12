@@ -135,13 +135,8 @@
   }
 
   function resizeCanvas(canvas) {
-    if (!canvas) return;
-    var rect = canvas.parentNode.getBoundingClientRect();
-    var dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.max(1, Math.round(rect.width * dpr));
-    canvas.height = Math.max(1, Math.round(rect.height * dpr));
-    canvas.style.width = rect.width + 'px';
-    canvas.style.height = rect.height + 'px';
+    // Delegate to centralized utility (001_utilities.js) to avoid DPI scaling duplication
+    resizeCanvasForDpr(canvas);
   }
 
   function init() {

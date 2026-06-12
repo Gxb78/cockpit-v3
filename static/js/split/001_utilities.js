@@ -454,3 +454,47 @@ async function api(path, opts = {}) {
   return res.json();
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// V6 Orderflow Helpers (canvas/resize/observer)
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Resize canvas for high-DPI displays (centralizes devicePixelRatio logic).
+ * Sets both physical canvas size and CSS display size to avoid DPI blur.
+ * @param {HTMLCanvasElement} canvas
+ */
+function resizeCanvasForDpr(canvas) {
+  if (!canvas || !canvas.parentNode) return;
+  var rect = canvas.parentNode.getBoundingClientRect();
+  var dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, Math.round(rect.width * dpr));
+  canvas.height = Math.max(1, Math.round(rect.height * dpr));
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+}
+
+/**
+ * Create a ResizeObserver that batches callbacks via requestAnimationFrame.
+ * Returns an object with observe(el) and disconnect() methods.
+ * @param {Function} callback - Called when resize detected (batched per frame)
+ * @returns {Object} - { observe(el), disconnect() }
+ */
+function createResizeObserverRaf(callback) {
+  if (typeof ResizeObserver === 'undefined') {
+    return { observe: function() {}, disconnect: function() {} };
+  }
+  var rafId = null;
+  var observer = new ResizeObserver(function () {
+    if (rafId) return;
+    rafId = requestAnimationFrame(function () {
+      rafId = null;
+      callback();
+    });
+  });
+  var originalDisconnect = observer.disconnect.bind(observer);
+  observer.disconnect = function () {
+    if (rafId) cancelAnimationFrame(rafId);
+    originalDisconnect();
+  };
+  return observer;
+}
