@@ -63,14 +63,29 @@
 
   /**
    * Validate footprint candle has required data
+   * DEFENSIVE: strict validation to prevent rendering broken candles
    */
   function isValidFootprint(candle) {
-    return candle &&
-           typeof candle === 'object' &&
-           Array.isArray(candle.levels) &&
-           candle.levels.length > 0 &&
-           Number.isFinite(candle.open) &&
-           Number.isFinite(candle.close);
+    if (!candle || typeof candle !== 'object') return false;
+    if (!Array.isArray(candle.levels) || candle.levels.length === 0) return false;
+
+    // Must have valid OHLC
+    if (!Number.isFinite(candle.open) || !Number.isFinite(candle.close)) return false;
+    if (!Number.isFinite(candle.high) || !Number.isFinite(candle.low)) return false;
+
+    // Must have valid timestamps
+    if (!Number.isFinite(candle.openTime) || !Number.isFinite(candle.closeTime)) return false;
+
+    // Must have valid volume data (not all zeros)
+    var hasVolume = candle.levels.some(function(level) {
+      return level.totalVol > 0;
+    });
+    if (!hasVolume) return false;
+
+    // POC must be set
+    if (!Number.isFinite(candle.poc)) return false;
+
+    return true;
   }
 
   /**

@@ -37,7 +37,19 @@
    * @param {object} options - Rendering options
    */
   function renderFootprintCandle(ctx, x, width, vp, candle, options) {
-    if (!candle || !candle.levels || !candle.levels.length) return;
+    // DEFENSIVE: strict validation before rendering
+    if (!candle) return;
+    if (!candle.levels || !Array.isArray(candle.levels)) return;
+    if (candle.levels.length === 0) return;
+
+    // Skip if no volume at all
+    var hasVolume = candle.levels.some(function(level) {
+      return level && level.totalVol > 0;
+    });
+    if (!hasVolume) return;
+
+    // Skip if maxVol is invalid (prevents render artifacts)
+    if (!Number.isFinite(candle.maxPriceLevelVol) || candle.maxPriceLevelVol <= 0) return;
 
     options = options || {};
     var showPOC = options.showPOC !== false;

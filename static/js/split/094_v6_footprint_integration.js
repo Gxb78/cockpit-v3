@@ -86,18 +86,34 @@
   /**
    * Main integration: render footprints to canvas
    * Call this from canvas chart renderer
+   * DEFENSIVE: multiple validation gates prevent crashes and DOM artifacts
    */
   function renderFootprintsToCanvas(ctx, vp, plot, state, settings) {
-    if (!state || !state.footprintCandles) return false;
+    // Gate 1: Basic state validation
+    if (!state || typeof state !== 'object') return false;
+    if (!state.footprintCandles) return false;
 
     var candles = state.footprintCandles;
-    if (!Array.isArray(candles) || !candles.length) return false;
+    if (!Array.isArray(candles) || candles.length === 0) return false;
 
-    // Validate footprints
-    var validCandles = candles.filter(FootprintParser.isValidFootprint);
+    // Gate 2: Viewport validation
+    if (!vp || typeof vp.priceToY !== 'function' || typeof vp.timeToX !== 'function') {
+      return false;
+    }
+
+    // Gate 3: Plot validation
+    if (!plot || !Number.isFinite(plot.left) || !Number.isFinite(plot.width)) {
+      return false;
+    }
+
+    // Gate 4: Filter and validate footprints
+    var validCandles = candles
+      .filter(function(c) { return c !== null && c !== undefined; })
+      .filter(FootprintParser.isValidFootprint);
+
     if (!validCandles.length) return false;
 
-    // Get rendering options from settings
+    // Gate 5: Settings validation
     var options = {
       showPOC: settings && settings.showFootprintPOC !== false,
       showVA: settings && settings.showFootprintVA !== false,
@@ -105,12 +121,13 @@
       showDelta: settings && settings.showFootprintDelta !== false
     };
 
-    // Render to canvas
+    // Gate 6: Safe rendering with error handling
     try {
       FootprintRenderer.renderFootprints(ctx, vp, plot, validCandles, options);
       return true;
     } catch (e) {
       console.error('[Footprint Integration] Render error:', e);
+      // Don't crash - just skip rendering this frame
       return false;
     }
   }
