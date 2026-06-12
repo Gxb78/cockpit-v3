@@ -22,7 +22,7 @@
     };
   }
 
-  var DOM_ROW_HEIGHT  = 16;  // px, grid-aligned (divisible for pixel-perfect rendering)
+  var DOM_ROW_HEIGHT  = 15;  // px, matches terminal-exocharts-photo-perfect-v2.html
   var OVERSCAN        = 8;   // rows hors viewport, pour le scroll fluide
   var RENDER_THROTTLE = 50;  // ms
 

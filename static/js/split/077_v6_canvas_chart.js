@@ -1707,8 +1707,12 @@
     drawCrosshair(ctx, vp, plot, baseCandles, canvas);
 
     // Debug grid overlay (when V6OF.DEBUG_RENDER = true)
-    if (V6OF.DEBUG_RENDER && V6OF.CanvasEnhancements && V6OF.CanvasEnhancements.drawDebugGridOverlay) {
-      V6OF.CanvasEnhancements.drawDebugGridOverlay(ctx, vp, plot, 40, 16);
+    if (V6OF.DEBUG_RENDER && V6OF.CanvasEnhancements && typeof V6OF.CanvasEnhancements.drawDebugGridOverlay === 'function') {
+      try {
+        V6OF.CanvasEnhancements.drawDebugGridOverlay(ctx, vp, plot, 40, 16);
+      } catch (e) {
+        // Debug overlay failed silently to prevent breaking chart render
+      }
     }
 
     if (typeof V6OF.updateViewportToolbarState === 'function') {

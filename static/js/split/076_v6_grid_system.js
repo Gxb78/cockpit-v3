@@ -182,11 +182,11 @@
     };
   };
 
-  // Export
-  if (!V6OF.register) {
+  // Export (safe, non-blocking registration)
+  if (typeof V6OF.register === 'function') {
+    V6OF.register('Core', 'GridSystem', GridSystem);
+  } else {
     V6OF.Core = V6OF.Core || {};
     V6OF.Core.GridSystem = GridSystem;
-  } else {
-    V6OF.register('Core', 'GridSystem', GridSystem);
   }
 })();
