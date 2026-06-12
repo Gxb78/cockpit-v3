@@ -2642,8 +2642,6 @@ function snapToPixel(value){return Math.round(value)}
    * Enhanced candle rendering with grid snapping.
    * Can be used to wrap existing drawCandlesVp calls.
    */
-// Hook into existing canvas chart if available
-if(
 // Export helpers
 V6OF.CanvasEnhancements={drawDebugGridOverlay:function(ctx,vp,plot,cellWidth,cellHeight){if(V6OF.DEBUG_RENDER){ctx.save(),ctx.strokeStyle="rgba(100, 200, 255, 0.15)",ctx.lineWidth=1;for(
 // Vertical grid lines (time axis)
@@ -2661,9 +2659,7 @@ var bodyWidth=Math.max(2,.6*Math.abs(x2-x1)),bodyLeft=xMid-Math.round(bodyWidth/
    * Enhance footprint rendering with even row spacing.
    */,enhanceFootprintRowSpacing:function(container,visibleLevels){if(container){var rowHeight=container.clientHeight/Math.max(1,visibleLevels);container.querySelectorAll("[data-footprint-row]").forEach(function(row,idx){row.style.top=idx*rowHeight+"px",row.style.height=rowHeight+"px";
 // Center text vertically
-var textEl=row.querySelector("[data-footprint-text]");textEl&&(textEl.style.lineHeight=rowHeight+"px")})}}},V6OF.CanvasChart&&V6OF.CanvasChart.draw){var origDraw=V6OF.CanvasChart.draw;V6OF.CanvasChart.draw=function(canvas,state){
-// Could add debug overlay here if needed
-return origDraw.call(this,canvas,state)}}}(),// ---------- 078_v6_local_engine_client.js ----------
+var textEl=row.querySelector("[data-footprint-text]");textEl&&(textEl.style.lineHeight=rowHeight+"px")})}}}}(),// ---------- 078_v6_local_engine_client.js ----------
 // Engine client: WebSocket transport connecting the V6 surface to the local Go market engine.
 // Auto-connects to the configured local engine WebSocket when the V6 orderflow shell mounts.
 // Local engine only. No exchange browser WebSocket. No Wails dependency.
