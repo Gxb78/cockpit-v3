@@ -359,24 +359,13 @@
 
   function getDomColumns(settings) {
     var cols = settings && settings.domColumns;
-    if (!Array.isArray(cols) || cols.length === 0) {
-      // Default: TradingView-style ladder with volume/heatmap columns.
-      // Settings (079) DEFAULT_DOM_COLUMNS is the source of truth for new
-      // installs; this is only a defensive fallback for raw/unvalidated
-      // settings objects.
-      return ['vol', 'sell', 'buy', 'bid', 'price', 'ask', 'delta'];
+    // Delegate to the centralized validation in 079_v6_orderflow_settings.js
+    // to avoid duplicating the logic for handling legacy defaults, uniqueness, etc.
+    if (V6OF.Core && V6OF.Core.Settings && V6OF.Core.Settings.getValidatedDomColumns) {
+      return V6OF.Core.Settings.getValidatedDomColumns(cols);
     }
-    if (cols.indexOf('price') === -1) {
-      var bidIdx = cols.indexOf('bid');
-      var askIdx = cols.indexOf('ask');
-      if (bidIdx !== -1 && askIdx !== -1 && askIdx > bidIdx) {
-        cols = cols.slice();
-        cols.splice(askIdx, 0, 'price');
-      } else {
-        cols = cols.concat(['price']);
-      }
-    }
-    return cols;
+    // Fallback if Settings module not loaded yet (defensive)
+    return cols && Array.isArray(cols) && cols.length > 0 ? cols : ['vol', 'sell', 'buy', 'bid', 'price', 'ask', 'delta'];
   }
 
   function getColumnWidths(cols) {
@@ -496,8 +485,9 @@
   }
 
   function syncControls(container, grouping, settings) {
+    if (!container || !container.classList) return;
     // In Exocharts layout, grouping select is in the parent .exo-dom-toolbar
-    var isExo = container.classList.contains && container.classList.contains('exo-dom-body');
+    var isExo = container.classList.contains('exo-dom-body');
     var searchRoot = isExo ? (container.parentElement || container) : container;
     var sel = searchRoot.querySelector('.v6-dom-grouping') || searchRoot.querySelector('.exo-dom-grouping');
     if (sel && document.activeElement !== sel && String(sel.value) !== String(grouping)) sel.value = grouping;
@@ -1120,7 +1110,7 @@
     // Grouping + mode
     eventTarget.addEventListener('change', function (event) {
       var target = event.target;
-      if (!target) return;
+      if (!target || !target.classList) return;
       if ((target.classList.contains('v6-dom-grouping') || target.classList.contains('exo-dom-grouping')) && onGroupChange) {
         autoCenter   = true;
         userScrolled = false;

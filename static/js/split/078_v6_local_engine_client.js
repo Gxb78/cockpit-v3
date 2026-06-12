@@ -1031,7 +1031,6 @@
               depthHistoryCount: depthHistory.length
             }, 'depth-history-init');
           }
-          console.log('[V6] loaded depth history: ' + depthHistory.length + ' points');
         }
         notify();
       }
@@ -1228,7 +1227,6 @@
           if ((prev.timeframe || '1m') === interval) patch.chartCandles = merged;
           return patch;
         }, 'deep-history-' + interval);
-        console.log('[V6] deep history loaded:', interval, older.length, 'candles fetched, reason:', reason || '');
       }).catch(function (err) {
         console.warn('[V6] deep history fetch failed', err);
       });

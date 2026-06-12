@@ -353,6 +353,36 @@
     return Object.assign({}, DEFAULTS);
   }
 
+  // Validate and normalize a domColumns array (used by DOM panel render).
+  // This centralizes the validation logic so it's not duplicated in 075_v6_dom_panel.js.
+  function getValidatedDomColumns(rawCols) {
+    if (isLegacyDefaultDomColumns(rawCols)) {
+      return DEFAULT_DOM_COLUMNS.slice();
+    }
+    if (!Array.isArray(rawCols) || rawCols.length === 0) {
+      return DEFAULT_DOM_COLUMNS.slice();
+    }
+    var seen = {};
+    var validCols = [];
+    rawCols.forEach(function (k) {
+      if (VALID_DOM_KEYS[k] && !seen[k]) {
+        seen[k] = true;
+        validCols.push(k);
+      }
+    });
+    // Force 'price' column if missing
+    if (!seen['price']) {
+      var bidIdx = validCols.indexOf('bid');
+      var askIdx = validCols.indexOf('ask');
+      if (bidIdx !== -1 && askIdx !== -1 && askIdx > bidIdx) {
+        validCols.splice(askIdx, 0, 'price');
+      } else {
+        validCols.push('price');
+      }
+    }
+    return validCols.length > 0 ? validCols : DEFAULT_DOM_COLUMNS.slice();
+  }
+
   function bindStore(store) {
     if (!store) return;
     var lastJson = '';
@@ -384,6 +414,7 @@
     save: save,
     reset: reset,
     validate: validateSettings,
-    bindStore: bindStore
+    bindStore: bindStore,
+    getValidatedDomColumns: getValidatedDomColumns
   }, 'Settings');
 })();

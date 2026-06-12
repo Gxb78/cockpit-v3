@@ -81,6 +81,7 @@
   var _gridEl = null;       // .v6-chart-grid container
   var _primaryCell = null;  // wrapper holding the original .v6-panel-chart
   var _extraCanvases = [];  // canvases for cells 2..N
+  var _primaryCanvas = null; // cached [data-v6-chart] node (stable across re-parenting)
   var _resizeObserver = null;
 
   // Pop-out window bookkeeping: cellIndex -> { win, channel, unsubscribe }
@@ -116,13 +117,12 @@
   }
 
   // ---------------------------------------------------------------------
-  // Popover (STANDARD presets + SYNC toggles), styled like the platform.html
-  // STANDARD/MONITOR/SYNC reference.
-  // ---------------------------------------------------------------------
-  var SYNC_LABELS = { symbol: 'Symbol', interval: 'Interval', crosshair: 'Crosshair' };
+  // Popover (chart layout presets + pop-out button).
+  // STANDARD (5 presets) + MONITOR (pop-out action).
+  // SYNC toggles removed (all no-ops: symbol/interval/crosshair always shared).
+  // ────────────────────────────────────────────────────────────────────────
 
   function popoverHtml(layout) {
-    var sync = layout.sync || {};
     var presetBtns = PRESET_ORDER.map(function (key) {
       var active = layout.preset === key ? ' is-active' : '';
       return '<button type="button" class="v6-cgp-preset' + active + '" data-v6-grid-preset="' + key + '" title="' + PRESET_LABELS[key] + '">' +
@@ -155,12 +155,6 @@
           '</div>',
           '<div class="v6-cgp-note">Browsers cannot detect physical monitors — &quot;New window&quot; pops the chart out into a separate, detached browser window you can drag to another screen.</div>',
         '</div>',
-        '<div class="v6-cgp-sep"></div>',
-        '<div class="v6-cgp-section">',
-          '<div class="v6-cgp-section-title">SYNC</div>',
-          '<div class="v6-cgp-syncs">', syncRows, '</div>',
-          '<div class="v6-cgp-note">Symbol &amp; Crosshair are always shared across cells. Interval sync is not yet available per cell.</div>',
-        '</div>',
       '</div>'
     ].join('');
   }
@@ -178,7 +172,6 @@
 
   function handlePopoverClick(e) {
     var presetBtn = e.target.closest('[data-v6-grid-preset]');
-    var syncBtn = e.target.closest('[data-v6-grid-sync]');
     var popoutNewBtn = e.target.closest('[data-v6-grid-popout-new]');
 
     if (presetBtn) {
@@ -186,16 +179,6 @@
       setLayout({ preset: preset });
       rerenderPopover();
       applyLayout();
-      return;
-    }
-
-    if (syncBtn) {
-      var key = syncBtn.getAttribute('data-v6-grid-sync');
-      var cur = getLayout();
-      var sync = Object.assign({}, cur.sync);
-      sync[key] = !sync[key];
-      setLayout({ sync: sync });
-      rerenderPopover();
       return;
     }
 
@@ -592,7 +575,7 @@
   function redrawAll() {
     if (!_store) return;
     var state = _store.getState ? _store.getState() : {};
-    var primaryCanvas = _root.querySelector('[data-v6-chart]');
+    var primaryCanvas = _primaryCanvas || (_primaryCanvas = _root.querySelector('[data-v6-chart]'));
     if (primaryCanvas && V6OF.CanvasChart && primaryCanvas.offsetWidth > 0 && primaryCanvas.offsetHeight > 0) {
       V6OF.CanvasChart.draw(primaryCanvas, state);
     }
@@ -759,24 +742,27 @@
       setupResizeObserver();
 
       if (store && store.subscribe) {
-        var lastSlice = null;
+        var lastPreset = null;
+        var lastCellsKey = null;
+        var lastKey = null;
         store.subscribe(function (state) {
           var settings = (state && state.settings) || {};
           var layout = settings.chartLayout || DEFAULT_LAYOUT;
-          var slice = JSON.stringify({ preset: layout.preset, cells: layout.cells, timeframe: state.timeframe, candleCount: (state.chartCandles || []).length });
-          if (slice !== lastSlice) {
-            var prev = lastSlice ? JSON.parse(lastSlice) : null;
-            var presetChanged = !prev || prev.preset !== layout.preset;
-            var cellsChanged = !prev || JSON.stringify(prev.cells) !== JSON.stringify(layout.cells);
-            lastSlice = slice;
-            if (presetChanged) {
-              applyLayout();
-            } else if (cellsChanged) {
-              applyCellModules();
-              requestAnimationFrame(redrawAll);
-            } else {
-              requestAnimationFrame(redrawAll);
-            }
+          var cellsKey = (layout.cells || []).join(',');
+          var key = layout.preset + '|' + cellsKey + '|' + state.timeframe + '|' + ((state.chartCandles || []).length);
+          if (key === lastKey) return;
+          var presetChanged = lastKey === null || layout.preset !== lastPreset;
+          var cellsChanged = lastKey === null || cellsKey !== lastCellsKey;
+          lastKey = key;
+          lastPreset = layout.preset;
+          lastCellsKey = cellsKey;
+          if (presetChanged) {
+            applyLayout();
+          } else if (cellsChanged) {
+            applyCellModules();
+            requestAnimationFrame(redrawAll);
+          } else {
+            requestAnimationFrame(redrawAll);
           }
         });
       }

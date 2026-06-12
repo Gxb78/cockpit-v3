@@ -155,11 +155,25 @@
     var shell = buildShell(root);
     var body = shell.querySelector('[data-v6-popout-body]');
     var canvas = null;
+    var lastState = null;
 
     if (module === 'chart') {
       canvas = buildChartBody(body);
       resizeCanvas(canvas);
-      window.addEventListener('resize', function () { resizeCanvas(canvas); });
+      // RAF-throttled: resize fires per pixel during a drag, and setting
+      // canvas.width clears the bitmap, so redraw from the last mirrored
+      // state or the chart stays blank until the next tick arrives.
+      var resizeRaf = null;
+      window.addEventListener('resize', function () {
+        if (resizeRaf) return;
+        resizeRaf = requestAnimationFrame(function () {
+          resizeRaf = null;
+          resizeCanvas(canvas);
+          if (lastState && V6OF.CanvasChart && canvas.offsetWidth > 0 && canvas.offsetHeight > 0) {
+            V6OF.CanvasChart.draw(canvas, lastState);
+          }
+        });
+      });
     } else {
       buildUnsupportedBody(body);
     }
@@ -179,6 +193,7 @@
       _channel.onmessage = function (ev) {
         var msg = ev && ev.data;
         if (!msg || msg.type !== 'state' || msg.cell !== cellIndex) return;
+        lastState = msg.state || null;
         if (module === 'chart' && canvas && V6OF.CanvasChart) {
           if (canvas.offsetWidth > 0 && canvas.offsetHeight > 0) {
             resizeCanvas(canvas);
