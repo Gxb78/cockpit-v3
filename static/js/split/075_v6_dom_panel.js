@@ -22,7 +22,7 @@
     };
   }
 
-  var DOM_ROW_HEIGHT  = 15;  // px, matches terminal-exocharts-photo-perfect-v2.html
+  var DOM_ROW_HEIGHT  = 16;  // px, grid-aligned (divisible for pixel-perfect rendering)
   var OVERSCAN        = 8;   // rows hors viewport, pour le scroll fluide
   var RENDER_THROTTLE = 50;  // ms
 
@@ -707,8 +707,9 @@
       return COLUMN_DEFS[c] ? COLUMN_DEFS[c].render(ctx) : '';
     }).join('');
 
+    var y_snap = Math.round(y);
     return '<div class="' + cls + '"' +
-      ' style="position:absolute;top:' + y + 'px;left:0;right:0;height:' + DOM_ROW_HEIGHT + 'px"' +
+      ' style="position:absolute;top:' + y_snap + 'px;left:0;right:0;height:' + DOM_ROW_HEIGHT + 'px"' +
       ' data-price-key="' + lv.priceKey + '" role="row" aria-label="' + escAttr(rowLabel) + '">' +
       cellsHtml +
       '</div>';
