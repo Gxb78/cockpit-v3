@@ -1668,8 +1668,10 @@
     // Independent layers (TradingView/ATAS model): candles are the base,
     // heatmap is an optional background, footprint is an optional cell overlay.
     var showHeatmap = settings.showHeatmap === true;
-    var showFootprint = settings.showFootprint === true || (settings.chartMode === 'footprint');
-    var showCandles = settings.showOhlc !== false && settings.showCandles !== false && settings.chartMode !== 'footprint';  // footprint-only = no candles underneath
+    // Footprint is disabled by default; only enable if explicitly set OR in footprint-mode
+    // At startup (insufficient zoom), always show OHLC instead
+    var showFootprint = settings.showFootprint === true;
+    var showCandles = settings.showOhlc !== false && settings.showCandles !== false;  // Always show OHLC unless explicitly disabled
 
     ctx.clearRect(0, 0, width, height);
     ctx.fillStyle = settings.bgColor || '#080b12';
