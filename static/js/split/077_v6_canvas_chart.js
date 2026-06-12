@@ -1668,9 +1668,8 @@
     // Independent layers (TradingView/ATAS model): candles are the base,
     // heatmap is an optional background, footprint is an optional cell overlay.
     var showHeatmap = settings.showHeatmap === true;
-    // Footprint is disabled by default; only enable if explicitly set OR in footprint-mode
-    // At startup (insufficient zoom), always show OHLC instead
-    var showFootprint = settings.showFootprint === true;
+    // FOOTPRINT DISABLED: Complete rewrite in progress
+    var showFootprint = false;  // Footprint rendering is disabled
     var showCandles = settings.showOhlc !== false && settings.showCandles !== false;  // Always show OHLC unless explicitly disabled
 
     ctx.clearRect(0, 0, width, height);
@@ -1733,9 +1732,10 @@
       drawBubblesVp(ctx, vp, plot, baseCandles);
     }
     if (showCandles && baseCandles.length) drawCandlesVp(ctx, vp, plot, baseCandles, settings, state);
-    if (showFootprint && !isInteractiveDrag && footprintCandles.length) {
-      drawFootprintVp(ctx, vp, plot, footprintCandles, settings, showCandles);
-    }
+    // FOOTPRINT DISABLED: Complete rewrite in progress
+    // if (showFootprint && !isInteractiveDrag && footprintCandles.length) {
+    //   drawFootprintVp(ctx, vp, plot, footprintCandles, settings, showCandles);
+    // }
     ctx.restore();
 
     // â”€â”€ Indicator overlays (EMA, SMA, Bollinger, etc.) â”€â”€
