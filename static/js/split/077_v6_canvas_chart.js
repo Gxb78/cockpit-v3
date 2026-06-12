@@ -1705,6 +1705,12 @@
     drawVolumeProfile(ctx, vp, plot, state, canvas);
     drawTimelineBookmarks(ctx, vp, plot, state, canvas);
     drawCrosshair(ctx, vp, plot, baseCandles, canvas);
+
+    // Debug grid overlay (when V6OF.DEBUG_RENDER = true)
+    if (V6OF.DEBUG_RENDER && V6OF.CanvasEnhancements && V6OF.CanvasEnhancements.drawDebugGridOverlay) {
+      V6OF.CanvasEnhancements.drawDebugGridOverlay(ctx, vp, plot, 40, 16);
+    }
+
     if (typeof V6OF.updateViewportToolbarState === 'function') {
       V6OF.updateViewportToolbarState();
     }
