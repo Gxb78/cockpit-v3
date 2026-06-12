@@ -1060,14 +1060,15 @@
           ctx.stroke();
         }
         ctx.restore();
+        // Draw synthetic candle marker line (use dark color, not white)
         ctx.setLineDash([3, 3]);
-        ctx.strokeStyle = 'rgba(226, 232, 240, 0.7)';
+        ctx.strokeStyle = 'rgba(107, 114, 128, 0.45)';  // Dark gray instead of white
         ctx.beginPath();
         ctx.moveTo(synthX, yClose);
         ctx.lineTo(synthX + synthW, yClose);
         ctx.stroke();
         ctx.setLineDash([]);
-        ctx.fillStyle = 'rgba(226, 232, 240, 0.82)';
+        ctx.fillStyle = 'rgba(107, 114, 128, 0.55)';  // Dark gray instead of white
         ctx.fillRect(xc - 1, yClose - 1, 2, 2);
         continue;
       }
