@@ -1064,15 +1064,20 @@
       ctx.strokeStyle = hexToRgba(col, 0.96);
       ctx.fillStyle = hexToRgba(col, 0.96);
       ctx.lineWidth = selected ? 1.8 : 1;
-      // wick
+      // wick (snap to pixel, 1px width for crisp rendering)
+      var xc_snap = Math.round(xc);
+      var yHigh_snap = Math.round(vp.priceToY(c.high));
+      var yLow_snap = Math.round(vp.priceToY(c.low));
       ctx.beginPath();
-      ctx.moveTo(xc, vp.priceToY(c.high));
-      ctx.lineTo(xc, vp.priceToY(c.low));
+      ctx.moveTo(xc_snap + 0.5, yHigh_snap);
+      ctx.lineTo(xc_snap + 0.5, yLow_snap);
       ctx.stroke();
-      // body
+      // body (snap to pixel grid for alignment)
       var top = Math.min(yOpen, yClose);
       var bh = Math.max(1, Math.abs(yClose - yOpen));
-      ctx.fillRect(xc - bodyW / 2, top, bodyW, bh);
+      var body_left = Math.round(xc - bodyW / 2);
+      var body_top = Math.round(top);
+      ctx.fillRect(body_left, body_top, Math.round(bodyW), Math.round(bh));
       if (selected) {
         ctx.strokeStyle = 'rgba(113, 63, 18, 0.92)';
         ctx.strokeRect(xc - bodyW / 2 - 1, top - 1, bodyW + 2, bh + 2);
