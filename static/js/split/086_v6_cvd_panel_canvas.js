@@ -362,9 +362,11 @@
     for (i = 0; i < deltaVol.length; i++) {
       var d = deltaVol[i];
       if (d.t < win.start || d.t > win.end) continue;
-      var x = tx(d.t + interval / 2) - bw / 2;
+      var x = Math.round(tx(d.t + interval / 2) - bw / 2);
       var hh = Math.abs(d.delta) / maxAbs * halfH;
       if (hh < 1) hh = 1;
+      hh = Math.round(hh);
+      var barY = d.delta >= 0 ? Math.round(zy - hh) : Math.round(zy);
       var grd = ctx.createLinearGradient(x, zy, x, d.delta >= 0 ? zy - hh : zy + hh);
       if (d.delta >= 0) {
         grd.addColorStop(0, C.buyGrad0);
@@ -374,7 +376,7 @@
         grd.addColorStop(1, C.sellGrad1);
       }
       ctx.fillStyle = grd;
-      ctx.fillRect(x, d.delta >= 0 ? zy - hh : zy, bw, Math.max(hh, 1));
+      ctx.fillRect(x, barY, Math.round(bw), hh);
     }
   }
 
