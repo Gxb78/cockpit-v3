@@ -120,14 +120,4 @@
     createHeatmapRamp: createHeatmapRamp,
     enhanceFootprintRowSpacing: enhanceFootprintRowSpacing
   };
-
-  // Hook into existing canvas chart if available
-  if (V6OF.CanvasChart && V6OF.CanvasChart.draw) {
-    var origDraw = V6OF.CanvasChart.draw;
-    V6OF.CanvasChart.draw = function(canvas, state) {
-      var result = origDraw.call(this, canvas, state);
-      // Could add debug overlay here if needed
-      return result;
-    };
-  }
 })();
