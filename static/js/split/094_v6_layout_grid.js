@@ -610,14 +610,15 @@
       entry.postState = postState;
     }
 
-    // Fallback: if BroadcastChannel is unavailable, re-dock as soon as the
-    // pop-out window is closed (polled).
+    // Fallback: if BroadcastChannel is unavailable, poll for pop-out closure.
+    // Check every 5s instead of 1s to reduce CPU overhead (BroadcastChannel preferred).
+    // Note: 095 also sends 'closed' message on beforeunload if channel available.
     var poll = setInterval(function () {
       if (win.closed) {
         clearInterval(poll);
         reDockCell(index);
       }
-    }, 1000);
+    }, 5000);
     entry.poll = poll;
   }
 
