@@ -858,8 +858,9 @@
       virt.lastH = spacerH;
     }
     var totalW = Math.max(1, Math.round(widths._total || totalColumnWidth(cols, widths)));
-    // Ensure spacer width is always valid and greater than 1px
-    if (totalW < 1 || !Number.isFinite(totalW)) totalW = Math.max(body.clientWidth, 100);
+    // Ensure spacer width is always valid: fallback to container width or 300px minimum
+    var containerW = body.clientWidth || 0;
+    if (totalW < containerW || !Number.isFinite(totalW)) totalW = Math.max(containerW, 300);
     virt.spacer.style.minWidth = totalW + 'px';
     virt.spacer.style.width = totalW + 'px';
     virt.spacer.style.backgroundImage = columnBoundaryBackground(cols, widths);
