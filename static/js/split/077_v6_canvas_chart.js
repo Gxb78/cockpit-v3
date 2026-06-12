@@ -1138,8 +1138,8 @@
       if (r < 7) continue; // auto-threshold: skip minor candles
       var price = Number.isFinite(v.mid) ? v.mid : Number(v.c.close);
       if (!Number.isFinite(price) || price < vp.priceMin || price > vp.priceMax) continue;
-      var x = vp.timeToX((v.s + v.e) / 2);
-      var y = vp.priceToY(price);
+      var x = Math.round(vp.timeToX((v.s + v.e) / 2));
+      var y = Math.round(vp.priceToY(price));
       var delta = Number(v.c.delta);
       var buy = Number.isFinite(delta) ? delta >= 0 : (Number(v.c.close) >= Number(v.c.open));
       ctx.beginPath();
