@@ -7,6 +7,19 @@
   'use strict';
 
   var V6OF = window.V6OF = window.V6OF || {};
+  // Defensive: define V6OF.register if not already present
+  if (!V6OF.register) {
+    var domains = ['Core', 'Data', 'Transport', 'UI', 'Studies', 'Page'];
+    domains.forEach(function (name) {
+      V6OF[name] = V6OF[name] || {};
+    });
+    V6OF.register = function (domain, name, value, legacyName) {
+      V6OF[domain] = V6OF[domain] || {};
+      V6OF[domain][name] = value;
+      if (legacyName) V6OF[legacyName] = value;
+      return value;
+    };
+  }
 
   // Create a popover element from HTML string.
   // @param {string} html - Inner HTML markup

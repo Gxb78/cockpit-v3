@@ -2,15 +2,16 @@
 // Centralized popover lifecycle management (used by layout-picker & layout-grid).
 // Eliminates duplication of positionPopover() / openPopover() / closePopover()
 // between 091_v6_layout_picker.js and 094_v6_layout_grid.js.
-!function(){"use strict";
-// Remove popover from DOM and detach listeners.
-// @param {HTMLElement} popEl - Popover element
-// @param {Function} onClose - Callback after removal
-function popoverClose(popEl,onClose){popEl&&(popEl.parentNode&&popEl.parentNode.removeChild(popEl),popEl._outsideClose&&document.removeEventListener("click",popEl._outsideClose,!0),popEl._escClose&&document.removeEventListener("keydown",popEl._escClose),onClose&&onClose())}(window.V6OF=window.V6OF||{}).register("UI","PopoverHelper",{create:
+!function(){"use strict";var V6OF=window.V6OF=window.V6OF||{};
+// Defensive: define V6OF.register if not already present
+if(!V6OF.register){["Core","Data","Transport","UI","Studies","Page"].forEach(function(name){V6OF[name]=V6OF[name]||{}}),V6OF.register=function(domain,name,value,legacyName){return V6OF[domain]=V6OF[domain]||{},V6OF[domain][name]=value,legacyName&&(V6OF[legacyName]=value),value}}
 // Create a popover element from HTML string.
 // @param {string} html - Inner HTML markup
 // @return {HTMLElement} - The popover wrapper
-function(html){var div=document.createElement("div");return div.innerHTML=html,div.firstElementChild}
+// Remove popover from DOM and detach listeners.
+// @param {HTMLElement} popEl - Popover element
+// @param {Function} onClose - Callback after removal
+function popoverClose(popEl,onClose){popEl&&(popEl.parentNode&&popEl.parentNode.removeChild(popEl),popEl._outsideClose&&document.removeEventListener("click",popEl._outsideClose,!0),popEl._escClose&&document.removeEventListener("keydown",popEl._escClose),onClose&&onClose())}V6OF.register("UI","PopoverHelper",{create:function(html){var div=document.createElement("div");return div.innerHTML=html,div.firstElementChild}
 // Position popover under anchor, right-aligned, clamped to viewport.
 // @param {HTMLElement} popEl - Popover element
 // @param {HTMLElement} anchorEl - Anchor element (optional)
