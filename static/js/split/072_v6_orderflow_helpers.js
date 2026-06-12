@@ -51,6 +51,7 @@
         domRangeLevels: Number(s.domRangeLevels || 1000),
         domValueMode: s.domValueMode || 'coin',
         domColumns: s.domColumns || ['bid', 'price', 'ask', 'buy', 'sell', 'delta', 'imb', 'stack', 'abs'],
+        domColumnWidths: s.domColumnWidths || {},
         domSoftWallPercentile: Number(s.domSoftWallPercentile || 0.85),
         domMajorWallPercentile: Number(s.domMajorWallPercentile || 0.95),
         showDOM: s.showDOM !== false
@@ -71,7 +72,11 @@
         replayEvents: state && state.replayEvents,
         replay: state && state.replay,
         markers: s.markers,
+        showOhlc: s.showOhlc !== false,
         showCandles: s.showCandles !== false,
+        ohlcBodyStyle: s.ohlcBodyStyle || 'candles',
+        ohlcBodyWidth: s.ohlcBodyWidth || 0.72,
+        ohlcLineWidth: s.ohlcLineWidth || 1,
         showBubbles: s.showBubbles === true,
         showHeatmap: s.showHeatmap === true,
         showFootprint: s.showFootprint === true,
@@ -91,6 +96,8 @@
         indicatorsKey: JSON.stringify((s.indicators || []).map(function (it) {
           return [it.instanceId, it.sourceId, it.visible, it.pane, it.name, JSON.stringify(it.inputs || {})].join(':');
         })),
+        chartIndicatorsKey: JSON.stringify(s.chartIndicators || []),
+        hiddenChartIndicatorsKey: JSON.stringify(s.hiddenChartIndicators || []),
         indicatorSourcesKey: JSON.stringify((s.indicatorSources || []).map(function (src) {
           return [src.sourceId, src.updatedAt].join(':');
         }))
@@ -120,6 +127,7 @@
     showDOM:        { type: 'bool', default: true,  on: true },
     showCVD:        { type: 'bool', default: true,  on: true },
     showVwap:       { type: 'bool', default: true,  on: true },
+    showOhlc:       { type: 'bool', default: true,  on: true },
     showCandles:    { type: 'bool', default: true,  on: true },
     showLastPrice:  { type: 'bool', default: true,  on: true },
     showGrid:       { type: 'bool', default: true,  on: true },
@@ -140,6 +148,7 @@
     volumeProfileType: { type: 'enum', default: 'visible', values: ['visible', 'session', 'fixed', 'composite'] },
     volumeProfileSide: { type: 'enum', default: 'right', values: ['left', 'right'] },
     volumeProfileStyle: { type: 'enum', default: 'volume', values: ['volume', 'delta', 'split'] },
+    ohlcBodyStyle:  { type: 'enum', default: 'candles', values: ['candles', 'hollow', 'bars'] },
     // ── Number with bounds ──
     minQty:         { type: 'number', default: 0,    min: 0 },
     maxRows:         { type: 'number', default: 5000, min: 1, max: 5000 },
@@ -159,6 +168,8 @@
     exhaustionFactor:{ type: 'number', default: 0.35, min: 0.05, max: 1 },
     footprintValueAreaPct:{ type: 'number', default: 70, min: 10, max: 90 },
     minWickTicks:    { type: 'number', default: 0,    min: 0 },
+    ohlcBodyWidth:   { type: 'number', default: 0.72, min: 0.2, max: 1 },
+    ohlcLineWidth:   { type: 'number', default: 1,    min: 1, max: 4 },
     tapeFontSize:    { type: 'number', default: 10,   min: 8, max: 16 },
     singleClickFitLiveDelayMs:{ type: 'number', default: 180, min: 0, max: 2000 },
     volumeProfileValueArea: { type: 'number', default: 70, min: 10, max: 100 },
@@ -170,7 +181,10 @@
     downColor:       { type: 'string', default: '#f23645' },
     indicators:      { type: 'array',  default: [] },
     indicatorSources:{ type: 'array',  default: [] },
-    domColumns:      { type: 'array',  default: ['bid', 'price', 'ask', 'buy', 'sell', 'delta', 'imb', 'stack', 'abs'] }
+    chartIndicators: { type: 'array',  default: ['ohlc'] },
+    hiddenChartIndicators:{ type: 'array', default: [] },
+    domColumns:      { type: 'array',  default: ['bid', 'price', 'ask', 'buy', 'sell', 'delta', 'imb', 'stack', 'abs'] },
+    domColumnWidths: { type: 'object', default: {} }
   };
 
   function resolveSettings(rawSettings, rawUi) {

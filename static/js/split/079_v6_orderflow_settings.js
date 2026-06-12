@@ -52,7 +52,11 @@
     showDOM: true,
     showCVD: true,
     showVwap: false,
+    showOhlc: true,
     showCandles: true,
+    ohlcBodyStyle: 'candles',
+    ohlcLineWidth: 1,
+    ohlcBodyWidth: 0.72,
     showBubbles: false,
     showHeatmap: false,
     showFootprint: false,
@@ -68,6 +72,7 @@
     domValueMode: 'coin',
     domGroup: 1,
     domColumns: DEFAULT_DOM_COLUMNS.slice(),
+    domColumnWidths: {},
     domSoftWallPercentile: 0.85,
     domMajorWallPercentile: 0.95,
     minQty: 0,
@@ -86,6 +91,8 @@
     theme: 'dark-tv',
     indicators: [],
     indicatorSources: [],
+    chartIndicators: ['ohlc'],
+    hiddenChartIndicators: [],
     activeTab: 'dom',
     dockCollapsed: false,
     cvdCollapsed: false,
@@ -135,7 +142,12 @@
     out.showDOM = typeof raw.showDOM === 'boolean' ? raw.showDOM : DEFAULTS.showDOM;
     out.showCVD = typeof raw.showCVD === 'boolean' ? raw.showCVD : DEFAULTS.showCVD;
     out.showVwap = typeof raw.showVwap === 'boolean' ? raw.showVwap : DEFAULTS.showVwap;
+    out.showOhlc = typeof raw.showOhlc === 'boolean' ? raw.showOhlc
+      : (typeof raw.showCandles === 'boolean' ? raw.showCandles : DEFAULTS.showOhlc);
     out.showCandles = typeof raw.showCandles === 'boolean' ? raw.showCandles : DEFAULTS.showCandles;
+    out.ohlcBodyStyle = raw.ohlcBodyStyle === 'bars' || raw.ohlcBodyStyle === 'hollow' ? raw.ohlcBodyStyle : DEFAULTS.ohlcBodyStyle;
+    out.ohlcLineWidth = Math.max(1, Math.min(4, Number(raw.ohlcLineWidth) || DEFAULTS.ohlcLineWidth));
+    out.ohlcBodyWidth = Math.max(0.2, Math.min(1, Number(raw.ohlcBodyWidth) || DEFAULTS.ohlcBodyWidth));
     out.showBubbles = typeof raw.showBubbles === 'boolean' ? raw.showBubbles : DEFAULTS.showBubbles;
     out.showHeatmap = typeof raw.showHeatmap === 'boolean' ? raw.showHeatmap : DEFAULTS.showHeatmap;
     out.showFootprint = typeof raw.showFootprint === 'boolean' ? raw.showFootprint : DEFAULTS.showFootprint;
@@ -198,6 +210,7 @@
     } else {
       out.domColumns = DEFAULT_DOM_COLUMNS.slice();
     }
+    out.domColumnWidths = sanitizeDomColumnWidths(raw.domColumnWidths);
     out.minQty = Math.max(0, Number(raw.minQty) || 0);
     out.maxRows = clampInt(raw.maxRows, 8, 5000, DEFAULTS.maxRows);
     out.restTradePrefillLimit = clampInt(raw.restTradePrefillLimit, 50, 100000, DEFAULTS.restTradePrefillLimit);
@@ -229,6 +242,8 @@
     out.minWickTicks = clampInt(raw.minWickTicks, 0, 10, DEFAULTS.minWickTicks);
     out.indicatorSources = sanitizeIndicatorSources(raw.indicatorSources);
     out.indicators = sanitizeIndicators(raw.indicators, out.indicatorSources);
+    out.chartIndicators = sanitizeChartIndicators(raw.chartIndicators, out.showOhlc);
+    out.hiddenChartIndicators = sanitizeHiddenChartIndicators(raw.hiddenChartIndicators);
     out.markers = Array.isArray(raw.markers) ? raw.markers.map(function (m) {
       return {
         ts: Number(m.ts || 0),
@@ -267,6 +282,38 @@
     return out;
   }
 
+  function sanitizeChartIndicators(raw, showOhlc) {
+    var valid = { ohlc: 1, vwap: 1, ema9: 1, ema21: 1 };
+    var out = [];
+    var seen = {};
+    if (Array.isArray(raw)) {
+      raw.forEach(function (id) {
+        id = String(id || '').trim();
+        if (valid[id] && !seen[id]) {
+          seen[id] = true;
+          out.push(id);
+        }
+      });
+    }
+    if (showOhlc !== false && !seen.ohlc) out.unshift('ohlc');
+    return out;
+  }
+
+  function sanitizeHiddenChartIndicators(raw) {
+    var valid = { ohlc: 1, vwap: 1, ema9: 1, ema21: 1 };
+    var out = [];
+    var seen = {};
+    if (!Array.isArray(raw)) return out;
+    raw.forEach(function (id) {
+      id = String(id || '').trim();
+      if (valid[id] && !seen[id]) {
+        seen[id] = true;
+        out.push(id);
+      }
+    });
+    return out;
+  }
+
   function sanitizeIndicators(rawIndicators, sources) {
     if (!Array.isArray(rawIndicators)) return DEFAULTS.indicators.slice();
     var sourceMap = {};
@@ -290,6 +337,18 @@
         height: clampInt(inst.height, 56, 280, 112),
         locked: inst.locked === true
       });
+    });
+    return out;
+  }
+
+  function sanitizeDomColumnWidths(raw) {
+    var out = {};
+    if (!raw || typeof raw !== 'object') return out;
+    Object.keys(VALID_DOM_KEYS).forEach(function (key) {
+      if (raw[key] == null) return;
+      var n = Number(raw[key]);
+      if (!Number.isFinite(n)) return;
+      out[key] = Math.max(24, Math.min(220, Math.round(n)));
     });
     return out;
   }

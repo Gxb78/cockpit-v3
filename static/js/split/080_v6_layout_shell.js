@@ -1068,6 +1068,23 @@
           V6OF.CanvasChart.draw(canvas, store.getState());
         }
       });
+
+      // Debug grid overlay toggle: Ctrl+Shift+G
+      if (!V6OF._debugGridKeyBound) {
+        V6OF._debugGridKeyBound = true;
+        document.addEventListener('keydown', function (e) {
+          if (e.ctrlKey && e.shiftKey && (e.key === 'G' || e.key === 'g')) {
+            e.preventDefault();
+            V6OF.DEBUG_RENDER = !V6OF.DEBUG_RENDER;
+            console.log('Debug Grid: ' + (V6OF.DEBUG_RENDER ? 'ON' : 'OFF'));
+            var activeCanvas = document.querySelector('[data-v6-chart]');
+            var activeStore = V6OF.getStore ? V6OF.getStore(document.getElementById('v6-orderflow-root')) : null;
+            if (activeCanvas && V6OF.CanvasChart && activeStore) {
+              V6OF.CanvasChart.draw(activeCanvas, activeStore.getState());
+            }
+          }
+        });
+      }
     }
   }, 'Shell');
 

@@ -474,6 +474,32 @@ function resizeCanvasForDpr(canvas) {
 }
 
 /**
+ * Cache for canvas text metrics, keyed by "text|fontSize|font".
+ * Avoids repeated ctx.measureText() calls for the same label/font combo.
+ */
+var _textMetricsCache = {};
+
+/**
+ * Measure text width/height with caching (computed once per text/font combo).
+ * @param {CanvasRenderingContext2D} ctx - Canvas context (font must be set by caller, or pass fontSize/font)
+ * @param {string} text - Text to measure
+ * @param {number} fontSize - Font size in px (used for cache key + height estimate)
+ * @param {string} font - Full font string to apply to ctx (e.g. "600 10px JetBrains Mono, monospace")
+ * @returns {{width: number, height: number}}
+ */
+function getCachedTextMetrics(ctx, text, fontSize, font) {
+  var key = text + '|' + fontSize + '|' + font;
+  var cached = _textMetricsCache[key];
+  if (cached) return cached;
+  ctx.font = font;
+  var width = ctx.measureText(text).width;
+  var height = fontSize;
+  cached = { width: width, height: height };
+  _textMetricsCache[key] = cached;
+  return cached;
+}
+
+/**
  * Create a ResizeObserver that batches callbacks via requestAnimationFrame.
  * Returns an object with observe(el) and disconnect() methods.
  * @param {Function} callback - Called when resize detected (batched per frame)
@@ -501,12 +527,14 @@ function createResizeObserverRaf(callback) {
 
 /**
  * ColorRamp: Smooth color interpolation for heatmap rendering.
- * Pre-computes 256-entry lookup table for fast O(1) color lookup.
- * @param {string} coldColor - CSS color (low intensity)
- * @param {string} hotColor - CSS color (high intensity)
+ * Pre-computes a 256-entry lookup table for fast O(1) color lookup.
+ * Accepts either a (coldColor, hotColor) pair of CSS colors, or a multi-stop
+ * array of [r,g,b] tuples evenly spaced across the 0..1 range (e.g. VIRIDIS).
+ * @param {string|Array} coldColorOrStops - CSS color (low intensity) or stop array
+ * @param {string} [hotColor] - CSS color (high intensity), ignored when first arg is an array
  */
-function ColorRamp(coldColor, hotColor) {
-  this.coldColor = coldColor;
+function ColorRamp(coldColorOrStops, hotColor) {
+  this.coldColor = coldColorOrStops;
   this.hotColor = hotColor;
   this.lut = this._buildLUT();
 }
@@ -522,15 +550,32 @@ ColorRamp.prototype._parseColor = function(color) {
 };
 
 ColorRamp.prototype._buildLUT = function() {
+  var lut = [];
+  var i, t;
+  if (Array.isArray(this.coldColor)) {
+    // Multi-stop array of [r,g,b] tuples evenly spaced across 0..1.
+    var stops = this.coldColor;
+    for (i = 0; i < 256; i++) {
+      t = i / 255;
+      var s = t * (stops.length - 1);
+      var idx = Math.floor(s);
+      var f = s - idx;
+      var a = stops[idx], b = stops[Math.min(stops.length - 1, idx + 1)];
+      var r = Math.round(a[0] + (b[0] - a[0]) * f);
+      var g = Math.round(a[1] + (b[1] - a[1]) * f);
+      var bl = Math.round(a[2] + (b[2] - a[2]) * f);
+      lut.push('rgb(' + r + ',' + g + ',' + bl + ')');
+    }
+    return lut;
+  }
   var cold = this._parseColor(this.coldColor);
   var hot = this._parseColor(this.hotColor);
-  var lut = [];
-  for (var i = 0; i < 256; i++) {
-    var t = i / 255;
-    var r = Math.round(cold.r + (hot.r - cold.r) * t);
-    var g = Math.round(cold.g + (hot.g - cold.g) * t);
-    var b = Math.round(cold.b + (hot.b - cold.b) * t);
-    lut.push('rgb(' + r + ',' + g + ',' + b + ')');
+  for (i = 0; i < 256; i++) {
+    t = i / 255;
+    var rr = Math.round(cold.r + (hot.r - cold.r) * t);
+    var gg = Math.round(cold.g + (hot.g - cold.g) * t);
+    var bb = Math.round(cold.b + (hot.b - cold.b) * t);
+    lut.push('rgb(' + rr + ',' + gg + ',' + bb + ')');
   }
   return lut;
 };
@@ -545,3 +590,19 @@ ColorRamp.prototype.getColorWithAlpha = function(intensity, alpha) {
   var match = color.match(/\d+/g);
   return 'rgba(' + match[0] + ',' + match[1] + ',' + match[2] + ',' + alpha + ')';
 };
+
+// Export on the shared V6OF namespace so other split files (e.g. canvas chart
+// heatmap renderer) can reuse a single cached 256-entry LUT instead of
+// recomputing colormap interpolation per cell/frame.
+(function () {
+  var V6OF = window.V6OF = window.V6OF || {};
+  V6OF.ColorRamp = ColorRamp;
+  // Default viridis-based ramp (dark indigo -> blue -> teal -> green -> yellow),
+  // matching the heatmap's perceptual colormap. Built once and cached.
+  var VIRIDIS_STOPS = [
+    [68, 1, 84], [59, 82, 139], [33, 145, 140], [94, 201, 98], [253, 231, 37]
+  ];
+  V6OF.ColorRamp.lutCache = V6OF.ColorRamp.lutCache || {};
+  V6OF.ColorRamp.viridis = V6OF.ColorRamp.viridis || new ColorRamp(VIRIDIS_STOPS);
+  V6OF.ColorRamp.lutCache.viridis = V6OF.ColorRamp.viridis.lut;
+})();

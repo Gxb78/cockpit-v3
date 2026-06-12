@@ -335,6 +335,7 @@
           drag.fixedStart = fStart;
           drag.fixedEnd = fEnd;
           canvas.classList.add('v6-chart-dragging');
+          V6OF.chartIsDragging = true;
           event.preventDefault();
           return;
         }
@@ -345,6 +346,7 @@
           drag.fixedStart = fStart;
           drag.fixedEnd = fEnd;
           canvas.classList.add('v6-chart-dragging');
+          V6OF.chartIsDragging = true;
           event.preventDefault();
           return;
         }
@@ -359,6 +361,7 @@
           drag.blockOffsetStart = fStart - vp.xToTime(pt.x);
           drag.blockOffsetEnd = fEnd - vp.xToTime(pt.x);
           canvas.classList.add('v6-chart-dragging');
+          V6OF.chartIsDragging = true;
           event.preventDefault();
           return;
         }
@@ -375,6 +378,7 @@
           priceMin: vp.priceMin, priceMax: vp.priceMax
         };
         canvas.classList.add('v6-chart-dragging');
+        V6OF.chartIsDragging = true;
         event.preventDefault();
         return;
       }
@@ -388,6 +392,7 @@
           priceMin: vp.priceMin, priceMax: vp.priceMax
         };
         canvas.classList.add('v6-chart-dragging');
+        V6OF.chartIsDragging = true;
         event.preventDefault();
         return;
       }
@@ -405,6 +410,7 @@
       };
 
       canvas.classList.add('v6-chart-dragging');
+      V6OF.chartIsDragging = true;
       event.preventDefault();
     },
 
@@ -522,6 +528,7 @@
       drag.active = false;
       if (drag.moved) drag.lastDragAt = Date.now();
       if (canvas) canvas.classList.remove('v6-chart-dragging');
+      V6OF.chartIsDragging = false;
 
       if (drag.mode === 'vp-fixed-start' || drag.mode === 'vp-fixed-end' || drag.mode === 'vp-fixed-block') {
         var store = storeFor(canvas);
@@ -534,6 +541,7 @@
         drag.fixedStart = null;
         drag.fixedEnd = null;
       }
+      redrawAll(canvas);
     },
 
     // ── Touch handlers (pinch-to-zoom + two-finger pan) ──
@@ -547,6 +555,7 @@
       } else if (event.touches.length === 2) {
         // Two fingers → prepare pinch
         drag.active = false;
+        V6OF.chartIsDragging = true;
         touchState.active = true;
         touchState.pinchActive = false;
         touchState.startDist = touchDist(event.touches[0], event.touches[1]);
@@ -561,6 +570,7 @@
           };
         }
         canvas.classList.add('v6-chart-dragging');
+        V6OF.chartIsDragging = true;
         event.preventDefault();
       }
     },
@@ -625,12 +635,14 @@
           this.onPointerUp(canvas, null);
         }
         canvas.classList.remove('v6-chart-dragging');
+        V6OF.chartIsDragging = false;
       } else if (event.touches.length === 1 && touchState.active) {
         // Went from 2 fingers to 1 → switch to pan
         touchState.active = false;
         touchState.pinchActive = false;
         touchState.startVp = null;
         drag.active = true;
+        V6OF.chartIsDragging = true;
         drag.mode = 'pan';
         var pt = localPoint(canvas, event.touches[0]);
         drag.startX = pt.x;

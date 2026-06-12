@@ -36,6 +36,16 @@
     slot.updatedAt = Date.now();
   }
 
+  // Snap a text anchor point to the device-pixel grid so glyphs render crisp
+  // at any devicePixelRatio (avoids sub-pixel blur on fractional CSS coords).
+  function snapTextPos(x, y) {
+    var dpr = window.devicePixelRatio || 1;
+    return {
+      x: Math.round(x * dpr) / dpr,
+      y: Math.round(y * dpr) / dpr
+    };
+  }
+
   function roundRect(ctx, x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -549,26 +559,20 @@
     var by = plot.top + plot.height;
 
     // ── Plot gridlines (faint, behind candles) ─────────────────────────────
-    ctx.save();
-    ctx.strokeStyle = AXIS_GRID_LINE;
-    ctx.lineWidth = 1;
-    pTicks.forEach(function (price) {
-      var y = Math.round(vp.priceToY(price)) + 0.5;
-      if (y < plot.top || y > plot.top + plot.height) return;
-      ctx.beginPath();
-      ctx.moveTo(plot.left, y);
-      ctx.lineTo(plot.left + plot.width, y);
-      ctx.stroke();
-    });
-    tInfo.ticks.forEach(function (ts) {
-      var x = Math.round(vp.timeToX(ts)) + 0.5;
-      if (x < plot.left || x > plot.left + plot.width) return;
-      ctx.beginPath();
-      ctx.moveTo(x, plot.top);
-      ctx.lineTo(x, plot.top + plot.height);
-      ctx.stroke();
-    });
-    ctx.restore();
+    if (settings.showGrid !== false) {
+      ctx.save();
+      ctx.strokeStyle = AXIS_GRID_LINE;
+      ctx.lineWidth = 1;
+      pTicks.forEach(function (price) {
+        var y = Math.round(vp.priceToY(price)) + 0.5;
+        if (y < plot.top || y > plot.top + plot.height) return;
+        ctx.beginPath();
+        ctx.moveTo(plot.left, y);
+        ctx.lineTo(plot.left + plot.width, y);
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
 
     // ── Price scale (right gutter) ─────────────────────────────────────────
     ctx.fillStyle = settings.bgColor || '#0a0b0d';
@@ -883,7 +887,7 @@
         grouped = levels.slice();
       }
 
-      var groupH = tickGroup > 1 ? Math.max(2, rowHeight * tickGroup) : Math.max(4, Math.min(16, rowHeight));
+      var groupH = Math.round(tickGroup > 1 ? Math.max(2, rowHeight * tickGroup) : Math.max(4, Math.min(16, rowHeight)));
       var halfW = Math.max(1, (colW - 3) / 2);
       var imbalanceColor = Number(settings.imbalanceRatio) || 3.0;
 
@@ -893,7 +897,9 @@
         if (buyVol <= 0 && sellVol <= 0) return;
         var price = Number(level.price);
         if (!Number.isFinite(price) || price < vp.priceMin || price > vp.priceMax) return;
-        var y = vp.priceToY(price);
+        // Snap row Y to the pixel grid so footprint rows align with the
+        // canvas grid and any DOM-aligned rows (GridAligner.snapRowToGrid).
+        var y = Math.round(vp.priceToY(price));
         var isPoc = level.isPoc || (Number(candle.poc) === price);
 
         var buyW = Math.max(0, halfW * Math.min(1, buyVol / globalMaxBuy));
@@ -1007,6 +1013,9 @@
     if (!Array.isArray(candles) || !candles.length) return false;
     var upHex = (settings && settings.upColor) || '#3ddc97';
     var downHex = (settings && settings.downColor) || '#ff5f73';
+    var style = (settings && settings.ohlcBodyStyle) || 'candles';
+    var bodyWidthFactor = Math.max(0.2, Math.min(1, Number(settings && settings.ohlcBodyWidth) || 0.72));
+    var lineWidth = Math.max(1, Math.min(4, Number(settings && settings.ohlcLineWidth) || 1));
     var activeOpenTime = Number(state && state.ui && state.ui.activeCandleLocked ? state.ui.activeCandleOpenTime : 0);
 
     var lo = 0, hi = candles.length - 1;
@@ -1026,7 +1035,7 @@
       var x1 = vp.timeToX(candleStartTs(c));
       var x2 = vp.timeToX(candleEndTs(c));
       var fullW = Math.max(2, x2 - x1);
-      var bodyW = Math.max(1, Math.min(28, fullW * 0.6));
+      var bodyW = Math.max(1, Math.min(28, fullW * bodyWidthFactor));
       var xc = (x1 + x2) / 2;
       var up = c.close >= c.open;
       var selected = activeOpenTime > 0 && Number(c.openTime || 0) === activeOpenTime;
@@ -1064,7 +1073,7 @@
       }
       ctx.strokeStyle = hexToRgba(col, 0.96);
       ctx.fillStyle = hexToRgba(col, 0.96);
-      ctx.lineWidth = selected ? 1.8 : 1;
+      ctx.lineWidth = selected ? Math.max(1.8, lineWidth + 0.75) : lineWidth;
       // wick (snap to pixel, 1px width for crisp rendering)
       var xc_snap = Math.round(xc);
       var yHigh_snap = Math.round(vp.priceToY(c.high));
@@ -1073,18 +1082,131 @@
       ctx.moveTo(xc_snap + 0.5, yHigh_snap);
       ctx.lineTo(xc_snap + 0.5, yLow_snap);
       ctx.stroke();
-      // body (snap to pixel grid for alignment)
-      var top = Math.min(yOpen, yClose);
-      var bh = Math.max(1, Math.abs(yClose - yOpen));
-      var body_left = Math.round(xc - bodyW / 2);
-      var body_top = Math.round(top);
-      ctx.fillRect(body_left, body_top, Math.round(bodyW), Math.round(bh));
-      if (selected) {
-        ctx.strokeStyle = 'rgba(113, 63, 18, 0.92)';
-        ctx.strokeRect(xc - bodyW / 2 - 1, top - 1, bodyW + 2, bh + 2);
+      if (style === 'bars') {
+        var tickW = Math.max(3, Math.round(bodyW * 0.45));
+        ctx.beginPath();
+        ctx.moveTo(Math.round(xc - tickW) + 0.5, Math.round(yOpen) + 0.5);
+        ctx.lineTo(Math.round(xc) + 0.5, Math.round(yOpen) + 0.5);
+        ctx.moveTo(Math.round(xc) + 0.5, Math.round(yClose) + 0.5);
+        ctx.lineTo(Math.round(xc + tickW) + 0.5, Math.round(yClose) + 0.5);
+        ctx.stroke();
+      } else {
+        // body (snap to pixel grid for alignment)
+        var top = Math.min(yOpen, yClose);
+        var bh = Math.max(1, Math.abs(yClose - yOpen));
+        var body_left = Math.round(xc - bodyW / 2);
+        var body_top = Math.round(top);
+        if (style === 'hollow' && up && !selected) {
+          ctx.strokeRect(body_left, body_top, Math.round(bodyW), Math.round(bh));
+        } else {
+          ctx.fillRect(body_left, body_top, Math.round(bodyW), Math.round(bh));
+        }
+        if (selected) {
+          ctx.strokeStyle = 'rgba(113, 63, 18, 0.92)';
+          ctx.strokeRect(xc - bodyW / 2 - 1, top - 1, bodyW + 2, bh + 2);
+        }
       }
     }
     return true;
+  }
+
+  function drawOhlcLegend(ctx, plot, candles, settings) {
+    if (!Array.isArray(candles) || !candles.length) return;
+    var last = candles[candles.length - 1];
+    if (!last || !Number.isFinite(Number(last.close))) return;
+    var up = Number(last.close) >= Number(last.open);
+    var color = up ? ((settings && settings.upColor) || '#089981') : ((settings && settings.downColor) || '#f23645');
+    var label = [
+      'OHLC',
+      V6OF.format.price(last.open),
+      V6OF.format.price(last.high),
+      V6OF.format.price(last.low),
+      V6OF.format.price(last.close)
+    ].join('  ');
+    ctx.save();
+    ctx.font = '700 12px JetBrains Mono, Consolas, monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(201, 206, 209, 0.96)';
+    ctx.fillText(label, plot.left + 8, Math.max(14, plot.top - 9));
+    ctx.fillStyle = color;
+    ctx.fillRect(plot.left + 8, Math.max(4, plot.top - 18), 24, 2);
+    ctx.restore();
+  }
+
+  function hasChartIndicator(settings, id) {
+    var list = settings && Array.isArray(settings.chartIndicators) ? settings.chartIndicators : ['ohlc'];
+    var hidden = settings && Array.isArray(settings.hiddenChartIndicators) ? settings.hiddenChartIndicators : [];
+    return list.indexOf(id) >= 0 && hidden.indexOf(id) < 0;
+  }
+
+  function drawIndicatorLine(ctx, vp, points, color, width) {
+    if (!Array.isArray(points) || points.length < 2) return;
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width || 1.25;
+    ctx.beginPath();
+    var started = false;
+    for (var i = 0; i < points.length; i++) {
+      var p = points[i];
+      if (!p || p.time < vp.timeStart) continue;
+      if (p.time > vp.timeEnd) break;
+      if (!Number.isFinite(p.value) || p.value < vp.priceMin || p.value > vp.priceMax) {
+        started = false;
+        continue;
+      }
+      var x = vp.timeToX(p.time);
+      var y = vp.priceToY(p.value);
+      if (!started) {
+        ctx.moveTo(x, y);
+        started = true;
+      } else {
+        ctx.lineTo(x, y);
+      }
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function emaPoints(candles, period) {
+    if (!Array.isArray(candles) || !candles.length) return [];
+    var k = 2 / (period + 1);
+    var prev = null;
+    var out = [];
+    for (var i = 0; i < candles.length; i++) {
+      var c = candles[i];
+      var close = Number(c && c.close);
+      if (!Number.isFinite(close)) continue;
+      prev = prev == null ? close : prev + k * (close - prev);
+      out.push({ time: candleMidTs(c), value: prev });
+    }
+    return out;
+  }
+
+  function vwapPoints(candles, state) {
+    if (state && state.vwap && Number.isFinite(Number(state.vwap.value)) && candles && candles.length) {
+      return candles.map(function (c) { return { time: candleMidTs(c), value: Number(state.vwap.value) }; });
+    }
+    var out = [];
+    var pv = 0;
+    var vol = 0;
+    for (var i = 0; i < (candles || []).length; i++) {
+      var c = candles[i];
+      var h = Number(c.high), l = Number(c.low), close = Number(c.close);
+      var v = Number(c.volume || 0);
+      if (!Number.isFinite(h) || !Number.isFinite(l) || !Number.isFinite(close) || !(v > 0)) continue;
+      pv += ((h + l + close) / 3) * v;
+      vol += v;
+      if (vol > 0) out.push({ time: candleMidTs(c), value: pv / vol });
+    }
+    return out;
+  }
+
+  function drawBuiltInChartIndicators(ctx, vp, candles, state, settings) {
+    if (!Array.isArray(candles) || !candles.length) return;
+    if (hasChartIndicator(settings, 'vwap')) drawIndicatorLine(ctx, vp, vwapPoints(candles, state), '#d6bd47', 1.25);
+    if (hasChartIndicator(settings, 'ema9')) drawIndicatorLine(ctx, vp, emaPoints(candles, 9), '#39c77a', 1.25);
+    if (hasChartIndicator(settings, 'ema21')) drawIndicatorLine(ctx, vp, emaPoints(candles, 21), '#55aee8', 1.25);
   }
 
   function moneyShort(v) {
@@ -1125,24 +1247,27 @@
     }
     if (maxNotional <= 0) return;
 
-    // Selective: only the larger candles get a bubble (like ATAS/Tradr). Scale
-    // by sqrt of notional relative to the visible max; small ones fall under the
-    // min radius and are skipped, keeping the chart readable.
-    var maxR = Math.max(10, Math.min(34, plot.width / Math.max(visible.length, 1) * 1.1));
+    // Proportional sizing: radius = sqrt(volumePercent) * maxRadius (power scaling),
+    // clamped to [minR, maxR] so every visible candle gets a readable bubble.
+    var minR = 3;
+    var maxR = Math.max(minR + 1, Math.min(20, plot.width / Math.max(visible.length, 1) * 1.1));
     ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (i = 0; i < visible.length; i++) {
       var v = visible[i];
       var ratio = v.notional / maxNotional;
-      var r = maxR * Math.pow(ratio, 0.7);
-      if (r < 7) continue; // auto-threshold: skip minor candles
+      var r = Math.max(minR, Math.min(maxR, Math.sqrt(ratio) * maxR));
+      // Opacity ramp: fade-in curve so small volumes stay faintly visible
+      // (30-50% at the low end) and large volumes reach full opacity.
+      var opacity = Math.max(0.3, Math.min(1, Math.pow(ratio, 0.4)));
       var price = Number.isFinite(v.mid) ? v.mid : Number(v.c.close);
       if (!Number.isFinite(price) || price < vp.priceMin || price > vp.priceMax) continue;
       var x = Math.round(vp.timeToX((v.s + v.e) / 2));
       var y = Math.round(vp.priceToY(price));
       var delta = Number(v.c.delta);
       var buy = Number.isFinite(delta) ? delta >= 0 : (Number(v.c.close) >= Number(v.c.open));
+      ctx.globalAlpha = opacity;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fillStyle = buy ? 'rgba(61, 220, 151, 0.15)' : 'rgba(255, 95, 115, 0.15)';
@@ -1156,6 +1281,7 @@
         ctx.fillText(moneyShort(v.notional), x, y);
       }
     }
+    ctx.globalAlpha = 1;
     ctx.textBaseline = 'alphabetic';
     ctx.textAlign = 'left';
     ctx.restore();
@@ -1378,7 +1504,7 @@
   function drawLiveInfo(ctx, vp, plot, state, settings) {
     settings = settings || {};
     var layers = [];
-    if (settings.showCandles !== false) layers.push('Candles');
+    if (settings.showOhlc !== false && settings.showCandles !== false) layers.push('OHLC');
     if (settings.showHeatmap === true) layers.push('Heatmap');
     if (settings.showFootprint === true) layers.push('Footprint');
     var modeLabel = layers.length ? layers.join(' + ') : 'No layers';
@@ -1541,9 +1667,9 @@
 
     // Independent layers (TradingView/ATAS model): candles are the base,
     // heatmap is an optional background, footprint is an optional cell overlay.
-    var showHeatmap = settings.showHeatmap === true || (settings.chartMode === 'heatmap');
+    var showHeatmap = settings.showHeatmap === true;
     var showFootprint = settings.showFootprint === true || (settings.chartMode === 'footprint');
-    var showCandles = settings.showCandles !== false && settings.chartMode !== 'footprint';  // footprint-only = no candles underneath
+    var showCandles = settings.showOhlc !== false && settings.showCandles !== false && settings.chartMode !== 'footprint';  // footprint-only = no candles underneath
 
     ctx.clearRect(0, 0, width, height);
     ctx.fillStyle = settings.bgColor || '#080b12';
@@ -1591,19 +1717,21 @@
 
     drawGridAndScales(ctx, vp, plot, settings);
 
+    var isInteractiveDrag = !!V6OF.chartIsDragging;
+
     // Data layers (clipped to the plot rect): heatmap behind, candles, then
     // footprint cells as an overlay so the candlesticks stay readable.
     ctx.save();
     ctx.beginPath();
     ctx.rect(plot.left, plot.top, plot.width, plot.height);
     ctx.clip();
-    if (showHeatmap) drawHeatmapVp(ctx, vp, plot, heatmapFrames, settings);
+    if (showHeatmap && !isInteractiveDrag) drawHeatmapVp(ctx, vp, plot, heatmapFrames, settings);
     // Bubbles behind candles so they don't obscure price action
     if (false && settings.showBubbles === true) {
       drawBubblesVp(ctx, vp, plot, baseCandles);
     }
     if (showCandles && baseCandles.length) drawCandlesVp(ctx, vp, plot, baseCandles, settings, state);
-    if (showFootprint && footprintCandles.length) {
+    if (showFootprint && !isInteractiveDrag && footprintCandles.length) {
       drawFootprintVp(ctx, vp, plot, footprintCandles, settings, showCandles);
     }
     ctx.restore();
@@ -1617,6 +1745,7 @@
       V6OF.Indicators.drawAll(ctx, vp, plot, state, baseCandles);
       ctx.restore();
     }
+    drawBuiltInChartIndicators(ctx, vp, baseCandles, state, settings);
 
     // Reference price lines (mid / bid / ask / poc / vwap)
     var lastFrame = heatmapFrames.length ? heatmapFrames[heatmapFrames.length - 1] : null;

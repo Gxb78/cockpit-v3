@@ -26,6 +26,7 @@
   var LAYER_PRESETS = {
     scalping: {
       chartMode: 'both',
+      showOhlc: true,
       showCandles: true,
       showBubbles: true,
       showHeatmap: false,
@@ -33,6 +34,7 @@
     },
     orderflow: {
       chartMode: 'both',
+      showOhlc: true,
       showCandles: true,
       showBubbles: false,
       showHeatmap: false,
@@ -40,6 +42,7 @@
     },
     analysis: {
       chartMode: 'both',
+      showOhlc: true,
       showCandles: true,
       showBubbles: false,
       showHeatmap: true,
@@ -74,6 +77,7 @@
       showDOM: true,
       showCVD: false,
       showVwap: true,
+      showOhlc: true,
       showCandles: true,
       showBubbles: true,
       showHeatmap: false,
@@ -94,6 +98,7 @@
       showDOM: true,
       showCVD: true,
       showVwap: true,
+      showOhlc: true,
       showCandles: true,
       showBubbles: false,
       showHeatmap: false,
@@ -114,6 +119,7 @@
       showDOM: false,
       showCVD: true,
       showVwap: true,
+      showOhlc: true,
       showCandles: true,
       showBubbles: false,
       showHeatmap: true,
@@ -809,6 +815,7 @@
         showDOM: settings.showDOM !== false,
         showCVD: settings.showCVD !== false,
         showVwap: settings.showVwap !== false,
+        showOhlc: settings.showOhlc !== false,
         showCandles: settings.showCandles !== false,
         showBubbles: settings.showBubbles !== false,
         showHeatmap: settings.showHeatmap === true,
@@ -836,6 +843,7 @@
         showDOM: config.showDOM !== false,
         showCVD: config.showCVD !== false,
         showVwap: config.showVwap !== false,
+        showOhlc: layerConfig.showOhlc !== false,
         showCandles: layerConfig.showCandles !== false,
         showBubbles: layerConfig.showBubbles === true,
         showHeatmap: layerConfig.showHeatmap === true,

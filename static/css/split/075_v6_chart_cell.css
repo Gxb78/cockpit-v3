@@ -41,3 +41,24 @@ body[data-current-page="orderflow"] .v6-cvd-strip.is-collapsed {
 body[data-current-page="orderflow"] .v6-cvd-strip.is-removed {
   display: none;
 }
+
+/* Grid-aligned footprint rows: each row's height/top is set inline by
+   GridAligner (080a_v6_dom_grid_aligner.js) to match the canvas
+   GridSystem cellHeight. Remove margin/padding so rows snap cleanly to
+   the pixel grid, and vertically center the row text. */
+[data-footprint-row] {
+  position: absolute;
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+[data-footprint-text] {
+  display: block;
+  margin: 0;
+  padding: 0;
+  vertical-align: middle;
+}

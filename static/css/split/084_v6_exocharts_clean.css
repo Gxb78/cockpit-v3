@@ -48,8 +48,9 @@
   --exo-top:   25px;
   --exo-tab:   24px;
   --exo-bottom: 24px;
-  --exo-tools: 30px;
-  --exo-dom:   292px;
+  --exo-tools: 36px;
+  --exo-dom:   340px;
+  --exo-cvd-height: 124px;
 
   /* — typography — */
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
@@ -380,7 +381,7 @@
 
 .exo-tool {
   width: 100%;
-  height: 28px;
+  height: 32px;
   display: grid;
   place-items: center;
   padding: 0;
@@ -398,8 +399,8 @@
 }
 
 .exo-tool svg {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   stroke: currentColor;
   fill: none;
   stroke-width: 1.65;
@@ -459,15 +460,88 @@
   right: 0;
   top: var(--exo-tab);
   bottom: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   background: var(--exo-bg2);
 }
 
 .exo-chart-canvas {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 220px;
   width: 100%;
-  height: 100%;
+  height: auto;
+  display: block;
+}
+
+.exo-cvd-resizer {
+  position: relative;
+  flex: 0 0 9px;
+  height: 9px;
+  cursor: row-resize;
+  z-index: 16;
+  background: transparent;
+}
+
+.exo-cvd-resizer::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 56px;
+  top: 4px;
+  height: 1px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.exo-cvd-resizer::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 1px;
+  width: 44px;
+  height: 7px;
+  transform: translateX(-50%);
+  border-radius: 99px;
+  background: rgba(20,28,36,.86);
+  border: 1px solid rgba(255,255,255,.12);
+}
+
+.exo-cvd-resizer:hover::before,
+.exo-cvd-resizer.exo-resizing::before {
+  background: rgba(231,239,247,.62);
+}
+
+.exo-cvd-resizer:hover::after,
+.exo-cvd-resizer.exo-resizing::after {
+  background: #1b2630;
+  border-color: rgba(255,255,255,.28);
+}
+
+.exo-cvd-canvas {
+  position: relative;
+  flex: 0 0 var(--exo-cvd-height);
+  width: 100%;
+  min-height: 72px;
+  max-height: min(420px, 45%);
+  display: block;
+  background: var(--exo-bg2);
+}
+
+.exo-cvd-hidden .exo-cvd-resizer,
+.exo-cvd-hidden .exo-cvd-canvas {
+  display: none;
+}
+
+body.is-resizing,
+body.is-resizing * {
+  user-select: none !important;
+}
+
+.exo-price-axis,
+.exo-time-axis {
+  display: none;
 }
 
 .v6-chart-canvas {
@@ -559,7 +633,7 @@
 
 .exo-dom-body .v6-dom-row {
   display: flex;
-  min-width: var(--exo-dom);
+  min-width: 1px;
 }
 
 .exo-dom-body .v6-dom-cell {
@@ -636,9 +710,10 @@
 /* Column headers inside .exo-dom-head */
 .exo-dom-head .v6-dom-col,
 .exo-dom-head .v6-dom-draghead {
+  position: relative;
   height: 22px;
   line-height: 22px;
-  padding: 0 4px;
+  padding: 0 7px 0 4px;
   background: transparent;
   border: 0;
   color: #9fa9b1;
@@ -648,8 +723,37 @@
   align-items: center;
 }
 
+.exo-dom-head .v6-dom-col:hover {
+  background: rgba(255,255,255,.035);
+}
+
 .exo-dom-head .v6-dom-dragicon {
   display: none;
+}
+
+.exo-dom-head .v6-dom-col-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 22px;
+  cursor: col-resize;
+  z-index: 8;
+}
+
+.exo-dom-head .v6-dom-col-resizer::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 3px;
+  width: 1px;
+  background: rgba(255,255,255,.13);
+}
+
+.exo-dom-head .v6-dom-col-resizer:hover::before,
+.exo-dom-head .v6-dom-col-resizer.is-dragging::before {
+  background: #e1e7ed;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -805,7 +909,8 @@ body:not([data-current-page="orderflow"]) .right-panel {
   .v6-orderflow-root {
     --exo-dom: 218px;
     --exo-row: 13px;
-    --exo-tools: 25px;
+    --exo-tools: 30px;
+    --exo-cvd-height: 104px;
   }
 }
 
@@ -983,10 +1088,12 @@ body:not([data-current-page="orderflow"]) .right-panel {
 
 /* ── Resize handle (between chart and DOM) ────────────────────────────────── */
 .exo-resize-handle {
-  width: 4px;
-  min-width: 4px;
+  width: 6px;
+  min-width: 6px;
   cursor: col-resize;
-  background: transparent;
+  background: #0d1319;
+  border-left: 1px solid rgba(255,255,255,.045);
+  border-right: 1px solid rgba(255,255,255,.06);
   transition: background .15s;
   position: relative;
   z-index: 10;
@@ -994,23 +1101,24 @@ body:not([data-current-page="orderflow"]) .right-panel {
 
 .exo-resize-handle:hover,
 .exo-resize-handle.exo-resizing {
-  background: rgba(100,160,220,.35);
+  background: #17202a;
 }
 
 .exo-resize-handle::after {
   content: '';
   position: absolute;
-  inset: 20% 0;
-  width: 1px;
-  margin: 0 auto;
-  background: rgba(255,255,255,.06);
-  border-radius: 1px;
+  top: 50%;
+  left: 2px;
+  width: 2px;
+  height: 54px;
+  transform: translateY(-50%);
+  background: rgba(162,176,188,.38);
+  border-radius: 99px;
 }
 
 .exo-resize-handle:hover::after,
 .exo-resize-handle.exo-resizing::after {
-  background: rgba(255,255,255,.18);
-  width: 2px;
+  background: #d5dee6;
 }
 
 /* ── Old nav popup (removed, replaced by .exo-page-menu) ─────────────────── */
@@ -1118,7 +1226,7 @@ body:not([data-current-page="orderflow"]) .right-panel {
 
 /* ── Workspace grid adjustment for resize handle ──────────────────────────── */
 .exo-workspace {
-  grid-template-columns: var(--exo-tools) 1fr 4px var(--exo-dom);
+  grid-template-columns: var(--exo-tools) minmax(0, 1fr) 6px var(--exo-dom);
 }
 
 /* ── DOM empty state ──────────────────────────────────────────────────────── */

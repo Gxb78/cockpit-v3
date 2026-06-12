@@ -255,6 +255,10 @@
           '<div class="exo-settings-section">Chart</div>',
           '<label class="v6-field">Mode<select data-v6-setting="chartMode"><option value="both">Both</option><option value="heatmap">Heatmap</option><option value="footprint">Footprint</option><option value="none">None</option></select></label>',
           '<label class="v6-check"><input type="checkbox" data-v6-setting="showGrid" /><span>Show Grid</span></label>',
+          '<label class="v6-check"><input type="checkbox" data-v6-setting="showOhlc" /><span>OHLC candles</span></label>',
+          '<label class="v6-field">OHLC style<select data-v6-setting="ohlcBodyStyle"><option value="candles">Candles</option><option value="hollow">Hollow</option><option value="bars">Bars</option></select></label>',
+          '<label class="v6-field">OHLC width<input type="number" min="0.2" max="1" step="0.05" data-v6-setting="ohlcBodyWidth" /></label>',
+          '<label class="v6-field">OHLC line<input type="number" min="1" max="4" step="0.25" data-v6-setting="ohlcLineWidth" /></label>',
           '<label class="v6-check"><input type="checkbox" data-v6-setting="showSessionZones" /><span>Show Sessions</span></label>',
           '<label class="v6-field">Sessions<select data-v6-setting="sessionProfile"><option value="global">Asia/Europe/US</option><option value="rth">US RTH</option><option value="eth">US ETH</option></select></label>',
           '<label class="v6-field">Background<input type="color" data-v6-setting="bgColor" /></label>',
@@ -378,6 +382,9 @@
             '<div class="exo-chart-tabs"><span class="exo-tab-title">Chart <button type="button" class="exo-tab-close" data-v6-action="close-panel" data-panel="chart">×</button></span></div>',
             '<div class="exo-chart-stage">',
               '<canvas class="exo-chart-canvas v6-chart-canvas" data-v6-chart></canvas>',
+              '<div class="v6-chart-indicator-stack" data-v6-chart-indicators aria-label="Chart indicators"></div>',
+              '<div class="exo-cvd-resizer" data-v6-cvd-resize title="Ajuster la hauteur Chart / CVD"></div>',
+              '<canvas class="exo-cvd-canvas" data-v6-cvd-canvas></canvas>',
               '<div class="exo-price-axis"></div>',
               '<div class="exo-time-axis"></div>',
             '</div>',
@@ -474,6 +481,105 @@
     if (ms < 1000) return Math.round(ms) + 'ms';
     if (ms < 60000) return (ms / 1000).toFixed(ms < 10000 ? 1 : 0) + 's';
     return Math.round(ms / 60000) + 'm';
+  }
+
+  function candleMidTs(candle) {
+    if (!candle) return 0;
+    var open = Number(candle.openTime || candle.time || candle.ts || 0);
+    var close = Number(candle.closeTime || 0);
+    return close > open ? (open + close) / 2 : open;
+  }
+
+  function emaValue(candles, period) {
+    if (!Array.isArray(candles) || !candles.length) return NaN;
+    var k = 2 / (period + 1);
+    var ema = Number(candles[0].close);
+    for (var i = 1; i < candles.length; i++) {
+      var close = Number(candles[i].close);
+      if (Number.isFinite(close)) ema = (close - ema) * k + ema;
+    }
+    return ema;
+  }
+
+  function vwapValue(candles, state) {
+    if (state && Number.isFinite(Number(state.vwap))) return Number(state.vwap);
+    var pv = 0;
+    var vol = 0;
+    for (var i = 0; i < candles.length; i++) {
+      var c = candles[i];
+      var typical = (Number(c.high) + Number(c.low) + Number(c.close)) / 3;
+      var v = Number(c.volume || c.vol || 0);
+      if (!Number.isFinite(typical) || !Number.isFinite(v) || v <= 0) continue;
+      pv += typical * v;
+      vol += v;
+    }
+    return vol > 0 ? pv / vol : NaN;
+  }
+
+  function iconSvg(kind) {
+    if (kind === 'hide') return '<svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="2.5"/></svg>';
+    if (kind === 'settings') return '<svg viewBox="0 0 24 24"><path d="M12 3l7 4v8l-7 4-7-4V7z"/><circle cx="12" cy="12" r="2.8"/></svg>';
+    if (kind === 'source') return '<svg viewBox="0 0 24 24"><path d="M8 4c-2 1-2 3-2 5 0 2-2 3-2 3s2 1 2 3c0 2 0 4 2 5"/><path d="M16 4c2 1 2 3 2 5 0 2 2 3 2 3s-2 1-2 3c0 2 0 4-2 5"/></svg>';
+    if (kind === 'remove') return '<svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6.5 7l1 16h9l1-16"/><path d="M10 11v6M14 11v6"/></svg>';
+    return '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18" cy="12" r="1.7"/></svg>';
+  }
+
+  function indicatorActionButtons(id, title) {
+    return [
+      '<span class="v6-chart-ind-actions">',
+        '<button class="v6-chart-ind-btn" data-v6-chart-ind-action="hide" data-indicator-id="' + id + '" data-tip="Hide" type="button" aria-label="Hide ' + title + '">' + iconSvg('hide') + '</button>',
+        '<button class="v6-chart-ind-btn" data-v6-chart-ind-action="settings" data-indicator-id="' + id + '" data-tip="Settings" type="button" aria-label="Settings ' + title + '">' + iconSvg('settings') + '</button>',
+        '<button class="v6-chart-ind-btn" data-v6-chart-ind-action="source" data-indicator-id="' + id + '" data-tip="Source code" type="button" aria-label="Source ' + title + '">' + iconSvg('source') + '</button>',
+        '<button class="v6-chart-ind-btn" data-v6-chart-ind-action="remove" data-indicator-id="' + id + '" data-tip="Remove" type="button" aria-label="Remove ' + title + '">' + iconSvg('remove') + '</button>',
+        '<button class="v6-chart-ind-btn more" data-v6-chart-ind-action="more" data-indicator-id="' + id + '" data-tip="More" type="button" aria-label="More ' + title + '">' + iconSvg('more') + '</button>',
+      '</span>'
+    ].join('');
+  }
+
+  function renderChartIndicatorStack(root, state) {
+    var host = root.querySelector('[data-v6-chart-indicators]');
+    if (!host) return;
+    var settings = state.settings || {};
+    var candles = state.chartCandles || state.candles || [];
+    var last = candles.length ? candles[candles.length - 1] : null;
+    var active = Array.isArray(settings.chartIndicators) && settings.chartIndicators.length ? settings.chartIndicators : ['ohlc'];
+    var hidden = Array.isArray(settings.hiddenChartIndicators) ? settings.hiddenChartIndicators : [];
+    var rows = [];
+    function isHidden(id) { return hidden.indexOf(id) >= 0 || (id === 'ohlc' && settings.showOhlc === false); }
+    function row(id, title, values, cls, settingsHtml) {
+      var hiddenCls = isHidden(id) ? ' is-hidden' : '';
+      return [
+        '<div class="v6-chart-ind-row' + hiddenCls + '" data-v6-chart-ind-row="' + id + '">',
+          '<span class="v6-chart-ind-title">' + title + '</span>',
+          '<span class="v6-chart-ind-values ' + (cls || '') + '">' + values + '</span>',
+          indicatorActionButtons(id, title.replace(/<[^>]+>/g, '')),
+          '<span class="v6-chart-ind-settings">' + settingsHtml + '</span>',
+        '</div>'
+      ].join('');
+    }
+    active.forEach(function (id) {
+      if (id === 'ohlc') {
+        if (!last) return;
+        var bodyStyle = settings.ohlcBodyStyle || 'candles';
+        rows.push(row('ohlc', '<span class="v6-chart-ind-mark">&#10021;</span><span>OHLC</span>', [
+          '<b>O</b><span>' + V6OF.format.price(last.open) + '</span>',
+          '<b>H</b><span>' + V6OF.format.price(last.high) + '</span>',
+          '<b>L</b><span>' + V6OF.format.price(last.low) + '</span>',
+          '<b>C</b><span>' + V6OF.format.price(last.close) + '</span>'
+        ].join(''), '', '<label>Style <select data-v6-setting="ohlcBodyStyle"><option value="candles"' + (bodyStyle === 'candles' ? ' selected' : '') + '>Candles</option><option value="hollow"' + (bodyStyle === 'hollow' ? ' selected' : '') + '>Hollow</option><option value="bars"' + (bodyStyle === 'bars' ? ' selected' : '') + '>Bars</option></select></label><label>Width <input data-v6-setting="ohlcBodyWidth" value="' + (settings.ohlcBodyWidth || 0.72) + '"></label>'));
+      } else if (id === 'vwap') {
+        rows.push(row('vwap', 'VWAP', '<span class="gold">' + V6OF.format.price(vwapValue(candles, state)) + '</span><span class="muted">Session</span>', '', '<label>Bands <input type="checkbox" data-v6-setting="showVwapBands"' + (settings.showVwapBands ? ' checked' : '') + '></label><label>Sigma <input data-v6-setting="vwapBand2" value="' + (settings.vwapBand2 || 2) + '"></label>'));
+      } else if (id === 'ema9') {
+        rows.push(row('ema9', 'EMA 9', '<span class="up">' + V6OF.format.price(emaValue(candles, 9)) + '</span>', '', '<label>Length <input value="9" readonly></label><label>Source <input value="Close" readonly></label>'));
+      } else if (id === 'ema21') {
+        rows.push(row('ema21', 'EMA 21', '<span class="blue">' + V6OF.format.price(emaValue(candles, 21)) + '</span>', '', '<label>Length <input value="21" readonly></label><label>Source <input value="Close" readonly></label>'));
+      }
+    });
+    var key = rows.join('|') + '|' + hidden.join(',');
+    if (host._v6IndStackKey !== key) {
+      host._v6IndStackKey = key;
+      host.innerHTML = rows.join('');
+    }
   }
 
   function setPanelFreshness(root, panel, label, status) {
@@ -591,9 +697,11 @@
     if (volumeProfileSide && document.activeElement !== volumeProfileSide) volumeProfileSide.value = settings.volumeProfileSide || 'right';
     var volumeProfileStyle = root.querySelector('[data-v6-setting="volumeProfileStyle"]');
     if (volumeProfileStyle && document.activeElement !== volumeProfileStyle) volumeProfileStyle.value = settings.volumeProfileStyle || 'volume';
+    var ohlcBodyStyle = root.querySelector('[data-v6-setting="ohlcBodyStyle"]');
+    if (ohlcBodyStyle && document.activeElement !== ohlcBodyStyle) ohlcBodyStyle.value = settings.ohlcBodyStyle || 'candles';
 
     // Checkboxes — resolved centrally via SETTINGS_SCHEMA
-    var toggles = ['showTape', 'showDOM', 'showCVD', 'showVwap', 'showHeatmap', 'showFootprint', 'showLastPrice', 'showGrid', 'showSessionZones', 'showVwapBands', 'alertsEnabled', 'showFootprintVA', 'showVolumeProfile', 'volumeProfileShowPocTrail'];
+    var toggles = ['showTape', 'showDOM', 'showCVD', 'showVwap', 'showOhlc', 'showHeatmap', 'showFootprint', 'showLastPrice', 'showGrid', 'showSessionZones', 'showVwapBands', 'alertsEnabled', 'showFootprintVA', 'showVolumeProfile', 'volumeProfileShowPocTrail'];
     var resolved = V6OF.resolveSettings(settings || {});
     toggles.forEach(function (key) {
       var el = root.querySelector('[data-v6-setting="' + key + '"]');
@@ -625,6 +733,8 @@
       exhaustionFactor: 'exhaustionFactor',
       footprintValueAreaPct: 'footprintValueAreaPct',
       minWickTicks: 'minWickTicks',
+      ohlcBodyWidth: 'ohlcBodyWidth',
+      ohlcLineWidth: 'ohlcLineWidth',
       bgColor: 'bgColor',
       upColor: 'upColor',
       downColor: 'downColor',
@@ -1147,6 +1257,7 @@
 
     var settings = state.settings || {};
     hydrateThemeVars(root, settings);
+    root.classList.toggle('exo-cvd-hidden', settings.showCVD === false);
 
     // Live BID/ASK/spread ticket (book first, heatmap fallback).
     var book = state.orderBook;
@@ -1161,7 +1272,7 @@
     // Mid price (book.mid preferred, fallback to bid/ask average)
     var mid = (book && Number.isFinite(book.mid)) ? book.mid : (Number.isFinite(bid) && Number.isFinite(ask) ? (bid + ask) / 2 : NaN);
     // Chart layer toggles active state — resolved centrally
-    var layerKeys = { candles: 'showCandles', bubbles: 'showBubbles', heatmap: 'showHeatmap', footprint: 'showFootprint' };
+    var layerKeys = { candles: 'showOhlc', bubbles: 'showBubbles', heatmap: 'showHeatmap', footprint: 'showFootprint' };
     var r = V6OF.resolveSettings(settings || {});
     var layerBtns = root.querySelectorAll('[data-v6-action="layer"]');
     Array.prototype.forEach.call(layerBtns, function (btn) {
@@ -1225,6 +1336,7 @@
       selectedDomSymbol: state.selectedDomSymbol,
       symbol: state.symbol,
       domColumns: settings.domColumns,
+      domColumnWidths: settings.domColumnWidths,
       domValueMode: settings.domValueMode,
       domSoftWallPercentile: settings.domSoftWallPercentile,
       domMajorWallPercentile: settings.domMajorWallPercentile
@@ -1248,7 +1360,18 @@
       trades: state.trades,
       heatmapFrames: state.heatmapFrames,
       footprintCandles: state.footprintCandles,
+      deltaBuckets: state.deltaBuckets,
+      latestDeltaByInterval: state.latestDeltaByInterval,
+      deltaIntervalMs: settings.deltaIntervalMs,
+      chartIndicators: Array.isArray(settings.chartIndicators) ? settings.chartIndicators.join(',') : 'ohlc',
+      hiddenChartIndicators: Array.isArray(settings.hiddenChartIndicators) ? settings.hiddenChartIndicators.join(',') : '',
+      showOhlc: settings.showOhlc !== false,
       showCandles: settings.showCandles !== false,
+      ohlcBodyStyle: settings.ohlcBodyStyle || 'candles',
+      ohlcBodyWidth: settings.ohlcBodyWidth,
+      ohlcLineWidth: settings.ohlcLineWidth,
+      upColor: settings.upColor,
+      downColor: settings.downColor,
       showBubbles: settings.showBubbles === true,
       showHeatmap: settings.showHeatmap === true,
       showFootprint: settings.showFootprint === true,
@@ -1334,7 +1457,15 @@
     if (V6OF.CanvasChart && V6OF.CanvasChart.draw) {
       if (shouldRender(root, 'chart', chartSlice, force)) {
         queueRender(root, 'chart', function () {
-          V6OF.CanvasChart.draw(root.querySelector('[data-v6-chart]'), makeChartRenderState(state));
+          var chartCanvas = root.querySelector('[data-v6-chart]');
+          var cvdCanvas = root.querySelector('[data-v6-cvd-canvas]');
+          V6OF.CanvasChart.draw(chartCanvas, makeChartRenderState(state));
+          renderChartIndicatorStack(root, state);
+          if (cvdCanvas && V6OF.Panels && V6OF.Panels.CvdPanel && V6OF.Panels.CvdPanel.draw && settings.showCVD !== false) {
+            V6OF.Panels.CvdPanel.draw(cvdCanvas, state, chartCanvas && chartCanvas._v6Viewport, {
+              showTimeAxis: false
+            });
+          }
         });
       }
     }
@@ -1524,6 +1655,51 @@
           store.updateSettings({ domColumns: cols });
         }
         return;
+      }
+
+      var indBtn = event.target.closest('[data-v6-chart-ind-action]');
+      if (indBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        var indId = indBtn.getAttribute('data-indicator-id');
+        var indAction = indBtn.getAttribute('data-v6-chart-ind-action');
+        var indState = store.getState();
+        var indSettings = indState.settings || {};
+        var chartIndicators = Array.isArray(indSettings.chartIndicators) ? indSettings.chartIndicators.slice() : ['ohlc'];
+        var hiddenIndicators = Array.isArray(indSettings.hiddenChartIndicators) ? indSettings.hiddenChartIndicators.slice() : [];
+        var row = indBtn.closest('[data-v6-chart-ind-row]');
+        if (indAction === 'hide') {
+          var hIdx = hiddenIndicators.indexOf(indId);
+          if (hIdx >= 0) hiddenIndicators.splice(hIdx, 1);
+          else hiddenIndicators.push(indId);
+          var hidePatch = { hiddenChartIndicators: hiddenIndicators };
+          if (indId === 'ohlc') {
+            hidePatch.showOhlc = hiddenIndicators.indexOf('ohlc') < 0;
+            hidePatch.showCandles = hidePatch.showOhlc;
+          }
+          store.updateSettings(hidePatch);
+          return;
+        }
+        if (indAction === 'remove') {
+          chartIndicators = chartIndicators.filter(function (id) { return id !== indId; });
+          hiddenIndicators = hiddenIndicators.filter(function (id) { return id !== indId; });
+          var removePatch = { chartIndicators: chartIndicators, hiddenChartIndicators: hiddenIndicators };
+          if (indId === 'ohlc') {
+            removePatch.showOhlc = false;
+            removePatch.showCandles = false;
+          }
+          store.updateSettings(removePatch);
+          return;
+        }
+        if (indAction === 'settings' || indAction === 'more') {
+          if (row) row.classList.toggle('is-settings');
+          return;
+        }
+        if (indAction === 'source') {
+          if (store.updateUi) store.updateUi({ activeIndicatorId: indId, indicatorEditorOpen: true });
+          if (V6OF.Page && V6OF.Page.Shell && V6OF.Page.Shell.openDockTab) V6OF.Page.Shell.openDockTab('indicators');
+          return;
+        }
       }
 
       var downBtn = event.target.closest('[data-col-down]');
@@ -2006,16 +2182,19 @@
         store.updateSettings({ volumeProfileSide: input.value });
       } else if (key === 'volumeProfileStyle') {
         store.updateSettings({ volumeProfileStyle: input.value });
+      } else if (key === 'ohlcBodyStyle') {
+        store.updateSettings({ ohlcBodyStyle: input.value === 'bars' || input.value === 'hollow' ? input.value : 'candles' });
       } else if (key === 'domGroup') {
         store.updateSettings({ domGroup: Math.max(1, Math.min(100, Number(input.value) || 1)) });
       } else if (key === 'showTape' || key === 'showDOM' || key === 'showCVD' ||
-                 key === 'showVwap' || key === 'showHeatmap' || key === 'showFootprint' ||
+                 key === 'showVwap' || key === 'showOhlc' || key === 'showHeatmap' || key === 'showFootprint' ||
                  key === 'showLastPrice' || key === 'showGrid' || key === 'showSessionZones' || key === 'showVwapBands' ||
                  key === 'alertsEnabled' || key === 'showFootprintVA' || key === 'showVolumeProfile' || key === 'volumeProfileShowPocTrail') {
         var patch = {};
         patch[key] = !!input.checked;
+        if (key === 'showOhlc') patch.showCandles = !!input.checked;
         store.updateSettings(patch);
-        if ((key === 'showCandles' || key === 'showBubbles' || key === 'showHeatmap' || key === 'showFootprint') && store.updateUi) {
+        if ((key === 'showOhlc' || key === 'showCandles' || key === 'showBubbles' || key === 'showHeatmap' || key === 'showFootprint') && store.updateUi) {
           store.updateUi({ layerPreset: 'custom' });
         }
       } else if (key === 'deltaIntervalMs') {
@@ -2092,6 +2271,10 @@
         store.updateSettings({ footprintValueAreaPct: Math.max(1, Math.min(100, Number(input.value) || 70)) });
       } else if (key === 'minWickTicks') {
         store.updateSettings({ minWickTicks: Math.max(0, Math.min(10, Math.round(Number(input.value) || 0))) });
+      } else if (key === 'ohlcBodyWidth') {
+        store.updateSettings({ ohlcBodyWidth: Math.max(0.2, Math.min(1, Number(input.value) || 0.72)) });
+      } else if (key === 'ohlcLineWidth') {
+        store.updateSettings({ ohlcLineWidth: Math.max(1, Math.min(4, Number(input.value) || 1)) });
       } else if (key === 'volumeProfileValueArea') {
         store.updateSettings({ volumeProfileValueArea: Math.max(10, Math.min(100, Math.round(Number(input.value) || 70))) });
       }
@@ -2238,7 +2421,7 @@
           e.preventDefault();
           resizeState = {
             startX: e.clientX,
-            startWidth: domPanel ? domPanel.getBoundingClientRect().width : 292
+            startWidth: domPanel ? domPanel.getBoundingClientRect().width : 340
           };
           resizeHandle.classList.add('exo-resizing');
           document.body.style.cursor = 'col-resize';
@@ -2247,7 +2430,7 @@
         document.addEventListener('mousemove', function (e) {
           if (!resizeState) return;
           var delta = resizeState.startX - e.clientX;
-          var newWidth = Math.max(180, Math.min(600, resizeState.startWidth + delta));
+          var newWidth = Math.max(260, Math.min(720, resizeState.startWidth + delta));
           root.style.setProperty('--exo-dom', newWidth + 'px');
           try { localStorage.setItem('cockpitV6.exoDomWidth', String(Math.round(newWidth))); } catch (_) {}
           // Throttle chart redraw to once per frame
@@ -2270,12 +2453,61 @@
         try {
           var savedWidth = localStorage.getItem('cockpitV6.exoDomWidth');
           if (savedWidth) {
-            root.style.setProperty('--exo-dom', Math.max(180, Math.min(600, Number(savedWidth))) + 'px');
+            root.style.setProperty('--exo-dom', Math.max(260, Math.min(720, Number(savedWidth))) + 'px');
           }
         } catch (_) {}
       }
 
       // ── Exocharts layout: logo page navigation menu ───────────────────
+      var cvdResizeHandle = root.querySelector('[data-v6-cvd-resize]');
+      if (cvdResizeHandle) {
+        var cvdResizeState = null;
+        var chartStage = root.querySelector('.exo-chart-stage');
+        cvdResizeHandle.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          chartStage = root.querySelector('.exo-chart-stage');
+          var cvdCanvas = root.querySelector('[data-v6-cvd-canvas]');
+          cvdResizeState = {
+            startY: e.clientY,
+            startHeight: cvdCanvas ? cvdCanvas.getBoundingClientRect().height : 124,
+            stageHeight: chartStage ? chartStage.getBoundingClientRect().height : 600
+          };
+          cvdResizeHandle.classList.add('exo-resizing');
+          document.body.classList.add('is-resizing');
+          document.body.style.cursor = 'row-resize';
+          document.body.style.userSelect = 'none';
+        });
+        document.addEventListener('mousemove', function (e) {
+          if (!cvdResizeState) return;
+          var delta = cvdResizeState.startY - e.clientY;
+          var maxHeight = Math.max(92, cvdResizeState.stageHeight - 220);
+          var nextHeight = Math.max(72, Math.min(maxHeight, cvdResizeState.startHeight + delta));
+          root.style.setProperty('--exo-cvd-height', Math.round(nextHeight) + 'px');
+          try { localStorage.setItem('cockpitV6.exoCvdHeight', String(Math.round(nextHeight))); } catch (_) {}
+          if (!cvdResizeState._raf) {
+            cvdResizeState._raf = requestAnimationFrame(function () {
+              cvdResizeState._raf = null;
+              var st = V6OF.getStore ? V6OF.getStore(root) : null;
+              if (st) render(root, st.getState(), true);
+            });
+          }
+        });
+        document.addEventListener('mouseup', function () {
+          if (!cvdResizeState) return;
+          cvdResizeState = null;
+          cvdResizeHandle.classList.remove('exo-resizing');
+          document.body.classList.remove('is-resizing');
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+        });
+        try {
+          var savedCvdHeight = localStorage.getItem('cockpitV6.exoCvdHeight');
+          if (savedCvdHeight) {
+            root.style.setProperty('--exo-cvd-height', Math.max(72, Math.min(420, Number(savedCvdHeight))) + 'px');
+          }
+        } catch (_) {}
+      }
+
       var logoBtn = root.querySelector('[data-exo-logo-menu]');
       var pageMenu = root.querySelector('[data-exo-page-menu]');
       if (logoBtn && pageMenu) {

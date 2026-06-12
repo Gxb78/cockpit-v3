@@ -279,24 +279,32 @@
       var barPx = Math.max(1, (interval / timeSpan) * plotW);
       var barW  = Math.max(1, barPx - 1);
 
+      // Row center (zero line) — bars are drawn symmetrically around this
+      // row center so they line up with the main chart's candle baseline.
+      var rowCenterY = Math.round(plotH / 2);
+      // Cap bar height so it stays centered within the row, matching the
+      // main chart grid's row geometry (snap to grid cell height * 0.7).
+      var maxBarH = Math.max(2, Math.round(plotH * 0.7));
+
       // Draw bars
       ctx.globalAlpha = 0.75;
       visibleBuckets.forEach(function (b) {
         var ts = Number(b.ts);
         if (!ts) return;
-        var x = localTimeToX(ts);
+        // Snap bar X to the candle column (whole-pixel grid).
+        var x = Math.round(localTimeToX(ts));
         if (x < GUTTER_LEFT - barW || x > GUTTER_LEFT + plotW) return;
         var pct  = Math.max(0.04, Math.min(1, Math.abs(b.delta) / maxAbs));
-        var barH = Math.max(2, Math.round(pct * (plotH - 4)));
-        var y    = b.delta >= 0 ? plotH - barH : 0;
+        var barH = Math.max(2, Math.min(maxBarH, Math.round(pct * (maxBarH))));
+        var y    = b.delta >= 0 ? rowCenterY - barH : rowCenterY;
         ctx.fillStyle = b.delta >= 0 ? buyColor : sellColor;
         ctx.fillRect(Math.round(x - barW / 2), y, Math.ceil(barW), barH);
       });
       ctx.globalAlpha = 1;
 
-      // Zero line
+      // Zero line — row center, snapped to pixel grid.
       ctx.fillStyle = hairline;
-      ctx.fillRect(GUTTER_LEFT, Math.round(plotH / 2), plotW, 1);
+      ctx.fillRect(GUTTER_LEFT, rowCenterY, plotW, 1);
 
       // Crosshair vertical line
       var crossTs = opts.crosshairTs;

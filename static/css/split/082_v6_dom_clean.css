@@ -180,7 +180,7 @@ body[data-current-page="orderflow"] .v6-dom-col {
   align-items: center;
   min-width: 0;
   height: 25px;
-  padding: 0 6px;
+  padding: 0 7px 0 6px;
   overflow: hidden;
   white-space: nowrap;
   color: #aab0b5;
@@ -208,21 +208,33 @@ body[data-current-page="orderflow"] .v6-dom-col-ask {
   justify-content: flex-start;
 }
 
-body[data-current-page="orderflow"] .v6-dom-col-bid {
-  border-left: 1px solid var(--v6-dom-ref-line);
-}
-
-body[data-current-page="orderflow"] .v6-dom-col-price,
-body[data-current-page="orderflow"] .v6-dom-col-ask {
-  border-left: 1px solid var(--v6-dom-ref-line);
-}
-
-body[data-current-page="orderflow"] .v6-dom-col-delta {
-  border-left: 1px solid var(--v6-dom-ref-line);
-}
-
 body[data-current-page="orderflow"] .v6-dom-dragicon {
   display: none;
+}
+
+body[data-current-page="orderflow"] .v6-dom-col-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 8;
+}
+
+body[data-current-page="orderflow"] .v6-dom-col-resizer::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 3px;
+  width: 1px;
+  background: rgba(255,255,255,.13);
+}
+
+body[data-current-page="orderflow"] .v6-dom-col-resizer:hover::before,
+body[data-current-page="orderflow"] .v6-dom-col-resizer.is-dragging::before {
+  background: #e1e7ed;
 }
 
 body[data-current-page="orderflow"] [data-v6-dom-list] > .v6-dom-body {
@@ -238,20 +250,14 @@ body[data-current-page="orderflow"] [data-v6-dom-list] > .v6-dom-body {
 
 body[data-current-page="orderflow"] .v6-dom-spacer {
   position: relative;
-  min-width: 522px;
-  background:
-    linear-gradient(90deg, transparent 104px, var(--v6-dom-ref-line) 104px, transparent 105px),
-    linear-gradient(90deg, transparent 208px, var(--v6-dom-ref-line) 208px, transparent 209px),
-    linear-gradient(90deg, transparent 299px, var(--v6-dom-ref-line) 299px, transparent 300px),
-    linear-gradient(90deg, transparent 356px, var(--v6-dom-ref-line) 356px, transparent 357px),
-    linear-gradient(90deg, transparent 447px, var(--v6-dom-ref-line) 447px, transparent 448px),
-    linear-gradient(90deg, rgba(14,44,31,.25) 209px, transparent 300px, rgba(64,25,28,.25) 448px);
+  min-width: 1px;
+  background-repeat: repeat-y;
 }
 
 body[data-current-page="orderflow"] .v6-dom-row {
   display: flex;
   align-items: stretch;
-  min-width: 522px;
+  min-width: 1px;
   height: 18px;
   min-height: 18px;
   max-height: 18px;
@@ -312,7 +318,6 @@ body[data-current-page="orderflow"] .v6-dom-cell-buy {
 
 body[data-current-page="orderflow"] .v6-dom-cell-bid {
   background: var(--v6-dom-ref-green-col);
-  border-left: 1px solid rgba(255,255,255,.035);
 }
 
 body[data-current-page="orderflow"] .v6-dom-cell-ask {

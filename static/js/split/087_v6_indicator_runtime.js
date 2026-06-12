@@ -487,6 +487,11 @@
     var settings = (state && state.settings) || {};
     var ui = (state && state.ui) || {};
     var indicators = settings.indicators || [];
+    var builtinNames = { ohlc: 'OHLC', vwap: 'VWAP', ema9: 'EMA 9', ema21: 'EMA 21' };
+    if (builtinNames[ui.activeIndicatorId]) {
+      var hidden = settings.hiddenChartIndicators || [];
+      return { instanceId: ui.activeIndicatorId, sourceId: 'builtin:' + ui.activeIndicatorId, name: builtinNames[ui.activeIndicatorId], pane: 'overlay', visible: hidden.indexOf(ui.activeIndicatorId) < 0, locked: true, builtin: true };
+    }
     if (ui.activeIndicatorId) {
       for (var i = 0; i < indicators.length; i++) {
         if (indicators[i].instanceId === ui.activeIndicatorId) return indicators[i];
@@ -530,6 +535,10 @@
     return [
       '<div class="v6-ind-panel">',
         '<div class="v6-ind-library" aria-label="Indicator templates">',
+          '<button type="button" class="v6-btn v6-btn-sm" data-v6-ind-action="add-built-in" data-indicator-id="ohlc">OHLC</button>',
+          '<button type="button" class="v6-btn v6-btn-sm" data-v6-ind-action="add-built-in" data-indicator-id="vwap">VWAP</button>',
+          '<button type="button" class="v6-btn v6-btn-sm" data-v6-ind-action="add-built-in" data-indicator-id="ema9">EMA 9</button>',
+          '<button type="button" class="v6-btn v6-btn-sm" data-v6-ind-action="add-built-in" data-indicator-id="ema21">EMA 21</button>',
           '<button type="button" class="v6-btn v6-btn-sm" data-v6-ind-action="add-template" data-template="sma">SMA</button>',
           '<button type="button" class="v6-btn v6-btn-sm" data-v6-ind-action="add-template" data-template="cvd">CVD Pane</button>',
           '<button type="button" class="v6-btn v6-btn-sm" data-v6-ind-action="add-template" data-template="marketCypherSeed">Market Seed</button>',
@@ -540,10 +549,11 @@
             '<span>' + escapeHtml(active ? (active.name || 'Indicator') : 'Source') + '</span>',
             '<em class="is-' + escapeHtml(status.state || 'idle') + '">' + escapeHtml(status.message || '') + '</em>',
           '</div>',
-          '<textarea spellcheck="false" data-v6-ind-code ' + (!active ? 'disabled' : '') + '>' + escapeHtml(code) + '</textarea>',
+          '<textarea spellcheck="false" data-v6-ind-code ' + (!active || active.builtin ? 'disabled' : '') + '>' + escapeHtml(active && active.builtin ? 'Built-in OHLC layer. Use Settings to change style, width and colors.' : code) + '</textarea>',
           '<div class="v6-ind-actions">',
-            '<button type="button" class="v6-btn v6-btn-sm" data-v6-ind-action="apply" ' + (!active ? 'disabled' : '') + '>Apply</button>',
-            '<button type="button" class="v6-btn v6-btn-sm" data-v6-ind-action="duplicate" ' + (!active ? 'disabled' : '') + '>Duplicate</button>',
+            '<button type="button" class="v6-btn v6-btn-sm" data-v6-ind-action="settings" ' + (!active ? 'disabled' : '') + '>Settings</button>',
+            '<button type="button" class="v6-btn v6-btn-sm" data-v6-ind-action="apply" ' + (!active || active.builtin ? 'disabled' : '') + '>Apply</button>',
+            '<button type="button" class="v6-btn v6-btn-sm" data-v6-ind-action="duplicate" ' + (!active || active.builtin ? 'disabled' : '') + '>Duplicate</button>',
             '<button type="button" class="v6-btn v6-btn-sm" data-v6-ind-action="toggle" ' + (!active ? 'disabled' : '') + '>' + (active && active.visible === false ? 'Show' : 'Hide') + '</button>',
             '<button type="button" class="v6-btn v6-btn-sm v6-btn-danger" data-v6-ind-action="remove" ' + (!active ? 'disabled' : '') + '>Remove</button>',
           '</div>',
@@ -563,6 +573,12 @@
     root.classList.remove('v6-dock-collapsed');
   }
 
+  function closeDock(root, store) {
+    if (!root) return;
+    root.classList.add('v6-dock-collapsed');
+    if (store && store.updateSettings) store.updateSettings({ dockCollapsed: true });
+  }
+
   var Panel = {
     renderInto: function (root, state) {
       var body = root && root.querySelector('[data-v6-indicators-panel]');
@@ -576,6 +592,7 @@
         sources: (settings.indicatorSources || []).map(function (s) { return s.sourceId + ':' + s.updatedAt; }).join(','),
         active: active ? active.instanceId : '',
         source: activeSource ? activeSource.updatedAt : 0,
+        ohlc: settings.showOhlc !== false,
         visible: (settings.indicators || []).map(function (i) { return i.instanceId + ':' + i.visible + ':' + i.pane; }).join(','),
         editor: ui.indicatorEditorOpen
       });
@@ -653,10 +670,48 @@
 
         if (action === 'add-template') {
           Runtime.addTemplate(actionEl.getAttribute('data-template'));
-          switchDockToIndicators(root);
+          closeDock(root, store);
+          return;
+        }
+        if (action === 'add-built-in') {
+          var builtinId = actionEl.getAttribute('data-indicator-id');
+          var validBuiltins = { ohlc: 1, vwap: 1, ema9: 1, ema21: 1 };
+          if (!validBuiltins[builtinId]) return;
+          var nextChartIndicators = Array.isArray(settings.chartIndicators) ? settings.chartIndicators.slice() : ['ohlc'];
+          if (nextChartIndicators.indexOf(builtinId) < 0) nextChartIndicators.push(builtinId);
+          var nextHidden = (settings.hiddenChartIndicators || []).filter(function (id) { return id !== builtinId; });
+          var patch = { chartIndicators: nextChartIndicators, hiddenChartIndicators: nextHidden };
+          if (builtinId === 'ohlc') {
+            patch.showOhlc = true;
+            patch.showCandles = true;
+          }
+          store.updateSettings(patch);
+          closeDock(root, store);
           return;
         }
         if (!instanceId) return;
+        if (instanceId === 'ohlc') {
+          if (action === 'select') {
+            if (store.updateUi) store.updateUi({ activeIndicatorId: 'ohlc', indicatorEditorOpen: true });
+            return;
+          }
+          if (action === 'settings' || action === 'source') {
+            if (store.updateUi) store.updateUi({ activeIndicatorId: 'ohlc', indicatorEditorOpen: true });
+            if (V6OF.Page && V6OF.Page.Shell && V6OF.Page.Shell.openDockTab) V6OF.Page.Shell.openDockTab('settings');
+            return;
+          }
+          if (action === 'toggle') {
+            var nextVisible = settings.showOhlc === false;
+            store.updateSettings({ showOhlc: nextVisible, showCandles: nextVisible });
+            return;
+          }
+          if (action === 'remove') {
+            store.updateSettings({ showOhlc: false, showCandles: false });
+            if (store.updateUi) store.updateUi({ activeIndicatorId: '' });
+            return;
+          }
+          return;
+        }
         var inst = indicators.filter(function (item) { return item.instanceId === instanceId; })[0];
         if (action === 'select' || action === 'settings' || action === 'source') {
           if (store.updateUi) store.updateUi({ activeIndicatorId: instanceId, indicatorEditorOpen: true });

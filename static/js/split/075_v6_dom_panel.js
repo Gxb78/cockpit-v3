@@ -354,8 +354,20 @@
     bid: 42,
     price: 48,
     ask: 42,
-    delta: 48
+    delta: 48,
+    imb: 36,
+    stack: 32,
+    abs: 36
   };
+
+  var DOM_COLUMN_MIN_WIDTH = 24;
+  var DOM_COLUMN_MAX_WIDTH = 220;
+
+  function clampColumnWidth(value, fallback) {
+    var n = Number(value);
+    if (!Number.isFinite(n)) n = Number(fallback) || 42;
+    return Math.max(DOM_COLUMN_MIN_WIDTH, Math.min(DOM_COLUMN_MAX_WIDTH, Math.round(n)));
+  }
 
   function getDomColumns(settings) {
     var cols = settings && settings.domColumns;
@@ -368,27 +380,39 @@
     return cols && Array.isArray(cols) && cols.length > 0 ? cols : ['vol', 'sell', 'buy', 'bid', 'price', 'ask', 'delta'];
   }
 
-  function getColumnWidths(cols) {
-    var hasOnlyReferenceCols = cols.length > 0 && cols.every(function (c) {
-      return DOM_REFERENCE_COLUMN_WIDTHS[c] != null;
-    });
-    if (hasOnlyReferenceCols) {
-      var fixed = {};
-      cols.forEach(function (c) {
-        fixed[c] = DOM_REFERENCE_COLUMN_WIDTHS[c] + 'px';
-      });
-      return fixed;
-    }
-    var sum = 0;
-    cols.forEach(function (c) {
-      sum += (COLUMN_DEFS[c] && COLUMN_DEFS[c].weight) || 10;
-    });
-    if (sum === 0) sum = 100;
+  function getColumnWidths(cols, settings) {
     var widths = {};
+    var custom = settings && settings.domColumnWidths && typeof settings.domColumnWidths === 'object'
+      ? settings.domColumnWidths : {};
     cols.forEach(function (c) {
-      widths[c] = ((((COLUMN_DEFS[c] && COLUMN_DEFS[c].weight) || 10) / sum) * 100).toFixed(2) + '%';
+      var fallback = DOM_REFERENCE_COLUMN_WIDTHS[c] || (((COLUMN_DEFS[c] && COLUMN_DEFS[c].weight) || 10) * 4);
+      widths[c] = clampColumnWidth(custom[c], fallback) + 'px';
     });
+    widths._total = totalColumnWidth(cols, widths);
     return widths;
+  }
+
+  function totalColumnWidth(cols, widths) {
+    var total = 0;
+    cols.forEach(function (c) {
+      var w = widths[c];
+      if (!w) return; // Skip undefined/null widths
+      total += parseFloat(w) || 0;
+    });
+    return Math.max(1, Math.round(total));
+  }
+
+  function columnBoundaryBackground(cols, widths) {
+    var x = 0;
+    var lines = [];
+    cols.forEach(function (c, idx) {
+      x += parseFloat(widths[c]) || 0;
+      if (idx < cols.length - 1) {
+        var pos = Math.round(x);
+        lines.push('linear-gradient(90deg, transparent ' + pos + 'px, var(--v6-dom-ref-line) ' + pos + 'px, transparent ' + (pos + 1) + 'px)');
+      }
+    });
+    return lines.join(',');
   }
 
   function renderHeadersHtml(cols, widths) {
@@ -398,6 +422,7 @@
       var label = (COLUMN_DEFS[c] && COLUMN_DEFS[c].label) || c.toUpperCase();
       return '<div class="v6-dom-col v6-dom-col-' + c + ' v6-dom-draghead" style="' + style + '" data-col="' + c + '" draggable="true">' +
         label +
+        '<span class="v6-dom-col-resizer" data-dom-col-resize="' + c + '" title="Ajuster ' + label + '"></span>' +
         '<span class="v6-dom-dragicon">&#9776;</span>' +
         '</div>';
     }).join('');
@@ -708,8 +733,9 @@
     }).join('');
 
     var y_snap = Math.round(y);
+    var rowW = Math.max(1, Math.round(widths._total || totalColumnWidth(cols, widths)));
     return '<div class="' + cls + '"' +
-      ' style="position:absolute;top:' + y_snap + 'px;left:0;right:0;height:' + DOM_ROW_HEIGHT + 'px"' +
+      ' style="position:absolute;top:' + y_snap + 'px;left:0;width:' + rowW + 'px;height:' + DOM_ROW_HEIGHT + 'px"' +
       ' data-price-key="' + lv.priceKey + '" role="row" aria-label="' + escAttr(rowLabel) + '">' +
       cellsHtml +
       '</div>';
@@ -741,7 +767,7 @@
     if (!body) return;
     if (!cols || !widths) {
       cols = getDomColumns(settings);
-      widths = getColumnWidths(cols);
+      widths = getColumnWidths(cols, settings);
     }
 
     var book     = snap.book;
@@ -831,6 +857,12 @@
       virt.spacer.style.height = spacerH + 'px';
       virt.lastH = spacerH;
     }
+    var totalW = Math.max(1, Math.round(widths._total || totalColumnWidth(cols, widths)));
+    // Ensure spacer width is always valid and greater than 1px
+    if (totalW < 1 || !Number.isFinite(totalW)) totalW = Math.max(body.clientWidth, 100);
+    virt.spacer.style.minWidth = totalW + 'px';
+    virt.spacer.style.width = totalW + 'px';
+    virt.spacer.style.backgroundImage = columnBoundaryBackground(cols, widths);
 
     var startTick = maxTick - firstRow;
     var endTick   = maxTick - lastRow;
@@ -977,7 +1009,7 @@
     }
 
     var cols = getDomColumns(settings);
-    var widths = getColumnWidths(cols);
+    var widths = getColumnWidths(cols, settings);
 
     // Update header columns dynamically
     var colsContainer = isExo ? exoHead : container.querySelector('.v6-dom-cols');
@@ -1279,15 +1311,72 @@
     var domList = root.querySelector('[data-v6-dom-list]');
     if (!domList) return;
 
-    var headerRow = domList.querySelector('.v6-dom-cols');
+    var headerRow = domList.querySelector('.v6-dom-cols') || root.querySelector('.exo-dom-head');
     if (!headerRow) return;
 
     if (headerRow._dragBound) return;
     headerRow._dragBound = true;
 
     var draggedCol = null;
+    var resizeState = null;
+
+    function currentColumns(settings) {
+      return getDomColumns(settings || {});
+    }
+
+    function currentWidths(settings, cols) {
+      return getColumnWidths(cols || currentColumns(settings), settings || {});
+    }
+
+    headerRow.addEventListener('mousedown', function (e) {
+      var handle = e.target.closest('[data-dom-col-resize]');
+      if (!handle) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var col = handle.getAttribute('data-dom-col-resize');
+      var settings = store.getState().settings || {};
+      var cols = currentColumns(settings);
+      var widths = currentWidths(settings, cols);
+      resizeState = {
+        col: col,
+        startX: e.clientX,
+        startWidth: parseFloat(widths[col]) || DOM_REFERENCE_COLUMN_WIDTHS[col] || 42,
+        widths: Object.assign({}, settings.domColumnWidths || {})
+      };
+      handle.classList.add('is-dragging');
+      document.body.classList.add('is-resizing');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', function (e) {
+      if (!resizeState) return;
+      var delta = e.clientX - resizeState.startX;
+      var next = clampColumnWidth(resizeState.startWidth + delta, resizeState.startWidth);
+      resizeState.widths[resizeState.col] = next;
+      if (!resizeState._raf) {
+        resizeState._raf = requestAnimationFrame(function () {
+          resizeState._raf = null;
+          store.updateSettings({ domColumnWidths: Object.assign({}, resizeState.widths) });
+        });
+      }
+    });
+
+    document.addEventListener('mouseup', function () {
+      if (!resizeState) return;
+      var active = headerRow.querySelector('[data-dom-col-resize].is-dragging');
+      if (active) active.classList.remove('is-dragging');
+      resizeState = null;
+      document.body.classList.remove('is-resizing');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    });
 
     headerRow.addEventListener('dragstart', function (e) {
+      if (e.target.closest('[data-dom-col-resize]')) {
+        e.preventDefault();
+        return;
+      }
       var target = e.target.closest('.v6-dom-col');
       if (!target) return;
       draggedCol = target.getAttribute('data-col');
