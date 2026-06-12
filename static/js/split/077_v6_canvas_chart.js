@@ -673,14 +673,14 @@
       var ts = frameTs(frame);
       var nextIndex = Math.min(endIndex - 1, index + step);
       var nextTs = nextIndex > index ? frameTs(frames[nextIndex]) : (index + 1 < count ? frameTs(frames[index + 1]) : ts + emit);
-      var x = vp.timeToX(ts);
-      var x2 = vp.timeToX(nextTs);
+      var x = Math.round(vp.timeToX(ts));
+      var x2 = Math.round(vp.timeToX(nextTs));
       if (x2 < plot.left || x > plot.left + plot.width) continue; // cull offscreen
-      var rectW = Math.max(1, Math.ceil(x2 - x + 0.6));
+      var rectW = Math.max(1, x2 - x);
       var levels = Array.isArray(frame.levels) ? frame.levels : [];
       var tick = Number(frame.tickSize || settings.tickSize || 1);
       if (!Number.isFinite(tick) || tick <= 0) tick = 1;
-      var h = Math.max(1, Math.ceil(tick * scaleY) + 1);
+      var h = Math.max(1, Math.round(tick * scaleY));
       levels.forEach(function (level) {
         var price = Number(level.price);
         if (!Number.isFinite(price) || price < vp.priceMin || price > vp.priceMax) return;
@@ -689,7 +689,8 @@
         var c = viridis(t);
         var alpha = 0.4 + t * 0.58;
         ctx.fillStyle = 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + alpha.toFixed(3) + ')';
-        ctx.fillRect(x, vp.priceToY(price) - h / 2, rectW, h);
+        var cellY = Math.round(vp.priceToY(price) - h / 2);
+        ctx.fillRect(x, cellY, rectW, h);
       });
     }
     return true;
