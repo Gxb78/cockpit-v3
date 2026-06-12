@@ -2418,7 +2418,21 @@ GridSystem.prototype.getVisibleCellRange=function(visibleColStart,visibleColEnd,
 // The mock path (index-based candles) is preserved unchanged below.
 function(){"use strict";var V6OF=window.V6OF=window.V6OF||{};V6OF.register||(["Core","Data","Transport","UI","Studies","Page"].forEach(function(name){V6OF[name]=V6OF[name]||{}}),V6OF.register=function(domain,name,value,legacyName){return V6OF[domain]=V6OF[domain]||{},V6OF[domain][name]=value,legacyName&&(V6OF[legacyName]=value),value});function roundRect(ctx,x,y,w,h,r){ctx.beginPath(),ctx.moveTo(x+r,y),ctx.lineTo(x+w-r,y),ctx.arcTo(x+w,y,x+w,y+r,r),ctx.lineTo(x+w,y+h-r),ctx.arcTo(x+w,y+h,x+w-r,y+h,r),ctx.lineTo(x+r,y+h),ctx.arcTo(x,y+h,x,y+h-r,r),ctx.lineTo(x,y+r),ctx.arcTo(x,y,x+r,y,r),ctx.closePath()}function frameTs(frame){var ts=Number(frame.tsExchange);return Number.isFinite(ts)&&ts>0?ts:(ts=Number(frame.tsLocal),Number.isFinite(ts)?ts:0)}function candleStartTs(candle){var t=Number(candle.openTime);return Number.isFinite(t)?t:0}function candleEndTs(candle){var t=Number(candle.closeTime);return Number.isFinite(t)&&t>0?t:candleStartTs(candle)+(Number(candle.intervalMs)||6e4)}function candleMidTs(candle){return(candleStartTs(candle)+candleEndTs(candle))/2}
 // Convert timeframe string ('1m', '1h', '1d', '1w', '1M') to milliseconds.
-function timeframeToMs(tf){if(!tf)return 0;var match=tf.match(/^(\d+)([mhdwM])$/);if(!match)return 0;var val=parseInt(match[1],10),unit=match[2];return"m"===unit?6e4*val:"h"===unit?36e5*val:"d"===unit?864e5*val:"w"===unit?6048e5*val:"M"===unit?2592e6*val:0}function aggregateFootprintsToTimeframe(footprints,tf){var interval=timeframeToMs(tf);if(!interval||interval<=6e4)return Array.isArray(footprints)?footprints:[];var buckets={};return(Array.isArray(footprints)?footprints:[]).forEach(function(fp){var openTime=candleStartTs(fp);if(openTime){var target,source,bucketOpen=Math.floor(openTime/interval)*interval,close=Number(fp.close),high=Number(fp.high),low=Number(fp.low),volume=Number(fp.volume||fp.totalVol||0)||0,buyVol=Number(fp.buyVol||0)||0,sellVol=Number(fp.sellVol||0)||0,bucket=buckets[bucketOpen];bucket||(bucket={exchange:fp.exchange||"",symbol:fp.symbol||"",intervalMs:interval,openTime:bucketOpen,closeTime:bucketOpen+interval-1,open:Number(fp.open),high:Number.isFinite(high)?high:close,low:Number.isFinite(low)?low:close,close:close,volume:0,buyVol:0,sellVol:0,delta:0,closed:!1,source:"live-aggregate",analyticsSource:"live-footprint-aggregate",tsLocal:Number(fp.tsLocal||0)||Date.now(),_lastSourceOpenTime:openTime,_levelsByPrice:{}},Number.isFinite(bucket.open)||(bucket.open=close),buckets[bucketOpen]=bucket),Number.isFinite(high)&&(bucket.high=Math.max(bucket.high,high)),Number.isFinite(low)&&(bucket.low=Math.min(bucket.low,low)),openTime>=bucket._lastSourceOpenTime&&(bucket.close=close,bucket._lastSourceOpenTime=openTime),bucket.volume+=volume,bucket.buyVol+=buyVol,bucket.sellVol+=sellVol,bucket.delta=bucket.buyVol-bucket.sellVol,bucket.tsLocal=Math.max(bucket.tsLocal||0,Number(fp.tsLocal||0)||0),bucket.closed=bucket.closed&&!0===fp.closed,target=bucket._levelsByPrice,source=fp.levels,target=target||{},(Array.isArray(source)?source:[]).forEach(function(lv){var price=Number(lv&&lv.price);if(Number.isFinite(price)){var key=String(price),cur=target[key]||{price:price,buyVol:0,sellVol:0,delta:0,totalVol:0,trades:0},buy=Number(lv.buyVol||0),sell=Number(lv.sellVol||0),total=Number(lv.totalVol);cur.buyVol+=Number.isFinite(buy)?buy:0,cur.sellVol+=Number.isFinite(sell)?sell:0,cur.totalVol+=Number.isFinite(total)?total:(Number.isFinite(buy)?buy:0)+(Number.isFinite(sell)?sell:0),cur.delta=cur.buyVol-cur.sellVol,cur.trades+=Number(lv.trades||0)||0,target[key]=cur}})}}),Object.keys(buckets).map(Number).sort(function(a,b){return a-b}).map(function(key){var bucket=buckets[key];return bucket.levels=Object.keys(bucket._levelsByPrice).map(function(priceKey){return bucket._levelsByPrice[priceKey]}).sort(function(a,b){return b.price-a.price}),delete bucket._levelsByPrice,delete bucket._lastSourceOpenTime,bucket})}function mergeCandlesByOpenTime(history,liveCandles,tf){if(history=Array.isArray(history)?history:[],liveCandles=Array.isArray(liveCandles)?liveCandles:[],!history.length)return liveCandles;if(!liveCandles.length)return history;var i,byTime={};for(i=0;i<history.length;i++)byTime[history[i].openTime]=history[i];for(i=0;i<liveCandles.length;i++)byTime[liveCandles[i].openTime]=liveCandles[i];var keys=Object.keys(byTime).map(Number).sort(function(a,b){return a-b}),out=[];for(i=0;i<keys.length;i++)out.push(byTime[keys[i]]);return function(candles,intervalMs){if(!Array.isArray(candles)||candles.length<2)return candles||[];intervalMs=Math.max(1e3,Number(intervalMs)||6e4);for(var out=[],syntheticCount=0,i=0;i<candles.length;i++){var current=candles[i];if(current&&Number.isFinite(Number(current.openTime))){if(out.length){var prev=out[out.length-1],prevStart=candleStartTs(prev),currentStart=candleStartTs(current),gap=currentStart-prevStart;if(gap>1.5*intervalMs&&gap<1e3*intervalMs){var nextOpen=prevStart+intervalMs,carry=Number(prev.close);for((!Number.isFinite(carry)||carry<=0)&&(carry=Number(current.open));nextOpen<currentStart-.5*intervalMs&&syntheticCount<240;)out.push({symbol:current.symbol||prev.symbol||"BTC",timeframe:current.timeframe||prev.timeframe,intervalMs:intervalMs,openTime:nextOpen,closeTime:nextOpen+intervalMs,open:carry,high:carry,low:carry,close:carry,volume:0,synthetic:!0,source:"gap-fill"}),syntheticCount++,nextOpen+=intervalMs}}out.push(current)}}return V6OF.chartGapFill={count:syntheticCount,updatedAt:Date.now()},out}(out,timeframeToMs(tf)||(out.length?function(candle,fallback){var interval=Number(candle&&candle.intervalMs);if(Number.isFinite(interval)&&interval>=1e3)return interval;var s=candleStartTs(candle),e=candleEndTs(candle);return e>s?e-s:fallback||6e4}(out[out.length-1],6e4):6e4))}
+function timeframeToMs(tf){if(!tf)return 0;var match=tf.match(/^(\d+)([mhdwM])$/);if(!match)return 0;var val=parseInt(match[1],10),unit=match[2];return"m"===unit?6e4*val:"h"===unit?36e5*val:"d"===unit?864e5*val:"w"===unit?6048e5*val:"M"===unit?2592e6*val:0}function aggregateFootprintsToTimeframe(footprints,tf){var interval=timeframeToMs(tf);if(!interval||interval<=6e4)return Array.isArray(footprints)?footprints:[];var buckets={};return(Array.isArray(footprints)?footprints:[]).forEach(function(fp){var openTime=candleStartTs(fp);if(openTime){var target,source,bucketOpen=Math.floor(openTime/interval)*interval,close=Number(fp.close),high=Number(fp.high),low=Number(fp.low),volume=Number(fp.volume||fp.totalVol||0)||0,buyVol=Number(fp.buyVol||0)||0,sellVol=Number(fp.sellVol||0)||0,bucket=buckets[bucketOpen];bucket||(bucket={exchange:fp.exchange||"",symbol:fp.symbol||"",intervalMs:interval,openTime:bucketOpen,closeTime:bucketOpen+interval-1,open:Number(fp.open),high:Number.isFinite(high)?high:close,low:Number.isFinite(low)?low:close,close:close,volume:0,buyVol:0,sellVol:0,delta:0,closed:!1,source:"live-aggregate",analyticsSource:"live-footprint-aggregate",tsLocal:Number(fp.tsLocal||0)||Date.now(),_lastSourceOpenTime:openTime,_levelsByPrice:{}},Number.isFinite(bucket.open)||(bucket.open=close),buckets[bucketOpen]=bucket),Number.isFinite(high)&&(bucket.high=Math.max(bucket.high,high)),Number.isFinite(low)&&(bucket.low=Math.min(bucket.low,low)),openTime>=bucket._lastSourceOpenTime&&(bucket.close=close,bucket._lastSourceOpenTime=openTime),bucket.volume+=volume,bucket.buyVol+=buyVol,bucket.sellVol+=sellVol,bucket.delta=bucket.buyVol-bucket.sellVol,bucket.tsLocal=Math.max(bucket.tsLocal||0,Number(fp.tsLocal||0)||0),bucket.closed=bucket.closed&&!0===fp.closed,target=bucket._levelsByPrice,source=fp.levels,target=target||{},(Array.isArray(source)?source:[]).forEach(function(lv){var price=Number(lv&&lv.price);if(Number.isFinite(price)){var key=String(price),cur=target[key]||{price:price,buyVol:0,sellVol:0,delta:0,totalVol:0,trades:0},buy=Number(lv.buyVol||0),sell=Number(lv.sellVol||0),total=Number(lv.totalVol);cur.buyVol+=Number.isFinite(buy)?buy:0,cur.sellVol+=Number.isFinite(sell)?sell:0,cur.totalVol+=Number.isFinite(total)?total:(Number.isFinite(buy)?buy:0)+(Number.isFinite(sell)?sell:0),cur.delta=cur.buyVol-cur.sellVol,cur.trades+=Number(lv.trades||0)||0,target[key]=cur}})}}),Object.keys(buckets).map(Number).sort(function(a,b){return a-b}).map(function(key){var bucket=buckets[key];return bucket.levels=Object.keys(bucket._levelsByPrice).map(function(priceKey){return bucket._levelsByPrice[priceKey]}).sort(function(a,b){return b.price-a.price}),delete bucket._levelsByPrice,delete bucket._lastSourceOpenTime,bucket})}
+// Graft footprint analytics (levels, delta, buy/sell volume) onto an
+// authoritative history kline without touching its OHLC.
+function graftFootprintOntoKline(hist,live){var merged={};for(var k in hist)Object.prototype.hasOwnProperty.call(hist,k)&&(merged[k]=hist[k]);return Array.isArray(live.levels)&&live.levels.length&&(merged.levels=live.levels),Number.isFinite(Number(live.buyVol))&&(merged.buyVol=Number(live.buyVol)),Number.isFinite(Number(live.sellVol))&&(merged.sellVol=Number(live.sellVol)),Number.isFinite(Number(live.delta))&&(merged.delta=Number(live.delta)),Number.isFinite(Number(live.poc))&&(merged.poc=Number(live.poc)),merged}function mergeCandlesByOpenTime(history,liveCandles,tf){if(history=Array.isArray(history)?history:[],liveCandles=Array.isArray(liveCandles)?liveCandles:[],!history.length)return liveCandles;if(!liveCandles.length)return history;var i,byTime={},lastHistOpen=0;for(i=0;i<history.length;i++)byTime[history[i].openTime]=history[i],Number(history[i].openTime)>lastHistOpen&&(lastHistOpen=Number(history[i].openTime));for(i=0;i<liveCandles.length;i++){var live=liveCandles[i],hist=byTime[live.openTime];if(hist)
+// The forming candle (at or beyond the history tip) is fresher than the
+// last REST fetch: live wins, but extend its range with the kline so a
+// partially-seen live bar never shrinks the true high/low.
+if(Number(live.openTime)>=lastHistOpen||!1===live.closed){var forming=graftFootprintOntoKline(live,live),lh=Number(live.high),ll=Number(live.low),hh=Number(hist.high),hl=Number(hist.low);Number.isFinite(hh)&&(forming.high=Number.isFinite(lh)?Math.max(lh,hh):hh),Number.isFinite(hl)&&(forming.low=Number.isFinite(ll)?Math.min(ll,hl):hl),Number.isFinite(Number(hist.open))&&(forming.open=Number(hist.open)),byTime[live.openTime]=forming}
+// Closed candle covered by both sources: the Binance kline is the
+// authority on OHLC. A locally-built engine bar can be degenerate
+// (engine started mid-minute, dropped trades => flat open≈close bar).
+// Keep the kline OHLC and graft the footprint analytics onto it.
+else{var histRange=Math.abs(Number(hist.high)-Number(hist.low)),liveRange=Math.abs(Number(live.high)-Number(live.low)),histVol=Number(hist.volume)||0,liveVol=Number(live.volume)||0,liveComplete=Number.isFinite(liveRange)&&Number.isFinite(histRange)&&liveRange>=.5*histRange&&(histVol<=0||liveVol>=.5*histVol);byTime[live.openTime]=liveComplete?live:graftFootprintOntoKline(hist,live)}else
+// No kline at this openTime: live candle is the only source.
+byTime[live.openTime]=live}var keys=Object.keys(byTime).map(Number).sort(function(a,b){return a-b}),out=[];for(i=0;i<keys.length;i++)out.push(byTime[keys[i]]);return function(candles,intervalMs){if(!Array.isArray(candles)||candles.length<2)return candles||[];intervalMs=Math.max(1e3,Number(intervalMs)||6e4);for(var out=[],syntheticCount=0,i=0;i<candles.length;i++){var current=candles[i];if(current&&Number.isFinite(Number(current.openTime))){if(out.length){var prev=out[out.length-1],prevStart=candleStartTs(prev),currentStart=candleStartTs(current),gap=currentStart-prevStart;if(gap>1.5*intervalMs&&gap<1e3*intervalMs){var nextOpen=prevStart+intervalMs,carry=Number(prev.close);for((!Number.isFinite(carry)||carry<=0)&&(carry=Number(current.open));nextOpen<currentStart-.5*intervalMs&&syntheticCount<240;)out.push({symbol:current.symbol||prev.symbol||"BTC",timeframe:current.timeframe||prev.timeframe,intervalMs:intervalMs,openTime:nextOpen,closeTime:nextOpen+intervalMs,open:carry,high:carry,low:carry,close:carry,volume:0,synthetic:!0,source:"gap-fill"}),syntheticCount++,nextOpen+=intervalMs}}out.push(current)}}return V6OF.chartGapFill={count:syntheticCount,updatedAt:Date.now()},out}(out,timeframeToMs(tf)||(out.length?function(candle,fallback){var interval=Number(candle&&candle.intervalMs);if(Number.isFinite(interval)&&interval>=1e3)return interval;var s=candleStartTs(candle),e=candleEndTs(candle);return e>s?e-s:fallback||6e4}(out[out.length-1],6e4):6e4))}
 // Convert hex color (#3ddc97) to rgba string with alpha
 function hexToRgba(hex,alpha){return!hex||hex.length<7?"rgba(61,220,151,"+alpha+")":"rgba("+(parseInt(hex.slice(1,3),16)||0)+","+(parseInt(hex.slice(3,5),16)||0)+","+(parseInt(hex.slice(5,7),16)||0)+","+alpha+")"}var _mergedCandlesCache=null,_mergedCandlesSrcChart=null,_mergedCandlesSrcFp=null,_mergedCandlesSrcTf=null,_boundsCache=null,_boundsSrcFrames=null,_boundsSrcCandles=null,_boundsSrcHeatmap=null,_heatmapBoundsCache=null,_heatmapBoundsFirst=null,_heatmapBoundsLast=null,_heatmapBoundsLen=0;
 // Compute combined data extents (time + price) across the visible live data.
@@ -2463,69 +2477,11 @@ var rectW=Math.max(1,x2-x),levels=Array.isArray(frame.levels)?frame.levels:[],ti
 // Gamma-boost the low end so faint liquidity is still visible.
 var value,t=Math.pow((value=level.intensity,value=Number(value),!Number.isFinite(value)||value<0?0:value>1?1:value),.55),c=viridis(t),alpha=.4+.58*t;ctx.fillStyle="rgba("+(0|c[0])+","+(0|c[1])+","+(0|c[2])+","+alpha.toFixed(3)+")";var cellY=Math.round(vp.priceToY(price)-h/2);ctx.fillRect(x,cellY,rectW,h)}})}}return!0}
 // â”€â”€â”€ Footprint imbalance detection â”€â”€â”€
-function stackedImbalanceCount(levels,idx,buyVol,sellVol,settings){var ratio=Number(settings.imbalanceRatio)||3,stack=Number(settings.imbalanceStack)||3;if(stack<=0)return 0;var count=0;if(buyVol>sellVol*ratio)
-// Bid imbalance â€” count consecutive bid imbalances going UP
-for(var i=idx-1;i>=0&&count<stack;i--){var lv=levels[i];if(!(Number(lv.buyVol||0)>Number(lv.sellVol||0)*ratio))break;count++}else if(sellVol>buyVol*ratio)
-// Ask imbalance â€” count consecutive ask imbalances going DOWN
-for(i=idx+1;i<levels.length&&count<stack;i++){var la=levels[i],bva=Number(la.buyVol||0);if(!(Number(la.sellVol||0)>bva*ratio))break;count++}return count}
-// â”€â”€ Adaptive Footprint Renderer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// 3 modes selon le zoom : small (candle+delta), compact (heatmap sans texte),
-// full (bid/ask + POC + imbalance).
-// Ne force jamais le chart â€” s'adapte a la place disponible.
-function drawAdaptiveFootprint(ctx,vp,plot,candles,settings,overlay){if(!settings||!1===settings.showFootprint)return!1;if(!Array.isArray(candles)||!candles.length)return!1;var tick=Number(settings.tickSize||1);(!Number.isFinite(tick)||tick<=0)&&(tick=1);
-// --- Compute dimensions from viewport ---
-// barWidth: width of one candle in px
-// rowHeight: px per tick in price space
-var refCandle=candles[Math.floor(candles.length/2)]||candles[0],cx1=vp.timeToX(candleStartTs(refCandle)),cx2=vp.timeToX(candleEndTs(refCandle)),barWidth=Math.max(3,Math.abs(cx2-cx1)),py1=vp.priceToY(0),py2=vp.priceToY(tick),rowHeight=Math.max(.5,Math.abs(py1-py2)),mode=function(barWidth,rowHeight){return barWidth<28||rowHeight<4?0:barWidth<65||rowHeight<8?1:2}
-// Groupement visuel des ticks quand rowHeight < MIN_ROW_HEIGHT
-(barWidth,rowHeight),tickGroup=function(tickSize,rowHeight){return rowHeight>=7?1:Math.max(1,Math.ceil(7/Math.max(1,rowHeight)))}(0,rowHeight),displayTick=tick*tickGroup,globalMaxBuy=1,globalMaxSell=1;if(0!==mode){for(var lo=0,hi=candles.length-1;lo<hi;){var mid=lo+hi>>>1;candleEndTs(candles[mid])<vp.timeStart?lo=mid+1:hi=mid}for(var i=lo;i<candles.length;i++){var c=candles[i];if(candleStartTs(c)>vp.timeEnd)break;for(var lvs=Array.isArray(c.levels)?c.levels:[],j=0;j<lvs.length;j++){var bv=Number(lvs[j].buyVol||0),sv=Number(lvs[j].sellVol||0);bv>globalMaxBuy&&(globalMaxBuy=bv),sv>globalMaxSell&&(globalMaxSell=sv)}}}
-// --- Iterate candles ---
-for(var lo2=0,hi2=candles.length-1;lo2<hi2;){var mid2=lo2+hi2>>>1;candleEndTs(candles[mid2])<vp.timeStart?lo2=mid2+1:hi2=mid2}for(var i2=lo2;i2<candles.length;i2++){var candle=candles[i2];if(candleStartTs(candle)>vp.timeEnd)break;var x1=vp.timeToX(candleStartTs(candle)),x2=vp.timeToX(candleEndTs(candle)),fullW=Math.max(3,x2-x1),bodyWidth=Math.max(3,Math.min(12,.18*fullW)),xCenter=(x1+x2)/2,colW=.84*fullW,x=xCenter-colW/2,yHigh=vp.priceToY(candle.high),yLow=vp.priceToY(candle.low),yOpen=vp.priceToY(candle.open),yClose=vp.priceToY(candle.close),upHex=settings&&settings.upColor||"#3ddc97",downHex=settings&&settings.downColor||"#ff5f73",candleCol=candle.close>=candle.open?hexToRgba(upHex,.92):hexToRgba(downHex,.92),delta=Number(candle.delta||0);
-// â”€â”€ MODE SMALL : candle + delta badge â”€â”€
-if(0!==mode){
-// â”€â”€ Background column (compact + full) â”€â”€
-ctx.fillStyle="rgba(15, 23, 42, 0.78)",ctx.fillRect(x,plot.top,colW,plot.height),
-// â”€â”€ OHLC body + wick â”€â”€
-ctx.strokeStyle=candleCol,ctx.lineWidth=1,ctx.beginPath(),ctx.moveTo(xCenter,yHigh),ctx.lineTo(xCenter,yLow),ctx.moveTo(xCenter-.4*bodyWidth,yOpen),ctx.lineTo(xCenter,yOpen),ctx.moveTo(xCenter,yClose),ctx.lineTo(xCenter+.4*bodyWidth,yClose),ctx.stroke();
-// â”€â”€ Levels (compact or full) â”€â”€
-var levels=Array.isArray(candle.levels)?candle.levels:[],grouped=[];
-// Group levels visually if needed
-if(tickGroup>1&&levels.length){var byBucket={};levels.forEach(function(lv){var price=Number(lv.price);if(Number.isFinite(price)){var bucket=Math.round(price/displayTick)*displayTick,k=bucket.toFixed(displayTick<1?2:0);byBucket[k]||(byBucket[k]={price:bucket,buyVol:0,sellVol:0,delta:0,isPoc:!1}),byBucket[k].buyVol+=Number(lv.buyVol||0),byBucket[k].sellVol+=Number(lv.sellVol||0),byBucket[k].delta+=Number(lv.delta||0),Number(candle.poc)===Number(lv.price)&&(byBucket[k].isPoc=!0)}}),grouped=Object.values(byBucket).sort(function(a,b){return b.price-a.price})}else grouped=levels.slice();var groupH=Math.round(tickGroup>1?Math.max(2,rowHeight*tickGroup):Math.max(4,Math.min(16,rowHeight))),halfW=Math.max(1,(colW-3)/2),imbalanceColor=Number(settings.imbalanceRatio)||3;grouped.forEach(function(level){var buyVol=Number(level.buyVol||0),sellVol=Number(level.sellVol||0);if(!(buyVol<=0&&sellVol<=0)){var price=Number(level.price);if(!(!Number.isFinite(price)||price<vp.priceMin||price>vp.priceMax)){
-// Snap row Y to the pixel grid so footprint rows align with the
-// canvas grid and any DOM-aligned rows (GridAligner.snapRowToGrid).
-var y=Math.round(vp.priceToY(price)),isPoc=level.isPoc||Number(candle.poc)===price,buyW=Math.max(0,halfW*Math.min(1,buyVol/globalMaxBuy)),sellW=Math.max(0,halfW*Math.min(1,sellVol/globalMaxSell)),ratio=0;buyVol>0&&sellVol>0?ratio=Math.max(buyVol,sellVol)/Math.min(buyVol,sellVol):(buyVol>0||sellVol>0)&&(ratio=1/0);var isBidImb=buyVol>sellVol&&ratio>=imbalanceColor,isAskImb=sellVol>buyVol&&ratio>=imbalanceColor;if(1===mode)
-// Compact: heatmap bars only, no text
-buyW>.3&&(ctx.fillStyle=isBidImb?"rgba(239,68,68,0.72)":"rgba(239,68,68,0.28)",ctx.fillRect(x+1+halfW-buyW,y-groupH/2,buyW,groupH)),sellW>.3&&(ctx.fillStyle=isAskImb?"rgba(34,197,94,0.72)":"rgba(34,197,94,0.28)",ctx.fillRect(x+1+halfW,y-groupH/2,sellW,groupH)),
-// POC dot
-isPoc&&(ctx.fillStyle="rgba(248,195,93,0.94)",ctx.fillRect(xCenter-2,y-1.5,4,3));else
-// Delta text
-if(
-// Full: bid/ask bars + text + POC frame + imbalance
-buyW>.3&&(ctx.fillStyle=isBidImb?"rgba(239,68,68,0.72)":"rgba(239,68,68,0.28)",ctx.fillRect(x+1+halfW-buyW,y-groupH/2,buyW,groupH)),sellW>.3&&(ctx.fillStyle=isAskImb?"rgba(34,197,94,0.72)":"rgba(34,197,94,0.28)",ctx.fillRect(x+1+halfW,y-groupH/2,sellW,groupH)),
-// Center separator
-ctx.strokeStyle="rgba(148,163,184,0.10)",ctx.lineWidth=.5,ctx.beginPath(),ctx.moveTo(x+1+halfW,y-groupH/2),ctx.lineTo(x+1+halfW,y+groupH/2),ctx.stroke(),
-// POC frame
-isPoc&&(ctx.strokeStyle="rgba(248,195,93,0.94)",ctx.lineWidth=1.4,ctx.strokeRect(x+1.5,y-groupH/2+.5,colW-3,groupH-1)),stackedImbalanceCount(levels,levels.indexOf(level),buyVol,sellVol,settings)>=(Number(settings.imbalanceStack)||3)-1&&colW>=18&&(ctx.strokeStyle=buyVol>sellVol?"rgba(239,68,68,0.55)":"rgba(34,197,94,0.55)",ctx.lineWidth=.8,ctx.setLineDash([2,2]),ctx.strokeRect(x+1.5,y-groupH/2+.5,colW-3,groupH-1),ctx.setLineDash([])),colW>=40&&groupH>=9){var lvDelta=Number(level.delta||0);ctx.fillStyle=lvDelta>0?"rgba(34,197,94,0.82)":lvDelta<0?"rgba(239,68,68,0.82)":"rgba(148,163,184,0.55)",ctx.font="8px JetBrains Mono, monospace",ctx.textAlign="center",ctx.fillText(V6OF.format.signed(lvDelta),x+colW/2,y+2.5),ctx.textAlign="left"}}}});
-// â”€â”€ Bottom summary bar â”€â”€
-var summaryY=plot.top+plot.height+1,summaryH=Math.min(18,17);if(summaryH>=10){var cd=Number(candle.delta||0),cv=Number(candle.volume||0),durMs=candleEndTs(candle)-candleStartTs(candle),durSec=Math.round(Math.max(0,durMs)/1e3),durLabel=durSec>=3600?Math.floor(durSec/3600)+"h":durSec>=60?Math.floor(durSec/60)+"m":durSec+"s";ctx.textAlign="center";
-// Delta
-var deltaColor=cd>0?"#22c55e":cd<0?"#ef4444":"#94a3b8";ctx.fillStyle=deltaColor,ctx.font="8px JetBrains Mono, monospace",ctx.fillText((cd>=0?"+":"")+V6OF.format.qty(Math.abs(cd)),xCenter,summaryY+summaryH-2),
-// Volume (if wide enough)
-colW>=30&&(ctx.fillStyle="rgba(203,213,225,0.62)",ctx.fillText(V6OF.format.qty(cv),xCenter,summaryY+6)),
-// Duration
-colW>=48&&(ctx.fillStyle="rgba(148,163,184,0.46)",ctx.font="7px JetBrains Mono, monospace",ctx.fillText(durLabel,xCenter,summaryY+summaryH+1)),ctx.textAlign="left"}}else{
-// Wick
-ctx.strokeStyle=candleCol,ctx.lineWidth=1,ctx.beginPath(),ctx.moveTo(xCenter,yHigh),ctx.lineTo(xCenter,yLow),ctx.stroke();
-// Body
-var bodyTop=Math.min(yOpen,yClose),bodyH=Math.max(1,Math.abs(yClose-yOpen));
-// Delta badge (above candle)
-if(ctx.fillStyle=candleCol,ctx.fillRect(xCenter-bodyWidth/2,bodyTop,bodyWidth,Math.max(1,bodyH)),0!==delta){var dbY=yHigh-10;ctx.fillStyle=delta>0?"rgba(34,197,94,0.85)":"rgba(239,68,68,0.85)",ctx.font="8px JetBrains Mono, monospace",ctx.textAlign="center",ctx.fillText((delta>0?"+":"")+V6OF.format.qty(Math.abs(delta)),xCenter,dbY),ctx.textAlign="left"}}}return!0}
-// Backward-compat alias
 function hasChartIndicator(settings,id){var list=settings&&Array.isArray(settings.chartIndicators)?settings.chartIndicators:["ohlc"],hidden=settings&&Array.isArray(settings.hiddenChartIndicators)?settings.hiddenChartIndicators:[];return list.indexOf(id)>=0&&hidden.indexOf(id)<0}function drawIndicatorLine(ctx,vp,points,color,width){if(Array.isArray(points)&&!(points.length<2)){ctx.save(),ctx.strokeStyle=color,ctx.lineWidth=width||1.25,ctx.beginPath();for(var started=!1,i=0;i<points.length;i++){var p=points[i];if(p&&!(p.time<vp.timeStart)){if(p.time>vp.timeEnd)break;if(!Number.isFinite(p.value)||p.value<vp.priceMin||p.value>vp.priceMax)started=!1;else{var x=vp.timeToX(p.time),y=vp.priceToY(p.value);started?ctx.lineTo(x,y):(ctx.moveTo(x,y),started=!0)}}}ctx.stroke(),ctx.restore()}}function emaPoints(candles,period){if(!Array.isArray(candles)||!candles.length)return[];for(var k=2/(period+1),prev=null,out=[],i=0;i<candles.length;i++){var c=candles[i],close=Number(c&&c.close);Number.isFinite(close)&&(prev=null==prev?close:prev+k*(close-prev),out.push({time:candleMidTs(c),value:prev}))}return out}function drawBuiltInChartIndicators(ctx,vp,candles,state,settings){Array.isArray(candles)&&candles.length&&(hasChartIndicator(settings,"vwap")&&drawIndicatorLine(ctx,vp,function(candles,state){if(state&&state.vwap&&Number.isFinite(Number(state.vwap.value))&&candles&&candles.length)return candles.map(function(c){return{time:candleMidTs(c),value:Number(state.vwap.value)}});for(var out=[],pv=0,vol=0,i=0;i<(candles||[]).length;i++){var c=candles[i],h=Number(c.high),l=Number(c.low),close=Number(c.close),v=Number(c.volume||0);Number.isFinite(h)&&Number.isFinite(l)&&Number.isFinite(close)&&v>0&&(pv+=(h+l+close)/3*v,(vol+=v)>0&&out.push({time:candleMidTs(c),value:pv/vol}))}return out}(candles,state),"#d6bd47",1.25),hasChartIndicator(settings,"ema9")&&drawIndicatorLine(ctx,vp,emaPoints(candles,9),"#39c77a",1.25),hasChartIndicator(settings,"ema21")&&drawIndicatorLine(ctx,vp,emaPoints(candles,21),"#55aee8",1.25))}
 // Find the nearest candle to a given time position (binary search).
 function nearestCandleAt(candles,timeMs){if(!Array.isArray(candles)||!candles.length)return null;for(var lo=0,hi=candles.length-1;lo<hi;){var mid=lo+hi>>>1;candleStartTs(candles[mid])<timeMs?lo=mid+1:hi=mid}
 // Check the found candle and the one before it
-var best=candles[lo],bestDist=Math.abs(candleMidTs(best)-timeMs);if(lo>0){var prev=candles[lo-1];Math.abs(candleMidTs(prev)-timeMs)<bestDist&&(best=prev)}return best}function indexOfCandle(candles,candle){if(!Array.isArray(candles)||!candle)return-1;for(var target=candleStartTs(candle),i=0;i<candles.length;i++)if(candleStartTs(candles[i])===target)return i;return-1}function drawWaiting(ctx,state,bounds,haveData){var cause=function(state,bounds,haveData){state=state||{};var source=String(state.source||"").toLowerCase(),freshness=String(state.dataFreshness||"").toLowerCase(),transport=String(state.transportStatus||"").toLowerCase(),chartCandles=Array.isArray(state.chartCandles)?state.chartCandles:[],footprintCandles=Array.isArray(state.footprintCandles)?state.footprintCandles:[],heatmapFrames=Array.isArray(state.heatmapFrames)?state.heatmapFrames:[];return function(state){if(!state)return!0;if(!0===state.permissionDenied||"denied"===state.marketPermission)return!1;var p=state.permissions||{};return!1!==p.marketData&&!1!==p.orderflow&&!1!==p.chart}(state)?source&&"unavailable"!==source&&"none"!==source&&"disabled"!==transport?state.isStale||"stale"===freshness?{title:"Market data stale",detail:"The last valid update is too old; waiting for a fresh tick or fallback."}:haveData&&bounds&&null==bounds.timeMax&&null==bounds.priceMax?{title:"No data in visible range",detail:"The current timeframe or viewport is outside the loaded market data."}:chartCandles.length||footprintCandles.length?!chartCandles.length&&heatmapFrames.length?{title:"No candle backfill",detail:"Depth frames exist, but candle history is missing for this timeframe."}:{title:"Waiting for chart data",detail:"The chart has a source, but no renderable candles are available yet."}:{title:"No backfill loaded",detail:"Historical candles are empty for "+(state.symbol||"symbol")+" "+(state.timeframe||"timeframe")+"."}:{title:"No market source",detail:"Select or reconnect a data source before rendering candles."}:{title:"No chart permissions",detail:"Market data access is disabled for this workspace or account."}}(state,bounds,haveData);ctx.fillStyle="rgba(226, 232, 240, 0.82)",ctx.font="bold 13px Inter, system-ui, sans-serif",ctx.fillText(cause.title,18,32),ctx.fillStyle="rgba(148, 163, 184, 0.72)",ctx.font="12px Inter, system-ui, sans-serif",ctx.fillText(cause.detail,18,52)}function drawLive(ctx,setup,state,canvas){var width=setup.width,height=setup.height,settings=state&&state.settings||{},heatmapFrames=Array.isArray(state.heatmapFrames)?state.heatmapFrames:[],footprintCandles=Array.isArray(state.footprintCandles)?state.footprintCandles:[],baseCandles=mergedChartCandles(state),showHeatmap=!0===settings.showHeatmap,showFootprint=!0===settings.showFootprint,showCandles=!1!==settings.showOhlc&&!1!==settings.showCandles;// Always show OHLC unless explicitly disabled
+var best=candles[lo],bestDist=Math.abs(candleMidTs(best)-timeMs);if(lo>0){var prev=candles[lo-1];Math.abs(candleMidTs(prev)-timeMs)<bestDist&&(best=prev)}return best}function indexOfCandle(candles,candle){if(!Array.isArray(candles)||!candle)return-1;for(var target=candleStartTs(candle),i=0;i<candles.length;i++)if(candleStartTs(candles[i])===target)return i;return-1}function drawWaiting(ctx,state,bounds,haveData){var cause=function(state,bounds,haveData){state=state||{};var source=String(state.source||"").toLowerCase(),freshness=String(state.dataFreshness||"").toLowerCase(),transport=String(state.transportStatus||"").toLowerCase(),chartCandles=Array.isArray(state.chartCandles)?state.chartCandles:[],footprintCandles=Array.isArray(state.footprintCandles)?state.footprintCandles:[],heatmapFrames=Array.isArray(state.heatmapFrames)?state.heatmapFrames:[];return function(state){if(!state)return!0;if(!0===state.permissionDenied||"denied"===state.marketPermission)return!1;var p=state.permissions||{};return!1!==p.marketData&&!1!==p.orderflow&&!1!==p.chart}(state)?source&&"unavailable"!==source&&"none"!==source&&"disabled"!==transport?state.isStale||"stale"===freshness?{title:"Market data stale",detail:"The last valid update is too old; waiting for a fresh tick or fallback."}:haveData&&bounds&&null==bounds.timeMax&&null==bounds.priceMax?{title:"No data in visible range",detail:"The current timeframe or viewport is outside the loaded market data."}:chartCandles.length||footprintCandles.length?!chartCandles.length&&heatmapFrames.length?{title:"No candle backfill",detail:"Depth frames exist, but candle history is missing for this timeframe."}:{title:"Waiting for chart data",detail:"The chart has a source, but no renderable candles are available yet."}:{title:"No backfill loaded",detail:"Historical candles are empty for "+(state.symbol||"symbol")+" "+(state.timeframe||"timeframe")+"."}:{title:"No market source",detail:"Select or reconnect a data source before rendering candles."}:{title:"No chart permissions",detail:"Market data access is disabled for this workspace or account."}}(state,bounds,haveData);ctx.fillStyle="rgba(226, 232, 240, 0.82)",ctx.font="bold 13px Inter, system-ui, sans-serif",ctx.fillText(cause.title,18,32),ctx.fillStyle="rgba(148, 163, 184, 0.72)",ctx.font="12px Inter, system-ui, sans-serif",ctx.fillText(cause.detail,18,52)}function drawLive(ctx,setup,state,canvas){var width=setup.width,height=setup.height,settings=state&&state.settings||{},heatmapFrames=Array.isArray(state.heatmapFrames)?state.heatmapFrames:[],footprintCandles=Array.isArray(state.footprintCandles)?state.footprintCandles:[],baseCandles=mergedChartCandles(state),showHeatmap=!0===settings.showHeatmap,showCandles=!1!==settings.showOhlc&&!1!==settings.showCandles;// Always show OHLC unless explicitly disabled
 ctx.clearRect(0,0,width,height),ctx.fillStyle=settings.bgColor||"#080b12",ctx.fillRect(0,0,width,height);var bounds=computeLiveBounds(state,showHeatmap);
 // Pass candle interval so the viewport can compute a candle-count-based
 // initial span (e.g. 80 candles for any timeframe).
@@ -2550,11 +2506,20 @@ if(vp.setPlot(plot),vp.syncToData(bounds),vp.autoFit&&baseCandles.length){var vi
 // footprint cells as an overlay so the candlesticks stay readable.
 ctx.save(),ctx.beginPath(),ctx.rect(plot.left,plot.top,plot.width,plot.height),ctx.clip(),showHeatmap&&!isInteractiveDrag&&drawHeatmapVp(ctx,vp,plot,heatmapFrames,settings),showCandles&&baseCandles.length&&
 // Plain candlesticks (base layer) from footprint OHLC, in the viewport space.
-function(ctx,vp,plot,candles,settings,state){if(!Array.isArray(candles)||!candles.length)return!1;for(var upHex=settings&&settings.upColor||"#3ddc97",downHex=settings&&settings.downColor||"#ff5f73",style=settings&&settings.ohlcBodyStyle||"candles",bodyWidthFactor=Math.max(.2,Math.min(1,Number(settings&&settings.ohlcBodyWidth)||.72)),lineWidth=Math.max(1,Math.min(4,Number(settings&&settings.ohlcLineWidth)||1)),activeOpenTime=Number(state&&state.ui&&state.ui.activeCandleLocked?state.ui.activeCandleOpenTime:0),lo=0,hi=candles.length-1;lo<hi;){var mid=lo+hi>>>1;candleEndTs(candles[mid])<vp.timeStart?lo=mid+1:hi=mid}for(var i=lo;i<candles.length;i++){var c=candles[i];if(candleStartTs(c)>vp.timeEnd)break;if(Number.isFinite(c.open)&&Number.isFinite(c.close)){var x1=vp.timeToX(candleStartTs(c)),x2=vp.timeToX(candleEndTs(c)),fullW=Math.max(2,x2-x1),bodyW=Math.max(1,Math.min(28,fullW*bodyWidthFactor)),xc=(x1+x2)/2,up=c.close>=c.open,selected=activeOpenTime>0&&Number(c.openTime||0)===activeOpenTime,col=selected?"#facc15":up?upHex:downHex,yOpen=vp.priceToY(c.open),yClose=vp.priceToY(c.close);if(c.synthetic){var synthX=Math.max(plot.left,x1+1),synthW=Math.max(2,Math.min(plot.left+plot.width,x2-1)-synthX);ctx.fillStyle="rgba(148, 163, 184, 0.08)",ctx.fillRect(synthX,plot.top,synthW,plot.height),ctx.save(),ctx.beginPath(),ctx.rect(synthX,plot.top,synthW,plot.height),ctx.clip(),ctx.strokeStyle="rgba(148, 163, 184, 0.32)",ctx.lineWidth=1;for(var sx=synthX-plot.height;sx<synthX+synthW;sx+=8)ctx.beginPath(),ctx.moveTo(sx,plot.top+plot.height),ctx.lineTo(sx+plot.height,plot.top),ctx.stroke();ctx.restore(),ctx.setLineDash([3,3]),ctx.strokeStyle="rgba(226, 232, 240, 0.7)",ctx.beginPath(),ctx.moveTo(synthX,yClose),ctx.lineTo(synthX+synthW,yClose),ctx.stroke(),ctx.setLineDash([]),ctx.fillStyle="rgba(226, 232, 240, 0.82)",ctx.fillRect(xc-1,yClose-1,2,2)}else{ctx.strokeStyle=hexToRgba(col,.96),ctx.fillStyle=hexToRgba(col,.96),ctx.lineWidth=selected?Math.max(1.8,lineWidth+.75):lineWidth;
+function(ctx,vp,plot,candles,settings,state){if(!Array.isArray(candles)||!candles.length)return!1;for(var upHex=settings&&settings.upColor||"#3ddc97",downHex=settings&&settings.downColor||"#ff5f73",style=settings&&settings.ohlcBodyStyle||"candles",bodyWidthFactor=Math.max(.2,Math.min(1,Number(settings&&settings.ohlcBodyWidth)||.72)),lineWidth=Math.max(1,Math.min(4,Number(settings&&settings.ohlcLineWidth)||1)),activeOpenTime=Number(state&&state.ui&&state.ui.activeCandleLocked?state.ui.activeCandleOpenTime:0),lo=0,hi=candles.length-1;lo<hi;){var mid=lo+hi>>>1;candleEndTs(candles[mid])<vp.timeStart?lo=mid+1:hi=mid}for(var i=lo;i<candles.length;i++){var c=candles[i];if(candleStartTs(c)>vp.timeEnd)break;if(Number.isFinite(c.open)&&Number.isFinite(c.close)){var x1=vp.timeToX(candleStartTs(c)),x2=vp.timeToX(candleEndTs(c)),fullW=Math.max(2,x2-x1),bodyW=Math.max(1,Math.min(28,fullW*bodyWidthFactor)),xc=(x1+x2)/2,up=c.close>=c.open,selected=activeOpenTime>0&&Number(c.openTime||0)===activeOpenTime,col=selected?"#facc15":up?upHex:downHex,yOpen=vp.priceToY(c.open),yClose=vp.priceToY(c.close);if(c.synthetic){var synthX=Math.max(plot.left,x1+1),synthW=Math.max(2,Math.min(plot.left+plot.width,x2-1)-synthX);ctx.fillStyle="rgba(148, 163, 184, 0.08)",ctx.fillRect(synthX,plot.top,synthW,plot.height),ctx.save(),ctx.beginPath(),ctx.rect(synthX,plot.top,synthW,plot.height),ctx.clip(),ctx.strokeStyle="rgba(148, 163, 184, 0.32)",ctx.lineWidth=1;for(var sx=synthX-plot.height;sx<synthX+synthW;sx+=8)ctx.beginPath(),ctx.moveTo(sx,plot.top+plot.height),ctx.lineTo(sx+plot.height,plot.top),ctx.stroke();ctx.restore(),
+// Draw synthetic candle marker line (use dark color, not white)
+ctx.setLineDash([3,3]),ctx.strokeStyle="rgba(107, 114, 128, 0.45)",// Dark gray instead of white
+ctx.beginPath(),ctx.moveTo(synthX,yClose),ctx.lineTo(synthX+synthW,yClose),ctx.stroke(),ctx.setLineDash([]),ctx.fillStyle="rgba(107, 114, 128, 0.55)",// Dark gray instead of white
+ctx.fillRect(xc-1,yClose-1,2,2)}else{ctx.strokeStyle=hexToRgba(col,.96),ctx.fillStyle=hexToRgba(col,.96),ctx.lineWidth=selected?Math.max(1.8,lineWidth+.75):lineWidth;
 // wick (snap to pixel, 1px width for crisp rendering)
 var xc_snap=Math.round(xc),yHigh_snap=Math.round(vp.priceToY(c.high)),yLow_snap=Math.round(vp.priceToY(c.low));if(ctx.beginPath(),ctx.moveTo(xc_snap+.5,yHigh_snap),ctx.lineTo(xc_snap+.5,yLow_snap),ctx.stroke(),"bars"===style){var tickW=Math.max(3,Math.round(.45*bodyW));ctx.beginPath(),ctx.moveTo(Math.round(xc-tickW)+.5,Math.round(yOpen)+.5),ctx.lineTo(Math.round(xc)+.5,Math.round(yOpen)+.5),ctx.moveTo(Math.round(xc)+.5,Math.round(yClose)+.5),ctx.lineTo(Math.round(xc+tickW)+.5,Math.round(yClose)+.5),ctx.stroke()}else{
 // body (snap to pixel grid for alignment)
-var top=Math.min(yOpen,yClose),bh=Math.max(1,Math.abs(yClose-yOpen)),body_left=Math.round(xc-bodyW/2),body_top=Math.round(top);"hollow"===style&&up&&!selected?ctx.strokeRect(body_left,body_top,Math.round(bodyW),Math.round(bh)):ctx.fillRect(body_left,body_top,Math.round(bodyW),Math.round(bh)),selected&&(ctx.strokeStyle="rgba(113, 63, 18, 0.92)",ctx.strokeRect(xc-bodyW/2-1,top-1,bodyW+2,bh+2))}}}}}(ctx,vp,plot,baseCandles,settings,state),showFootprint&&!isInteractiveDrag&&footprintCandles.length&&function(ctx,vp,plot,candles,settings){drawAdaptiveFootprint(ctx,vp,plot,candles,settings)}(ctx,vp,plot,footprintCandles,settings),ctx.restore(),
+var top=Math.min(yOpen,yClose),bh=Math.max(1,Math.abs(yClose-yOpen)),body_left=Math.round(xc-bodyW/2),body_top=Math.round(top);"hollow"===style&&up&&!selected?ctx.strokeRect(body_left,body_top,Math.round(bodyW),Math.round(bh)):ctx.fillRect(body_left,body_top,Math.round(bodyW),Math.round(bh)),selected&&(ctx.strokeStyle="rgba(113, 63, 18, 0.92)",ctx.strokeRect(xc-bodyW/2-1,top-1,bodyW+2,bh+2))}}}}}(ctx,vp,plot,baseCandles,settings,state),
+// FOOTPRINT DISABLED: Complete rewrite in progress
+// if (showFootprint && !isInteractiveDrag && footprintCandles.length) {
+//   drawFootprintVp(ctx, vp, plot, footprintCandles, settings, showCandles);
+// }
+ctx.restore(),
 // â”€â”€ Indicator overlays (EMA, SMA, Bollinger, etc.) â”€â”€
 V6OF.Indicators&&V6OF.Indicators.drawAll&&(ctx.save(),ctx.beginPath(),ctx.rect(plot.left,plot.top,plot.width,plot.height),ctx.clip(),V6OF.Indicators.drawAll(ctx,vp,plot,state,baseCandles),ctx.restore()),drawBuiltInChartIndicators(ctx,vp,baseCandles,state,settings);
 // Reference price lines (mid / bid / ask / poc / vwap)
@@ -2702,7 +2667,7 @@ function normalizeOrigin(rawUrl,transport){try{var parsed=new URL(rawUrl,window.
 // HTTP origin for the market engine REST API (footprint history, /replay).
 // First-class config value: read COCKPIT_CONFIG.marketHttpUrl when present;
 // otherwise fall back to deriving it from the WS origin (legacy behavior).
-function configuredMarketHttpUrl(){var cfg=window.COCKPIT_CONFIG||{};return cfg.marketHttpUrl?String(cfg.marketHttpUrl).replace(/\/$/,""):normalizeOrigin(configuredMarketWsUrl(),"http")}function resolveMarketUrl(path,transport){var suffix=path||"";return("ws"===transport?normalizeOrigin(configuredMarketWsUrl(),"ws"):configuredMarketHttpUrl())+("/"===suffix.charAt(0)?suffix:"/"+suffix)}V6OF.register||(["Core","Data","Transport","UI","Studies","Page"].forEach(function(name){V6OF[name]=V6OF[name]||{}}),V6OF.register=function(domain,name,value,legacyName){return V6OF[domain]=V6OF[domain]||{},V6OF[domain][name]=value,legacyName&&(V6OF[legacyName]=value),value}),V6OF.register("Transport","resolveMarketUrl",resolveMarketUrl,"resolveMarketUrl"),V6OF.register("Transport","marketWsUrl",configuredMarketWsUrl,"marketWsUrl"),V6OF.register("Transport","marketHttpUrl",configuredMarketHttpUrl,"marketHttpUrl");var DEFAULT_URL=configuredMarketWsUrl();function timeframeToMs(tf){if(!tf)return 6e4;var match=tf.match(/^(\d+)([mhd])$/i);if(!match)return 6e4;var val=parseInt(match[1],10),unit=match[2].toLowerCase();return"m"===unit?6e4*val:"h"===unit?36e5*val:"d"===unit?864e5*val:6e4}
+function configuredMarketHttpUrl(){var cfg=window.COCKPIT_CONFIG||{};return cfg.marketHttpUrl?String(cfg.marketHttpUrl).replace(/\/$/,""):normalizeOrigin(configuredMarketWsUrl(),"http")}V6OF.register||(["Core","Data","Transport","UI","Studies","Page"].forEach(function(name){V6OF[name]=V6OF[name]||{}}),V6OF.register=function(domain,name,value,legacyName){return V6OF[domain]=V6OF[domain]||{},V6OF[domain][name]=value,legacyName&&(V6OF[legacyName]=value),value}),V6OF.register("Transport","resolveMarketUrl",function(path,transport){var suffix=path||"";return("ws"===transport?normalizeOrigin(configuredMarketWsUrl(),"ws"):configuredMarketHttpUrl())+("/"===suffix.charAt(0)?suffix:"/"+suffix)},"resolveMarketUrl"),V6OF.register("Transport","marketWsUrl",configuredMarketWsUrl,"marketWsUrl"),V6OF.register("Transport","marketHttpUrl",configuredMarketHttpUrl,"marketHttpUrl");var DEFAULT_URL=configuredMarketWsUrl();function timeframeToMs(tf){if(!tf)return 6e4;var match=tf.match(/^(\d+)([mhd])$/i);if(!match)return 6e4;var val=parseInt(match[1],10),unit=match[2].toLowerCase();return"m"===unit?6e4*val:"h"===unit?36e5*val:"d"===unit?864e5*val:6e4}
 // Normalize symbol: 'BTC' -> 'BTCUSDT', leave 'BTCUSDT' etc. unchanged.
 // This prevents the subscriber from seeing a fake symbol change each batch.
 function normalizeSymbol(sym){if(!sym)return"BTCUSDT";var s=sym.toUpperCase();
@@ -2793,7 +2758,11 @@ store&&store.subscribe(function(state){var currentTf=state.timeframe||"1m",curre
 if(currentTf!==lastTf&&(lastTf=currentTf,changed=!0,ws&&"connected"===status))try{ws.send(JSON.stringify({type:"cvd_history_request",timeframe:currentTf})),console.log("[V6 Client] requested CVD history for timeframe:",currentTf)}catch(e){console.warn("[V6 Client] failed to request CVD history:",e)}currentSymbol!==lastSymbol&&(lastSymbol=currentSymbol,changed=!0,console.log("[V6 Client] symbol changed to",currentSymbol,"— will fetch footprint history")),changed&&"connected"===status&&fetchFootprintHistory()});var _lastFpFetch=null;function fetchFootprintHistory(options){if(!store)return Promise.resolve(null);options=options||{};var state=store.getState(),symbol=normalizeSymbol(options.symbol||state.symbol||"BTC"),tf=options.timeframe||state.timeframe||"1m",intervalMsValue=timeframeToMs(tf),from=Number(options.from||options.startTime||0),to=Number(options.to||options.endTime||0);if(!from||!to){var settings=state.settings||{},lookbackMinutes=Math.max(1,Math.min(1e5,Number(options.lookbackMinutes||settings.footprintHistoryLookbackMinutes||10080)));to=to||Date.now(),from=from||to-6e4*lookbackMinutes}var requestedFrom=from,requestedTo=to,limit=Math.max(1,Math.min(1e5,Number(options.limit||1e5))),isSmallFetch=options.limit&&options.limit<=20;if(!isSmallFetch&&!options.force&&_lastFpFetch){var sameKey=_lastFpFetch.symbol===symbol&&_lastFpFetch.tf===tf,sameWindow=(!from||_lastFpFetch.from<=from)&&(!to||_lastFpFetch.to>=to),recentEnough=Date.now()-_lastFpFetch.ts<6e4;// 1 min debounce
 if(sameKey&&sameWindow&&recentEnough){
 // Check we actually have candles covering this window
-var fp=state.footprintCandles||[];if(fp.length>0)return console.log("[V6 Client] footprint history already loaded ("+fp.length+" candles), skipping refetch"),Promise.resolve(null)}}_lastFpFetch={symbol:symbol,tf:tf,from:from,to:to,ts:Date.now()};var url=resolveMarketUrl("1m"===tf?"/api/v1/footprint/1m":"/api/v1/footprint/tf","http");return url+="?symbol="+encodeURIComponent(symbol),"1m"!==tf&&(url+="&tf="+encodeURIComponent(tf)),from>0&&(url+="&from="+encodeURIComponent(Math.floor(from))),to>0&&(url+="&to="+encodeURIComponent(Math.floor(to))),url+="&limit="+encodeURIComponent(limit),console.log("[V6 Client] fetching footprint history from:",url),fetch(url).then(function(res){if(!res.ok)throw new Error("HTTP "+res.status);return res.json()}).then(function(data){if(data&&Array.isArray(data.candles)){var candles=data.candles.map(function(c){return{exchange:state.dataSource||"local",symbol:symbol,intervalMs:intervalMsValue,openTime:c.ts,closeTime:c.ts+intervalMsValue-1,open:c.open,high:c.high,low:c.low,close:c.close,volume:c.volume,buyVol:c.buy_volume,sellVol:c.sell_volume,delta:c.delta,poc:c.close,closed:!0,levels:(c.profile||[]).map(function(lv){var buy=Number(lv.b||0),sell=Number(lv.s||0);return{price:Number(lv.p),buyVol:buy,sellVol:sell,delta:buy-sell,totalVol:buy+sell}}),source:"history",tsLocal:Date.now()}});candles.length&&(store.setState(function(prev){var maxCandles=Math.max(60,Math.min(1e5,Number(prev.settings&&prev.settings.footprintMaxCandles||1e5))),merged=mergeFootprintCandles(prev.footprintCandles||[],candles,maxCandles);!isSmallFetch&&requestedFrom>0&&requestedTo>0&&(merged=merged.filter(function(item){var open=Number(item&&item.openTime||0);return open>=requestedFrom&&open<=requestedTo}));var lastCandle=merged[merged.length-1];return{footprintCandles:merged,lastFootprintCandle:lastCandle||null,lastFootprintTs:lastCandle?lastCandle.tsLocal||Date.now():0,selectedFootprintSymbol:symbol,selectedFootprintTimeframe:tf}},"footprint-history-loaded"),console.log("[V6 Client] footprint history loaded:",candles.length,"candles"))}}).catch(function(err){console.warn("[V6 Client] failed to load footprint history:",err)})}function tryFetch(url,retries){return fetch(url).then(function(res){if(res.ok)return res.json();if(retries>0&&(502===res.status||503===res.status||429===res.status))return console.log("[V6] retry",url,"status",res.status,"retries left:",retries),new Promise(function(resolve){setTimeout(resolve,1500)}).then(function(){return tryFetch(url,retries-1)});throw new Error("HTTP "+res.status)})}return{
+var fp=state.footprintCandles||[];if(fp.length>0)return console.log("[V6 Client] footprint history already loaded ("+fp.length+" candles), skipping refetch"),Promise.resolve(null)}}_lastFpFetch={symbol:symbol,tf:tf,from:from,to:to,ts:Date.now()};
+// Same-origin Flask proxy: the engine's HTTP API (port 8765) sends no
+// CORS headers, so a direct browser fetch fails. The proxy forwards to
+// MARKET_GO_HOST:MARKET_GO_PORT server-side.
+var url="1m"===tf?"/api/market/engine/footprint/1m":"/api/market/engine/footprint/tf";return url+="?symbol="+encodeURIComponent(symbol),"1m"!==tf&&(url+="&tf="+encodeURIComponent(tf)),from>0&&(url+="&from="+encodeURIComponent(Math.floor(from))),to>0&&(url+="&to="+encodeURIComponent(Math.floor(to))),url+="&limit="+encodeURIComponent(limit),console.log("[V6 Client] fetching footprint history from:",url),fetch(url).then(function(res){if(!res.ok)throw new Error("HTTP "+res.status);return res.json()}).then(function(data){if(data&&Array.isArray(data.candles)){var candles=data.candles.map(function(c){return{exchange:state.dataSource||"local",symbol:symbol,intervalMs:intervalMsValue,openTime:c.ts,closeTime:c.ts+intervalMsValue-1,open:c.open,high:c.high,low:c.low,close:c.close,volume:c.volume,buyVol:c.buy_volume,sellVol:c.sell_volume,delta:c.delta,poc:c.close,closed:!0,levels:(c.profile||[]).map(function(lv){var buy=Number(lv.b||0),sell=Number(lv.s||0);return{price:Number(lv.p),buyVol:buy,sellVol:sell,delta:buy-sell,totalVol:buy+sell}}),source:"history",tsLocal:Date.now()}});candles.length&&(store.setState(function(prev){var maxCandles=Math.max(60,Math.min(1e5,Number(prev.settings&&prev.settings.footprintMaxCandles||1e5))),merged=mergeFootprintCandles(prev.footprintCandles||[],candles,maxCandles);!isSmallFetch&&requestedFrom>0&&requestedTo>0&&(merged=merged.filter(function(item){var open=Number(item&&item.openTime||0);return open>=requestedFrom&&open<=requestedTo}));var lastCandle=merged[merged.length-1];return{footprintCandles:merged,lastFootprintCandle:lastCandle||null,lastFootprintTs:lastCandle?lastCandle.tsLocal||Date.now():0,selectedFootprintSymbol:symbol,selectedFootprintTimeframe:tf}},"footprint-history-loaded"),console.log("[V6 Client] footprint history loaded:",candles.length,"candles"))}}).catch(function(err){console.warn("[V6 Client] failed to load footprint history:",err)})}function tryFetch(url,retries){return fetch(url).then(function(res){if(res.ok)return res.json();if(retries>0&&(502===res.status||503===res.status||429===res.status))return console.log("[V6] retry",url,"status",res.status,"retries left:",retries),new Promise(function(resolve){setTimeout(resolve,1500)}).then(function(){return tryFetch(url,retries-1)});throw new Error("HTTP "+res.status)})}return{
 /**
        * Connect to the local engine. The layout calls this automatically on mount;
        * the header control can still use it for reconnect.
@@ -3398,7 +3367,59 @@ if(priceGrouping=group,tickSize=Math.max(nativeTickSize,priceGrouping>0?priceGro
 return computeWallScores(),{book:book,nativeTickSize:nativeTickSize,tickSize:tickSize,contractSize:contractSize,priceGrouping:priceGrouping,midPrice:midPrice,bestBid:bestBid,bestAsk:bestAsk,spread:spread,minTick:viewMin,// backward compat : utilise la fenetre stable
 maxTick:viewMax,// backward compat : utilise la fenetre stable
 viewMin:viewMin,// nouveau nom explicite
-viewMax:viewMax,dataMin:dataMin,dataMax:dataMax,midTick:priceToTick(midPrice),bestBidTick:priceToTick(bestBid),bestAskTick:priceToTick(bestAsk),bookCount:bookCount,sequence:lastSequence,sequenceGapCount:sequenceGapCount,droppedUpdates:droppedUpdates,bookSize:book.size,lastUpdate:lastUpdateTs,source:source,symbol:symbol}},getGroupingOptions:function(){return groupingOptions.slice()},THROTTLE_MS:200,priceToTick:priceToTick,tickToPrice:function(tick){return tick*tickSize},setAutoCenterEnabled:function(enabled){autoCenterEnabled=!!enabled},centerWindowOnTick:function(tick){Number.isFinite(tick)&&(viewMin=tick-200,viewMax=tick+200)}},"DomLadder")}(),// 091_v6_layout_picker.js
+viewMax:viewMax,dataMin:dataMin,dataMax:dataMax,midTick:priceToTick(midPrice),bestBidTick:priceToTick(bestBid),bestAskTick:priceToTick(bestAsk),bookCount:bookCount,sequence:lastSequence,sequenceGapCount:sequenceGapCount,droppedUpdates:droppedUpdates,bookSize:book.size,lastUpdate:lastUpdateTs,source:source,symbol:symbol}},getGroupingOptions:function(){return groupingOptions.slice()},THROTTLE_MS:200,priceToTick:priceToTick,tickToPrice:function(tick){return tick*tickSize},setAutoCenterEnabled:function(enabled){autoCenterEnabled=!!enabled},centerWindowOnTick:function(tick){Number.isFinite(tick)&&(viewMin=tick-200,viewMax=tick+200)}},"DomLadder")}(),// ============ 091_v6_footprint_core.js ============
+// Footprint core engine: data structures & calculations
+// NO rendering logic here - pure data & math
+function(){"use strict";var V6OF=window.V6OF=window.V6OF||{};
+// ===== DATA STRUCTURES =====
+/**
+   * PriceLevel: Buy/sell volume at a specific price
+   * @param {number} price - Price level
+   * @param {number} buyVol - Volume bought at this price (aggressive buyers lifting offers)
+   * @param {number} sellVol - Volume sold at this price (aggressive sellers hitting bids)
+   */function PriceLevel(price,buyVol,sellVol){this.price=Number(price)||0,this.buyVol=Math.max(0,Number(buyVol)||0),this.sellVol=Math.max(0,Number(sellVol)||0),this.delta=this.buyVol-this.sellVol,// Positive = bullish, negative = bearish
+this.totalVol=this.buyVol+this.sellVol}
+/**
+   * FootprintCandle: Complete footprint for one candle
+   * @param {number} openTime - Candle open timestamp
+   * @param {number} closeTime - Candle close timestamp
+   * @param {Array<PriceLevel>} levels - Price levels with buy/sell volume
+   * @param {number} open - OHLC open
+   * @param {number} high - OHLC high
+   * @param {number} low - OHLC low
+   * @param {number} close - OHLC close
+   */function FootprintCandle(openTime,closeTime,levels,ohlc){this.openTime=Number(openTime)||0,this.closeTime=Number(closeTime)||0,
+// Sort levels by price (descending for easier rendering)
+this.levels=Array.isArray(levels)?levels.sort(function(a,b){return b.price-a.price}):[],
+// OHLC
+this.open=Number(ohlc&&ohlc.open)||0,this.high=Number(ohlc&&ohlc.high)||0,this.low=Number(ohlc&&ohlc.low)||0,this.close=Number(ohlc&&ohlc.close)||0,
+// Calculate metrics
+this._calculateMetrics()}
+/**
+   * Calculate Value Area (70% of volume)
+   * Returns { high, low, volume }
+   */
+function calculateValueArea(levels,totalVol){if(!levels||!levels.length)return{high:0,low:0,volume:0};for(var targetVol=.7*totalVol,sortedByVol=levels.slice().sort(function(a,b){return b.totalVol-a.totalVol}),vaVol=0,vaPrices=[],i=0;i<sortedByVol.length&&vaVol<targetVol;i++)vaPrices.push(sortedByVol[i].price),vaVol+=sortedByVol[i].totalVol;return 0===vaPrices.length?{high:0,low:0,volume:0}:{high:Math.max.apply(null,vaPrices),low:Math.min.apply(null,vaPrices),volume:vaVol,numLevels:vaPrices.length}}
+/**
+   * Identify volume imbalances (3-to-1 ratio)
+   * Returns array of price levels with significant imbalance
+   */function findImbalances(levels,minRatio){return minRatio=Math.max(1.5,Number(minRatio)||3),levels.filter(function(level){if(0===level.totalVol)return!1;var buyRatio=level.buyVol/level.totalVol,sellRatio=level.sellVol/level.totalVol;
+// Imbalance if one side is > minRatio% of total
+return buyRatio>1/minRatio||sellRatio>1/minRatio})}
+/**
+   * Determine aggression side (who's pushing the market)
+   * Returns 'buy', 'sell', or 'balanced'
+   */function aggressionSide(candle){return candle?Math.abs(candle.totalDelta)/Math.max(1,candle.totalVol)<.1?"balanced":candle.totalDelta>0?"buy":"sell":"balanced"}
+// ===== EXPORTS =====
+FootprintCandle.prototype._calculateMetrics=function(){var totalBuy=0,totalSell=0,maxVol=0,pocPrice=null,pocVol=0,allVolumes=[];this.levels.forEach(function(level){totalBuy+=level.buyVol,totalSell+=level.sellVol,maxVol=Math.max(maxVol,level.totalVol),level.totalVol>pocVol&&(pocVol=level.totalVol,pocPrice=level.price),allVolumes.push(level.totalVol)}),
+// Totals
+this.totalBuyVol=totalBuy,this.totalSellVol=totalSell,this.totalVol=totalBuy+totalSell,this.totalDelta=totalBuy-totalSell,
+// Point of Control: price level with highest volume
+this.poc=pocPrice,this.pocVol=pocVol,
+// Value Area: ~70% of total volume
+this.va=calculateValueArea(this.levels,this.totalVol),
+// Max volume at any single price level
+this.maxPriceLevelVol=maxVol},V6OF.register("Core","FootprintCore",{PriceLevel:PriceLevel,FootprintCandle:FootprintCandle,calculateValueArea:calculateValueArea,findImbalances:findImbalances,aggressionSide:aggressionSide}),"function"!=typeof V6OF.register&&(V6OF.Core=V6OF.Core||{},V6OF.Core.FootprintCore={PriceLevel:PriceLevel,FootprintCandle:FootprintCandle,calculateValueArea:calculateValueArea,findImbalances:findImbalances,aggressionSide:aggressionSide})}(),// 091_v6_layout_picker.js
 // Layout picker: STANDARD presets, SYNC toggles, add-panel menu.
 // Injected into .v6-header by LayoutPicker.init(root, store).
 function(){"use strict";var V6OF=window.V6OF=window.V6OF||{};V6OF.register||(["Core","Data","Transport","UI","Studies","Page"].forEach(function(n){V6OF[n]=V6OF[n]||{}}),V6OF.register=function(domain,name,value,legacyName){return V6OF[domain]=V6OF[domain]||{},V6OF[domain][name]=value,legacyName&&(V6OF[legacyName]=value),value});var ALL_PANELS=["dom","tape","info"],PRESET_SVGS={single:'<svg viewBox="0 0 16 12"><rect x="1" y="1" width="14" height="10" rx="1"/></svg>',vsplit:'<svg viewBox="0 0 16 12"><rect x="1" y="1" width="8" height="10" rx="1"/><rect x="10" y="1" width="5" height="10" rx="1"/></svg>',hsplit:'<svg viewBox="0 0 16 12"><rect x="1" y="1" width="14" height="5" rx="1"/><rect x="1" y="7" width="14" height="4" rx="1"/></svg>',"one-plus-two":'<svg viewBox="0 0 16 12"><rect x="1" y="1" width="8" height="10" rx="1"/><rect x="10" y="1" width="5" height="4" rx="1"/><rect x="10" y="7" width="5" height="4" rx="1"/></svg>',three:'<svg viewBox="0 0 16 12"><rect x="1" y="1" width="4" height="10" rx="1"/><rect x="6" y="1" width="4" height="10" rx="1"/><rect x="11" y="1" width="4" height="10" rx="1"/></svg>',"2x2":'<svg viewBox="0 0 16 12"><rect x="1" y="1" width="6" height="4" rx="1"/><rect x="9" y="1" width="6" height="4" rx="1"/><rect x="1" y="7" width="6" height="4" rx="1"/><rect x="9" y="7" width="6" height="4" rx="1"/></svg>'},PRESET_LABELS={single:"Single",vsplit:"Vertical",hsplit:"Horizontal","one-plus-two":"1+2",three:"3 Col","2x2":"2x2"};
@@ -3411,7 +3432,58 @@ _popover=V6OF.UI.PopoverHelper.create(popoverHtml(getSchema()))).addEventListene
 // Inject layout picker button into the header toolbar area
 var header=root&&root.querySelector(".v6-header");if(header&&!header._v6LayoutPickerMounted){header._v6LayoutPickerMounted=!0;var btn=document.createElement("button");btn.type="button",btn.className="v6-header-lp-btn",btn.setAttribute("data-v6-layout-picker",""),btn.setAttribute("title","Layout picker"),btn.setAttribute("aria-label","Layout picker"),btn.innerHTML='<svg viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="1" y="1" width="7" height="12" rx="1"/><rect x="10" y="1" width="7" height="5" rx="1"/><rect x="10" y="8" width="7" height="5" rx="1"/></svg>',btn.addEventListener("click",function(e){e.stopPropagation(),_popover?closePopover():openPopover(btn)});
 // Insert before the right side of the header (before reconnect/settings)
-var headerRight=header.querySelector(".v6-header-right, .v6-header-actions, .v6-reconnect");headerRight?header.insertBefore(btn,headerRight):header.appendChild(btn)}},open:openPopover,close:closePopover,buildSchema:buildSchema})}(),// 092_v6_panel_settings.js
+var headerRight=header.querySelector(".v6-header-right, .v6-header-actions, .v6-reconnect");headerRight?header.insertBefore(btn,headerRight):header.appendChild(btn)}},open:openPopover,close:closePopover,buildSchema:buildSchema})}(),// ============ 092_v6_footprint_parser.js ============
+// Footprint data parsing: convert server data → FootprintCandles
+function(){"use strict";var V6OF=window.V6OF=window.V6OF||{},FootprintCore=V6OF.Core&&V6OF.Core.FootprintCore;if(FootprintCore){var PriceLevel=FootprintCore.PriceLevel,FootprintCandle=FootprintCore.FootprintCandle;
+// ===== EXPORTS =====
+V6OF.register("Core","FootprintParser",{parseFootprintCandle:parseFootprintCandle,parseFootprintCandles:parseFootprintCandles,isValidFootprint:isValidFootprint,aggregateFootprints:aggregateFootprints,mergeFootprints:mergeFootprints,sanitizeFootprint:sanitizeFootprint}),"function"!=typeof V6OF.register&&(V6OF.Core=V6OF.Core||{},V6OF.Core.FootprintParser={parseFootprintCandle:parseFootprintCandle,parseFootprintCandles:parseFootprintCandles,isValidFootprint:isValidFootprint,aggregateFootprints:aggregateFootprints,mergeFootprints:mergeFootprints,sanitizeFootprint:sanitizeFootprint})}else console.error("[Footprint Parser] FootprintCore not available");
+// ===== PARSING =====
+/**
+   * Parse raw server footprint data → FootprintCandle
+   * Server format: { openTime, closeTime, ohlc, levels: [{price, buyVol, sellVol}, ...] }
+   */
+function parseFootprintCandle(rawData){if(!rawData)return null;var levels=[];Array.isArray(rawData.levels)&&(levels=rawData.levels.map(function(lvl){return new PriceLevel(lvl.price,lvl.buyVol||lvl.buy||0,lvl.sellVol||lvl.sell||0)}));var ohlc=rawData.ohlc||{open:rawData.open||0,high:rawData.high||0,low:rawData.low||0,close:rawData.close||0};return new FootprintCandle(rawData.openTime,rawData.closeTime,levels,ohlc)}
+/**
+   * Parse array of raw candles → array of FootprintCandles
+   */function parseFootprintCandles(rawCandles){return Array.isArray(rawCandles)?rawCandles.map(parseFootprintCandle).filter(function(candle){return null!==candle}):[]}
+/**
+   * Validate footprint candle has required data
+   * DEFENSIVE: strict validation to prevent rendering broken candles
+   */function isValidFootprint(candle){return!(!candle||"object"!=typeof candle)&&(!(!Array.isArray(candle.levels)||0===candle.levels.length)&&(
+// Must have valid OHLC
+!(!Number.isFinite(candle.open)||!Number.isFinite(candle.close))&&(!(!Number.isFinite(candle.high)||!Number.isFinite(candle.low))&&(
+// Must have valid timestamps
+!(!Number.isFinite(candle.openTime)||!Number.isFinite(candle.closeTime))&&(!!candle.levels.some(function(level){return level.totalVol>0})&&!!Number.isFinite(candle.poc))))))}
+/**
+   * Aggregate footprints from 1m to target timeframe
+   * Takes array of 1m candles, returns aggregated candle
+   */function aggregateFootprints(oneMinCandles,targetTf){if(!Array.isArray(oneMinCandles)||!oneMinCandles.length)return null;
+// Filter valid candles
+var validCandles=oneMinCandles.filter(isValidFootprint);if(!validCandles.length)return null;
+// Aggregate price levels: merge all levels, sum volumes
+var levelMap={};// { price: PriceLevel }
+validCandles.forEach(function(candle){candle.levels.forEach(function(level){var key=level.price.toFixed(8);// Use string key for precision
+levelMap[key]||(levelMap[key]=new PriceLevel(level.price,0,0)),levelMap[key].buyVol+=level.buyVol,levelMap[key].sellVol+=level.sellVol,levelMap[key].delta=levelMap[key].buyVol-levelMap[key].sellVol,levelMap[key].totalVol=levelMap[key].buyVol+levelMap[key].sellVol})});
+// Convert map back to array
+var aggregatedLevels=Object.keys(levelMap).map(function(key){return levelMap[key]}),first=validCandles[0],last=validCandles[validCandles.length-1],aggregatedOhlc={open:first.open,high:Math.max.apply(null,validCandles.map(function(c){return c.high})),low:Math.min.apply(null,validCandles.map(function(c){return c.low})),close:last.close};
+// Use first and last candle for time/OHLC
+return new FootprintCandle(first.openTime,last.closeTime,aggregatedLevels,aggregatedOhlc)}
+/**
+   * Merge footprints intelligently: update existing or append new
+   * Keeps max N candles
+   */function mergeFootprints(existingCandles,newCandles,maxCandles){Array.isArray(existingCandles)||(existingCandles=[]),Array.isArray(newCandles)||(newCandles=[]),maxCandles=Math.max(1,Number(maxCandles)||100);
+// Create a map for fast lookup
+var candleMap={};// Keep most recent
+return existingCandles.forEach(function(candle){candleMap[candle.openTime]=candle}),
+// Merge new candles (update or add)
+newCandles.forEach(function(candle){candleMap[candle.openTime]=candle}),Object.keys(candleMap).map(function(key){return candleMap[key]}).sort(function(a,b){return a.openTime-b.openTime}).slice(-maxCandles)}
+/**
+   * Sanitize footprint: remove invalid/empty levels
+   */function sanitizeFootprint(candle){return isValidFootprint(candle)?(
+// Remove levels with zero volume
+candle.levels=candle.levels.filter(function(level){return level.totalVol>0}),0===candle.levels.length?null:(
+// Recalculate metrics after filtering
+candle._calculateMetrics(),candle)):null}}(),// 092_v6_panel_settings.js
 // Per-panel settings flyout: opens anchored to the panel's ⚙ button.
 // Reads/writes store settings keys for DOM and Tape panels.
 function(){"use strict";var V6OF=window.V6OF=window.V6OF||{};V6OF.register||(["Core","Data","Transport","UI","Studies","Page"].forEach(function(n){V6OF[n]=V6OF[n]||{}}),V6OF.register=function(domain,name,value,legacyName){return V6OF[domain]=V6OF[domain]||{},V6OF[domain][name]=value,legacyName&&(V6OF[legacyName]=value),value});
@@ -3422,10 +3494,140 @@ var inputs=(_flyout=div.firstElementChild).querySelectorAll("[data-v6-ps-key]"),
 // Append inside the orderflow root so the flyout inherits --v6-* tokens
 // (they're scoped to .v6-orderflow-root, not :root/body).
 // Position below anchor
-if((document.querySelector(".v6-orderflow-root")||document.body).appendChild(_flyout),anchorEl){var rect=anchorEl.getBoundingClientRect();_flyout.style.top=rect.bottom+4+window.scrollY+"px",_flyout.style.left=Math.max(8,rect.right+window.scrollX-180)+"px"}setTimeout(function(){document.addEventListener("click",outsideClose,!0)},0)}}},close:closeFlyout})}(),// 093_v6_orderbook_panel.js
+if((document.querySelector(".v6-orderflow-root")||document.body).appendChild(_flyout),anchorEl){var rect=anchorEl.getBoundingClientRect();_flyout.style.top=rect.bottom+4+window.scrollY+"px",_flyout.style.left=Math.max(8,rect.right+window.scrollX-180)+"px"}setTimeout(function(){document.addEventListener("click",outsideClose,!0)},0)}}},close:closeFlyout})}(),// ============ 093_v6_footprint_renderer.js ============
+// Footprint rendering: correct visualization of order flow
+function(){"use strict";var V6OF=window.V6OF=window.V6OF||{},FootprintCore=V6OF.Core&&V6OF.Core.FootprintCore;if(FootprintCore){
+// ===== COLOR SCHEME =====
+var COLORS={buy:"#39c77a",// Green: bullish/buy volume
+sell:"#d85b66",// Red: bearish/sell volume
+neutral:"#555d6f",// Gray: balanced
+poc:"#facc15",// Yellow: Point of Control
+va:"rgba(255, 193, 7, 0.1)",// Value Area background
+imbalance:"rgba(255, 193, 7, 0.3)"};
+// ===== SIZING =====
+// ===== EXPORTS =====
+V6OF.register("UI","FootprintRenderer",{renderFootprintCandle:renderFootprintCandle,renderFootprints:renderFootprints,recommendDisplayMode:recommendDisplayMode,COLORS:COLORS}),"function"!=typeof V6OF.register&&(V6OF.UI=V6OF.UI||{},V6OF.UI.FootprintRenderer={renderFootprintCandle:renderFootprintCandle,renderFootprints:renderFootprints,recommendDisplayMode:recommendDisplayMode,COLORS:COLORS})}else console.error("[Footprint Renderer] FootprintCore not available");
+/**
+   * Render single footprint candle
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} x - Candle x position
+   * @param {number} width - Candle width in pixels
+   * @param {object} vp - Viewport (has priceToY for mapping)
+   * @param {FootprintCandle} candle - The footprint candle
+   * @param {object} options - Rendering options
+   */
+function renderFootprintCandle(ctx,x,width,vp,candle,options){
+// DEFENSIVE: strict validation before rendering
+if(candle&&(candle.levels&&Array.isArray(candle.levels)&&0!==candle.levels.length&&candle.levels.some(function(level){return level&&level.totalVol>0})&&Number.isFinite(candle.maxPriceLevelVol)&&!(candle.maxPriceLevelVol<=0)))
+// Skip if maxVol is invalid (prevents render artifacts)
+{var showPOC=!1!==(options=options||{}).showPOC,showVA=!1!==options.showVA,showImbalances=!1!==options.showImbalances,innerWidth=(options.showDelta,Math.max(4,width-2)),columnWidth=(innerWidth-1)/2,maxVol=candle.maxPriceLevelVol||1;
+// Highlight imbalances
+if(
+// Draw each price level
+candle.levels.forEach(function(level){var y=vp.priceToY(level.price),levelHeight=Math.max(2,vp.priceToY(level.price-(vp.priceMax-vp.priceMin)/100)),buyWidth=level.buyVol/maxVol*columnWidth,sellWidth=level.sellVol/maxVol*columnWidth;
+// Buy side (left)
+level.buyVol>0&&drawBar(ctx,x+(columnWidth-buyWidth),y-levelHeight/2,buyWidth,levelHeight,COLORS.buy,level.delta),
+// Sell side (right)
+level.sellVol>0&&drawBar(ctx,x+innerWidth/2+.5,y-levelHeight/2,sellWidth,levelHeight,COLORS.sell,level.delta)}),
+// Draw POC (Point of Control) marker
+showPOC&&candle.poc&&
+/**
+   * Draw Point of Control marker line
+   */
+function(ctx,x,x2,pocPrice,vp){var pocY=Math.round(vp.priceToY(pocPrice));ctx.strokeStyle=COLORS.poc,ctx.lineWidth=3,ctx.beginPath(),ctx.moveTo(x,pocY),ctx.lineTo(x2,pocY),ctx.stroke()}
+/**
+   * Draw Value Area background
+   */(ctx,x,x+width,candle.poc,vp),
+// Draw Value Area
+showVA&&candle.va&&candle.va.high&&function(ctx,x,x2,va,vp){var vaHigh=vp.priceToY(va.high),vaLow=vp.priceToY(va.low),vaHeight=Math.abs(vaLow-vaHigh);ctx.fillStyle=COLORS.va,ctx.fillRect(Math.round(x),Math.round(Math.min(vaHigh,vaLow)),Math.round(x2-x),Math.round(vaHeight))}
+/**
+   * Highlight imbalance at specific price level
+   */(ctx,x,x+width,candle.va,vp),showImbalances)FootprintCore.findImbalances(candle.levels,3).forEach(function(level){!function(ctx,x,x2,price,vp){var y=Math.round(vp.priceToY(price)),levelHeight=Math.max(2,Math.abs(vp.priceToY(price-1)-y));ctx.fillStyle=COLORS.imbalance,ctx.fillRect(Math.round(x),Math.round(y-levelHeight/2),Math.round(x2-x),Math.round(levelHeight))}
+/**
+   * Render footprint candles to canvas
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {Viewport} vp - Viewport with timeToX, priceToY
+   * @param {object} plot - Plot area bounds {left, top, width, height}
+   * @param {Array<FootprintCandle>} candles - Footprints to render
+   * @param {object} options - Rendering options
+   */(ctx,x,x+width,level.price,vp)})}}
+/**
+   * Draw a single volume bar
+   */function drawBar(ctx,x,y,width,height,color,delta){if(!(width<=0||height<=0)){
+// Vary opacity based on delta strength
+var opacity=Math.min(1,.3+Math.abs(delta)/1e3);ctx.fillStyle=color.replace("rgb(","rgba(").replace(")",", "+opacity+")"),ctx.fillRect(Math.round(x),Math.round(y),Math.max(1,Math.round(width)),Math.max(1,Math.round(height)))}}function renderFootprints(ctx,vp,plot,candles,options){Array.isArray(candles)&&candles.length&&(options=options||{},candles.forEach(function(candle){var x1=vp.timeToX(candle.openTime),x2=vp.timeToX(candle.closeTime);if(!(x2<plot.left||x1>plot.left+plot.width)){// Off-screen
+var candleWidth=Math.max(2,x2-x1),candleX=Math.max(plot.left,x1);renderFootprintCandle(ctx,candleX,candleWidth,vp,candle,options)}}))}
+/**
+   * Get recommended footprint display mode based on zoom level
+   * Returns: 'ohlc', 'footprint-simple', 'footprint-full'
+   */function recommendDisplayMode(vp){if(!vp)return"ohlc";var timeSpan=vp.timeEnd-vp.timeStart;// 24h in ms
+// Show OHLC only if zoomed out
+return timeSpan>2592e6?"ohlc":
+// Show simple footprint if moderately zoomed
+timeSpan>864e5?"footprint-simple":"footprint-full"}}(),// 093_v6_orderbook_panel.js
 // Orderbook panel: two-sided ladder with cumulative depth bars.
 // Reads from V6OrderBookSnapshot (state.orderBook).
-function(){"use strict";var V6OF=window.V6OF=window.V6OF||{},Panels=V6OF.Panels=V6OF.Panels||{};function esc(s){return V6OF.escapeHtml?V6OF.escapeHtml(String(s)):String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}function fmtPrice(v){return V6OF.format&&V6OF.format.price?V6OF.format.price(Number(v)):Number(v).toFixed(2)}function fmtQty(v){return V6OF.format&&V6OF.format.qty?V6OF.format.qty(Number(v)):Number(v).toFixed(3)}function rowHtml(level,side,maxCum){return['<div class="',"v6-ob-row is-"+side,'">','<span class="v6-ob-bar" style="width:',maxCum>0?Math.min(100,Math.round((Number(level.cumulative)||0)/maxCum*100)):0,'%"></span>','<span class="v6-ob-cell-bid-amt">',"bid"===side?esc(fmtQty(level.size)):"","</span>",'<span class="v6-ob-cell-bid-total">',"bid"===side?esc(fmtQty(level.cumulative)):"","</span>",'<span class="v6-ob-cell-price">',esc(fmtPrice(level.price)),"</span>",'<span class="v6-ob-cell-ask-total">',"ask"===side?esc(fmtQty(level.cumulative)):"","</span>",'<span class="v6-ob-cell-ask-amt">',"ask"===side?esc(fmtQty(level.size)):"","</span>","</div>"].join("")}V6OF.register||(["Core","Data","Transport","UI","Studies","Page"].forEach(function(n){V6OF[n]=V6OF[n]||{}}),V6OF.register=function(domain,name,value,legacyName){return V6OF[domain]=V6OF[domain]||{},V6OF[domain][name]=value,legacyName&&(V6OF[legacyName]=value),value}),Panels.OrderbookPanel={renderInto:function(container,snap,settings){if(container){snap=snap||{},settings=settings||{};var obRows=Math.max(5,Math.min(50,Number(settings.obRows||15))),bids=Array.isArray(snap.bids)?snap.bids.slice(0,obRows):[],asks=Array.isArray(snap.asks)?snap.asks.slice(0,obRows):[],asksDesc=asks.slice().sort(function(a,b){return Number(b.price)-Number(a.price)}),bidsDesc=bids.slice().sort(function(a,b){return Number(b.price)-Number(a.price)}),maxCum=0;bids.forEach(function(l){var c=Number(l.cumulative)||0;c>maxCum&&(maxCum=c)}),asks.forEach(function(l){var c=Number(l.cumulative)||0;c>maxCum&&(maxCum=c)});var source,parts=[(source=snap.exchange||snap.source||"",['<div class="v6-ob-header">','<span class="v6-panel-tick" aria-hidden="true"></span>','<span class="v6-panel-title">Book</span>','<span class="v6-panel-meta" data-ob-stat="source">',esc(source||"—"),"</span>",'<span class="v6-panel-sp"></span>','<span class="v6-panel-grab" aria-hidden="true">&#x2807;</span>','<button type="button" class="v6-panel-ib" data-v6-action="panel-settings" title="Orderbook settings" aria-label="Orderbook settings">&#x2699;</button>','<button type="button" class="v6-panel-ib v6-panel-ib-close" data-v6-action="panel-close" title="Close orderbook" aria-label="Close orderbook">&#x2715;</button>',"</div>"].join("")),['<div class="v6-ob-row v6-ob-colhead">','<span class="v6-ob-cell-bid-amt">Amt</span>','<span class="v6-ob-cell-bid-total">Total</span>','<span class="v6-ob-cell-price">Price</span>','<span class="v6-ob-cell-ask-total">Total</span>','<span class="v6-ob-cell-ask-amt">Amt</span>',"</div>"].join("")];asksDesc.forEach(function(lv){parts.push(rowHtml(lv,"ask",maxCum))}),parts.push(function(snap){var spread=Number(snap.spread)||0,mid=Number(snap.mid||snap.midPrice)||0;return['<div class="v6-ob-row v6-ob-spread">','<span class="v6-ob-cell-bid-amt"></span>','<span class="v6-ob-cell-bid-total"></span>','<span class="v6-ob-cell-price">',mid>0?esc(fmtPrice(mid)):"—"," <em>",spread>0?esc(spread.toFixed(2)):"—","</em>","</span>",'<span class="v6-ob-cell-ask-total"></span>','<span class="v6-ob-cell-ask-amt"></span>',"</div>"].join("")}(snap)),bidsDesc.forEach(function(lv){parts.push(rowHtml(lv,"bid",maxCum))}),bids.length||asks.length||parts.push('<div class="v6-empty">No orderbook data</div>'),container.innerHTML=parts.join("")}}}}(),// 094_v6_layout_grid.js
+function(){"use strict";var V6OF=window.V6OF=window.V6OF||{},Panels=V6OF.Panels=V6OF.Panels||{};function esc(s){return V6OF.escapeHtml?V6OF.escapeHtml(String(s)):String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}function fmtPrice(v){return V6OF.format&&V6OF.format.price?V6OF.format.price(Number(v)):Number(v).toFixed(2)}function fmtQty(v){return V6OF.format&&V6OF.format.qty?V6OF.format.qty(Number(v)):Number(v).toFixed(3)}function rowHtml(level,side,maxCum){return['<div class="',"v6-ob-row is-"+side,'">','<span class="v6-ob-bar" style="width:',maxCum>0?Math.min(100,Math.round((Number(level.cumulative)||0)/maxCum*100)):0,'%"></span>','<span class="v6-ob-cell-bid-amt">',"bid"===side?esc(fmtQty(level.size)):"","</span>",'<span class="v6-ob-cell-bid-total">',"bid"===side?esc(fmtQty(level.cumulative)):"","</span>",'<span class="v6-ob-cell-price">',esc(fmtPrice(level.price)),"</span>",'<span class="v6-ob-cell-ask-total">',"ask"===side?esc(fmtQty(level.cumulative)):"","</span>",'<span class="v6-ob-cell-ask-amt">',"ask"===side?esc(fmtQty(level.size)):"","</span>","</div>"].join("")}V6OF.register||(["Core","Data","Transport","UI","Studies","Page"].forEach(function(n){V6OF[n]=V6OF[n]||{}}),V6OF.register=function(domain,name,value,legacyName){return V6OF[domain]=V6OF[domain]||{},V6OF[domain][name]=value,legacyName&&(V6OF[legacyName]=value),value}),Panels.OrderbookPanel={renderInto:function(container,snap,settings){if(container){snap=snap||{},settings=settings||{};var obRows=Math.max(5,Math.min(50,Number(settings.obRows||15))),bids=Array.isArray(snap.bids)?snap.bids.slice(0,obRows):[],asks=Array.isArray(snap.asks)?snap.asks.slice(0,obRows):[],asksDesc=asks.slice().sort(function(a,b){return Number(b.price)-Number(a.price)}),bidsDesc=bids.slice().sort(function(a,b){return Number(b.price)-Number(a.price)}),maxCum=0;bids.forEach(function(l){var c=Number(l.cumulative)||0;c>maxCum&&(maxCum=c)}),asks.forEach(function(l){var c=Number(l.cumulative)||0;c>maxCum&&(maxCum=c)});var source,parts=[(source=snap.exchange||snap.source||"",['<div class="v6-ob-header">','<span class="v6-panel-tick" aria-hidden="true"></span>','<span class="v6-panel-title">Book</span>','<span class="v6-panel-meta" data-ob-stat="source">',esc(source||"—"),"</span>",'<span class="v6-panel-sp"></span>','<span class="v6-panel-grab" aria-hidden="true">&#x2807;</span>','<button type="button" class="v6-panel-ib" data-v6-action="panel-settings" title="Orderbook settings" aria-label="Orderbook settings">&#x2699;</button>','<button type="button" class="v6-panel-ib v6-panel-ib-close" data-v6-action="panel-close" title="Close orderbook" aria-label="Close orderbook">&#x2715;</button>',"</div>"].join("")),['<div class="v6-ob-row v6-ob-colhead">','<span class="v6-ob-cell-bid-amt">Amt</span>','<span class="v6-ob-cell-bid-total">Total</span>','<span class="v6-ob-cell-price">Price</span>','<span class="v6-ob-cell-ask-total">Total</span>','<span class="v6-ob-cell-ask-amt">Amt</span>',"</div>"].join("")];asksDesc.forEach(function(lv){parts.push(rowHtml(lv,"ask",maxCum))}),parts.push(function(snap){var spread=Number(snap.spread)||0,mid=Number(snap.mid||snap.midPrice)||0;return['<div class="v6-ob-row v6-ob-spread">','<span class="v6-ob-cell-bid-amt"></span>','<span class="v6-ob-cell-bid-total"></span>','<span class="v6-ob-cell-price">',mid>0?esc(fmtPrice(mid)):"—"," <em>",spread>0?esc(spread.toFixed(2)):"—","</em>","</span>",'<span class="v6-ob-cell-ask-total"></span>','<span class="v6-ob-cell-ask-amt"></span>',"</div>"].join("")}(snap)),bidsDesc.forEach(function(lv){parts.push(rowHtml(lv,"bid",maxCum))}),bids.length||asks.length||parts.push('<div class="v6-empty">No orderbook data</div>'),container.innerHTML=parts.join("")}}}}(),// ============ 094_v6_footprint_integration.js ============
+// Footprint integration: tie together core, parser, renderer
+function(){"use strict";var V6OF=window.V6OF=window.V6OF||{},FootprintCore=V6OF.Core&&V6OF.Core.FootprintCore,FootprintParser=V6OF.Core&&V6OF.Core.FootprintParser,FootprintRenderer=V6OF.UI&&V6OF.UI.FootprintRenderer;
+// ===== INTEGRATION ENGINE =====
+/**
+   * Process raw server footprints into renderable format
+   * @param {Array} rawFootprints - Raw data from server
+   * @param {string} timeframe - Target timeframe ('1m', '5m', etc)
+   * @param {number} maxCandles - Max candles to keep
+   * @returns {Array<FootprintCandle>} - Ready-to-render candles
+   */
+function processFootprints(rawFootprints,timeframe,maxCandles){if(!Array.isArray(rawFootprints))return[];
+// Parse raw data
+var parsed=FootprintParser.parseFootprintCandles(rawFootprints);return parsed.length?
+// If not 1m, aggregate to target timeframe
+timeframe&&"1m"!==timeframe?
+/**
+   * Aggregate 1m candles to target timeframe
+   * Naive approach: group by timeframe bucket and aggregate
+   */
+function(oneMinCandles,tf){if(!oneMinCandles.length)return[];var tfMs=timeframeToMs(tf);if(!tfMs)return oneMinCandles;// Fallback to 1m
+var buckets={};// { bucketTime: [candles] }
+// Aggregate each bucket
+return oneMinCandles.forEach(function(candle){var bucketTime=Math.floor(candle.openTime/tfMs)*tfMs;buckets[bucketTime]||(buckets[bucketTime]=[]),buckets[bucketTime].push(candle)}),Object.keys(buckets).sort(function(a,b){return Number(a)-Number(b)}).map(function(bucketTime){return FootprintParser.aggregateFootprints(buckets[bucketTime],tf)}).filter(function(candle){return null!==candle})}
+/**
+   * Convert timeframe string to milliseconds
+   */(parsed,timeframe).slice(-(maxCandles||100)):parsed.slice(-(maxCandles||100)):[]}function timeframeToMs(tf){return{"1m":6e4,"5m":3e5,"15m":9e5,"30m":18e5,"1h":36e5,"4h":144e5,"1d":864e5}[String(tf).toLowerCase()]}
+/**
+   * Main integration: render footprints to canvas
+   * Call this from canvas chart renderer
+   * DEFENSIVE: multiple validation gates prevent crashes and DOM artifacts
+   */function renderFootprintsToCanvas(ctx,vp,plot,state,settings){
+// Gate 1: Basic state validation
+if(!state||"object"!=typeof state)return!1;if(!state.footprintCandles)return!1;var candles=state.footprintCandles;if(!Array.isArray(candles)||0===candles.length)return!1;
+// Gate 2: Viewport validation
+if(!vp||"function"!=typeof vp.priceToY||"function"!=typeof vp.timeToX)return!1;
+// Gate 3: Plot validation
+if(!plot||!Number.isFinite(plot.left)||!Number.isFinite(plot.width))return!1;
+// Gate 4: Filter and validate footprints
+var validCandles=candles.filter(function(c){return null!=c}).filter(FootprintParser.isValidFootprint);if(!validCandles.length)return!1;
+// Gate 5: Settings validation
+var options={showPOC:settings&&!1!==settings.showFootprintPOC,showVA:settings&&!1!==settings.showFootprintVA,showImbalances:settings&&!1!==settings.showFootprintImbalances,showDelta:settings&&!1!==settings.showFootprintDelta};
+// Gate 6: Safe rendering with error handling
+try{return FootprintRenderer.renderFootprints(ctx,vp,plot,validCandles,options),!0}catch(e){
+// Don't crash - just skip rendering this frame
+return console.error("[Footprint Integration] Render error:",e),!1}}
+/**
+   * Determine if footprint should be visible based on zoom
+   */function shouldShowFootprint(vp,settings){return!(!settings||!0!==settings.showFootprint)&&"ohlc"!==FootprintRenderer.recommendDisplayMode(vp);
+// Check zoom level
+}
+/**
+   * Merge new footprints with existing state
+   */function updateFootprintState(existingCandles,newRawFootprints,maxCandles){var newParsed=FootprintParser.parseFootprintCandles(newRawFootprints);return newParsed.length?FootprintParser.mergeFootprints(existingCandles,newParsed,maxCandles):existingCandles}
+/**
+   * Reset footprint cache (clear all footprints)
+   */function resetFootprints(){return[]}
+// ===== EXPORTS =====
+FootprintCore&&FootprintParser&&FootprintRenderer?(V6OF.register("UI","FootprintIntegration",{processFootprints:processFootprints,renderFootprintsToCanvas:renderFootprintsToCanvas,shouldShowFootprint:shouldShowFootprint,updateFootprintState:updateFootprintState,resetFootprints:resetFootprints,timeframeToMs:timeframeToMs}),"function"!=typeof V6OF.register&&(V6OF.UI=V6OF.UI||{},V6OF.UI.FootprintIntegration={processFootprints:processFootprints,renderFootprintsToCanvas:renderFootprintsToCanvas,shouldShowFootprint:shouldShowFootprint,updateFootprintState:updateFootprintState,resetFootprints:resetFootprints,timeframeToMs:timeframeToMs}),
+// Log successful initialization
+console.log("[Footprint Integration] Initialized successfully")):console.error("[Footprint Integration] Missing dependencies (Core, Parser, Renderer)")}(),// 094_v6_layout_grid.js
 // Multi-chart tiling layout: header "▦" picker (chart-grid presets + SYNC
 // toggles), and a CSS-grid of chart cells inside .v6-center-chart.
 // SCOPE / HONESTY NOTES (read before extending):
@@ -3556,7 +3758,56 @@ var poll=setInterval(function(){win.closed&&(clearInterval(poll),reDockCell(inde
 V6OF.register("UI","ChartLayoutGrid",{init:function(root,store){if(root&&(_root=root,_store=store,function(){var header=_root.querySelector(".v6-header");if(header&&!header._v6ChartGridBtnMounted){header._v6ChartGridBtnMounted=!0;var btn=document.createElement("button");btn.type="button",btn.className="v6-header-grid-btn",btn.setAttribute("data-v6-action","layout-grid-picker"),btn.setAttribute("title","Chart layout"),btn.setAttribute("aria-label","Chart layout"),btn.textContent="▦",// ▦
 btn.addEventListener("click",function(e){e.stopPropagation(),_popover?closePopover():openPopover(btn)});var headerActions=header.querySelector(".v6-header-actions");headerActions?headerActions.insertBefore(btn,headerActions.firstChild):header.appendChild(btn)}}(),applyLayout(),_resizeObserver||(
 // Use centralized RAF-batched ResizeObserver from 001_utilities.js
-_resizeObserver=createResizeObserverRaf(redrawAll),_gridEl&&_resizeObserver.observe(_gridEl)),store&&store.subscribe)){var lastPreset=null,lastCellsKey=null,lastKey=null;store.subscribe(function(state){var layout=(state&&state.settings||{}).chartLayout||DEFAULT_LAYOUT,cellsKey=(layout.cells||[]).join(","),key=layout.preset+"|"+cellsKey+"|"+state.timeframe+"|"+(state.chartCandles||[]).length;if(key!==lastKey){var presetChanged=null===lastKey||layout.preset!==lastPreset,cellsChanged=null===lastKey||cellsKey!==lastCellsKey;lastKey=key,lastPreset=layout.preset,lastCellsKey=cellsKey,presetChanged?applyLayout():cellsChanged?(applyCellModules(),requestAnimationFrame(redrawAll)):requestAnimationFrame(redrawAll)}})}},open:openPopover,close:closePopover,redraw:redrawAll},"ChartLayoutGrid")}(),// 095_v6_popout.js
+_resizeObserver=createResizeObserverRaf(redrawAll),_gridEl&&_resizeObserver.observe(_gridEl)),store&&store.subscribe)){var lastPreset=null,lastCellsKey=null,lastKey=null;store.subscribe(function(state){var layout=(state&&state.settings||{}).chartLayout||DEFAULT_LAYOUT,cellsKey=(layout.cells||[]).join(","),key=layout.preset+"|"+cellsKey+"|"+state.timeframe+"|"+(state.chartCandles||[]).length;if(key!==lastKey){var presetChanged=null===lastKey||layout.preset!==lastPreset,cellsChanged=null===lastKey||cellsKey!==lastCellsKey;lastKey=key,lastPreset=layout.preset,lastCellsKey=cellsKey,presetChanged?applyLayout():cellsChanged?(applyCellModules(),requestAnimationFrame(redrawAll)):requestAnimationFrame(redrawAll)}})}},open:openPopover,close:closePopover,redraw:redrawAll},"ChartLayoutGrid")}(),// ============ 095_v6_footprint_settings.js ============
+// Footprint settings: configuration, defaults, validation
+function(){"use strict";var V6OF=window.V6OF=window.V6OF||{},FOOTPRINT_DEFAULTS={
+// Display
+showFootprint:!1,// Enable/disable footprint
+showFootprintPOC:!0,// Show Point of Control marker
+showFootprintVA:!0,// Show Value Area shading
+showFootprintImbalances:!0,// Highlight 3-to-1 imbalances
+showFootprintDelta:!0,// Show delta coloring
+// Rendering
+footprintMinZoom:"daily",// Minimum timeframe to show (daily/hourly/15m/5m/1m)
+footprintColumnMode:"bid-ask",// 'bid-ask', 'delta', 'volume'
+footprintOpacity:.7,// Volume bar opacity (0-1)
+footprintPOCWidth:3,// POC marker width (px)
+imbalanceRatio:3,// Imbalance trigger ratio (3 = 3-to-1)
+// Colors (can be overridden per user theme)
+footprintColorBuy:"#39c77a",// Green for buy volume
+footprintColorSell:"#d85b66",// Red for sell volume
+footprintColorPOC:"#facc15",// Yellow for POC
+footprintColorVA:"#f0ad4e",// Orange for Value Area
+// History
+footprintMaxCandles:100,// Max candles to keep in memory
+footprintHistoryLookback:10080},FOOTPRINT_SETTING_DEFS={showFootprint:{type:"bool",label:"Show Footprint",description:"Display order flow footprint on chart",default:!1,group:"display"},showFootprintPOC:{type:"bool",label:"POC Marker",description:"Show Point of Control (highest volume level)",default:!0,group:"markers"},showFootprintVA:{type:"bool",label:"Value Area",description:"Show Value Area (70% of volume)",default:!0,group:"markers"},showFootprintImbalances:{type:"bool",label:"Imbalances",description:"Highlight volume imbalances (institutional activity)",default:!0,group:"markers"},footprintColumnMode:{type:"enum",label:"Column Display",description:"How to display volume columns",values:["bid-ask","delta","volume"],default:"bid-ask",group:"rendering",help:{"bid-ask":"Show separate buy/sell columns",delta:"Show net delta as single column",volume:"Show total volume (no buy/sell split)"}},footprintOpacity:{type:"slider",label:"Opacity",description:"Volume bar transparency",min:.1,max:1,step:.1,default:.7,group:"rendering"},imbalanceRatio:{type:"number",label:"Imbalance Ratio",description:"Ratio to trigger imbalance highlight (e.g. 3 = 3-to-1)",min:1.5,max:10,default:3,group:"rendering"}};
+// ===== DEFAULT SETTINGS =====
+// ===== VALIDATION =====
+/**
+   * Validate footprint settings
+   */
+function validateSettings(settings){if(!settings||"object"!=typeof settings)return!1;
+// Check critical boolean flags
+if(!("showFootprint"in settings||"showFootprintPOC"in settings||"showFootprintVA"in settings))return!1;
+// Validate types
+if("showFootprint"in settings&&"boolean"!=typeof settings.showFootprint)return!1;if("footprintOpacity"in settings){var op=Number(settings.footprintOpacity);if(!Number.isFinite(op)||op<0||op>1)return!1}if("imbalanceRatio"in settings){var ratio=Number(settings.imbalanceRatio);if(!Number.isFinite(ratio)||ratio<1)return!1}return!0}
+/**
+   * Merge user settings with defaults
+   */function mergeWithDefaults(userSettings){var merged={};
+// Start with defaults
+return Object.keys(FOOTPRINT_DEFAULTS).forEach(function(key){merged[key]=FOOTPRINT_DEFAULTS[key]}),
+// Override with user settings
+userSettings&&"object"==typeof userSettings&&Object.keys(userSettings).forEach(function(key){key in FOOTPRINT_DEFAULTS&&(merged[key]=userSettings[key])}),merged}
+// ===== PRESETS =====
+var FOOTPRINT_PRESETS={minimal:{showFootprint:!0,showFootprintPOC:!1,showFootprintVA:!1,showFootprintImbalances:!1,footprintOpacity:.5},standard:{showFootprint:!0,showFootprintPOC:!0,showFootprintVA:!0,showFootprintImbalances:!1,footprintOpacity:.7},detailed:{showFootprint:!0,showFootprintPOC:!0,showFootprintVA:!0,showFootprintImbalances:!0,footprintOpacity:.9,imbalanceRatio:2.5},"order-flow":{showFootprint:!0,showFootprintPOC:!0,showFootprintVA:!0,showFootprintImbalances:!0,footprintColumnMode:"delta",footprintOpacity:.8,imbalanceRatio:2}};
+/**
+   * Apply a preset
+   */function applyPreset(presetName){var preset=FOOTPRINT_PRESETS[presetName];return preset?mergeWithDefaults(preset):null}
+/**
+   * Get all available presets
+   */function getAvailablePresets(){return Object.keys(FOOTPRINT_PRESETS)}
+// ===== EXPORTS =====
+V6OF.register("Core","FootprintSettings",{DEFAULTS:FOOTPRINT_DEFAULTS,DEFINITIONS:FOOTPRINT_SETTING_DEFS,PRESETS:FOOTPRINT_PRESETS,validateSettings:validateSettings,mergeWithDefaults:mergeWithDefaults,applyPreset:applyPreset,getAvailablePresets:getAvailablePresets}),"function"!=typeof V6OF.register&&(V6OF.Core=V6OF.Core||{},V6OF.Core.FootprintSettings={DEFAULTS:FOOTPRINT_DEFAULTS,DEFINITIONS:FOOTPRINT_SETTING_DEFS,PRESETS:FOOTPRINT_PRESETS,validateSettings:validateSettings,mergeWithDefaults:mergeWithDefaults,applyPreset:applyPreset,getAvailablePresets:getAvailablePresets}),console.log("[Footprint Settings] Initialized with presets:",getAvailablePresets())}(),// 095_v6_popout.js
 // Pop-out window bootstrap for the V6 layout grid (094_v6_layout_grid.js).
 // SCOPE / HONESTY NOTES (read before extending):
 // - Activated ONLY when the page URL has `?orderflow_popout=<module>`. With

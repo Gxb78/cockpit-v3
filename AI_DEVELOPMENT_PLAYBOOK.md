@@ -1478,3 +1478,20 @@ if end_time is not None:
 - Test de non-regression: Verifier qu'aucun selecteur `.v6-dom-col-*` ou `.v6-dom-cell-*` n'a de `width` ou `flex-basis` dans les CSS actifs (sauf 084 si necessaire). `grep -n 'v6-dom-col-\|v6-dom-cell-' static/css/split/07*.css` doit retourner 0 dans 070/071/072/073. Les colonnes DOM s'affichent correctement avec les poids proportionnels du registre JS.
 
 - Fichiers a surveiller: `static/css/split/070_v6_orderflow.css` (@layer tokens), `static/css/split/071_v6_layout_shell.css` (layout only), `static/css/split/072_v6_orderflow_refactor.css` (neutralise), `static/css/split/073_v6_orderflow_pro.css` (neutralise), `static/css/split/083_v6_exocharts_photo_perfect.css` (neutralise), `static/css/split/084_v6_exocharts_clean.css` (source unique), `static/js/split/075_v6_dom_panel.js` (COLUMN_DEFS), `static/js/split/079_v6_orderflow_settings.js` (toggle colonnes).
+
+### BUG-20260612-02 - [RESOLU] Bougies plates + bandes hachurees : le moteur local ecrasait les klines Binance
+
+- Symptome: Des bougies s'affichaient plates (open=high=low=close) alors que TradingView montrait une vraie bougie directionnelle au meme timestamp. Au demarrage d'orderflow, des bandes hachurees grises (gap-fill synthetique) apparaissaient sur le chart et disparaissaient apres ~2 minutes. L'historique footprint ne chargeait jamais (CORS).
+
+- Cause racine: Double probleme de pipeline de donnees.
+  1. `mergeCandlesByOpenTime` (077) ecrasait inconditionnellement les klines Binance par les bougies 1m construites localement par le moteur Go. Si le moteur a demarre en cours de minute ou a rate des trades, sa bougie est degeneree (ex reel: open=63399.99 high=63400 low=63399.99 volume=0.34) et remplacait la vraie kline. Les trous entre l'historique REST et les bougies moteur declenchaient `fillCandleGaps` qui inserait des synthetiques plates hachurees.
+  2. Le fetch footprint history appelait directement le moteur (port 8765) qui n'envoie aucun header CORS: le navigateur bloquait systematiquement la requete (ERR_FAILED/426), donc aucun backfill footprint.
+
+- Regle de prevention:
+  1. **Les klines exchange (Binance) sont autoritaires pour l'OHLC des bougies fermees.** Une bougie construite localement a partir d'un flux de trades partiel ne doit JAMAIS remplacer une kline complete. Elle ne gagne que si son range et son volume sont comparables (>= 50% de la kline). Sinon on greffe seulement ses analytics footprint (levels/delta/buyVol/sellVol/poc) sur la kline.
+  2. **La bougie en formation est l'exception**: la donnee live est plus fraiche que le dernier fetch REST, elle gagne, mais son high/low est etendu par la kline pour ne jamais retrecir le vrai range.
+  3. **Le navigateur ne doit jamais fetch le moteur Go en direct en HTTP.** Toute API HTTP du moteur passe par un proxy Flask same-origin (`/api/market/engine/...`), comme le proxy Binance existant.
+
+- Test de non-regression: curl `http://127.0.0.1:5001/api/market/engine/footprint/1m?symbol=BTCUSDT&limit=2` doit retourner 200 avec des candles. Visuel: ouvrir orderflow a froid, aucune bande hachuree ne doit couvrir une periode ou Binance a des klines, et aucune bougie plate ne doit apparaitre la ou TradingView montre une bougie directionnelle. `build.py` puis `node --check static/app.js`.
+
+- Fichiers a surveiller: `static/js/split/077_v6_canvas_chart.js` (mergeCandlesByOpenTime, fillCandleGaps, graftFootprintOntoKline), `static/js/split/078_v6_local_engine_client.js` (fetchFootprintHistory), `app_parts/23_routes_market.py` (proxy engine footprint).

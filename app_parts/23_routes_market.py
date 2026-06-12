@@ -709,3 +709,25 @@ def market_depth():
         return jsonify(data)
     except Exception as e:
         return jsonify({"error": str(e)}), 502
+
+
+# === Local market engine proxy (footprint history) ===
+# The browser cannot call the Go engine (port 8765) directly: its HTTP API
+# sends no CORS headers, so cross-origin fetches from the Flask page fail.
+# Proxy the footprint history endpoints same-origin instead.
+
+@app.get("/api/market/engine/footprint/<fp_kind>")
+def market_engine_footprint(fp_kind):
+    if fp_kind not in ("1m", "tf"):
+        abort(404)
+    host = (os.environ.get("MARKET_GO_HOST") or "127.0.0.1").strip() or "127.0.0.1"
+    port = (os.environ.get("MARKET_GO_PORT") or "8765").strip() or "8765"
+    qs = request.query_string.decode("utf-8")
+    url = f"http://{host}:{port}/api/v1/footprint/{fp_kind}" + (f"?{qs}" if qs else "")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Journal/1.0", "Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            payload = resp.read()
+        return app.response_class(payload, mimetype="application/json")
+    except Exception as e:
+        return jsonify({"error": f"engine footprint proxy failed: {e}"}), 502

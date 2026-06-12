@@ -1272,7 +1272,10 @@
       }
       _lastFpFetch = { symbol: symbol, tf: tf, from: from, to: to, ts: Date.now() };
 
-      var url = resolveMarketUrl(tf === '1m' ? '/api/v1/footprint/1m' : '/api/v1/footprint/tf', 'http');
+      // Same-origin Flask proxy: the engine's HTTP API (port 8765) sends no
+      // CORS headers, so a direct browser fetch fails. The proxy forwards to
+      // MARKET_GO_HOST:MARKET_GO_PORT server-side.
+      var url = (tf === '1m' ? '/api/market/engine/footprint/1m' : '/api/market/engine/footprint/tf');
       url += '?symbol=' + encodeURIComponent(symbol);
       if (tf !== '1m') {
         url += '&tf=' + encodeURIComponent(tf);

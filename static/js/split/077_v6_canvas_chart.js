@@ -273,6 +273,19 @@
     });
   }
 
+  // Graft footprint analytics (levels, delta, buy/sell volume) onto an
+  // authoritative history kline without touching its OHLC.
+  function graftFootprintOntoKline(hist, live) {
+    var merged = {};
+    for (var k in hist) { if (Object.prototype.hasOwnProperty.call(hist, k)) merged[k] = hist[k]; }
+    if (Array.isArray(live.levels) && live.levels.length) merged.levels = live.levels;
+    if (Number.isFinite(Number(live.buyVol))) merged.buyVol = Number(live.buyVol);
+    if (Number.isFinite(Number(live.sellVol))) merged.sellVol = Number(live.sellVol);
+    if (Number.isFinite(Number(live.delta))) merged.delta = Number(live.delta);
+    if (Number.isFinite(Number(live.poc))) merged.poc = Number(live.poc);
+    return merged;
+  }
+
   function mergeCandlesByOpenTime(history, liveCandles, tf) {
     history = Array.isArray(history) ? history : [];
     liveCandles = Array.isArray(liveCandles) ? liveCandles : [];
@@ -280,8 +293,44 @@
     if (!liveCandles.length) return history;
     var byTime = {};
     var i;
-    for (i = 0; i < history.length; i++) byTime[history[i].openTime] = history[i];
-    for (i = 0; i < liveCandles.length; i++) byTime[liveCandles[i].openTime] = liveCandles[i];
+    var lastHistOpen = 0;
+    for (i = 0; i < history.length; i++) {
+      byTime[history[i].openTime] = history[i];
+      if (Number(history[i].openTime) > lastHistOpen) lastHistOpen = Number(history[i].openTime);
+    }
+    for (i = 0; i < liveCandles.length; i++) {
+      var live = liveCandles[i];
+      var hist = byTime[live.openTime];
+      if (!hist) {
+        // No kline at this openTime: live candle is the only source.
+        byTime[live.openTime] = live;
+        continue;
+      }
+      // The forming candle (at or beyond the history tip) is fresher than the
+      // last REST fetch: live wins, but extend its range with the kline so a
+      // partially-seen live bar never shrinks the true high/low.
+      if (Number(live.openTime) >= lastHistOpen || live.closed === false) {
+        var forming = graftFootprintOntoKline(live, live);
+        var lh = Number(live.high), ll = Number(live.low);
+        var hh = Number(hist.high), hl = Number(hist.low);
+        if (Number.isFinite(hh)) forming.high = Number.isFinite(lh) ? Math.max(lh, hh) : hh;
+        if (Number.isFinite(hl)) forming.low = Number.isFinite(ll) ? Math.min(ll, hl) : hl;
+        if (Number.isFinite(Number(hist.open))) forming.open = Number(hist.open);
+        byTime[live.openTime] = forming;
+        continue;
+      }
+      // Closed candle covered by both sources: the Binance kline is the
+      // authority on OHLC. A locally-built engine bar can be degenerate
+      // (engine started mid-minute, dropped trades => flat open≈close bar).
+      // Keep the kline OHLC and graft the footprint analytics onto it.
+      var histRange = Math.abs(Number(hist.high) - Number(hist.low));
+      var liveRange = Math.abs(Number(live.high) - Number(live.low));
+      var histVol = Number(hist.volume) || 0;
+      var liveVol = Number(live.volume) || 0;
+      var liveComplete = Number.isFinite(liveRange) && Number.isFinite(histRange) &&
+        liveRange >= histRange * 0.5 && (histVol <= 0 || liveVol >= histVol * 0.5);
+      byTime[live.openTime] = liveComplete ? live : graftFootprintOntoKline(hist, live);
+    }
     var keys = Object.keys(byTime).map(Number).sort(function (a, b) { return a - b; });
     var out = [];
     for (i = 0; i < keys.length; i++) out.push(byTime[keys[i]]);
