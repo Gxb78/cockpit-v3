@@ -36,12 +36,6 @@ body[data-current-page="orderflow"] .v6-panel-dom > .v6-panel-body.v6-dom-body {
   padding: 0;
 }
 
-body[data-current-page="orderflow"] .v6-orderflow-root:not(.v6-dock-collapsed) .v6-right-col {
-  flex: 0 0 545px !important;
-  width: 545px !important;
-  min-width: 545px;
-}
-
 body[data-current-page="orderflow"] [data-v6-dom-list] {
   min-width: min(100%, 522px);
   height: 100%;
@@ -110,6 +104,40 @@ body[data-current-page="orderflow"] .v6-panel-meta {
   color: #b3b8bd;
   opacity: .9;
   font: 500 11px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+body[data-current-page="orderflow"] .v6-panel-price-gap {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  height: 16px;
+  max-width: 112px;
+  padding: 0 5px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.035);
+  color: #9aa0a6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 9px/1 "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+body[data-current-page="orderflow"] .v6-panel-price-gap.is-ok {
+  border-color: rgba(45,176,115,.22);
+  background: rgba(45,176,115,.08);
+  color: #7bd8aa;
+}
+
+body[data-current-page="orderflow"] .v6-panel-price-gap.is-warn {
+  border-color: rgba(255,126,34,.28);
+  background: rgba(255,126,34,.10);
+  color: #ffb06a;
+}
+
+body[data-current-page="orderflow"] .v6-panel-price-gap.is-alert {
+  border-color: rgba(216,75,88,.36);
+  background: rgba(216,75,88,.12);
+  color: #ff8c98;
 }
 
 body[data-current-page="orderflow"] .v6-dom-toolbar {
@@ -219,6 +247,7 @@ body[data-current-page="orderflow"] .v6-dom-col-resizer {
   width: 7px;
   height: 100%;
   cursor: col-resize;
+  touch-action: none;
   z-index: 8;
 }
 
@@ -358,20 +387,23 @@ body[data-current-page="orderflow"] .v6-dom-bar {
   top: 1px;
   bottom: 1px;
   z-index: 0;
+  width: 100%;
   min-width: 2px;
   border-radius: 0;
   opacity: .96;
-  transition: width 100ms ease, background 120ms ease;
+  transition: transform 100ms ease, background 120ms ease;
 }
 
 body[data-current-page="orderflow"] .v6-dom-bar.is-bid {
   right: 0;
+  transform-origin: right center;
   background: linear-gradient(90deg, rgba(45,176,115,.65), rgba(45,176,115,.95));
   border-left: 1px solid rgba(83,220,155,.15);
 }
 
 body[data-current-page="orderflow"] .v6-dom-bar.is-ask {
   left: 0;
+  transform-origin: left center;
   background: linear-gradient(90deg, rgba(216,75,88,.92), rgba(216,75,88,.72));
   border-right: 1px solid rgba(255,115,125,.13);
 }
@@ -381,10 +413,24 @@ body[data-current-page="orderflow"] .v6-dom-cell-ask .v6-dom-val:empty {
   display: none;
 }
 
-body[data-current-page="orderflow"] .v6-dom-cell-bid .v6-dom-bar[style*="width:0%"],
-body[data-current-page="orderflow"] .v6-dom-cell-ask .v6-dom-bar[style*="width:0%"],
-body[data-current-page="orderflow"] .v6-dom-cell-bid .v6-dom-bar[style*="width: 0%"],
-body[data-current-page="orderflow"] .v6-dom-cell-ask .v6-dom-bar[style*="width: 0%"] {
+body[data-current-page="orderflow"] .v6-dom-cell-vol {
+  background: rgba(var(--v6-accent-rgb), var(--dom-heat-vol, 0));
+}
+
+body[data-current-page="orderflow"] .v6-dom-cell-sell {
+  background: rgba(var(--v6-sell-rgb), var(--dom-heat-sell, 0));
+}
+
+body[data-current-page="orderflow"] .v6-dom-cell-buy {
+  background: rgba(var(--v6-buy-rgb), var(--dom-heat-buy, 0));
+}
+
+body[data-current-page="orderflow"] .v6-dom-cell-delta {
+  background: rgba(var(--dom-heat-delta-rgb, var(--v6-buy-rgb)), var(--dom-heat-delta, 0));
+}
+
+body[data-current-page="orderflow"] .v6-dom-cell-bid .v6-dom-bar[style*="scaleX(0"],
+body[data-current-page="orderflow"] .v6-dom-cell-ask .v6-dom-bar[style*="scaleX(0"] {
   display: none;
 }
 
@@ -558,6 +604,27 @@ body[data-current-page="orderflow"] .v6-dom-stale-overlay {
 }
 
 body[data-current-page="orderflow"] .v6-dom-stale-overlay.is-visible {
+  display: flex;
+}
+
+body[data-current-page="orderflow"] .v6-dom-empty-overlay {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 86px;
+  z-index: 9;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  border: 1px solid rgba(56,211,238,.18);
+  background: rgba(17,19,21,.94);
+  color: rgba(56,211,238,.85);
+  font: 600 11px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+  pointer-events: none;
+}
+
+body[data-current-page="orderflow"] .v6-dom-empty-overlay.is-visible {
   display: flex;
 }
 

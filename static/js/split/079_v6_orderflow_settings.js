@@ -19,6 +19,8 @@
   var SERVER_KEY = 'v6_orderflow_settings';
   var SETTINGS_SCHEMA_VERSION = 1;
   var _settingsSyncTimer = null;
+  var _lastSettingsSyncJson = '';
+  var _pendingSettingsSyncJson = '';
 
   // TradingView-style ladder default: VOL | SELL | BUY | BID | PRICE | ASK | DELTA,
   // with heatmap-intensity backgrounds on vol/sell/buy/delta. Older builds
@@ -54,6 +56,7 @@
     showVwap: false,
     showOhlc: true,
     showCandles: true,
+    crosshairSnapOhlc: 'off',
     ohlcBodyStyle: 'candles',
     ohlcLineWidth: 1,
     ohlcBodyWidth: 0.72,
@@ -123,6 +126,7 @@
 
   var VALID_CHART_MODES = { heatmap: 1, footprint: 1, both: 1, none: 1 };
   var VALID_SESSION_PROFILES = { global: 1, rth: 1, eth: 1 };
+  var VALID_CROSSHAIR_SNAP_OHLC = { off: 1, high: 1, low: 1, close: 1, nearest: 1 };
   // DOM bid/ask value display modes. 'usd' is the legacy alias of 'notional'.
   var VALID_VALUE_MODES = { coin: 1, notional: 1, contracts: 1, ticks: 1 };
   var VALID_THEMES = { 'light-tv': 1, 'dark-tv': 1 };
@@ -145,6 +149,7 @@
     out.showOhlc = typeof raw.showOhlc === 'boolean' ? raw.showOhlc
       : (typeof raw.showCandles === 'boolean' ? raw.showCandles : DEFAULTS.showOhlc);
     out.showCandles = typeof raw.showCandles === 'boolean' ? raw.showCandles : DEFAULTS.showCandles;
+    out.crosshairSnapOhlc = VALID_CROSSHAIR_SNAP_OHLC[raw.crosshairSnapOhlc] ? raw.crosshairSnapOhlc : DEFAULTS.crosshairSnapOhlc;
     out.ohlcBodyStyle = raw.ohlcBodyStyle === 'bars' || raw.ohlcBodyStyle === 'hollow' ? raw.ohlcBodyStyle : DEFAULTS.ohlcBodyStyle;
     out.ohlcLineWidth = Math.max(1, Math.min(4, Number(raw.ohlcLineWidth) || DEFAULTS.ohlcLineWidth));
     out.ohlcBodyWidth = Math.max(0.2, Math.min(1, Number(raw.ohlcBodyWidth) || DEFAULTS.ohlcBodyWidth));
@@ -359,7 +364,7 @@
       if (!json) return Object.assign({}, DEFAULTS);
       var parsed = JSON.parse(json);
       var validated = validateSettings(parsed);
-      if (parsed.schemaVersion !== SETTINGS_SCHEMA_VERSION) save(validated);
+      if (parsed.schemaVersion !== SETTINGS_SCHEMA_VERSION) save(validated, { sync: false });
       return validated;
     } catch (err) {
       console.warn('[V6OF Settings] invalid localStorage, using defaults', err);
@@ -369,15 +374,23 @@
 
   function syncToServer(settings) {
     if (typeof fetch !== 'function' || typeof setTimeout !== 'function') return;
+    var payload = {};
+    payload[SERVER_KEY] = validateSettings(settings);
+    var payloadJson = JSON.stringify(payload);
+    if (!payloadJson || payloadJson === _lastSettingsSyncJson || payloadJson === _pendingSettingsSyncJson) return;
+    _pendingSettingsSyncJson = payloadJson;
     if (typeof clearTimeout === 'function') clearTimeout(_settingsSyncTimer);
     _settingsSyncTimer = setTimeout(function () {
-      var payload = {};
-      payload[SERVER_KEY] = validateSettings(settings);
+      var body = _pendingSettingsSyncJson;
+      _pendingSettingsSyncJson = '';
+      if (!body || body === _lastSettingsSyncJson) return;
       fetch('/api/user/workspace-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify(payload)
+        body: body
+      }).then(function (r) {
+        if (r && r.ok) _lastSettingsSyncJson = body;
       }).catch(function () {});
     }, 1000);
   }
@@ -389,7 +402,11 @@
       .then(function (data) {
         var raw = data && data.workspace_profile && data.workspace_profile[SERVER_KEY];
         if (!raw || typeof raw !== 'object') return;
-        callback(validateSettings(raw));
+        var serverSettings = validateSettings(raw);
+        var payload = {};
+        payload[SERVER_KEY] = serverSettings;
+        _lastSettingsSyncJson = JSON.stringify(payload);
+        callback(serverSettings);
       })
       .catch(function () {});
   }

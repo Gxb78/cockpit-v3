@@ -288,6 +288,7 @@
         var next = typeof patch === 'function' ? patch(state) : patch;
         if (!next) return state;
         state = normalizeState(Object.assign({}, state, next), state);
+        state._stateVersion = (state._stateVersion || 0) + 1;
         state.lastUpdateReason = reason || 'setState';
         notify(changedSlices(prev, state));
         return state;
@@ -313,6 +314,7 @@
           return this.setState(patch, 'slice-' + sliceName);
         }
         state.lastUpdateReason = 'slice-' + sliceName;
+        state._stateVersion = (state._stateVersion || 0) + 1;
         notify([sliceName]);
         return state;
       },

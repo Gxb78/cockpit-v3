@@ -111,6 +111,17 @@
   z-index: 100;
 }
 
+.v6-reconnect-banner {
+  background: #3b2f12;
+  color: #fde68a;
+  text-align: center;
+  padding: 6px 12px;
+  font: 700 12px/1.4 var(--v6-font);
+  border-bottom: 1px solid #854d0e;
+  letter-spacing: 0.02em;
+  z-index: 100;
+}
+
 /* ---- Shell: flat chart-page surface ---- */
 .v6-shell {
   position: relative;
@@ -718,6 +729,19 @@
   background: #06090f;
 }
 
+.v6-chart-layer-stack {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: calc(100% - 36px);
+  background: #06090f;
+}
+
+.v6-chart-layer-stack .v6-chart-canvas {
+  height: 100%;
+  background: transparent;
+}
+
 .v6-panel-hidden { display: none !important; }
 
 .v6-empty {
@@ -789,6 +813,18 @@
   font-size: 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Virtual scroll container for tape */
+[data-v6-tape-virtual] {
+  position: relative;
+  overflow-y: auto;
+  flex: 1 1 0;
+  min-height: 0;
+}
+.v6-tape-spacer {
+  position: relative;
+  width: 100%;
 }
 
 /* ============================= DOM LADDER PRO =========================== */

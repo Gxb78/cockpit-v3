@@ -18,11 +18,42 @@
     };
   }
 
-  var GUTTER_RIGHT = 66;  // price scale width
-  var GUTTER_BOTTOM = 24; // time scale height
-  var PAD_TOP = 22;       // header label band
+  // Layout tokens — source unique dans le CSS (084_v6_exocharts_clean.css).
+  // Lus au runtime pour rester synchronises avec le design system.
+  function _readLayoutToken(name, fallback) {
+    try {
+      var el = document.getElementById('v6-orderflow-root') || document.body;
+      var v = window.getComputedStyle(el).getPropertyValue(name).trim();
+      if (v && v !== '') { var px = parseFloat(v); if (Number.isFinite(px)) return px; }
+    } catch (e) { /* DOM pas encore pret, fallback */ }
+    return fallback;
+  }
+  var GUTTER_RIGHT  = _readLayoutToken('--exo-gutter-right', 66);
+  var GUTTER_BOTTOM = _readLayoutToken('--exo-gutter-bottom', 24);
+  var PAD_TOP       = _readLayoutToken('--exo-pad-top', 22);
   var PAD_LEFT = 8;
   var DEFAULT_EMIT_MS = 500;
+  var RENDER_WINDOW_PAD_RATIO = 0.35;
+  var MAX_RENDER_CANDLES = 1800;
+  var MAX_RENDER_FOOTPRINTS = 1400;
+
+  // Pre-built 8×8 diagonal hatch pattern for synthetic (gap-fill) candles.
+  // Replaces the per-frame stroke loop at drawCandlesVp.
+  var _synthPatternCanvas = null;
+  function _ensureSynthPattern() {
+    if (_synthPatternCanvas) return _synthPatternCanvas;
+    var pc = document.createElement('canvas');
+    pc.width = 8; pc.height = 8;
+    var pctx = pc.getContext('2d');
+    pctx.strokeStyle = 'rgba(148, 163, 184, 0.32)';
+    pctx.lineWidth = 1;
+    pctx.beginPath();
+    pctx.moveTo(0, 8);
+    pctx.lineTo(8, 0);
+    pctx.stroke();
+    _synthPatternCanvas = pc;
+    return pc;
+  }
 
   function recordPerf(name, startedAt) {
     if (!window.performance || !startedAt) return;
@@ -46,26 +77,62 @@
     };
   }
 
-  function roundRect(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.arcTo(x + w, y, x + w, y + r, r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
-    ctx.lineTo(x + r, y + h);
-    ctx.arcTo(x, y + h, x, y + h - r, r);
-    ctx.lineTo(x, y + r);
-    ctx.arcTo(x, y, x + r, y, r);
-    ctx.closePath();
+  // Rounded rectangle path — native ctx.roundRect() when available, manual arcTo fallback.
+  var roundRect = (typeof CanvasRenderingContext2D !== 'undefined'
+    && CanvasRenderingContext2D.prototype.roundRect)
+    ? function (ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, r);
+      }
+    : function (ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.arcTo(x + w, y, x + w, y + r, r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+        ctx.lineTo(x + r, y + h);
+        ctx.arcTo(x, y + h, x, y + h - r, r);
+        ctx.lineTo(x, y + r);
+        ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+      };
+
+  function updateCanvasSizeCache(canvas, width, height) {
+    if (!canvas) return null;
+    width = Math.max(1, Number(width) || 1);
+    height = Math.max(1, Number(height) || 1);
+    canvas._v6SizeCache = { width: width, height: height };
+    return canvas._v6SizeCache;
+  }
+
+  function ensureCanvasSizeObserver(canvas) {
+    if (!canvas || canvas._v6SizeObserverBound) return;
+    canvas._v6SizeObserverBound = true;
+    if (typeof ResizeObserver === 'function') {
+      canvas._v6SizeObserver = new ResizeObserver(function (entries) {
+        var entry = entries && entries[0];
+        var box = entry && entry.contentRect;
+        if (box) updateCanvasSizeCache(canvas, box.width, box.height);
+      });
+      canvas._v6SizeObserver.observe(canvas);
+    }
+  }
+
+  function getCanvasCachedSize(canvas) {
+    ensureCanvasSizeObserver(canvas);
+    var cached = canvas._v6SizeCache;
+    if (cached && cached.width > 0 && cached.height > 0) return cached;
+    return updateCanvasSizeCache(canvas, canvas.clientWidth || 1, canvas.clientHeight || 1);
   }
 
   function setupCanvas(canvas) {
     if (!canvas) return null;
-    var rect = canvas.getBoundingClientRect();
-    var width = Math.max(1, rect.width || canvas.clientWidth || 1);
-    var height = Math.max(1, rect.height || canvas.clientHeight || 1);
+    var size = getCanvasCachedSize(canvas);
+    var width = size.width;
+    var height = size.height;
     var dpr = window.devicePixelRatio || 1;
+    canvas._v6LastDpr = dpr;
     if (canvas.width !== Math.floor(width * dpr) || canvas.height !== Math.floor(height * dpr)) {
       canvas.width = Math.floor(width * dpr);
       canvas.height = Math.floor(height * dpr);
@@ -73,6 +140,29 @@
     var ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     return { ctx: ctx, width: width, height: height };
+  }
+
+  function chartLayerCanvas(canvas, name) {
+    if (!canvas) return null;
+    if (name === 'overlay') return canvas;
+    var stack = canvas.closest && canvas.closest('[data-v6-chart-stack]');
+    return stack && stack.querySelector ? stack.querySelector('[data-v6-chart-layer="' + name + '"]') : null;
+  }
+
+  function setupChartLayers(canvas) {
+    var overlay = setupCanvas(canvas);
+    if (!overlay) return null;
+    var staticCanvas = chartLayerCanvas(canvas, 'static');
+    var dataCanvas = chartLayerCanvas(canvas, 'data');
+    var staticSetup = staticCanvas ? setupCanvas(staticCanvas) : overlay;
+    var dataSetup = dataCanvas ? setupCanvas(dataCanvas) : overlay;
+    return {
+      width: overlay.width,
+      height: overlay.height,
+      overlay: overlay,
+      data: dataSetup,
+      statik: staticSetup
+    };
   }
 
   // ===================================================================
@@ -151,6 +241,8 @@
     var out = [];
     var maxSynthetic = 240;
     var syntheticCount = 0;
+    var totalGaps = 0;      // all gaps detected (before cap)
+    var truncated = false;  // true if cap was hit
     for (var i = 0; i < candles.length; i++) {
       var current = candles[i];
       if (!current || !Number.isFinite(Number(current.openTime))) continue;
@@ -163,7 +255,10 @@
           var nextOpen = prevStart + intervalMs;
           var carry = Number(prev.close);
           if (!Number.isFinite(carry) || carry <= 0) carry = Number(current.open);
-          while (nextOpen < currentStart - intervalMs * 0.5 && syntheticCount < maxSynthetic) {
+          var gapCandles = Math.round(gap / intervalMs) - 1;
+          totalGaps += gapCandles;
+          while (nextOpen < currentStart - intervalMs * 0.5) {
+            if (syntheticCount >= maxSynthetic) { truncated = true; break; }
             out.push({
               symbol: current.symbol || prev.symbol || 'BTC',
               timeframe: current.timeframe || prev.timeframe,
@@ -185,7 +280,10 @@
       }
       out.push(current);
     }
-    V6OF.chartGapFill = { count: syntheticCount, updatedAt: Date.now() };
+    V6OF.chartGapFill = { count: syntheticCount, totalGaps: totalGaps, truncated: truncated, updatedAt: Date.now() };
+    if (truncated) {
+      console.warn('fillCandleGaps: capped at ' + maxSynthetic + ' synthetics, ' + totalGaps + ' gaps total — data may have holes');
+    }
     return out;
   }
 
@@ -286,54 +384,55 @@
     return merged;
   }
 
+  function resolveHistoryLiveCandle(hist, live, lastHistOpen) {
+    if (!hist) return live;
+    if (!live) return hist;
+    if (Number(live.openTime) >= lastHistOpen || live.closed === false) {
+      var forming = graftFootprintOntoKline(live, live);
+      var lh = Number(live.high), ll = Number(live.low);
+      var hh = Number(hist.high), hl = Number(hist.low);
+      if (Number.isFinite(hh)) forming.high = Number.isFinite(lh) ? Math.max(lh, hh) : hh;
+      if (Number.isFinite(hl)) forming.low = Number.isFinite(ll) ? Math.min(ll, hl) : hl;
+      if (Number.isFinite(Number(hist.open))) forming.open = Number(hist.open);
+      return forming;
+    }
+    var histRange = Math.abs(Number(hist.high) - Number(hist.low));
+    var liveRange = Math.abs(Number(live.high) - Number(live.low));
+    var histVol = Number(hist.volume) || 0;
+    var liveVol = Number(live.volume) || 0;
+    var liveComplete = Number.isFinite(liveRange) && Number.isFinite(histRange) &&
+      liveRange >= histRange * 0.5 && (histVol <= 0 || liveVol >= histVol * 0.5);
+    return liveComplete ? live : graftFootprintOntoKline(hist, live);
+  }
+
   function mergeCandlesByOpenTime(history, liveCandles, tf) {
     history = Array.isArray(history) ? history : [];
     liveCandles = Array.isArray(liveCandles) ? liveCandles : [];
     if (!history.length) return liveCandles;
     if (!liveCandles.length) return history;
-    var byTime = {};
-    var i;
-    var lastHistOpen = 0;
-    for (i = 0; i < history.length; i++) {
-      byTime[history[i].openTime] = history[i];
-      if (Number(history[i].openTime) > lastHistOpen) lastHistOpen = Number(history[i].openTime);
-    }
-    for (i = 0; i < liveCandles.length; i++) {
-      var live = liveCandles[i];
-      var hist = byTime[live.openTime];
-      if (!hist) {
-        // No kline at this openTime: live candle is the only source.
-        byTime[live.openTime] = live;
-        continue;
-      }
-      // The forming candle (at or beyond the history tip) is fresher than the
-      // last REST fetch: live wins, but extend its range with the kline so a
-      // partially-seen live bar never shrinks the true high/low.
-      if (Number(live.openTime) >= lastHistOpen || live.closed === false) {
-        var forming = graftFootprintOntoKline(live, live);
-        var lh = Number(live.high), ll = Number(live.low);
-        var hh = Number(hist.high), hl = Number(hist.low);
-        if (Number.isFinite(hh)) forming.high = Number.isFinite(lh) ? Math.max(lh, hh) : hh;
-        if (Number.isFinite(hl)) forming.low = Number.isFinite(ll) ? Math.min(ll, hl) : hl;
-        if (Number.isFinite(Number(hist.open))) forming.open = Number(hist.open);
-        byTime[live.openTime] = forming;
-        continue;
-      }
-      // Closed candle covered by both sources: the Binance kline is the
-      // authority on OHLC. A locally-built engine bar can be degenerate
-      // (engine started mid-minute, dropped trades => flat open≈close bar).
-      // Keep the kline OHLC and graft the footprint analytics onto it.
-      var histRange = Math.abs(Number(hist.high) - Number(hist.low));
-      var liveRange = Math.abs(Number(live.high) - Number(live.low));
-      var histVol = Number(hist.volume) || 0;
-      var liveVol = Number(live.volume) || 0;
-      var liveComplete = Number.isFinite(liveRange) && Number.isFinite(histRange) &&
-        liveRange >= histRange * 0.5 && (histVol <= 0 || liveVol >= histVol * 0.5);
-      byTime[live.openTime] = liveComplete ? live : graftFootprintOntoKline(hist, live);
-    }
-    var keys = Object.keys(byTime).map(Number).sort(function (a, b) { return a - b; });
     var out = [];
-    for (i = 0; i < keys.length; i++) out.push(byTime[keys[i]]);
+    var i = 0;
+    var j = 0;
+    var lastHistOpen = Number(history[history.length - 1] && history[history.length - 1].openTime) || 0;
+    while (i < history.length && j < liveCandles.length) {
+      var hist = history[i];
+      var live = liveCandles[j];
+      var ht = Number(hist && hist.openTime);
+      var lt = Number(live && live.openTime);
+      if (ht === lt) {
+        out.push(resolveHistoryLiveCandle(hist, live, lastHistOpen));
+        i++;
+        j++;
+      } else if (!Number.isFinite(lt) || (Number.isFinite(ht) && ht < lt)) {
+        out.push(hist);
+        i++;
+      } else {
+        out.push(live);
+        j++;
+      }
+    }
+    while (i < history.length) out.push(history[i++]);
+    while (j < liveCandles.length) out.push(liveCandles[j++]);
     var interval = timeframeToMs(tf) || (out.length ? normalizeCandleInterval(out[out.length - 1], 60000) : 60000);
     return fillCandleGaps(out, interval);
   }
@@ -347,6 +446,25 @@
     return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
   }
 
+  // Pre-computed candle palette — avoids hexToRgba per candle per frame.
+  // Recomputed only when upColor/downColor settings change.
+  var _paletteCache = null;
+  var _paletteSig = '';
+
+  function getCandlePalette(settings) {
+    var up = (settings && settings.upColor) || '#3ddc97';
+    var down = (settings && settings.downColor) || '#ff5f73';
+    var sig = up + '|' + down;
+    if (_paletteCache && _paletteSig === sig) return _paletteCache;
+    _paletteCache = {
+      up: hexToRgba(up, 0.96),
+      down: hexToRgba(down, 0.96),
+      selected: hexToRgba('#facc15', 0.96)
+    };
+    _paletteSig = sig;
+    return _paletteCache;
+  }
+
   function emitGuess(frames) {
     var n = frames.length;
     if (n >= 2) {
@@ -357,17 +475,160 @@
   }
 
   var _mergedCandlesCache = null;
-  var _mergedCandlesSrcChart = null;
-  var _mergedCandlesSrcFp = null;
-  var _mergedCandlesSrcTf = null;
+  var _mergedCandlesSig = '';
+  var _mergedCandlesVersion = -1;
+  var _aggregatedFpSrc = null;
+  var _aggregatedFpTf = '';
+  var _aggregatedFpCache = null;
   var _boundsCache = null;
   var _boundsSrcFrames = null;
   var _boundsSrcCandles = null;
   var _boundsSrcHeatmap = null;
+  var _boundsVersion = -1;
   var _heatmapBoundsCache = null;
   var _heatmapBoundsFirst = null;
   var _heatmapBoundsLast = null;
   var _heatmapBoundsLen = 0;
+
+  function candleListSignature(list) {
+    if (!Array.isArray(list) || !list.length) return '0';
+    var first = list[0] || {};
+    var last = list[list.length - 1] || {};
+    return [
+      list.length,
+      candleStartTs(first),
+      candleStartTs(last),
+      candleEndTs(last),
+      Number(last.tsLocal || last.tsExchange || last.updatedAt || 0) || 0,
+      Number(last.volume || last.totalVol || 0) || 0,
+      Number(last.close || 0) || 0
+    ].join(':');
+  }
+
+  function aggregateFootprintsToTimeframeCached(footprints, tf) {
+    if (tf === '1m') return Array.isArray(footprints) ? footprints : [];
+    if (_aggregatedFpCache && _aggregatedFpSrc === footprints && _aggregatedFpTf === tf) {
+      return _aggregatedFpCache;
+    }
+    _aggregatedFpCache = aggregateFootprintsToTimeframe(footprints, tf);
+    _aggregatedFpSrc = footprints;
+    _aggregatedFpTf = tf;
+    return _aggregatedFpCache;
+  }
+
+  function lowerBoundByTime(list, target, timeFn) {
+    list = Array.isArray(list) ? list : [];
+    var lo = 0;
+    var hi = list.length;
+    while (lo < hi) {
+      var mid = (lo + hi) >>> 1;
+      if (timeFn(list[mid]) < target) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+
+  function sliceByTimeWindow(list, start, end, startFn, endFn, maxItems) {
+    list = Array.isArray(list) ? list : [];
+    if (!list.length) return [];
+    startFn = startFn || candleStartTs;
+    endFn = endFn || startFn;
+    var first = Math.max(0, lowerBoundByTime(list, start, endFn) - 1);
+    var out = [];
+    for (var i = first; i < list.length; i++) {
+      var item = list[i];
+      var s = startFn(item);
+      if (s > end) break;
+      if (endFn(item) >= start) out.push(item);
+    }
+    if (maxItems && out.length > maxItems) {
+      return out.slice(out.length - maxItems);
+    }
+    return out;
+  }
+
+  function downsampleCandlesForRender(candles, maxPoints) {
+    candles = Array.isArray(candles) ? candles : [];
+    maxPoints = Math.max(100, Number(maxPoints) || MAX_RENDER_CANDLES);
+    if (candles.length <= maxPoints) return candles;
+    var bucketSize = Math.ceil(candles.length / maxPoints);
+    var out = [];
+    for (var i = 0; i < candles.length; i += bucketSize) {
+      var first = candles[i];
+      if (!first) continue;
+      var last = first;
+      var high = Number(first.high);
+      var low = Number(first.low);
+      var volume = 0;
+      var buyVol = 0;
+      var sellVol = 0;
+      var delta = 0;
+      for (var j = i; j < Math.min(candles.length, i + bucketSize); j++) {
+        var c = candles[j];
+        if (!c) continue;
+        last = c;
+        if (Number.isFinite(Number(c.high))) high = Number.isFinite(high) ? Math.max(high, Number(c.high)) : Number(c.high);
+        if (Number.isFinite(Number(c.low))) low = Number.isFinite(low) ? Math.min(low, Number(c.low)) : Number(c.low);
+        volume += Number(c.volume || c.totalVol || 0) || 0;
+        buyVol += Number(c.buyVol || 0) || 0;
+        sellVol += Number(c.sellVol || 0) || 0;
+        delta += Number(c.delta || 0) || 0;
+      }
+      out.push(Object.assign({}, first, {
+        closeTime: candleEndTs(last),
+        close: Number(last.close),
+        high: high,
+        low: low,
+        volume: volume,
+        buyVol: buyVol,
+        sellVol: sellVol,
+        delta: delta,
+        levels: null,
+        lod: true,
+        lodCount: Math.min(candles.length - i, bucketSize)
+      }));
+    }
+    return out;
+  }
+
+  function renderTimeWindow(vp) {
+    var start = Number(vp && vp.timeStart);
+    var end = Number(vp && vp.timeEnd);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+      return { start: -Infinity, end: Infinity };
+    }
+    var pad = (end - start) * RENDER_WINDOW_PAD_RATIO;
+    return { start: start - pad, end: end + pad };
+  }
+
+  function buildRenderData(state, vp, baseCandles, heatmapFrames, footprintCandles) {
+    var win = renderTimeWindow(vp);
+    var visibleCandles = sliceByTimeWindow(baseCandles, win.start, win.end, candleStartTs, candleEndTs);
+    var visibleHeatmap = sliceByTimeWindow(heatmapFrames, win.start, win.end, frameTs, frameTs);
+    var visibleFootprints = sliceByTimeWindow(footprintCandles, win.start, win.end, candleStartTs, candleEndTs, MAX_RENDER_FOOTPRINTS);
+    var drawCandles = downsampleCandlesForRender(visibleCandles, MAX_RENDER_CANDLES);
+    return {
+      fullCandles: baseCandles,
+      candles: visibleCandles,
+      drawCandles: drawCandles,
+      heatmapFrames: visibleHeatmap,
+      footprintCandles: visibleFootprints,
+      state: Object.assign({}, state || {}, {
+        chartCandles: visibleCandles,
+        heatmapFrames: visibleHeatmap,
+        footprintCandles: visibleFootprints,
+        _fullChartCandles: baseCandles,
+        _fullHeatmapFrames: heatmapFrames,
+        _fullFootprintCandles: footprintCandles,
+        _renderLod: {
+          candles: visibleCandles.length,
+          drawCandles: drawCandles.length,
+          heatmapFrames: visibleHeatmap.length,
+          footprintCandles: visibleFootprints.length
+        }
+      })
+    };
+  }
 
   // Compute combined data extents (time + price) across the visible live data.
   // Candle base = backfilled history (chartCandles) merged with the live
@@ -378,21 +639,24 @@
     // Live footprint candles are emitted as 1m bars. Aggregate them to the
     // active chart timeframe before merging so HTF views get the forming bar.
     var tf = state.timeframe || '1m';
+    var ver = state._stateVersion || 0;
+    // Fast-path: version unchanged → no data could have changed.
+    if (_mergedCandlesCache && _mergedCandlesVersion === ver) {
+      return _mergedCandlesCache;
+    }
+    var sig = tf + '|' + candleListSignature(hist) + '|' + candleListSignature(fp);
 
-    if (_mergedCandlesCache &&
-        _mergedCandlesSrcChart === hist &&
-        _mergedCandlesSrcFp === fp &&
-        _mergedCandlesSrcTf === tf) {
+    if (_mergedCandlesCache && _mergedCandlesSig === sig) {
+      _mergedCandlesVersion = ver;
       return _mergedCandlesCache;
     }
 
-    var liveCandles = tf === '1m' ? fp : aggregateFootprintsToTimeframe(fp, tf);
+    var liveCandles = aggregateFootprintsToTimeframeCached(fp, tf);
     var out = mergeCandlesByOpenTime(hist, liveCandles, tf);
 
     _mergedCandlesCache = out;
-    _mergedCandlesSrcChart = hist;
-    _mergedCandlesSrcFp = fp;
-    _mergedCandlesSrcTf = tf;
+    _mergedCandlesSig = sig;
+    _mergedCandlesVersion = ver;
     return out;
   }
 
@@ -467,7 +731,9 @@
   function computeLiveBounds(state, showHeatmap) {
     var frames = showHeatmap && Array.isArray(state.heatmapFrames) ? state.heatmapFrames : [];
     var candles = mergedChartCandles(state);
-    if (_boundsCache &&
+    var ver = state._stateVersion || 0;
+    // Fast-path: version + refs unchanged → nothing could have changed.
+    if (_boundsCache && _boundsVersion === ver &&
         _boundsSrcFrames === frames &&
         _boundsSrcCandles === candles &&
         _boundsSrcHeatmap === showHeatmap) {
@@ -502,6 +768,7 @@
     _boundsSrcFrames = frames;
     _boundsSrcCandles = candles;
     _boundsSrcHeatmap = showHeatmap;
+    _boundsVersion = ver;
     return bounds;
   }
 
@@ -563,29 +830,72 @@
   }
 
   var MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var TIME_LABEL_CACHE_LIMIT = 4096;
+  var _timeLabelCache = new Map();
+  var _timeDateCache = new Map();
+  var _timeDayKeyCache = new Map();
+  var _priceLabelCache = new Map();
+
+  function cacheSet(cache, key, value, limit) {
+    if (cache.size >= limit) {
+      var first = cache.keys().next();
+      if (!first.done) cache.delete(first.value);
+    }
+    cache.set(key, value);
+    return value;
+  }
+
+  function pad2(n) { return n < 10 ? '0' + n : String(n); }
+
+  function timeDayKey(ts) {
+    var key = Number(ts) || 0;
+    var cached = _timeDayKeyCache.get(key);
+    if (cached) return cached;
+    var d = new Date(key);
+    return cacheSet(_timeDayKeyCache, key,
+      d.getUTCFullYear() + '-' + d.getUTCMonth() + '-' + d.getUTCDate(),
+      TIME_LABEL_CACHE_LIMIT);
+  }
 
   function timeAxisLabel(ts, step) {
+    var key = (Number(ts) || 0) + '|' + (Number(step) || 0);
+    var cached = _timeLabelCache.get(key);
+    if (cached) return cached;
     var d = new Date(ts);
-    function pad(n) { return n < 10 ? '0' + n : String(n); }
+    var label;
 
     // Step >= 24h â†’ date format "03 Jun"
     if (step >= 86400000) {
-      return pad(d.getUTCDate()) + ' ' + MONTHS_SHORT[d.getUTCMonth()];
+      label = pad2(d.getUTCDate()) + ' ' + MONTHS_SHORT[d.getUTCMonth()];
+      return cacheSet(_timeLabelCache, key, label, TIME_LABEL_CACHE_LIMIT);
     }
 
     // Sub-minute (step < 60000) â†’ "HH:MM:SS"
     if (step < 60000) {
-      return pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds());
+      label = pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes()) + ':' + pad2(d.getUTCSeconds());
+      return cacheSet(_timeLabelCache, key, label, TIME_LABEL_CACHE_LIMIT);
     }
 
     // Step >= 1m â†’ "HH:MM"
-    return pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes());
+    label = pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes());
+    return cacheSet(_timeLabelCache, key, label, TIME_LABEL_CACHE_LIMIT);
   }
 
   function timeAxisDate(ts) {
-    var d = new Date(ts);
-    function pad(n) { return n < 10 ? '0' + n : String(n); }
-    return pad(d.getUTCDate()) + ' ' + MONTHS_SHORT[d.getUTCMonth()];
+    var key = Number(ts) || 0;
+    var cached = _timeDateCache.get(key);
+    if (cached) return cached;
+    var d = new Date(key);
+    return cacheSet(_timeDateCache, key,
+      pad2(d.getUTCDate()) + ' ' + MONTHS_SHORT[d.getUTCMonth()],
+      TIME_LABEL_CACHE_LIMIT);
+  }
+
+  function priceAxisLabel(price) {
+    var key = Math.round(Number(price) * 1000000) / 1000000;
+    var cached = _priceLabelCache.get(key);
+    if (cached) return cached;
+    return cacheSet(_priceLabelCache, key, V6OF.format.price(price), 2048);
   }
 
   // Expose time axis helpers for external handling
@@ -603,6 +913,7 @@
   function drawGridAndScales(ctx, vp, plot, settings) {
     var pTicks = priceTicks(vp.priceMin, vp.priceMax, 6);
     var tInfo = timeTicks(vp.timeStart, vp.timeEnd, 7);
+    if (vp) vp._timeAxisStep = tInfo.step;
     var effectiveGB = (vp && vp._gutterBottom != null) ? vp._gutterBottom : GUTTER_BOTTOM;
     var gx = plot.left + plot.width;
     var by = plot.top + plot.height;
@@ -638,7 +949,7 @@
     pTicks.forEach(function (price) {
       var y = vp.priceToY(price);
       if (y < plot.top + 4 || y > plot.top + plot.height - 2) return;
-      ctx.fillText(V6OF.format.price(price), gx + 8, y + 1);
+      ctx.fillText(priceAxisLabel(price), gx + 8, y + 1);
     });
     ctx.textBaseline = 'alphabetic';
 
@@ -658,12 +969,8 @@
       tInfo.ticks.forEach(function (ts, idx) {
         var x = vp.timeToX(ts);
         if (x < plot.left + 16 || x > plot.left + plot.width - 16) return;
-        var d = new Date(ts);
-        var dayKey = d.getUTCFullYear() + '-' + d.getUTCMonth() + '-' + d.getUTCDate();
-        var prevDayKey = idx > 0 ? (function () {
-          var pd = new Date(tInfo.ticks[idx - 1]);
-          return pd.getUTCFullYear() + '-' + pd.getUTCMonth() + '-' + pd.getUTCDate();
-        })() : null;
+        var dayKey = timeDayKey(ts);
+        var prevDayKey = idx > 0 ? timeDayKey(tInfo.ticks[idx - 1]) : null;
         var isNewDay = prevDayKey && dayKey !== prevDayKey;
 
         var label;
@@ -698,27 +1005,105 @@
     return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
   }
 
-  // Pro liquidity-heatmap field: dense time x price grid, viridis-coloured by
-  // resting-liquidity intensity. Candles render on top of this background.
+  // Pre-rendered viridis RGBA lookup (64 steps) so drawHeatmapVp doesn't
+  // build rgba strings per level per frame.
+  var VIRIDIS_RGBA = [];
+  for (var _vi = 0; _vi < 64; _vi++) {
+    var _vt = _vi / 63;
+    var _vc = viridis(_vt);
+    VIRIDIS_RGBA[_vi] = 'rgba(' + (_vc[0]|0) + ',' + (_vc[1]|0) + ',' + (_vc[2]|0) + ',';
+  }
+
+  // Offscreen heatmap canvas for incremental rendering.
+  // Full re-rasterize only on price-range change or significant pan;
+  // live follow (right-shift) just shifts + draws the new column(s).
+  var _hmCache = null; // { canvas, ctx, timeStart, timeEnd, priceMin, priceMax, plotW, plotH }
+
   function drawHeatmapVp(ctx, vp, plot, frames, settings) {
     if (!Array.isArray(frames) || !frames.length) return false;
+    var dpr = window.devicePixelRatio || 1;
+    var plotW = Math.round(plot.width);
+    var plotH = Math.round(plot.height);
+    if (plotW < 1 || plotH < 1) return false;
+
     var count = frames.length;
     var emit = emitGuess(frames);
-    var scaleY = plot.height / vp.priceSpan();
+    var scaleY = plotH / vp.priceSpan();
+    var bgColor = settings.bgColor || '#0a0b0d';
 
-    // Dark base (matches V6 theme) -- the heatmap cells (viridis colormap)
-    // are drawn on top; areas with no liquidity data stay this dark shade
-    // instead of a jarring light-theme block.
-    ctx.fillStyle = settings.bgColor || '#0a0b0d';
-    ctx.fillRect(plot.left, plot.top, plot.width, plot.height);
+    // ── Offscreen canvas lifecycle ──────────────────────────────────────────
+    var offW = Math.round(plotW * dpr);
+    var offH = Math.round(plotH * dpr);
+    var needFull = !_hmCache
+      || _hmCache.plotW !== plotW || _hmCache.plotH !== plotH
+      || _hmCache.priceMin !== vp.priceMin || _hmCache.priceMax !== vp.priceMax;
+    var needRecreate = needFull || (_hmCache.canvas.width !== offW || _hmCache.canvas.height !== offH);
 
-    var startIndex = firstFrameIndexAtOrBefore(frames, vp.timeStart);
-    var hardEnd = vp.timeEnd + emit * 2;
-    var endIndex = startIndex;
-    while (endIndex < count && frameTs(frames[endIndex]) <= hardEnd) endIndex++;
-    endIndex = Math.min(count, Math.max(startIndex + 1, endIndex));
+    if (!_hmCache) _hmCache = {};
+    if (needRecreate) {
+      var oc = document.createElement('canvas');
+      oc.width = offW; oc.height = offH;
+      _hmCache.canvas = oc;
+      _hmCache.ctx = oc.getContext('2d');
+      _hmCache.plotW = plotW; _hmCache.plotH = plotH;
+      needFull = true;
+    }
+
+    var offCtx = _hmCache.ctx;
+    var offCanvas = _hmCache.canvas;
+
+    // ── Right-shift detection (live follow) ─────────────────────────────────
+    var isRightShift = !needFull
+      && _hmCache.timeEnd != null && vp.timeEnd > _hmCache.timeEnd
+      && _hmCache.timeStart != null && vp.timeStart > _hmCache.timeStart;
+    var shiftPxCSS = 0;
+    if (isRightShift) {
+      var timeSpanCSS = vp.timeEnd - vp.timeStart;
+      if (timeSpanCSS > 0) {
+        shiftPxCSS = Math.round((vp.timeEnd - _hmCache.timeEnd) / timeSpanCSS * plotW);
+      }
+      isRightShift = shiftPxCSS > 0 && shiftPxCSS < plotW;
+    }
+
+    if (isRightShift) {
+      var shiftPhys = Math.round(shiftPxCSS * dpr);
+      // Shift existing content left in physical pixel space (identity CTM).
+      offCtx.save();
+      offCtx.setTransform(1, 0, 0, 1, 0, 0);
+      offCtx.drawImage(offCanvas, shiftPhys, 0, offW - shiftPhys, offH, 0, 0, offW - shiftPhys, offH);
+      offCtx.clearRect(offW - shiftPhys, 0, shiftPhys, offH);
+      offCtx.restore();
+    }
+
+    // ── Draw columns ────────────────────────────────────────────────────────
+    offCtx.save();
+    offCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    if (needFull) {
+      offCtx.fillStyle = bgColor;
+      offCtx.fillRect(0, 0, plotW, plotH);
+    }
+
+    // Determine which frames to draw.
+    var startIndex, endIndex;
+    if (isRightShift && !needFull) {
+      // Draw only new frames at the right edge. We need to find frames whose
+      // X position falls in the exposed right strip [plotW - shiftPxCSS, plotW].
+      // Translate that to data space: find frames with ts in [vp.timeEnd - shiftPxCSS*span/plotW, vp.timeEnd].
+      var newStartMs = vp.timeEnd - (shiftPxCSS / plotW) * (vp.timeEnd - vp.timeStart);
+      startIndex = firstFrameIndexAtOrBefore(frames, newStartMs);
+      endIndex = Math.min(count, startIndex + Math.ceil(1.5 * shiftPxCSS / Math.max(1, Math.round(vp.timeToX(frameTs(frames[Math.min(startIndex + 1, count - 1)])) - vp.timeToX(frameTs(frames[startIndex]))))) + 2);
+      endIndex = Math.min(count, Math.max(startIndex + 1, endIndex));
+    } else {
+      startIndex = firstFrameIndexAtOrBefore(frames, vp.timeStart);
+      var hardEnd = vp.timeEnd + emit * 2;
+      endIndex = startIndex;
+      while (endIndex < count && frameTs(frames[endIndex]) <= hardEnd) endIndex++;
+      endIndex = Math.min(count, Math.max(startIndex + 1, endIndex));
+    }
+
     var visibleFrames = Math.max(1, endIndex - startIndex);
-    var maxColumns = Math.max(120, Math.floor(plot.width * 1.25));
+    var maxColumns = Math.max(120, Math.floor(plotW * 1.25));
     var step = Math.max(1, Math.ceil(visibleFrames / maxColumns));
 
     for (var index = startIndex; index < endIndex; index += step) {
@@ -728,335 +1113,37 @@
       var nextTs = nextIndex > index ? frameTs(frames[nextIndex]) : (index + 1 < count ? frameTs(frames[index + 1]) : ts + emit);
       var x = Math.round(vp.timeToX(ts));
       var x2 = Math.round(vp.timeToX(nextTs));
-      if (x2 < plot.left || x > plot.left + plot.width) continue; // cull offscreen
+      if (x2 < 0 || x > plotW) continue;
       var rectW = Math.max(1, x2 - x);
       var levels = Array.isArray(frame.levels) ? frame.levels : [];
       var tick = Number(frame.tickSize || settings.tickSize || 1);
       if (!Number.isFinite(tick) || tick <= 0) tick = 1;
       var h = Math.max(1, Math.round(tick * scaleY));
-      levels.forEach(function (level) {
+      for (var li = 0; li < levels.length; li++) {
+        var level = levels[li];
         var price = Number(level.price);
-        if (!Number.isFinite(price) || price < vp.priceMin || price > vp.priceMax) return;
-        // Gamma-boost the low end so faint liquidity is still visible.
+        if (!Number.isFinite(price) || price < vp.priceMin || price > vp.priceMax) continue;
         var t = Math.pow(clamp01(level.intensity), 0.55);
-        var c = viridis(t);
-        var alpha = 0.4 + t * 0.58;
-        ctx.fillStyle = 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + alpha.toFixed(3) + ')';
+        var ci = Math.min(63, Math.round(t * 63));
+        var alpha = (0.4 + t * 0.58).toFixed(3);
+        offCtx.fillStyle = VIRIDIS_RGBA[ci] + alpha + ')';
         var cellY = Math.round(vp.priceToY(price) - h / 2);
-        ctx.fillRect(x, cellY, rectW, h);
-      });
+        offCtx.fillRect(x, cellY, rectW, h);
+      }
     }
+
+    offCtx.restore();
+
+    // ── Update cache state ──────────────────────────────────────────────────
+    _hmCache.timeStart = vp.timeStart;
+    _hmCache.timeEnd = vp.timeEnd;
+    _hmCache.priceMin = vp.priceMin;
+    _hmCache.priceMax = vp.priceMax;
+
+    // ── Blit offscreen to main canvas ───────────────────────────────────────
+    ctx.drawImage(offCanvas, plot.left, plot.top);
     return true;
   }
-
-  // â”€â”€â”€ Footprint imbalance detection â”€â”€â”€
-  function imbalanceRatio(buyVol, sellVol, settings) {
-    var ratio = Number(settings.imbalanceRatio) || 3.0;
-    if (ratio <= 0) ratio = 3.0;
-    var maxV = Math.max(buyVol, sellVol);
-    var minV = Math.min(buyVol, sellVol);
-    if (minV <= 0 && maxV > 0) return Infinity;
-    if (minV <= 0) return 0;
-    return maxV / minV;
-  }
-
-  function stackedImbalanceCount(levels, idx, buyVol, sellVol, settings) {
-    var ratio = Number(settings.imbalanceRatio) || 3.0;
-    var stack = Number(settings.imbalanceStack) || 3;
-    if (stack <= 0) return 0;
-    var count = 0;
-    if (buyVol > sellVol * ratio) {
-      // Bid imbalance â€” count consecutive bid imbalances going UP
-      for (var i = idx - 1; i >= 0 && count < stack; i--) {
-        var lv = levels[i];
-        var bv = Number(lv.buyVol || 0), sv = Number(lv.sellVol || 0);
-        if (bv > sv * ratio) count++;
-        else break;
-      }
-    } else if (sellVol > buyVol * ratio) {
-      // Ask imbalance â€” count consecutive ask imbalances going DOWN
-      for (var i = idx + 1; i < levels.length && count < stack; i++) {
-        var la = levels[i];
-        var bva = Number(la.buyVol || 0), sva = Number(la.sellVol || 0);
-        if (sva > bva * ratio) count++;
-        else break;
-      }
-    }
-    return count;
-  }
-
-  // â”€â”€ Adaptive Footprint Renderer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  // 3 modes selon le zoom : small (candle+delta), compact (heatmap sans texte),
-  // full (bid/ask + POC + imbalance).
-  // Ne force jamais le chart â€” s'adapte a la place disponible.
-
-  var FP_MODE_SMALL   = 0;
-  var FP_MODE_COMPACT = 1;
-  var FP_MODE_FULL    = 2;
-
-  function fpMode(barWidth, rowHeight) {
-    if (barWidth < 28 || rowHeight < 4) return FP_MODE_SMALL;
-    if (barWidth < 65 || rowHeight < 8) return FP_MODE_COMPACT;
-    return FP_MODE_FULL;
-  }
-
-  // Groupement visuel des ticks quand rowHeight < MIN_ROW_HEIGHT
-  function visualTickGroup(tickSize, rowHeight) {
-    var MIN_ROW_HEIGHT = 7;
-    if (rowHeight >= MIN_ROW_HEIGHT) return 1;
-    return Math.max(1, Math.ceil(MIN_ROW_HEIGHT / Math.max(1, rowHeight)));
-  }
-
-  function drawAdaptiveFootprint(ctx, vp, plot, candles, settings, overlay) {
-    if (!settings || settings.showFootprint === false) return false;
-    if (!Array.isArray(candles) || !candles.length) return false;
-    var tick = Number(settings.tickSize || 1);
-    if (!Number.isFinite(tick) || tick <= 0) tick = 1;
-
-    // --- Compute dimensions from viewport ---
-    // barWidth: width of one candle in px
-    // rowHeight: px per tick in price space
-    var refCandle = candles[Math.floor(candles.length / 2)] || candles[0];
-    var cx1 = vp.timeToX(candleStartTs(refCandle));
-    var cx2 = vp.timeToX(candleEndTs(refCandle));
-    var barWidth = Math.max(3, Math.abs(cx2 - cx1));
-
-    var py1 = vp.priceToY(0);
-    var py2 = vp.priceToY(tick);
-    var rowHeight = Math.max(0.5, Math.abs(py1 - py2));
-
-    var mode = fpMode(barWidth, rowHeight);
-    var tickGroup = visualTickGroup(tick, rowHeight);
-    var displayTick = tick * tickGroup;
-
-    // --- Global max volumes for bar scaling (all modes except small) ---
-    var globalMaxBuy = 1, globalMaxSell = 1;
-    if (mode !== FP_MODE_SMALL) {
-      var lo = 0, hi = candles.length - 1;
-      while (lo < hi) { var mid = (lo+hi)>>>1; if (candleEndTs(candles[mid]) < vp.timeStart) lo = mid+1; else hi = mid; }
-      for (var i = lo; i < candles.length; i++) {
-        var c = candles[i];
-        if (candleStartTs(c) > vp.timeEnd) break;
-        var lvs = Array.isArray(c.levels) ? c.levels : [];
-        for (var j = 0; j < lvs.length; j++) {
-          var bv = Number(lvs[j].buyVol||0), sv = Number(lvs[j].sellVol||0);
-          if (bv > globalMaxBuy) globalMaxBuy = bv;
-          if (sv > globalMaxSell) globalMaxSell = sv;
-        }
-      }
-    }
-
-    // --- Iterate candles ---
-    var lo2 = 0, hi2 = candles.length - 1;
-    while (lo2 < hi2) { var mid2 = (lo2+hi2)>>>1; if (candleEndTs(candles[mid2]) < vp.timeStart) lo2 = mid2+1; else hi2 = mid2; }
-
-    for (var i2 = lo2; i2 < candles.length; i2++) {
-      var candle = candles[i2];
-      if (candleStartTs(candle) > vp.timeEnd) break;
-      var x1 = vp.timeToX(candleStartTs(candle));
-      var x2 = vp.timeToX(candleEndTs(candle));
-      var fullW = Math.max(3, x2 - x1);
-      var bodyWidth = Math.max(3, Math.min(12, fullW * 0.18));
-      var xCenter = (x1 + x2) / 2;
-      var sideW = (fullW - bodyWidth) / 2;
-      var colW = fullW * 0.84;
-      var x = xCenter - colW / 2;
-
-      // OHLC coordinates
-      var yHigh = vp.priceToY(candle.high);
-      var yLow = vp.priceToY(candle.low);
-      var yOpen = vp.priceToY(candle.open);
-      var yClose = vp.priceToY(candle.close);
-      var upHex = (settings && settings.upColor) || '#3ddc97';
-      var downHex = (settings && settings.downColor) || '#ff5f73';
-      var candleCol = candle.close >= candle.open ? hexToRgba(upHex, 0.92) : hexToRgba(downHex, 0.92);
-      var delta = Number(candle.delta || 0);
-
-      // â”€â”€ MODE SMALL : candle + delta badge â”€â”€
-      if (mode === FP_MODE_SMALL) {
-        // Wick
-        ctx.strokeStyle = candleCol;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(xCenter, yHigh);
-        ctx.lineTo(xCenter, yLow);
-        ctx.stroke();
-        // Body
-        var bodyTop = Math.min(yOpen, yClose);
-        var bodyH = Math.max(1, Math.abs(yClose - yOpen));
-        ctx.fillStyle = candleCol;
-        ctx.fillRect(xCenter - bodyWidth/2, bodyTop, bodyWidth, Math.max(1, bodyH));
-        // Delta badge (above candle)
-        if (delta !== 0) {
-          var dbY = yHigh - 10;
-          ctx.fillStyle = delta > 0 ? 'rgba(34,197,94,0.85)' : 'rgba(239,68,68,0.85)';
-          ctx.font = '8px JetBrains Mono, monospace';
-          ctx.textAlign = 'center';
-          ctx.fillText((delta>0?'+':'')+V6OF.format.qty(Math.abs(delta)), xCenter, dbY);
-          ctx.textAlign = 'left';
-        }
-        continue;
-      }
-
-      // â”€â”€ Background column (compact + full) â”€â”€
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
-      ctx.fillRect(x, plot.top, colW, plot.height);
-
-      // â”€â”€ OHLC body + wick â”€â”€
-      ctx.strokeStyle = candleCol;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(xCenter, yHigh);
-      ctx.lineTo(xCenter, yLow);
-      ctx.moveTo(xCenter - bodyWidth * 0.4, yOpen);
-      ctx.lineTo(xCenter, yOpen);
-      ctx.moveTo(xCenter, yClose);
-      ctx.lineTo(xCenter + bodyWidth * 0.4, yClose);
-      ctx.stroke();
-
-      // â”€â”€ Levels (compact or full) â”€â”€
-      var levels = Array.isArray(candle.levels) ? candle.levels : [];
-      // Group levels visually if needed
-      var grouped = [];
-      if (tickGroup > 1 && levels.length) {
-        var byBucket = {};
-        levels.forEach(function (lv) {
-          var price = Number(lv.price);
-          if (!Number.isFinite(price)) return;
-          var bucket = Math.round(price / displayTick) * displayTick;
-          var k = bucket.toFixed(displayTick < 1 ? 2 : 0);
-          if (!byBucket[k]) byBucket[k] = { price: bucket, buyVol:0, sellVol:0, delta:0, isPoc: false };
-          byBucket[k].buyVol += Number(lv.buyVol||0);
-          byBucket[k].sellVol += Number(lv.sellVol||0);
-          byBucket[k].delta += Number(lv.delta||0);
-          if (Number(candle.poc) === Number(lv.price)) byBucket[k].isPoc = true;
-        });
-        grouped = Object.values(byBucket).sort(function(a,b){ return b.price - a.price; });
-      } else {
-        grouped = levels.slice();
-      }
-
-      var groupH = Math.round(tickGroup > 1 ? Math.max(2, rowHeight * tickGroup) : Math.max(4, Math.min(16, rowHeight)));
-      var halfW = Math.max(1, (colW - 3) / 2);
-      var imbalanceColor = Number(settings.imbalanceRatio) || 3.0;
-
-      grouped.forEach(function (level) {
-        var buyVol = Number(level.buyVol||0);
-        var sellVol = Number(level.sellVol||0);
-        if (buyVol <= 0 && sellVol <= 0) return;
-        var price = Number(level.price);
-        if (!Number.isFinite(price) || price < vp.priceMin || price > vp.priceMax) return;
-        // Snap row Y to the pixel grid so footprint rows align with the
-        // canvas grid and any DOM-aligned rows (GridAligner.snapRowToGrid).
-        var y = Math.round(vp.priceToY(price));
-        var isPoc = level.isPoc || (Number(candle.poc) === price);
-
-        var buyW = Math.max(0, halfW * Math.min(1, buyVol / globalMaxBuy));
-        var sellW = Math.max(0, halfW * Math.min(1, sellVol / globalMaxSell));
-        var ratio = 0;
-        if (buyVol > 0 && sellVol > 0) ratio = Math.max(buyVol, sellVol) / Math.min(buyVol, sellVol);
-        else if (buyVol > 0 || sellVol > 0) ratio = Infinity;
-        var isBidImb = buyVol > sellVol && ratio >= imbalanceColor;
-        var isAskImb = sellVol > buyVol && ratio >= imbalanceColor;
-
-        if (mode === FP_MODE_COMPACT) {
-          // Compact: heatmap bars only, no text
-          if (buyW > 0.3) {
-            ctx.fillStyle = isBidImb ? 'rgba(239,68,68,0.72)' : 'rgba(239,68,68,0.28)';
-            ctx.fillRect(x + 1 + halfW - buyW, y - groupH/2, buyW, groupH);
-          }
-          if (sellW > 0.3) {
-            ctx.fillStyle = isAskImb ? 'rgba(34,197,94,0.72)' : 'rgba(34,197,94,0.28)';
-            ctx.fillRect(x + 1 + halfW, y - groupH/2, sellW, groupH);
-          }
-          // POC dot
-          if (isPoc) {
-            ctx.fillStyle = 'rgba(248,195,93,0.94)';
-            ctx.fillRect(xCenter - 2, y - 1.5, 4, 3);
-          }
-        } else {
-          // Full: bid/ask bars + text + POC frame + imbalance
-          if (buyW > 0.3) {
-            ctx.fillStyle = isBidImb ? 'rgba(239,68,68,0.72)' : 'rgba(239,68,68,0.28)';
-            ctx.fillRect(x + 1 + halfW - buyW, y - groupH/2, buyW, groupH);
-          }
-          if (sellW > 0.3) {
-            ctx.fillStyle = isAskImb ? 'rgba(34,197,94,0.72)' : 'rgba(34,197,94,0.28)';
-            ctx.fillRect(x + 1 + halfW, y - groupH/2, sellW, groupH);
-          }
-          // Center separator
-          ctx.strokeStyle = 'rgba(148,163,184,0.10)';
-          ctx.lineWidth = 0.5;
-          ctx.beginPath();
-          ctx.moveTo(x + 1 + halfW, y - groupH/2);
-          ctx.lineTo(x + 1 + halfW, y + groupH/2);
-          ctx.stroke();
-          // POC frame
-          if (isPoc) {
-            ctx.strokeStyle = 'rgba(248,195,93,0.94)';
-            ctx.lineWidth = 1.4;
-            ctx.strokeRect(x + 1.5, y - groupH/2 + 0.5, colW - 3, groupH - 1);
-          }
-          // Stacked imbalance
-          var stackCount = stackedImbalanceCount(levels, levels.indexOf(level), buyVol, sellVol, settings);
-          var stackThresh = Number(settings.imbalanceStack) || 3;
-          if (stackCount >= stackThresh - 1 && colW >= 18) {
-            ctx.strokeStyle = buyVol > sellVol ? 'rgba(239,68,68,0.55)' : 'rgba(34,197,94,0.55)';
-            ctx.lineWidth = 0.8;
-            ctx.setLineDash([2, 2]);
-            ctx.strokeRect(x + 1.5, y - groupH/2 + 0.5, colW - 3, groupH - 1);
-            ctx.setLineDash([]);
-          }
-          // Delta text
-          if (colW >= 40 && groupH >= 9) {
-            var lvDelta = Number(level.delta||0);
-            ctx.fillStyle = lvDelta > 0 ? 'rgba(34,197,94,0.82)' : lvDelta < 0 ? 'rgba(239,68,68,0.82)' : 'rgba(148,163,184,0.55)';
-            ctx.font = '8px JetBrains Mono, monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText(V6OF.format.signed(lvDelta), x + colW/2, y + 2.5);
-            ctx.textAlign = 'left';
-          }
-        }
-      });
-
-      // â”€â”€ Bottom summary bar â”€â”€
-      var GUTTER_BOTTOM = 20;
-      var summaryY = plot.top + plot.height + 1;
-      var summaryH = Math.min(18, GUTTER_BOTTOM - 3);
-      if (summaryH >= 10) {
-        var cd = Number(candle.delta||0);
-        var cv = Number(candle.volume||0);
-        var durMs = candleEndTs(candle) - candleStartTs(candle);
-        var durSec = Math.round(Math.max(0, durMs) / 1000);
-        var durLabel = durSec >= 3600 ? Math.floor(durSec/3600)+'h' : durSec >= 60 ? Math.floor(durSec/60)+'m' : durSec+'s';
-        ctx.textAlign = 'center';
-        // Delta
-        var deltaColor = cd > 0 ? '#22c55e' : cd < 0 ? '#ef4444' : '#94a3b8';
-        ctx.fillStyle = deltaColor;
-        ctx.font = '8px JetBrains Mono, monospace';
-        ctx.fillText((cd>=0?'+':'')+V6OF.format.qty(Math.abs(cd)), xCenter, summaryY + summaryH - 2);
-        // Volume (if wide enough)
-        if (colW >= 30) {
-          ctx.fillStyle = 'rgba(203,213,225,0.62)';
-          ctx.fillText(V6OF.format.qty(cv), xCenter, summaryY + 6);
-        }
-        // Duration
-        if (colW >= 48) {
-          ctx.fillStyle = 'rgba(148,163,184,0.46)';
-          ctx.font = '7px JetBrains Mono, monospace';
-          ctx.fillText(durLabel, xCenter, summaryY + summaryH + 1);
-        }
-        ctx.textAlign = 'left';
-      }
-    }
-    return true;
-  }
-
-  // Backward-compat alias
-  function drawFootprintVp(ctx, vp, plot, candles, settings, overlay) {
-    return drawAdaptiveFootprint(ctx, vp, plot, candles, settings, overlay);
-  }
-
   // Plain candlesticks (base layer) from footprint OHLC, in the viewport space.
   function drawCandlesVp(ctx, vp, plot, candles, settings, state) {
     if (!Array.isArray(candles) || !candles.length) return false;
@@ -1084,11 +1171,12 @@
       var x1 = vp.timeToX(candleStartTs(c));
       var x2 = vp.timeToX(candleEndTs(c));
       var fullW = Math.max(2, x2 - x1);
-      var bodyW = Math.max(1, Math.min(28, fullW * bodyWidthFactor));
+      var bodyW = Math.max(1, fullW * bodyWidthFactor);
       var xc = (x1 + x2) / 2;
       var up = c.close >= c.open;
       var selected = activeOpenTime > 0 && Number(c.openTime || 0) === activeOpenTime;
-      var col = selected ? '#facc15' : (up ? upHex : downHex);
+      var palette = getCandlePalette(settings);
+      var colRgba = selected ? palette.selected : (up ? palette.up : palette.down);
       var yOpen = vp.priceToY(c.open);
       var yClose = vp.priceToY(c.close);
       if (c.synthetic) {
@@ -1096,18 +1184,13 @@
         var synthW = Math.max(2, Math.min(plot.left + plot.width, x2 - 1) - synthX);
         ctx.fillStyle = 'rgba(148, 163, 184, 0.08)';
         ctx.fillRect(synthX, plot.top, synthW, plot.height);
+        // Diagonal hatch via pre-built pattern — avoids per-frame stroke loop.
         ctx.save();
         ctx.beginPath();
         ctx.rect(synthX, plot.top, synthW, plot.height);
         ctx.clip();
-        ctx.strokeStyle = 'rgba(148, 163, 184, 0.32)';
-        ctx.lineWidth = 1;
-        for (var sx = synthX - plot.height; sx < synthX + synthW; sx += 8) {
-          ctx.beginPath();
-          ctx.moveTo(sx, plot.top + plot.height);
-          ctx.lineTo(sx + plot.height, plot.top);
-          ctx.stroke();
-        }
+        ctx.fillStyle = ctx._synthHatchPattern || (ctx._synthHatchPattern = ctx.createPattern(_ensureSynthPattern(), 'repeat'));
+        ctx.fillRect(synthX, plot.top, synthW, plot.height);
         ctx.restore();
         // Draw synthetic candle marker line (use dark color, not white)
         ctx.setLineDash([3, 3]);
@@ -1121,8 +1204,8 @@
         ctx.fillRect(xc - 1, yClose - 1, 2, 2);
         continue;
       }
-      ctx.strokeStyle = hexToRgba(col, 0.96);
-      ctx.fillStyle = hexToRgba(col, 0.96);
+      ctx.strokeStyle = colRgba;
+      ctx.fillStyle = colRgba;
       ctx.lineWidth = selected ? Math.max(1.8, lineWidth + 0.75) : lineWidth;
       // wick (snap to pixel, 1px width for crisp rendering)
       var xc_snap = Math.round(xc);
@@ -1150,6 +1233,17 @@
           ctx.strokeRect(body_left, body_top, Math.round(bodyW), Math.round(bh));
         } else {
           ctx.fillRect(body_left, body_top, Math.round(bodyW), Math.round(bh));
+        }
+        // Doji / tiny candle: body < 3px is ambiguous — draw open/close ticks so
+        // direction remains readable even when the body blends into the wick.
+        if (bh < 3) {
+          var tickW = Math.max(2, Math.round(bodyW * 0.35));
+          ctx.beginPath();
+          ctx.moveTo(Math.round(xc - tickW), Math.round(yOpen) + 0.5);
+          ctx.lineTo(Math.round(xc), Math.round(yOpen) + 0.5);
+          ctx.moveTo(Math.round(xc), Math.round(yClose) + 0.5);
+          ctx.lineTo(Math.round(xc + tickW), Math.round(yClose) + 0.5);
+          ctx.stroke();
         }
         if (selected) {
           ctx.strokeStyle = 'rgba(113, 63, 18, 0.92)';
@@ -1218,38 +1312,160 @@
     ctx.restore();
   }
 
-  function emaPoints(candles, period) {
+  // Incremental EMA cache — avoids O(n) recompute every frame for the
+  // 300+ candles visible at 1m. Only the forming candle changes frame-to-frame,
+  // so we recompute a single point per period.
+  var _emaCache = {};
+
+  function emaPointsCached(candles, period) {
     if (!Array.isArray(candles) || !candles.length) return [];
+    var key = String(period);
+    var cache = _emaCache[key];
+    var len = candles.length;
     var k = 2 / (period + 1);
-    var prev = null;
-    var out = [];
-    for (var i = 0; i < candles.length; i++) {
-      var c = candles[i];
-      var close = Number(c && c.close);
-      if (!Number.isFinite(close)) continue;
-      prev = prev == null ? close : prev + k * (close - prev);
-      out.push({ time: candleMidTs(c), value: prev });
+
+    // Full recompute: cache miss, count dropped (timeframe change), or first call.
+    if (!cache || cache.count > len || cache.count === 0) {
+      var prev = null;
+      var out = new Array(len);
+      for (var i = 0; i < len; i++) {
+        var close = Number(candles[i] && candles[i].close);
+        if (!Number.isFinite(close)) { out[i] = null; continue; }
+        prev = prev == null ? close : prev + k * (close - prev);
+        out[i] = { time: candleMidTs(candles[i]), value: prev };
+      }
+      _emaCache[key] = { count: len, lastEma: prev, points: out };
+      return out;
     }
+
+    // Count grew: new candle(s) appended → resume from last known EMA.
+    if (cache.count < len) {
+      var prev = cache.lastEma;
+      var points = cache.points.slice();
+      for (var i = cache.count; i < len; i++) {
+        var close = Number(candles[i] && candles[i].close);
+        if (!Number.isFinite(close)) { points.push(null); continue; }
+        prev = prev == null ? close : prev + k * (close - prev);
+        points.push({ time: candleMidTs(candles[i]), value: prev });
+      }
+      _emaCache[key] = { count: len, lastEma: prev, points: points };
+      return points;
+    }
+
+    // Same count: only the forming candle (last) changed → recompute last only.
+    var points = cache.points.slice();
+    var i = len - 1;
+    var prev = i > 0 && points[i - 1] ? points[i - 1].value : null;
+    var close = Number(candles[i] && candles[i].close);
+    if (Number.isFinite(close)) {
+      prev = prev == null ? close : prev + k * (close - prev);
+      points[i] = { time: candleMidTs(candles[i]), value: prev };
+    } else {
+      points[i] = null;
+    }
+    _emaCache[key] = { count: len, lastEma: prev, points: points };
+    return points;
+  }
+
+  // Backward-compat alias — still used by V6OF.Studies if external code calls it.
+  function emaPoints(candles, period) {
+    return emaPointsCached(candles, period);
+  }
+
+  // Incremental VWAP cache — tracks cumulative price*volume and volume
+  // per candle so same-count updates are O(1), not O(n).
+  var _vwapCache = null;
+
+  function vwapPointsCached(candles, state) {
+    // Pre-computed VWAP from the state (back-end provides it) → trivial O(1).
+    if (state && state.vwap && Number.isFinite(Number(state.vwap.value)) && candles && candles.length) {
+      var vwapVal = Number(state.vwap.value);
+      if (_vwapCache && _vwapCache.vwapVal === vwapVal && _vwapCache.count === candles.length) {
+        return _vwapCache.points;
+      }
+      var out = new Array(candles.length);
+      for (var i = 0; i < candles.length; i++) {
+        out[i] = { time: candleMidTs(candles[i]), value: vwapVal };
+      }
+      _vwapCache = { vwapVal: vwapVal, count: candles.length, points: out, cumPv: null, cumVol: null };
+      return out;
+    }
+
+    var len = (candles || []).length;
+    if (!len) { _vwapCache = null; return []; }
+
+    // Helper: contribution of a single candle to the HLC3*Vol / Vol accumulator.
+    function candleContrib(c) {
+      var h = Number(c.high), l = Number(c.low), cl = Number(c.close);
+      var v = Number(c.volume || 0);
+      if (!Number.isFinite(h) || !Number.isFinite(l) || !Number.isFinite(cl) || !(v > 0)) return null;
+      return { pv: ((h + l + cl) / 3) * v, vol: v };
+    }
+
+    // Full recompute: cache miss, count shrunk, or previously had pre-computed VWAP.
+    if (!_vwapCache || _vwapCache.count > len || _vwapCache.count === 0 || _vwapCache.vwapVal != null) {
+      var cumPv = [], cumVol = [];
+      var pv = 0, vol = 0;
+      var out = [];
+      for (var i = 0; i < len; i++) {
+        var contrib = candleContrib(candles[i]);
+        if (contrib) {
+          pv += contrib.pv; vol += contrib.vol;
+          cumPv.push(pv); cumVol.push(vol);
+          out.push({ time: candleMidTs(candles[i]), value: pv / vol });
+        } else {
+          // Candle with no volume: carry forward last known value, keep arrays aligned.
+          cumPv.push(pv); cumVol.push(vol);
+          out.push(out.length ? out[out.length - 1] : null);
+        }
+      }
+      _vwapCache = { vwapVal: null, count: len, points: out, cumPv: cumPv, cumVol: cumVol };
+      return out;
+    }
+
+    // Count grew: append new candles incrementally.
+    if (_vwapCache.count < len) {
+      var pv = _vwapCache.cumPv.length ? _vwapCache.cumPv[_vwapCache.cumPv.length - 1] : 0;
+      var vol = _vwapCache.cumVol.length ? _vwapCache.cumVol[_vwapCache.cumVol.length - 1] : 0;
+      var out = _vwapCache.points.slice();
+      var cumPv = _vwapCache.cumPv.slice();
+      var cumVol = _vwapCache.cumVol.slice();
+      for (var i = _vwapCache.count; i < len; i++) {
+        var contrib = candleContrib(candles[i]);
+        if (contrib) {
+          pv += contrib.pv; vol += contrib.vol;
+        }
+        cumPv.push(pv); cumVol.push(vol);
+        out.push(vol > 0 ? { time: candleMidTs(candles[i]), value: pv / vol } : (out.length ? out[out.length - 1] : null));
+      }
+      _vwapCache = { vwapVal: null, count: len, points: out, cumPv: cumPv, cumVol: cumVol };
+      return out;
+    }
+
+    // Same count: only last candle changed (forming) — O(1) recompute.
+    var out = _vwapCache.points.slice();
+    var cumPv = _vwapCache.cumPv.slice();
+    var cumVol = _vwapCache.cumVol.slice();
+    var last = len - 1;
+    var prevPv = last > 0 ? cumPv[last - 1] : 0;
+    var prevVol = last > 0 ? cumVol[last - 1] : 0;
+    var contrib = candleContrib(candles[last]);
+    if (contrib) {
+      cumPv[last] = prevPv + contrib.pv;
+      cumVol[last] = prevVol + contrib.vol;
+      out[last] = cumVol[last] > 0 ? { time: candleMidTs(candles[last]), value: cumPv[last] / cumVol[last] } : null;
+    } else {
+      cumPv[last] = prevPv;
+      cumVol[last] = prevVol;
+      out[last] = last > 0 ? out[last - 1] : null;
+    }
+    _vwapCache = { vwapVal: null, count: len, points: out, cumPv: cumPv, cumVol: cumVol };
     return out;
   }
 
+  // Backward-compat alias.
   function vwapPoints(candles, state) {
-    if (state && state.vwap && Number.isFinite(Number(state.vwap.value)) && candles && candles.length) {
-      return candles.map(function (c) { return { time: candleMidTs(c), value: Number(state.vwap.value) }; });
-    }
-    var out = [];
-    var pv = 0;
-    var vol = 0;
-    for (var i = 0; i < (candles || []).length; i++) {
-      var c = candles[i];
-      var h = Number(c.high), l = Number(c.low), close = Number(c.close);
-      var v = Number(c.volume || 0);
-      if (!Number.isFinite(h) || !Number.isFinite(l) || !Number.isFinite(close) || !(v > 0)) continue;
-      pv += ((h + l + close) / 3) * v;
-      vol += v;
-      if (vol > 0) out.push({ time: candleMidTs(c), value: pv / vol });
-    }
-    return out;
+    return vwapPointsCached(candles, state);
   }
 
   function drawBuiltInChartIndicators(ctx, vp, candles, state, settings) {
@@ -1380,19 +1596,45 @@
 
   function findCandleByOpenTime(candles, openTime) {
     if (!Array.isArray(candles) || !openTime) return null;
-    for (var i = 0; i < candles.length; i++) {
-      if (candleStartTs(candles[i]) === openTime) return candles[i];
-    }
-    return null;
+    var idx = indexOfCandleOpenTime(candles, openTime);
+    return idx >= 0 ? candles[idx] : null;
   }
 
-  function indexOfCandle(candles, candle) {
-    if (!Array.isArray(candles) || !candle) return -1;
-    var target = candleStartTs(candle);
-    for (var i = 0; i < candles.length; i++) {
-      if (candleStartTs(candles[i]) === target) return i;
+  function indexOfCandleOpenTime(candles, openTime) {
+    if (!Array.isArray(candles) || !candles.length) return -1;
+    var target = Number(openTime);
+    if (!Number.isFinite(target)) return -1;
+    var lo = 0, hi = candles.length - 1;
+    while (lo <= hi) {
+      var mid = (lo + hi) >>> 1;
+      var t = candleStartTs(candles[mid]);
+      if (t === target) return mid;
+      if (t < target) lo = mid + 1;
+      else hi = mid - 1;
     }
     return -1;
+  }
+
+  function nearestCandlePick(candles, timeMs) {
+    if (!Array.isArray(candles) || !candles.length) return null;
+    var lo = 0, hi = candles.length - 1;
+    while (lo < hi) {
+      var mid = (lo + hi) >>> 1;
+      if (candleStartTs(candles[mid]) < timeMs) lo = mid + 1;
+      else hi = mid;
+    }
+    var bestIndex = lo;
+    var best = candles[bestIndex];
+    var bestDist = Math.abs(candleMidTs(best) - timeMs);
+    if (lo > 0) {
+      var prev = candles[lo - 1];
+      var prevDist = Math.abs(candleMidTs(prev) - timeMs);
+      if (prevDist < bestDist) {
+        bestIndex = lo - 1;
+        best = prev;
+      }
+    }
+    return { candle: best, index: bestIndex };
   }
 
   function pickCandleAtPoint(canvas, state, x, y) {
@@ -1404,11 +1646,12 @@
     }
     var candles = mergedChartCandles(state);
     if (!candles.length) return null;
-    var candle = nearestCandleAt(candles, vp.xToTime(x));
+    var pick = nearestCandlePick(candles, vp.xToTime(x));
+    var candle = pick && pick.candle;
     if (!candle) return null;
     return {
       candle: candle,
-      index: indexOfCandle(candles, candle),
+      index: pick.index,
       source: candle.source || (Array.isArray(candle.levels) && candle.levels.length ? 'footprint' : 'chart')
     };
   }
@@ -1534,7 +1777,10 @@
     // Toujours afficher la date (DD Mon HH:MM:SS) pour savoir exactement
     // quel jour on survole, mÃªme sur un viewport < 24h.
     var snappedTs = vp.xToTime(snappedX);
-    var timeText = V6OF.timeAxisDate(snappedTs) + ' ' + timeAxisLabel(snappedTs, 1000);
+    var axisStep = (vp && Number.isFinite(vp._timeAxisStep) && vp._timeAxisStep > 0)
+      ? vp._timeAxisStep
+      : timeTicks(vp.timeStart, vp.timeEnd, 7).step;
+    var timeText = V6OF.timeAxisDate(snappedTs) + ' ' + timeAxisLabel(snappedTs, axisStep);
     var tw = 130;
     var xhairGB = (vp && vp._gutterBottom != null) ? vp._gutterBottom : GUTTER_BOTTOM;
     ctx.fillStyle = 'rgba(56, 211, 238, 0.95)';
@@ -1593,48 +1839,136 @@
       ctx.font = 'bold 10px JetBrains Mono, Consolas, monospace';
       ctx.fillText('STALE', plot.left + plot.width - 56, 14);
     }
+
+    // Data gap: fillCandleGaps hit its synthetic cap — some gaps are unfilled.
+    var gf = V6OF.chartGapFill;
+    if (gf && gf.truncated) {
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.88)';
+      ctx.font = 'bold 9px JetBrains Mono, Consolas, monospace';
+      ctx.fillText('DATA GAP', plot.left + plot.width - 72, 28);
+    }
+  }
+
+  function countdownTextForCloseTime(closeTime) {
+    var nowMs = window.BtcMarketClock ? window.BtcMarketClock.now() : Date.now();
+    return formatCountdown(Math.max(0, Number(closeTime) - nowMs));
+  }
+
+  function lastCandleCloseTime(candles) {
+    if (!candles || !candles.length) return 0;
+    return candleEndTs(candles[candles.length - 1]);
+  }
+
+  function drawLastPriceBadge(ctx, canvas, plot, lastPrice, lastY, closeTime) {
+    var gx = plot.left + plot.width;
+    var badgeH = 32;
+    var badgeY = lastY - badgeH / 2;
+    var badgeX = gx + 1;
+    var badgeW = GUTTER_RIGHT - 2;
+    var textX = gx + GUTTER_RIGHT / 2;
+    var countdownY = lastY + 7;
+
+    ctx.save();
+    ctx.fillStyle = '#000000';
+    roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 3);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 11px JetBrains Mono, Consolas, monospace';
+    ctx.fillText(V6OF.format.price(lastPrice), textX, lastY - 6);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px JetBrains Mono, Consolas, monospace';
+    ctx.fillText(closeTime ? countdownTextForCloseTime(closeTime) : '00:00', textX, countdownY);
+    ctx.restore();
+
+    if (canvas) {
+      canvas._v6CountdownLabel = {
+        x: badgeX,
+        y: lastY - 1,
+        w: badgeW,
+        h: 15,
+        textX: textX,
+        textY: countdownY,
+        closeTime: closeTime || 0
+      };
+    }
+  }
+
+  function drawCountdownLabelOnly(canvas) {
+    var label = canvas && canvas._v6CountdownLabel;
+    if (!label || !label.closeTime || !canvas.isConnected) return false;
+    var size = getCanvasCachedSize(canvas);
+    if (!(size.width > 0) || !(size.height > 0)) return false;
+    var dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== Math.floor(size.width * dpr) ||
+        canvas.height !== Math.floor(size.height * dpr)) {
+      return false;
+    }
+
+    var ctx = canvas.getContext('2d');
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(label.x, label.y, label.w, label.h);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px JetBrains Mono, Consolas, monospace';
+    ctx.fillText(countdownTextForCloseTime(label.closeTime), label.textX, label.textY);
+    ctx.restore();
+    return true;
   }
 
   function drawNonePlaceholder(ctx, setup, state) {
     var width = setup.width;
     var height = setup.height;
-    var heatmapFrames = state && Array.isArray(state.heatmapFrames) ? state.heatmapFrames : [];
-    var footprintCandles = state && Array.isArray(state.footprintCandles) ? state.footprintCandles : [];
-    var vwap = state && state.vwap;
-    var book = state && state.orderBook;
-    var mid = book ? book.mid : 0;
 
     ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = (state.settings && state.settings.bgColor) || '#080b12';
+    ctx.fillStyle = (state && state.settings && state.settings.bgColor) || '#080b12';
     ctx.fillRect(0, 0, width, height);
 
-    ctx.strokeStyle = 'rgba(148, 163, 184, 0.06)';
+    // Subtle grid
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.04)';
     ctx.lineWidth = 1;
-    for (var gx = 0; gx < width; gx += 60) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, height); ctx.stroke(); }
-    for (var gy = 0; gy < height; gy += 40) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(width, gy); ctx.stroke(); }
+    for (var gx = 0; gx < width; gx += 80) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, height); ctx.stroke(); }
+    for (var gy = 0; gy < height; gy += 50) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(width, gy); ctx.stroke(); }
 
     var cx = width / 2;
-    var cy = height / 2 - 40;
+    var cy = height / 2;
+    var now = Date.now();
+
+    // Animated spinner ring
+    var spinnerR = 18;
+    var spinnerAngle = (now % 1400) / 1400 * Math.PI * 2;
+    ctx.save();
+    ctx.translate(cx, cy - 24);
+    ctx.lineWidth = 2.5;
+    // Track ring
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.10)';
+    ctx.beginPath();
+    ctx.arc(0, 0, spinnerR, 0, Math.PI * 2);
+    ctx.stroke();
+    // Spinning arc
+    var arcLen = 1.2 + Math.sin(now / 600) * 0.5;
+    ctx.strokeStyle = 'rgba(56, 211, 238, 0.70)';
+    ctx.beginPath();
+    ctx.arc(0, 0, spinnerR, spinnerAngle, spinnerAngle + arcLen);
+    ctx.stroke();
+    ctx.restore();
+
+    // Label
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(226, 232, 240, 0.72)';
-    ctx.font = 'bold 14px Inter, system-ui, sans-serif';
-    ctx.fillText('Chart Mode: None', cx, cy);
-    ctx.fillStyle = 'rgba(148, 163, 184, 0.72)';
-    ctx.font = '12px JetBrains Mono, Consolas, monospace';
-    ctx.fillText(state.symbol || 'BTC', cx, cy + 28);
-    ctx.font = '11px JetBrains Mono, Consolas, monospace';
-    ctx.fillText('Mid: ' + V6OF.format.price(mid), cx, cy + 50);
-    ctx.fillText('Heatmap frames: ' + heatmapFrames.length, cx, cy + 68);
-    ctx.fillText('Footprint candles: ' + footprintCandles.length, cx, cy + 86);
-    if (vwap && Number.isFinite(vwap.value)) {
-      ctx.fillStyle = vwap.isWarm ? 'rgba(245, 158, 11, 0.82)' : 'rgba(245, 158, 11, 0.55)';
-      ctx.fillText('VWAP: ' + V6OF.format.price(vwap.value) + (vwap.isWarm ? '' : '  (not warm)'), cx, cy + 106);
-    }
-    if (state && state.isStale) {
-      ctx.fillStyle = 'rgba(239, 68, 68, 0.85)';
-      ctx.font = 'bold 12px JetBrains Mono, Consolas, monospace';
-      ctx.fillText('âš  STALE â€” no data received', cx, cy + 130);
-    }
+    ctx.fillStyle = 'rgba(203, 213, 225, 0.55)';
+    ctx.font = '13px Inter, system-ui, sans-serif';
+    ctx.fillText('Loading market data\u2026', cx, cy + 10);
+
     ctx.textAlign = 'left';
   }
 
@@ -1710,6 +2044,9 @@
   function drawLive(ctx, setup, state, canvas) {
     var width = setup.width;
     var height = setup.height;
+    var staticCtx = setup.statik && setup.statik.ctx ? setup.statik.ctx : ctx;
+    var dataCtx = setup.data && setup.data.ctx ? setup.data.ctx : ctx;
+    var overlayCtx = setup.overlay && setup.overlay.ctx ? setup.overlay.ctx : ctx;
     var settings = (state && state.settings) || {};
     var heatmapFrames = Array.isArray(state.heatmapFrames) ? state.heatmapFrames : [];
     var footprintCandles = Array.isArray(state.footprintCandles) ? state.footprintCandles : [];
@@ -1718,13 +2055,14 @@
     // Independent layers (TradingView/ATAS model): candles are the base,
     // heatmap is an optional background, footprint is an optional cell overlay.
     var showHeatmap = settings.showHeatmap === true;
-    // FOOTPRINT DISABLED: Complete rewrite in progress
-    var showFootprint = false;  // Footprint rendering is disabled
+    var showFootprint = false;  // resolved after viewport init below
     var showCandles = settings.showOhlc !== false && settings.showCandles !== false;  // Always show OHLC unless explicitly disabled
 
-    ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = settings.bgColor || '#080b12';
-    ctx.fillRect(0, 0, width, height);
+    staticCtx.clearRect(0, 0, width, height);
+    dataCtx.clearRect(0, 0, width, height);
+    overlayCtx.clearRect(0, 0, width, height);
+    staticCtx.fillStyle = settings.bgColor || '#080b12';
+    staticCtx.fillRect(0, 0, width, height);
 
     var bounds = computeLiveBounds(state, showHeatmap);
     // Pass candle interval so the viewport can compute a candle-count-based
@@ -1737,7 +2075,17 @@
         candleStartTs(baseCandles[baseCandles.length - 2])) : 60000);
     var haveData = baseCandles.length || (showHeatmap && heatmapFrames.length);
     if (!haveData || (bounds.timeMax == null && bounds.priceMax == null)) {
-      drawWaiting(ctx, state, bounds, haveData);
+      var cause = emptyChartCause(state, bounds, haveData);
+      // Loading / waiting states → spinner; hard errors → message.
+      var isError = cause && (cause.title.indexOf('permission') >= 0
+        || cause.title.indexOf('source') >= 0
+        || cause.title.indexOf('stale') >= 0
+        || cause.title.indexOf('Stale') >= 0);
+      if (isError) {
+        drawWaiting(dataCtx, state, bounds, haveData);
+      } else {
+        drawNonePlaceholder(staticCtx, setup, state);
+      }
       return;
     }
 
@@ -1760,44 +2108,64 @@
     };
     vp.setPlot(plot);
     vp.syncToData(bounds);
+
+    // Resolve footprint visibility now that vp is initialized.
+    showFootprint = V6OF.UI && V6OF.UI.FootprintIntegration
+      ? V6OF.UI.FootprintIntegration.shouldShowFootprint(vp, settings)
+      : false;
+    var renderData = buildRenderData(state, vp, baseCandles, heatmapFrames, footprintCandles);
+    var renderState = renderData.state;
+    var renderCandles = renderData.candles;
+    var drawCandles = renderData.drawCandles;
+    var renderHeatmapFrames = renderData.heatmapFrames;
     // Re-fit the price axis to the candles actually visible in the time window.
+    // Use lerp-based smoothing to avoid vertical jumps when a new candle
+    // appears or the 18% pad shifts the visible range.
     if (vp.autoFit && baseCandles.length) {
-      var visRange = visiblePriceRange(baseCandles, vp, state, showHeatmap);
-      if (visRange) { vp.priceMin = visRange.min; vp.priceMax = visRange.max; }
+      var visRange = visiblePriceRange(renderCandles.length ? renderCandles : baseCandles, vp, renderState, showHeatmap);
+      if (visRange) { vp.smoothPriceRange(visRange.min, visRange.max); }
     }
 
-    drawGridAndScales(ctx, vp, plot, settings);
+    drawGridAndScales(staticCtx, vp, plot, settings);
 
     var isInteractiveDrag = !!V6OF.chartIsDragging;
 
     // Data layers (clipped to the plot rect): heatmap behind, candles, then
     // footprint cells as an overlay so the candlesticks stay readable.
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(plot.left, plot.top, plot.width, plot.height);
-    ctx.clip();
-    if (showHeatmap && !isInteractiveDrag) drawHeatmapVp(ctx, vp, plot, heatmapFrames, settings);
+    dataCtx.save();
+    dataCtx.beginPath();
+    dataCtx.rect(plot.left, plot.top, plot.width, plot.height);
+    dataCtx.clip();
+    // Heatmap: during drag, blit the frozen offscreen snapshot to avoid the
+    // expensive full rasterize; on release, drawHeatmapVp resumes live.
+    if (showHeatmap) {
+      if (isInteractiveDrag && _hmCache && _hmCache.canvas) {
+        dataCtx.drawImage(_hmCache.canvas, plot.left, plot.top);
+      } else {
+        drawHeatmapVp(dataCtx, vp, plot, renderHeatmapFrames, settings);
+      }
+    }
     // Bubbles behind candles so they don't obscure price action
     if (false && settings.showBubbles === true) {
-      drawBubblesVp(ctx, vp, plot, baseCandles);
+      drawBubblesVp(dataCtx, vp, plot, drawCandles);
     }
-    if (showCandles && baseCandles.length) drawCandlesVp(ctx, vp, plot, baseCandles, settings, state);
-    // FOOTPRINT DISABLED: Complete rewrite in progress
-    // if (showFootprint && !isInteractiveDrag && footprintCandles.length) {
-    //   drawFootprintVp(ctx, vp, plot, footprintCandles, settings, showCandles);
-    // }
-    ctx.restore();
+    if (showCandles && drawCandles.length) drawCandlesVp(dataCtx, vp, plot, drawCandles, settings, renderState);
+    // Footprint overlay via the new v6 pipeline (091-095).
+    if (showFootprint && !isInteractiveDrag) {
+      V6OF.UI.FootprintIntegration.renderFootprintsToCanvas(dataCtx, vp, plot, renderState, settings);
+    }
+    dataCtx.restore();
 
     // â”€â”€ Indicator overlays (EMA, SMA, Bollinger, etc.) â”€â”€
     if (V6OF.Indicators && V6OF.Indicators.drawAll) {
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(plot.left, plot.top, plot.width, plot.height);
-      ctx.clip();
-      V6OF.Indicators.drawAll(ctx, vp, plot, state, baseCandles);
-      ctx.restore();
+      dataCtx.save();
+      dataCtx.beginPath();
+      dataCtx.rect(plot.left, plot.top, plot.width, plot.height);
+      dataCtx.clip();
+      V6OF.Indicators.drawAll(dataCtx, vp, plot, renderState, drawCandles);
+      dataCtx.restore();
     }
-    drawBuiltInChartIndicators(ctx, vp, baseCandles, state, settings);
+    drawBuiltInChartIndicators(dataCtx, vp, drawCandles, renderState, settings);
 
     // Reference price lines (mid / bid / ask / poc / vwap)
     var lastFrame = heatmapFrames.length ? heatmapFrames[heatmapFrames.length - 1] : null;
@@ -1824,58 +2192,24 @@
         var lastY = vp.priceToY(lastPrice);
         
         // Dotted line spanning chart (up to the price axis)
-        ctx.save();
-        ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([1, 2]);
-        ctx.beginPath();
-        ctx.moveTo(plot.left, lastY);
-        ctx.lineTo(plot.left + plot.width, lastY);
-        ctx.stroke();
-        ctx.restore();
+        overlayCtx.save();
+        overlayCtx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
+        overlayCtx.lineWidth = 1;
+        overlayCtx.setLineDash([1, 2]);
+        overlayCtx.beginPath();
+        overlayCtx.moveTo(plot.left, lastY);
+        overlayCtx.lineTo(plot.left + plot.width, lastY);
+        overlayCtx.stroke();
+        overlayCtx.restore();
 
-        // Price scale badge (right gutter)
-        var gx = plot.left + plot.width;
-        var badgeH = 32;
-        var badgeY = lastY - badgeH / 2;
-
-        ctx.save();
-        // Badge Background: Pitch black matching the dark theme
-        ctx.fillStyle = '#000000';
-        roundRect(ctx, gx + 1, badgeY, GUTTER_RIGHT - 2, badgeH, 3);
-        ctx.fill();
-
-        // Subtle borders to give it a premium finish
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        // Set alignment and text settings
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-
-        // 1. Bold price label in white
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 11px JetBrains Mono, Consolas, monospace';
-        ctx.fillText(V6OF.format.price(lastPrice), gx + GUTTER_RIGHT / 2, lastY - 6);
-
-        // 2. Countdown label below price in slate gray
-        var countdownText = '00:00';
-        if (baseCandles && baseCandles.length) {
-          var lastCandleObj = baseCandles[baseCandles.length - 1];
-          var closeTime = candleEndTs(lastCandleObj);
-          var nowMs = window.BtcMarketClock ? window.BtcMarketClock.now() : Date.now();
-          var ms = Math.max(0, closeTime - nowMs);
-          countdownText = formatCountdown(ms);
-        }
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '10px JetBrains Mono, Consolas, monospace';
-        ctx.fillText(countdownText, gx + GUTTER_RIGHT / 2, lastY + 7);
-
-        ctx.restore();
+        drawLastPriceBadge(overlayCtx, canvas, plot, lastPrice, lastY, lastCandleCloseTime(baseCandles));
+      } else if (canvas) {
+        canvas._v6CountdownLabel = null;
       }
+    } else if (canvas) {
+      canvas._v6CountdownLabel = null;
     }
-    if (false && showFootprint && lastCandle) drawPriceLineVp(ctx, vp, plot, Number(lastCandle.poc), 'rgba(248, 195, 93, 0.94)', 'POC', true);
+    if (false && showFootprint && lastCandle) drawPriceLineVp(overlayCtx, vp, plot, Number(lastCandle.poc), 'rgba(248, 195, 93, 0.94)', 'POC', true);
     // VWAP removed â€” keep chart clean
     // if (settings.showVwap !== false && state.vwap && Number.isFinite(state.vwap.value)) {
     //   drawPriceLineVp(ctx, vp, plot, Number(state.vwap.value),
@@ -1883,14 +2217,14 @@
     // }
 
     // Selection is shown by coloring the selected candle yellow in drawCandlesVp.
-    drawVolumeProfile(ctx, vp, plot, state, canvas);
-    drawTimelineBookmarks(ctx, vp, plot, state, canvas);
-    drawCrosshair(ctx, vp, plot, baseCandles, canvas);
+    drawVolumeProfile(overlayCtx, vp, plot, renderState, canvas);
+    drawTimelineBookmarks(overlayCtx, vp, plot, renderState, canvas);
+    drawCrosshair(overlayCtx, vp, plot, renderCandles.length ? renderCandles : baseCandles, canvas);
 
     // Debug grid overlay (when V6OF.DEBUG_RENDER = true)
     if (V6OF.DEBUG_RENDER && V6OF.CanvasEnhancements && typeof V6OF.CanvasEnhancements.drawDebugGridOverlay === 'function') {
       try {
-        V6OF.CanvasEnhancements.drawDebugGridOverlay(ctx, vp, plot, 40, 16);
+        V6OF.CanvasEnhancements.drawDebugGridOverlay(overlayCtx, vp, plot, 40, 16);
       } catch (e) {
         // Debug overlay failed silently to prevent breaking chart render
       }
@@ -1900,13 +2234,16 @@
       V6OF.updateViewportToolbarState();
     }
     V6OF._followLiveBtn = null;
+
+    // Status badges (LIVE, STALE, DATA GAP, etc.) on the overlay layer.
+    drawLiveInfo(overlayCtx, vp, plot, state, settings);
   }
 
   function internalDraw(canvas, state) {
     var perfStart = window.performance ? performance.now() : 0;
-    var setup = setupCanvas(canvas);
+    var setup = setupChartLayers(canvas);
     if (!setup) return;
-    var ctx = setup.ctx;
+    var ctx = setup.overlay.ctx;
     var width = setup.width;
     var height = setup.height;
     // Live-only: always render the live chart engine. No mock path.
@@ -1914,19 +2251,161 @@
     recordPerf('chart', perfStart);
   }
 
+  function internalDrawOverlay(canvas, state) {
+    var setup = setupCanvas(canvas);
+    if (!setup) return;
+    var ctx = setup.ctx;
+    var width = setup.width;
+    var height = setup.height;
+    var vp = V6OF.chart;
+    var plot = vp && vp.plot;
+    if (!vp || !plot) return;
+    state = state || canvas._v6PendingState || {};
+    var baseCandles = mergedChartCandles(state);
+    var heatmapFrames = Array.isArray(state.heatmapFrames) ? state.heatmapFrames : [];
+    var footprintCandles = Array.isArray(state.footprintCandles) ? state.footprintCandles : [];
+    var settings = state.settings || {};
+
+    ctx.clearRect(0, 0, width, height);
+
+    var lastFrame = heatmapFrames.length ? heatmapFrames[heatmapFrames.length - 1] : null;
+    var book = state.orderBook;
+    var mid = book && Number.isFinite(book.mid) ? book.mid : (lastFrame ? lastFrame.mid : NaN);
+    if (settings.showLastPrice !== false) {
+      var lastPrice = 0;
+      var trades = state.trades || [];
+      if (trades.length && Number.isFinite(trades[0].price)) lastPrice = trades[0].price;
+      if (!lastPrice && Number.isFinite(mid)) lastPrice = mid;
+      if (lastPrice && Number.isFinite(lastPrice) && lastPrice >= vp.priceMin && lastPrice <= vp.priceMax) {
+        var lastY = vp.priceToY(lastPrice);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([1, 2]);
+        ctx.beginPath();
+        ctx.moveTo(plot.left, lastY);
+        ctx.lineTo(plot.left + plot.width, lastY);
+        ctx.stroke();
+        ctx.restore();
+        drawLastPriceBadge(ctx, canvas, plot, lastPrice, lastY, lastCandleCloseTime(baseCandles));
+      } else {
+        canvas._v6CountdownLabel = null;
+      }
+    } else {
+      canvas._v6CountdownLabel = null;
+    }
+
+    drawVolumeProfile(ctx, vp, plot, state, canvas);
+    drawTimelineBookmarks(ctx, vp, plot, state, canvas);
+    drawCrosshair(ctx, vp, plot, baseCandles, canvas);
+  }
+
+  var countdownTickerId = null;
+  var countdownTickerCanvas = null;
+  var activeChartCanvas = null;
+  var dprMediaQuery = null;
+  var dprMediaHandler = null;
+
+  function isOrderflowPageActive(canvas) {
+    if (!canvas || !canvas.isConnected) return false;
+    var page = document.body && document.body.getAttribute('data-current-page');
+    return page === 'orderflow';
+  }
+
+  function stopCountdownTicker() {
+    if (countdownTickerId != null) {
+      clearInterval(countdownTickerId);
+      countdownTickerId = null;
+    }
+    countdownTickerCanvas = null;
+  }
+
+  function ensureCountdownTicker(canvas) {
+    if (!isOrderflowPageActive(canvas)) {
+      stopCountdownTicker();
+      return;
+    }
+    countdownTickerCanvas = canvas;
+    if (countdownTickerId != null) return;
+    countdownTickerId = setInterval(function () {
+      if (document.hidden) return;  // pause in background tabs
+      var cv = countdownTickerCanvas;
+      if (!isOrderflowPageActive(cv)) {
+        stopCountdownTicker();
+        return;
+      }
+      if (V6OF.chartIsDragging) return;
+      if (cv._v6PendingState && cv.offsetWidth > 0 && cv.offsetHeight > 0) {
+        drawCountdownLabelOnly(cv);
+      }
+    }, 1000);
+  }
+
+  function removeDprWatcher() {
+    if (!dprMediaQuery || !dprMediaHandler) return;
+    if (typeof dprMediaQuery.removeEventListener === 'function') {
+      dprMediaQuery.removeEventListener('change', dprMediaHandler);
+    } else if (typeof dprMediaQuery.removeListener === 'function') {
+      dprMediaQuery.removeListener(dprMediaHandler);
+    }
+    dprMediaQuery = null;
+    dprMediaHandler = null;
+  }
+
+  function redrawAfterDprChange() {
+    var canvas = activeChartCanvas;
+    installDprWatcher(canvas);
+    if (!isOrderflowPageActive(canvas) || !canvas._v6PendingState) return;
+    canvas._v6LastDpr = 0;
+    V6OF.CanvasChart.draw(canvas);
+  }
+
+  function installDprWatcher(canvas) {
+    activeChartCanvas = canvas || activeChartCanvas;
+    if (!window.matchMedia) return;
+    var dpr = window.devicePixelRatio || 1;
+    var query = '(resolution: ' + dpr + 'dppx)';
+    if (dprMediaQuery && dprMediaQuery.media === query) return;
+    removeDprWatcher();
+    dprMediaHandler = redrawAfterDprChange;
+    dprMediaQuery = window.matchMedia(query);
+    if (typeof dprMediaQuery.addEventListener === 'function') {
+      dprMediaQuery.addEventListener('change', dprMediaHandler);
+    } else if (typeof dprMediaQuery.addListener === 'function') {
+      dprMediaQuery.addListener(dprMediaHandler);
+    }
+  }
+
   V6OF.register('UI', 'CanvasChart', {
     draw: function (canvas, state) {
       if (!canvas) return;
+      activeChartCanvas = canvas;
+      installDprWatcher(canvas);
+      ensureCountdownTicker(canvas);
       if (state) canvas._v6PendingState = state;
       if (canvas._v6DrawQueued) return;
       canvas._v6DrawQueued = true;
-      var schedule = typeof requestAnimationFrame === 'function' && !document.hidden
-        ? requestAnimationFrame
+      var schedule = typeof requestAnimationFrame === 'function'
+        ? requestAnimationFrame  // RAF auto-pauses when tab is hidden
         : function (fn) { return setTimeout(fn, 33); };
       schedule(function () {
         canvas._v6DrawQueued = false;
         internalDraw(canvas, canvas._v6PendingState);
       });
+    },
+    drawNow: function (canvas, state) {
+      if (!canvas) return;
+      activeChartCanvas = canvas;
+      installDprWatcher(canvas);
+      ensureCountdownTicker(canvas);
+      if (state) canvas._v6PendingState = state;
+      canvas._v6DrawQueued = false;
+      internalDraw(canvas, canvas._v6PendingState);
+    },
+    redrawOverlay: function (canvas, state) {
+      if (!canvas) return;
+      if (state) canvas._v6PendingState = state;
+      internalDrawOverlay(canvas, canvas._v6PendingState);
     },
     pickCandle: function (canvas, state, x, y) {
       return pickCandleAtPoint(canvas, state || {}, x, y);
@@ -1934,18 +2413,55 @@
     // Exposed so snapTimeToCandle in interactions.js uses the same
     // merged candle array as the chart renderer, preventing crosshair
     // from snapping to 1m footprint candles on higher timeframes.
-    mergedCandles: mergedChartCandles
-  }, 'CanvasChart');
+    mergedCandles: mergedChartCandles,
 
-  // Periodic ticker to refresh the canvas chart every 1s for the countdown clock
-  setInterval(function () {
-    var canvas = document.querySelector('[data-v6-chart]');
-    if (canvas && canvas._v6PendingState) {
-      if (canvas.offsetWidth > 0 && canvas.offsetHeight > 0) {
-        V6OF.CanvasChart.draw(canvas);
+    // Release all canvas-attached state and module-level references.
+    // Call on page unmount to prevent _v6PendingState leaks.
+    cleanup: function (canvas) {
+      stopCountdownTicker();
+      removeDprWatcher();
+      activeChartCanvas = null;
+      if (canvas) {
+        // Canvas-attached state
+        canvas._v6PendingState = null;
+        canvas._v6DrawQueued = false;
+        canvas._v6CountdownLabel = null;
+        canvas._v6vp = null;
+        canvas._v6suppressBottomGutter = false;
+        canvas._v6LastDpr = 0;
+        // ResizeObserver
+        if (canvas._v6SizeObserver) {
+          try { canvas._v6SizeObserver.disconnect(); } catch (_) {}
+          canvas._v6SizeObserver = null;
+        }
+        canvas._v6SizeObserverBound = false;
+        canvas._v6SizeCache = null;
       }
+      // Global state
+      V6OF.chart = null;
+      V6OF.chartIsDragging = false;
+      _hmCache = null;
+      _heatmapBoundsCache = null;
+      _heatmapBoundsFirst = null;
+      _heatmapBoundsLast = null;
+      _heatmapBoundsLen = 0;
+      _mergedCandlesCache = null;
+      _mergedCandlesSig = '';
+      _mergedCandlesVersion = -1;
+      _aggregatedFpCache = null;
+      _aggregatedFpSrc = null;
+      _aggregatedFpTf = '';
+      _boundsCache = null;
+      _boundsSrcFrames = null;
+      _boundsSrcCandles = null;
+      _boundsSrcHeatmap = null;
+      _boundsVersion = -1;
+      _emaCache = {};
+      _vwapCache = null;
+      _paletteCache = null;
+      _paletteSig = '';
     }
-  }, 1000);
+  }, 'CanvasChart');
 
   function drawTimelineBookmarks(ctx, vp, plot, state, canvas) {
     var settings = state.settings || {};

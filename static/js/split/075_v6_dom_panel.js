@@ -22,9 +22,8 @@
     };
   }
 
-  var DOM_ROW_HEIGHT  = 15;  // px, matches terminal-exocharts-photo-perfect-v2.html
+  var DOM_ROW_HEIGHT  = 15;  // px default — overridden at mount from --exo-row CSS var
   var OVERSCAN        = 8;   // rows hors viewport, pour le scroll fluide
-  var RENDER_THROTTLE = 50;  // ms
 
   // ── Formatters ──────────────────────────────────────────────────────────────
 
@@ -73,6 +72,16 @@
     if (v == null || !Number.isFinite(Number(v))) return '-';
     if (v >= 1000) return String(Math.round(v));
     return Number.isInteger(v) ? String(v) : v.toFixed(2);
+  }
+
+  function fmtGap(v) {
+    if (v == null || !Number.isFinite(Number(v))) return '-';
+    var abs = Math.abs(Number(v));
+    var body = abs >= 1000 ? String(Math.round(abs))
+      : abs >= 10 ? trimZeros(abs.toFixed(1))
+      : abs >= 1 ? trimZeros(abs.toFixed(2))
+      : trimZeros(abs.toFixed(4));
+    return (v > 0 ? '+' : v < 0 ? '-' : '') + body;
   }
 
   function escAttr(value) {
@@ -154,6 +163,53 @@
     return Math.max(0, Math.round(localDrops + engineDrops));
   }
 
+  function latestChartClose(state) {
+    var candles = state && (state.chartCandles || state.candles);
+    if (!Array.isArray(candles) || !candles.length) return NaN;
+    for (var i = candles.length - 1; i >= 0; i--) {
+      var close = Number(candles[i] && candles[i].close);
+      if (Number.isFinite(close) && close > 0) return close;
+    }
+    return NaN;
+  }
+
+  function chartSourceLabel(state) {
+    var candles = state && (state.chartCandles || state.candles);
+    var last = Array.isArray(candles) && candles.length ? candles[candles.length - 1] : null;
+    var src = String((last && (last.source || last.exchange || last.analyticsSource)) || 'chart');
+    return src.indexOf('binance') >= 0 ? 'Binance kline' : src;
+  }
+
+  function updatePriceGapIndicator(container, snap, state) {
+    var refs = container && container._domStatRefs;
+    var els = refs && refs['price-gap'];
+    if (!els || !els.length) return;
+    var domMid = Number(snap && snap.midPrice);
+    var chartClose = latestChartClose(state);
+    var text = 'DOM/CHART -';
+    var mode = 'is-empty';
+    var title = 'DOM mid and chart last close unavailable';
+    if (Number.isFinite(domMid) && domMid > 0 && Number.isFinite(chartClose) && chartClose > 0) {
+      var gap = domMid - chartClose;
+      var pct = chartClose ? (gap / chartClose) * 100 : 0;
+      var spread = Math.abs(Number(snap && snap.spread) || 0);
+      var warn = Math.max(spread * 2, chartClose * 0.0005);
+      var alert = Math.max(spread * 5, chartClose * 0.002);
+      mode = Math.abs(gap) >= alert ? 'is-alert' : (Math.abs(gap) >= warn ? 'is-warn' : 'is-ok');
+      text = 'DOM-CHART ' + fmtGap(gap);
+      title = 'DOM mid ' + fmtPrice(domMid) +
+        ' vs chart close ' + fmtPrice(chartClose) +
+        ' (' + fmtGap(pct) + '%). DOM source: ' + sourceLabel(state, snap) +
+        '. Chart source: ' + chartSourceLabel(state) + '.';
+    }
+    for (var i = 0; i < els.length; i++) {
+      if (els[i].textContent !== text) els[i].textContent = text;
+      els[i].classList.remove('is-ok', 'is-warn', 'is-alert', 'is-empty');
+      els[i].classList.add(mode);
+      els[i].setAttribute('title', title);
+    }
+  }
+
   function renderStats(container, snap, state, live, settings) {
     setStat(container, 'source', sourceLabel(state, snap));
     setStat(container, 'age',    fmtAge(state.lastOrderBookTs || snap.lastUpdate));
@@ -164,6 +220,7 @@
     setStat(container, 'seq',    domSequenceLabel(snap));
     setStat(container, 'gap',    String(domGapCount(snap)));
     setStat(container, 'drop',   String(domDroppedCount(state, snap)));
+    updatePriceGapIndicator(container, snap, state);
     syncControls(container, snap.priceGrouping || 25, settings);
     // Σ BID / Σ ASK footer
     var sigmaFoot = container.querySelector('[data-v6-dom-sigma]');
@@ -185,43 +242,44 @@
 
   // ── Scroll / Follow ─────────────────────────────────────────────────────────
 
-  var suppressScrollUntil = 0;
   var autoCenter   = true;
   var userScrolled = false;
   var lastMidTick  = null;      // pour detecter le mouvement du mid
   var followRaf    = null;
   var followPending = null;
 
-  function scheduleFollowReturn(container) {
-    // Disabled to prevent automatic mid-centering from resetting the viewport.
-    // The user must explicitly request follow mid via the "Follow mid" button.
-  }
-
   // ── Center on a tick (smooth si le mid a bouge, instant sinon) ──
+
+  // Set a flag on the container to suppress user-scroll detection for one tick.
+  // Cleared asynchronously so synchronous scroll events (from scrollTop=) see it,
+  // and smooth-scroll animation events also stay suppressed.
+  function suppressScrollDetection(container, durationMs) {
+    container._suppressScrollDetection = true;
+    setTimeout(function () {
+      container._suppressScrollDetection = false;
+    }, durationMs || 0);
+  }
 
   function centerOnTick(body, tick, maxTick, smooth) {
     if (!body || tick == null) return;
+    var container = body.closest && body.closest('[data-v6-dom-list]');
     var rowIndex     = maxTick - tick;
     var targetCenter = Math.max(0, Math.round((body.clientHeight - DOM_ROW_HEIGHT) * 0.48));
     var nextTop      = Math.max(0, rowIndex * DOM_ROW_HEIGHT - targetCenter);
-    suppressScrollUntil = Date.now() + (smooth ? 600 : 100);
+    if (container) suppressScrollDetection(container, smooth ? 700 : 0);
     if (smooth && typeof body.scrollTo === 'function') {
       body.scrollTo({ top: nextTop, behavior: 'smooth' });
     } else {
-      // Direct assignment is synchronous, so the re-render below sees the new top.
       body.scrollTop = nextTop;
     }
     // Re-render the virtual window for the NEW scrollTop immediately. renderVirtual
     // keys off body.scrollTop; without this, an auto-center leaves the rows
     // rendered for the previous (pre-scroll) position and stranded off-screen —
     // the cause of the "empty ladder on load" until you click Follow mid.
-    var ctn = body.closest && body.closest('[data-v6-dom-list]');
-    if (ctn && ctn._domLastSnap) {
-      renderVirtual(body, ctn._domLastSnap, ctn._domLastLive || 0,
-        (ctn._domLastState && ctn._domLastState.settings) || {});
+    if (container && container._domLastSnap) {
+      renderVirtual(body, container._domLastSnap, container._domLastLive || 0,
+        (container._domLastState && container._domLastState.settings) || {});
     }
-    setTimeout(function () { if (Date.now() >= suppressScrollUntil) suppressScrollUntil = 0; },
-      smooth ? 660 : 120);
   }
 
   // ── Column registry ──────────────────────────────────────────────────────────
@@ -237,8 +295,6 @@
       label: 'VOL',
       render: function (ctx) {
         var style = 'width:' + ctx.widths.vol + '; flex-shrink:0;';
-        var alpha = ctx.heat.vol || 0;
-        if (alpha > 0) style += ' background: rgba(var(--v6-accent-rgb), ' + alpha.toFixed(3) + ');';
         var raw = (Number(ctx.lv.buyVol) || 0) + (Number(ctx.lv.sellVol) || 0);
         return '<div class="v6-dom-cell v6-dom-cell-vol" style="' + style + '">' + fmtMode(raw, false, ctx.vctx) + '</div>';
       }
@@ -248,8 +304,6 @@
       label: 'SELL',
       render: function (ctx) {
         var style = 'width:' + ctx.widths.sell + '; flex-shrink:0;';
-        var alpha = ctx.heat.sell || 0;
-        if (alpha > 0) style += ' background: rgba(var(--v6-sell-rgb), ' + alpha.toFixed(3) + ');';
         return '<div class="v6-dom-cell v6-dom-cell-sell" style="' + style + '">' + fmtMode(ctx.lv.sellVol, false, ctx.vctx) + '</div>';
       }
     },
@@ -258,8 +312,6 @@
       label: 'BUY',
       render: function (ctx) {
         var style = 'width:' + ctx.widths.buy + '; flex-shrink:0;';
-        var alpha = ctx.heat.buy || 0;
-        if (alpha > 0) style += ' background: rgba(var(--v6-buy-rgb), ' + alpha.toFixed(3) + ');';
         return '<div class="v6-dom-cell v6-dom-cell-buy" style="' + style + '">' + fmtMode(ctx.lv.buyVol, false, ctx.vctx) + '</div>';
       }
     },
@@ -268,8 +320,8 @@
       label: 'BID',
       render: function (ctx) {
         var style = 'width:' + ctx.widths.bid + '; flex-shrink:0;';
-        return '<div class="v6-dom-cell v6-dom-cell-bid' + ctx.bidChangeClass + '" style="' + style + '" role="gridcell" tabindex="0" aria-label="' + escAttr('Bid size ' + ctx.bidText + ' at price ' + ctx.priceText) + '">' +
-          '<div class="v6-dom-bar is-bid" style="width:' + ctx.bidPct + '%"></div>' +
+        return '<div class="v6-dom-cell v6-dom-cell-bid' + ctx.bidChangeClass + '" style="' + style + '" role="gridcell" tabindex="-1">' +
+          '<div class="v6-dom-bar is-bid" style="transform:scaleX(' + (ctx.bidPct / 100).toFixed(3) + ')"></div>' +
           '<span class="v6-dom-val">' + (ctx.bidText === '0' ? '' : ctx.bidText) + '</span>' +
         '</div>';
       }
@@ -279,7 +331,7 @@
       label: 'PRICE',
       render: function (ctx) {
         var style = 'width:' + ctx.widths.price + '; flex-shrink:0;';
-        return '<div class="v6-dom-cell v6-dom-cell-price" style="' + style + '" role="gridcell" tabindex="0" aria-label="' + escAttr(ctx.rowLabel) + '">' + ctx.marker + ctx.priceText + ctx.liveBadge + '</div>';
+        return '<div class="v6-dom-cell v6-dom-cell-price" style="' + style + '" role="gridcell" tabindex="-1" >' + ctx.marker + ctx.priceText + ctx.liveBadge + '</div>';
       }
     },
     ask: {
@@ -287,8 +339,8 @@
       label: 'ASK',
       render: function (ctx) {
         var style = 'width:' + ctx.widths.ask + '; flex-shrink:0;';
-        return '<div class="v6-dom-cell v6-dom-cell-ask' + ctx.askChangeClass + '" style="' + style + '" role="gridcell" tabindex="0" aria-label="' + escAttr('Ask size ' + ctx.askText + ' at price ' + ctx.priceText) + '">' +
-          '<div class="v6-dom-bar is-ask" style="width:' + ctx.askPct + '%"></div>' +
+        return '<div class="v6-dom-cell v6-dom-cell-ask' + ctx.askChangeClass + '" style="' + style + '" role="gridcell" tabindex="-1" >' +
+          '<div class="v6-dom-bar is-ask" style="transform:scaleX(' + (ctx.askPct / 100).toFixed(3) + ')"></div>' +
           '<span class="v6-dom-val">' + (ctx.askText === '0' ? '' : ctx.askText) + '</span>' +
         '</div>';
       }
@@ -298,11 +350,6 @@
       label: 'DELTA',
       render: function (ctx) {
         var style = 'width:' + ctx.widths.delta + '; flex-shrink:0;';
-        var alpha = ctx.heat.delta || 0;
-        if (alpha > 0) {
-          var rgbVar = (Number(ctx.lv.delta) || 0) >= 0 ? '--v6-buy-rgb' : '--v6-sell-rgb';
-          style += ' background: rgba(var(' + rgbVar + '), ' + alpha.toFixed(3) + ');';
-        }
         return '<div class="v6-dom-cell v6-dom-cell-delta" style="' + style + '">' + fmtModeSigned(ctx.lv.delta, ctx.vctx) + '</div>';
       }
     },
@@ -380,7 +427,7 @@
     return cols && Array.isArray(cols) && cols.length > 0 ? cols : ['vol', 'sell', 'buy', 'bid', 'price', 'ask', 'delta'];
   }
 
-  function getColumnWidths(cols, settings) {
+  function getColumnWidths(cols, settings, availableWidth) {
     var widths = {};
     var custom = settings && settings.domColumnWidths && typeof settings.domColumnWidths === 'object'
       ? settings.domColumnWidths : {};
@@ -388,7 +435,7 @@
       var fallback = DOM_REFERENCE_COLUMN_WIDTHS[c] || (((COLUMN_DEFS[c] && COLUMN_DEFS[c].weight) || 10) * 4);
       widths[c] = clampColumnWidth(custom[c], fallback) + 'px';
     });
-    widths._total = totalColumnWidth(cols, widths);
+    fitColumnWidthsToAvailable(cols, widths, availableWidth);
     return widths;
   }
 
@@ -400,6 +447,36 @@
       total += parseFloat(w) || 0;
     });
     return Math.max(1, Math.round(total));
+  }
+
+  function fitColumnWidthsToAvailable(cols, widths, availableWidth) {
+    var currentTotal = totalColumnWidth(cols, widths);
+    var target = Math.floor(Number(availableWidth) || 0);
+    if (!cols.length || !(target > currentTotal)) {
+      widths._total = currentTotal;
+      return widths;
+    }
+
+    var remaining = target - currentTotal;
+    var baseTotal = 0;
+    cols.forEach(function (c) { baseTotal += parseFloat(widths[c]) || 0; });
+    if (!(baseTotal > 0)) {
+      widths._total = currentTotal;
+      return widths;
+    }
+
+    var distributed = 0;
+    cols.forEach(function (c, idx) {
+      var base = parseFloat(widths[c]) || 0;
+      var add = idx === cols.length - 1
+        ? remaining - distributed
+        : Math.floor(remaining * (base / baseTotal));
+      distributed += add;
+      widths[c] = Math.max(DOM_COLUMN_MIN_WIDTH, Math.round(base + add)) + 'px';
+    });
+
+    widths._total = totalColumnWidth(cols, widths);
+    return widths;
   }
 
   function columnBoundaryBackground(cols, widths) {
@@ -422,13 +499,23 @@
       var label = (COLUMN_DEFS[c] && COLUMN_DEFS[c].label) || c.toUpperCase();
       return '<div class="v6-dom-col v6-dom-col-' + c + ' v6-dom-draghead" style="' + style + '" data-col="' + c + '" draggable="true">' +
         label +
-        '<span class="v6-dom-col-resizer" data-dom-col-resize="' + c + '" title="Ajuster ' + label + '"></span>' +
+        '<span class="v6-dom-col-resizer" data-dom-col-resize="' + c + '" draggable="false" title="Ajuster ' + label + '"></span>' +
         '<span class="v6-dom-dragicon">&#9776;</span>' +
         '</div>';
     }).join('');
   }
 
   // ── Skeleton HTML ─────────────────────────────────────────────────────────────
+
+  // Read --exo-row CSS custom property once at mount so DOM_ROW_HEIGHT stays
+  // in sync with the design system (single source of truth in CSS).
+  function syncRowHeightFromCSS() {
+    try {
+      var root = document.getElementById('v6-orderflow-root') || document.body;
+      var v = window.getComputedStyle(root).getPropertyValue('--exo-row').trim();
+      if (v && v !== '') { var px = parseFloat(v); if (Number.isFinite(px) && px > 0) DOM_ROW_HEIGHT = px; }
+    } catch (e) { /* keep default */ }
+  }
 
   function buildSkeleton(container, grouping, groupOpts) {
     var groupSelectHtml = groupOpts.map(function (g) {
@@ -447,6 +534,7 @@
           '<span class="v6-dom-stat"><em>SEQ</em><strong data-dom-stat="seq">-</strong></span>' +
           '<span class="v6-dom-stat"><em>GAP</em><strong data-dom-stat="gap">0</strong></span>' +
           '<span class="v6-dom-stat"><em>DROP</em><strong data-dom-stat="drop">0</strong></span>' +
+          '<span class="v6-dom-stat"><em>DOM/CHART</em><strong data-dom-stat="price-gap">-</strong></span>' +
         '</div>' +
         '<div class="v6-dom-hright">' +
           '<span class="v6-dom-stat"><em>DEPTH</em><span data-dom-stat="depth">0/0</span></span>' +
@@ -456,6 +544,7 @@
         '<span class="v6-panel-tick" aria-hidden="true"></span>' +
         '<span class="v6-panel-title">DOM</span>' +
         '<span class="v6-panel-meta" data-dom-stat="source">—</span>' +
+        '<span class="v6-panel-price-gap is-empty" data-dom-stat="price-gap">DOM/CHART -</span>' +
         '<span class="v6-panel-sp"></span>' +
         '<span class="v6-panel-grab" aria-hidden="true">&#x2807;</span>' +
         '<button type="button" class="v6-panel-ib" data-v6-action="panel-settings" title="Settings" aria-label="Panel settings">&#x2699;</button>' +
@@ -471,6 +560,9 @@
       '<div class="v6-dom-body" role="grid" aria-label="Depth of market price ladder"></div>' +
       '<div class="v6-dom-stale-overlay" data-dom-stale-overlay hidden aria-live="polite">' +
         '<strong>Stale DOM</strong><span data-dom-stale-text>Waiting for order book</span>' +
+      '</div>' +
+      '<div class="v6-dom-empty-overlay" data-dom-empty-overlay hidden aria-live="polite">' +
+        '<span>Waiting for order book\u2026</span>' +
       '</div>' +
       '<div class="v6-dom-activity-above" data-dom-activity-above hidden aria-live="polite">▲ Activity above window</div>' +
       '<div class="v6-dom-activity-below" data-dom-activity-below hidden aria-live="polite">▼ Activity below window</div>' +
@@ -494,10 +586,25 @@
   }
 
   function setStat(container, name, value) {
-    var els = container.querySelectorAll('[data-dom-stat="' + name + '"]');
-    els.forEach(function (el) {
-      if (el && el.textContent !== String(value)) el.textContent = String(value);
-    });
+    var refs = container._domStatRefs;
+    if (!refs) return;
+    var els = refs[name];
+    if (!els) return;
+    for (var i = 0; i < els.length; i++) {
+      if (els[i].textContent !== String(value)) els[i].textContent = String(value);
+    }
+  }
+
+  // Pre-resolve data-dom-stat elements once after skeleton build.
+  function cacheStatRefs(container) {
+    var refs = {};
+    var all = container.querySelectorAll('[data-dom-stat]');
+    for (var i = 0; i < all.length; i++) {
+      var name = all[i].getAttribute('data-dom-stat');
+      if (!refs[name]) refs[name] = [];
+      refs[name].push(all[i]);
+    }
+    container._domStatRefs = refs;
   }
 
   function setStaleOverlay(container, visible, text) {
@@ -666,6 +773,33 @@
     return body ? (q >= 0 ? '+' : '-') + body : '';
   }
 
+  function heatAlphaText(value) {
+    value = Number(value) || 0;
+    return value > 0 ? value.toFixed(3) : '0';
+  }
+
+  function heatSignature(heat, delta) {
+    var deltaSide = (Number(delta) || 0) >= 0 ? 'buy' : 'sell';
+    return heatAlphaText(heat && heat.vol) + '|' +
+      heatAlphaText(heat && heat.sell) + '|' +
+      heatAlphaText(heat && heat.buy) + '|' +
+      heatAlphaText(heat && heat.delta) + '|' +
+      deltaSide;
+  }
+
+  function applyRowHeatVars(rowHost, heat, delta) {
+    var row = rowHost && rowHost.firstElementChild;
+    if (!row) return;
+    var sig = heatSignature(heat, delta);
+    if (rowHost._domHeatSig === sig) return;
+    rowHost._domHeatSig = sig;
+    row.style.setProperty('--dom-heat-vol', heatAlphaText(heat && heat.vol));
+    row.style.setProperty('--dom-heat-sell', heatAlphaText(heat && heat.sell));
+    row.style.setProperty('--dom-heat-buy', heatAlphaText(heat && heat.buy));
+    row.style.setProperty('--dom-heat-delta', heatAlphaText(heat && heat.delta));
+    row.style.setProperty('--dom-heat-delta-rgb', (Number(delta) || 0) >= 0 ? 'var(--v6-buy-rgb)' : 'var(--v6-sell-rgb)');
+  }
+
   function renderRow(lv, y, maxBid, maxAsk, liveTick, midTick, bestBidTick, bestAskTick, live, vctx, sizeThreshold, analytics, cols, widths, heat) {
     var isLive    = lv.tick === liveTick;
     var isMid     = lv.tick === midTick;
@@ -735,8 +869,8 @@
     var y_snap = Math.round(y);
     var rowW = Math.max(1, Math.round(widths._total || totalColumnWidth(cols, widths)));
     return '<div class="' + cls + '"' +
-      ' style="position:absolute;top:' + y_snap + 'px;left:0;width:' + rowW + 'px;height:' + DOM_ROW_HEIGHT + 'px"' +
-      ' data-price-key="' + lv.priceKey + '" role="row" aria-label="' + escAttr(rowLabel) + '">' +
+      ' style="position:absolute;left:0;width:' + rowW + 'px;height:' + DOM_ROW_HEIGHT + 'px;transform:translateY(' + y_snap + 'px)"' +
+      ' data-price-key="' + lv.priceKey + '" role="row" >' +
       cellsHtml +
       '</div>';
   }
@@ -767,7 +901,7 @@
     if (!body) return;
     if (!cols || !widths) {
       cols = getDomColumns(settings);
-      widths = getColumnWidths(cols, settings);
+      widths = getColumnWidths(cols, settings, body.clientWidth || 0);
     }
 
     var book     = snap.book;
@@ -816,7 +950,8 @@
       var deltaMin = minTick - virt.lastViewMin;
       var adjusted = body.scrollTop - deltaMin * DOM_ROW_HEIGHT;
       if (adjusted >= 0) {
-        suppressScrollUntil = Date.now() + 80;
+        var ctn = body.closest && body.closest('[data-v6-dom-list]');
+        if (ctn) suppressScrollDetection(ctn, 0);
         body.scrollTop = adjusted;
       }
       virt.lastViewMin = minTick;
@@ -844,7 +979,11 @@
       lastRow       = Math.min(totalTicks - 1, firstRow + visN);
       rowOffsetBase = firstRow;   // rows positioned relative to the viewport top
       spacerH       = viewport;   // container does not scroll
-      if (body.scrollTop !== 0) { suppressScrollUntil = Date.now() + 120; body.scrollTop = 0; }
+      if (body.scrollTop !== 0) {
+        var ctn2 = body.closest && body.closest('[data-v6-dom-list]');
+        if (ctn2) suppressScrollDetection(ctn2, 0);
+        body.scrollTop = 0;
+      }
     } else {
       var scrollTop = body.scrollTop;
       firstRow      = Math.max(0, Math.floor(scrollTop / DOM_ROW_HEIGHT) - OVERSCAN);
@@ -861,9 +1000,17 @@
     // Ensure spacer width is always valid: fallback to container width or 300px minimum
     var containerW = body.clientWidth || 0;
     if (totalW < containerW || !Number.isFinite(totalW)) totalW = Math.max(containerW, 300);
-    virt.spacer.style.minWidth = totalW + 'px';
-    virt.spacer.style.width = totalW + 'px';
-    virt.spacer.style.backgroundImage = columnBoundaryBackground(cols, widths);
+    if (virt.lastW !== totalW) {
+      virt.spacer.style.minWidth = totalW + 'px';
+      virt.spacer.style.width = totalW + 'px';
+      virt.lastW = totalW;
+    }
+    // Column boundary gradients — cached, only regenerated when cols/widths change.
+    var bgSig = cols.join(',') + '|' + (widths._total || 0);
+    if (virt._lastBgSig !== bgSig) {
+      virt.spacer.style.backgroundImage = columnBoundaryBackground(cols, widths);
+      virt._lastBgSig = bgSig;
+    }
 
     var startTick = maxTick - firstRow;
     var endTick   = maxTick - lastRow;
@@ -905,15 +1052,18 @@
     var bestAskTick = snap.bestAskTick;
     var analyticsByTick = computeDomAnalytics(book, minTick, maxTick, settings);
 
-    // 7. Generation du HTML
-    var html = '';
+    // 7. DOM row pool — reuses existing row elements instead of innerHTML rebuild.
+    //    Only updates className, style, and content for rows that actually changed.
+    virt.pool = virt.pool || [];
+    var pool = virt.pool;
+    var used = 0;
+    var rowIdx = 0;
+
     for (var tick = startTick; tick >= endTick; tick--) {
       var rowIndex = maxTick - tick;
-      // Following: positioned relative to the viewport top (rowOffsetBase=firstRow).
-      // Manual: absolute offset within the tall spacer (rowOffsetBase=0).
-      var y        = (rowIndex - rowOffsetBase) * DOM_ROW_HEIGHT;
-      var pk       = String(tick);
-      var lv       = book.get(pk);
+      var y = (rowIndex - rowOffsetBase) * DOM_ROW_HEIGHT;
+      var pk = String(tick);
+      var lv = book.get(pk);
       if (!lv) {
         lv = {
           priceKey: pk, tick: tick, price: tick * tickSize,
@@ -927,10 +1077,41 @@
         buy: heatAlpha((Number(lv.buyVol) || 0) / maxBuy),
         delta: heatAlpha(Math.abs(Number(lv.delta) || 0) / maxAbsDelta)
       };
-      html += renderRow(lv, y, maxBid, maxAsk, liveTick, midTick, bestBidTick, bestAskTick, live, vctx, sizeThreshold, analyticsByTick[tick], cols, widths, heat);
+      var rowHtml = renderRow(lv, y, maxBid, maxAsk, liveTick, midTick, bestBidTick, bestAskTick, live, vctx, sizeThreshold, analyticsByTick[tick], cols, widths, heat);
+
+      // Get or create row element from pool
+      var rowEl = pool[rowIdx];
+      if (!rowEl) {
+        rowEl = document.createElement('div');
+        rowEl.innerHTML = rowHtml;  // first render: parse HTML once
+        rowEl._domHtml = rowHtml;
+        rowEl._domHeatSig = null;
+        rowEl._domPriceKey = pk;
+        virt.spacer.appendChild(rowEl);
+        pool[rowIdx] = rowEl;
+      } else {
+        // Reuse: update only what changed
+        if (rowEl._domHtml !== rowHtml) {
+          rowEl.innerHTML = rowHtml;  // content changed — parse new HTML
+          rowEl._domHtml = rowHtml;
+          rowEl._domHeatSig = null;
+        } else {
+          // Content same — just reposition and re-class
+          rowEl.style.transform = 'translateY(' + Math.round(y) + 'px)';
+          rowEl.style.width = Math.max(1, Math.round(widths._total || totalColumnWidth(cols, widths))) + 'px';
+        }
+        rowEl._domPriceKey = pk;
+      }
+      applyRowHeatVars(rowEl, heat, lv.delta);
+      rowEl.style.display = '';
+      used++;
+      rowIdx++;
     }
 
-    virt.spacer.innerHTML = html;
+    // Hide unused rows (don't remove — keep in pool for reuse)
+    for (; rowIdx < pool.length; rowIdx++) {
+      pool[rowIdx].style.display = 'none';
+    }
   }
 
   // ── Follow : centrage smooth sur le mid ──
@@ -1007,21 +1188,24 @@
         buildSkeleton(container, grouping, groupOpts);
       }
       container._domBuilt = true;
+      syncRowHeightFromCSS();
+      cacheStatRefs(container);
     }
 
+    var body = isExo ? container : container.querySelector('.v6-dom-body');
+    var colsContainer = isExo ? exoHead : container.querySelector('.v6-dom-cols');
+    var availableWidth = body && body.clientWidth ? body.clientWidth
+      : (colsContainer && colsContainer.clientWidth ? colsContainer.clientWidth : 0);
     var cols = getDomColumns(settings);
-    var widths = getColumnWidths(cols, settings);
+    var widths = getColumnWidths(cols, settings, availableWidth);
 
     // Update header columns dynamically
-    var colsContainer = isExo ? exoHead : container.querySelector('.v6-dom-cols');
     if (colsContainer) {
       var headerHtml = renderHeadersHtml(cols, widths);
       if (colsContainer.innerHTML !== headerHtml) {
         colsContainer.innerHTML = headerHtml;
       }
     }
-
-    var body = isExo ? container : container.querySelector('.v6-dom-body');
 
     // ── Etat "pas encore de book" ──
     // NOTE: on ne detruit PLUS le DOM virtuel. On garde le dernier rendu visible.
@@ -1035,11 +1219,10 @@
       if (aboveEl) { aboveEl.hidden = true; aboveEl.classList.remove('is-visible'); }
       if (belowEl) { belowEl.hidden = true; belowEl.classList.remove('is-visible'); }
 
-      // Premier render sans aucune donnee : afficher le placeholder
+      // Premier render sans aucune donnee : afficher l'overlay sans detruire le virtuel
       if (!container._domHasCentered) {
-        if (body) {
-          body.innerHTML = '<div class="v6-dom-empty">Waiting for order book\u2026</div>';
-        }
+        var emptyOverlay = container.querySelector('[data-dom-empty-overlay]');
+        if (emptyOverlay) { emptyOverlay.hidden = false; emptyOverlay.classList.add('is-visible'); }
         setStaleOverlay(container, true, 'Waiting for first order book update');
         setStat(container, 'source', sourceLabel(state, snap));
         setStat(container, 'age', '-');
@@ -1064,12 +1247,17 @@
     container._domLastLive  = live;
 
     var now = Date.now();
-    var shouldRefreshRows = !container._domLastRowsRender || now - container._domLastRowsRender >= RENDER_THROTTLE;
-    if (!shouldRefreshRows) return;
-    container._domLastRowsRender = now;
-
-    // ── Render virtuel (ne touche PAS scrollTop sauf decalage de fenetre) ──
-    renderVirtual(body, snap, live, settings, cols, widths);
+    // rAF-aligned render: skip if snapshot unchanged since last render,
+    // otherwise schedule via requestAnimationFrame (matches display refresh).
+    if (snap === container._domLastRenderedSnap) return;
+    container._domLastRenderedSnap = snap;
+    if (container._domRenderRaf) return;  // already scheduled
+    container._domRenderRaf = requestAnimationFrame(function () {
+      container._domRenderRaf = null;
+      // Re-read live — may have updated between schedule and callback.
+      var rafLive = livePrice(state, container._domLastSnap || snap);
+      renderVirtual(body, container._domLastSnap || snap, rafLive, settings, cols, widths);
+    });
 
     // ── Activity above / below stable window ──
     var aboveEl = container.querySelector('[data-dom-activity-above]');
@@ -1096,6 +1284,7 @@
     setStat(container, 'seq',    domSequenceLabel(snap));
     setStat(container, 'gap',    String(domGapCount(snap)));
     setStat(container, 'drop',   String(domDroppedCount(state, snap)));
+    updatePriceGapIndicator(container, snap, state);
     syncControls(container, snap.priceGrouping || 25, settings);
 
     // ── Memorisation pour le scroll handler ──
@@ -1113,6 +1302,9 @@
     if (!container._domHasCentered || (body && body._domNeedsCenter)) {
       container._domHasCentered = true;
       if (body) body._domNeedsCenter = false;
+      // Hide the empty overlay now that we have data.
+      var emptyOverlay = container.querySelector('[data-dom-empty-overlay]');
+      if (emptyOverlay) { emptyOverlay.hidden = true; emptyOverlay.classList.remove('is-visible'); }
       var midTick = snap.midTick;
       var maxTick = snap.viewMax != null ? snap.viewMax : snap.maxTick;
       if (body && Number.isFinite(midTick) && Number.isFinite(maxTick)) {
@@ -1217,7 +1409,7 @@
         var body = getBody(container);
         if (body && container._domLastSnap) {
           var s = container._domLastSnap;
-          centerOnTick(body, s.midTick, s.maxTick, true);
+          centerOnTick(body, s.midTick, s.maxTick, false);  // instant — avoids misaligned rows during smooth animation
           requestAnimationFrame(function () {
             renderVirtual(body, s, container._domLastLive || 0,
               (container._domLastState && container._domLastState.settings) || {});
@@ -1233,11 +1425,11 @@
     var body = getBody(container);
     if (body) {
       body.addEventListener('scroll', function () {
-        // suppressScrollUntil covers programmatic scrolls (centerOnTick / follow).
+        // _suppressScrollDetection covers programmatic scrolls (centerOnTick / follow).
         // It must ONLY skip the "user disabled auto-follow" side effect — the
         // virtual window must STILL be re-rendered so rows stay aligned with the
         // new scrollTop (otherwise an auto-center leaves rows stranded off-screen).
-        var suppressed = Date.now() < suppressScrollUntil;
+        var suppressed = container._suppressScrollDetection;
 
         // L'utilisateur a scrolle manuellement → desactiver auto-follow
         if (!suppressed && !userScrolled) {
@@ -1246,7 +1438,6 @@
           if (V6OF.DomLadder && V6OF.DomLadder.setAutoCenterEnabled) {
             V6OF.DomLadder.setAutoCenterEnabled(false);
           }
-          scheduleFollowReturn(container);
         }
 
         if (!container._domScrollRaf && container._domLastSnap) {
@@ -1263,8 +1454,9 @@
       // Mouse wheel → detection scroll utilisateur. Leaving follow mode switches
       // from the viewport-relative model to the scroll model; anchor the scroll at
       // the mid first so the view doesn't snap to the top of the book.
-      body.addEventListener('wheel', function () {
+      body.addEventListener('wheel', function (event) {
         if (!userScrolled) {
+          if (event && typeof event.preventDefault === 'function') event.preventDefault();
           userScrolled = true;
           autoCenter   = false;
           if (V6OF.DomLadder && V6OF.DomLadder.setAutoCenterEnabled) {
@@ -1278,14 +1470,14 @@
             var maxTickL = s.viewMax != null ? s.viewMax : s.maxTick;
             if (Number.isFinite(s.midTick) && Number.isFinite(maxTickL)) {
               var midOff = (maxTickL - s.midTick) * DOM_ROW_HEIGHT;
-              suppressScrollUntil = Date.now() + 150;
-              body.scrollTop = Math.max(0, midOff - body.clientHeight / 2);
-              renderVirtual(body, s, live, settings); // render window at the anchored scroll
+              var wheelDelta = event && Number.isFinite(Number(event.deltaY)) ? Number(event.deltaY) : 0;
+              suppressScrollDetection(container, 0);
+              body.scrollTop = Math.max(0, midOff - body.clientHeight / 2 + wheelDelta);
+              // scrollTop triggers the native scroll event → _domScrollRaf → renderVirtual
             }
           }
-          scheduleFollowReturn(container);
         }
-      }, { passive: true });
+      }, { passive: false });
 
       // Resize → re-render (which re-centers on the mid). A window/dock/panel
       // resize changes the body height and resets scrollTop; without this the
@@ -1317,21 +1509,33 @@
 
     if (headerRow._dragBound) return;
     headerRow._dragBound = true;
+    domList._domHeaderRow = headerRow;
+    if (domList._domHeaderAbortController) {
+      try { domList._domHeaderAbortController.abort(); } catch (_) {}
+    }
+    domList._domHeaderAbortController = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var headerListenerOptions = domList._domHeaderAbortController ? { signal: domList._domHeaderAbortController.signal } : false;
 
     var draggedCol = null;
     var resizeState = null;
+    var suppressNextDragStart = false;
 
     function currentColumns(settings) {
       return getDomColumns(settings || {});
     }
 
     function currentWidths(settings, cols) {
-      return getColumnWidths(cols || currentColumns(settings), settings || {});
+      return getColumnWidths(cols || currentColumns(settings), settings || {}, headerRow.clientWidth || 0);
     }
 
-    headerRow.addEventListener('mousedown', function (e) {
+    function persistColumnWidths(widths) {
+      store.updateSettings({ domColumnWidths: Object.assign({}, widths || {}) });
+    }
+
+    headerRow.addEventListener('pointerdown', function (e) {
       var handle = e.target.closest('[data-dom-col-resize]');
       if (!handle) return;
+      suppressNextDragStart = true;
       e.preventDefault();
       e.stopPropagation();
       var col = handle.getAttribute('data-dom-col-resize');
@@ -1342,39 +1546,62 @@
         col: col,
         startX: e.clientX,
         startWidth: parseFloat(widths[col]) || DOM_REFERENCE_COLUMN_WIDTHS[col] || 42,
-        widths: Object.assign({}, settings.domColumnWidths || {})
+        widths: Object.assign({}, settings.domColumnWidths || {}),
+        pointerId: e.pointerId,
+        handle: handle
       };
+      try {
+        handle.setPointerCapture(e.pointerId);
+      } catch (_) {}
       handle.classList.add('is-dragging');
       document.body.classList.add('is-resizing');
       document.body.style.cursor = 'col-resize';
       document.body.style.userSelect = 'none';
-    });
+    }, headerListenerOptions);
 
-    document.addEventListener('mousemove', function (e) {
+    document.addEventListener('pointermove', function (e) {
       if (!resizeState) return;
+      if (resizeState.pointerId != null && e.pointerId !== resizeState.pointerId) return;
       var delta = e.clientX - resizeState.startX;
       var next = clampColumnWidth(resizeState.startWidth + delta, resizeState.startWidth);
       resizeState.widths[resizeState.col] = next;
       if (!resizeState._raf) {
+        var pendingResize = resizeState;
         resizeState._raf = requestAnimationFrame(function () {
-          resizeState._raf = null;
-          store.updateSettings({ domColumnWidths: Object.assign({}, resizeState.widths) });
+          pendingResize._raf = null;
+          persistColumnWidths(pendingResize.widths);
         });
       }
-    });
+    }, headerListenerOptions);
 
-    document.addEventListener('mouseup', function () {
+    function endColumnResize(e) {
       if (!resizeState) return;
+      if (e && resizeState.pointerId != null && e.pointerId !== resizeState.pointerId) return;
+      if (resizeState._raf) {
+        cancelAnimationFrame(resizeState._raf);
+        resizeState._raf = null;
+      }
+      persistColumnWidths(resizeState.widths);
+      try {
+        if (resizeState.handle && resizeState.pointerId != null) {
+          resizeState.handle.releasePointerCapture(resizeState.pointerId);
+        }
+      } catch (_) {}
       var active = headerRow.querySelector('[data-dom-col-resize].is-dragging');
       if (active) active.classList.remove('is-dragging');
       resizeState = null;
+      suppressNextDragStart = false;
       document.body.classList.remove('is-resizing');
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
-    });
+    }
+
+    document.addEventListener('pointerup', endColumnResize, headerListenerOptions);
+    document.addEventListener('pointercancel', endColumnResize, headerListenerOptions);
 
     headerRow.addEventListener('dragstart', function (e) {
-      if (e.target.closest('[data-dom-col-resize]')) {
+      if (suppressNextDragStart || resizeState || e.target.closest('[data-dom-col-resize]')) {
+        suppressNextDragStart = false;
         e.preventDefault();
         return;
       }
@@ -1384,7 +1611,7 @@
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', draggedCol);
       target.classList.add('v6-dragging');
-    });
+    }, headerListenerOptions);
 
     headerRow.addEventListener('dragover', function (e) {
       e.preventDefault();
@@ -1392,18 +1619,18 @@
       if (target && target.getAttribute('data-col') !== draggedCol) {
         target.classList.add('v6-drop-target');
       }
-    });
+    }, headerListenerOptions);
 
     headerRow.addEventListener('dragenter', function (e) {
       e.preventDefault();
-    });
+    }, headerListenerOptions);
 
     headerRow.addEventListener('dragleave', function (e) {
       var target = e.target.closest('.v6-dom-col');
       if (target) {
         target.classList.remove('v6-drop-target');
       }
-    });
+    }, headerListenerOptions);
 
     headerRow.addEventListener('dragend', function (e) {
       var cols = headerRow.querySelectorAll('.v6-dom-col');
@@ -1412,7 +1639,7 @@
         c.classList.remove('v6-drop-target');
       });
       draggedCol = null;
-    });
+    }, headerListenerOptions);
 
     headerRow.addEventListener('drop', function (e) {
       e.preventDefault();
@@ -1439,8 +1666,35 @@
       }
 
       target.classList.remove('v6-drop-target');
-    });
+    }, headerListenerOptions);
   };
+
+  // ── Cleanup ──────────────────────────────────────────────────────────────────
+
+  function cleanupDomPanel(container) {
+    var body = getBody(container);
+    if (body && body._domResizeObs) {
+      try { body._domResizeObs.disconnect(); } catch (_) {}
+      body._domResizeObs = null;
+    }
+    if (container && container._domHeaderAbortController) {
+      try { container._domHeaderAbortController.abort(); } catch (_) {}
+      container._domHeaderAbortController = null;
+    }
+    var headerRow = container && (container._domHeaderRow || container.querySelector('.v6-dom-cols') || container.querySelector('.exo-dom-head'));
+    if (headerRow) {
+      headerRow._dragBound = false;
+      headerRow.querySelectorAll('[data-dom-col-resize].is-dragging, .v6-drop-target, .v6-dragging').forEach(function (el) {
+        el.classList.remove('is-dragging', 'v6-drop-target', 'v6-dragging');
+      });
+    }
+    if (container) container._domHeaderRow = null;
+    if (document.body) {
+      document.body.classList.remove('is-resizing');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+  }
 
   // ── API publique ──
   V6OF.register('UI', 'DomPanel', {
@@ -1448,7 +1702,8 @@
     bindControls : bindControls,
     computeSizeThreshold : computeSizeThreshold,
     modeValue    : modeValue,
-    normalizeValueMode : normalizeValueMode
+    normalizeValueMode : normalizeValueMode,
+    cleanup      : cleanupDomPanel
   }, 'DomPanel');
 
 })();

@@ -103,6 +103,16 @@
 
     vp.timeSpan = timeSpan;
     vp.priceSpan = priceSpan;
+    vp.userInteractionAt = 0;
+
+    vp.markUserInteraction = function () {
+      vp.userInteractionAt = Date.now();
+    };
+
+    vp.hasRecentUserInteraction = function (windowMs) {
+      windowMs = isNum(windowMs) ? windowMs : 12000;
+      return !!V6OF.chartIsDragging || (vp.userInteractionAt > 0 && Date.now() - vp.userInteractionAt < windowMs);
+    };
 
     // ---- Explicit range setters (used by interactions / external code) ----
     vp.setTimeRange = function (start, end) {
@@ -190,15 +200,15 @@
         vp.timeStart = vp.timeEnd - keep;
       }
 
-      // Auto fit price to visible data.
+      // Auto fit price to visible data — smooth transitions via lerp.
       if (hasPrice && vp.autoFit) {
-        vp.priceMin = bounds.priceMin;
-        vp.priceMax = bounds.priceMax;
+        vp.smoothPriceRange(bounds.priceMin, bounds.priceMax);
       }
     };
 
     // ---- Fit / reset / follow ----
     vp.fitTimeToData = function () {
+      vp.markUserInteraction();
       if (vp.dataTimeMax > vp.dataTimeMin) {
         var span = clamp(vp.dataTimeMax - vp.dataTimeMin, MIN_TIME_SPAN_MS, MAX_TIME_SPAN_MS);
         var pad = span * LIVE_EDGE_PAD_RATIO;
@@ -208,14 +218,40 @@
     };
 
     vp.fitPriceToData = function () {
+      vp.markUserInteraction();
       if (vp.dataPriceMax > vp.dataPriceMin) {
         vp.priceMin = vp.dataPriceMin;
         vp.priceMax = vp.dataPriceMax;
       }
       vp.autoFit = true;
+      // Reset lerp target so next smoothPriceRange snaps immediately.
+      vp._smoothPriceTarget = null;
+    };
+
+    // Smooth price-range transitions to avoid vertical jumps when the visible
+    // candle set changes (new high/low, forming candle, 18% pad recompute).
+    // factor: 0 = no smoothing, 0.25 = slow follow. Default 0.22 per frame (~30fps).
+    vp.smoothPriceRange = function (targetMin, targetMax, factor) {
+      if (!isNum(targetMin) || !isNum(targetMax) || targetMax <= targetMin) return;
+      factor = isNum(factor) ? clamp(factor, 0, 1) : 0.22;
+      var prev = vp._smoothPriceTarget;
+      // Snap on first call, after reset, or if the target jumped >2x the current span.
+      var curSpan = vp.priceMax - vp.priceMin;
+      var tgtSpan = targetMax - targetMin;
+      var shouldSnap = !prev || curSpan <= 0 || tgtSpan > curSpan * 2.5 || curSpan > tgtSpan * 2.5;
+      vp._smoothPriceTarget = { min: targetMin, max: targetMax };
+      if (shouldSnap || factor >= 1) {
+        vp.priceMin = targetMin;
+        vp.priceMax = targetMax;
+        return;
+      }
+      // Lerp toward target.
+      vp.priceMin = vp.priceMin + (targetMin - vp.priceMin) * factor;
+      vp.priceMax = vp.priceMax + (targetMax - vp.priceMax) * factor;
     };
 
     vp.fitToData = function () {
+      vp.markUserInteraction();
       vp.fitTimeToData();
       vp.fitPriceToData();
       vp.followLive = true;
@@ -232,13 +268,16 @@
       vp.dataTimeMax = 0;
       vp.dataPriceMin = 0;
       vp.dataPriceMax = 1;
+      vp._smoothPriceTarget = null;
     };
 
     vp.resetView = function () {
+      vp.markUserInteraction();
       vp.fitToData();
     };
 
     vp.goLive = function () {
+      vp.markUserInteraction();
       vp.followLive = true;
       if (vp.dataTimeMax > vp.dataTimeMin) {
         var keep = timeSpan();
@@ -249,6 +288,7 @@
     };
 
     vp.detachLive = function () {
+      vp.markUserInteraction();
       vp.followLive = false;
     };
 
@@ -264,18 +304,21 @@
         // caused drag-pan to feel "stuck" until the cumulative delta crossed
         // half a candle width, then jump a whole candle at once.
         vp.setTimeRange(vp.timeStart - dt, vp.timeEnd - dt);
+        vp.markUserInteraction();
         // Any pan disables follow-live (user is exploring history).
         vp.followLive = false;
       }
       if (dy) {
         var dp = dy / p.height * priceSpan();
         vp.setPriceRange(vp.priceMin + dp, vp.priceMax + dp);
+        vp.markUserInteraction();
       }
     };
 
     // ---- Zoom (factor < 1 = zoom in, > 1 = zoom out) ----
     vp.zoomTime = function (factor, anchorX) {
       if (!isNum(factor) || factor <= 0) return;
+      vp.markUserInteraction();
       var anchorTime = isNum(anchorX) ? vp.xToTime(anchorX) : (vp.timeStart + vp.timeEnd) / 2;
       var newSpan = clamp(timeSpan() * factor, MIN_TIME_SPAN_MS, MAX_TIME_SPAN_MS);
       var leftFrac = (anchorTime - vp.timeStart) / timeSpan();
@@ -286,6 +329,7 @@
 
     vp.zoomPrice = function (factor, anchorY) {
       if (!isNum(factor) || factor <= 0) return;
+      vp.markUserInteraction();
       var anchorPrice = isNum(anchorY) ? vp.yToPrice(anchorY) : (vp.priceMin + vp.priceMax) / 2;
       var newSpan = Math.max(MIN_PRICE_SPAN, priceSpan() * factor);
       var topFrac = (vp.priceMax - anchorPrice) / priceSpan();

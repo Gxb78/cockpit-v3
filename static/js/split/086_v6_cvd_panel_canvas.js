@@ -136,6 +136,7 @@
     var rect = canvas.getBoundingClientRect();
     var w = Math.max(1, rect.width || canvas.clientWidth || 1);
     var h = Math.max(1, rect.height || canvas.clientHeight || 1);
+    canvas._cvdRectCache = { left: rect.left, top: rect.top, width: w, height: h };
     var dpr = window.devicePixelRatio || 1;
     if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
       canvas.width = Math.floor(w * dpr);
@@ -144,6 +145,60 @@
     var ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     return { ctx: ctx, width: w, height: h };
+  }
+
+  function cachedRect(canvas, force) {
+    if (!canvas) return { left: 0, top: 0, width: 1, height: 1 };
+    if (force || !canvas._cvdRectCache) {
+      var rect = canvas.getBoundingClientRect();
+      canvas._cvdRectCache = {
+        left: rect.left,
+        top: rect.top,
+        width: Math.max(1, rect.width || canvas.clientWidth || 1),
+        height: Math.max(1, rect.height || canvas.clientHeight || 1)
+      };
+    }
+    return canvas._cvdRectCache;
+  }
+
+  function invalidateRectCache(canvas) {
+    if (canvas) canvas._cvdRectCache = null;
+  }
+
+  function chartAnchorXFromCvd(mx, rect, vp) {
+    if (!vp || !vp.plot || !rect) return mx;
+    var gx = Math.max(LABEL_W + 40, rect.width - VAL_W);
+    var plotLeft = LABEL_W;
+    var plotWidth = Math.max(1, gx - LABEL_W - 1);
+    var frac = (mx - plotLeft) / plotWidth;
+    if (frac < 0) frac = 0;
+    if (frac > 1) frac = 1;
+    return vp.plot.left + frac * vp.plot.width;
+  }
+
+  function cleanupCanvas(canvas) {
+    canvas = cvdDataCanvas(canvas) || canvas;
+    if (!canvas) return;
+    if (canvas._cvdInteractAbort) {
+      try { canvas._cvdInteractAbort.abort(); } catch (_) {}
+      canvas._cvdInteractAbort = null;
+    }
+    invalidateRectCache(canvas);
+    canvas._cvdInteractBound = false;
+  }
+
+  function cvdOverlayCanvas(canvas) {
+    if (!canvas) return null;
+    if (canvas.hasAttribute && canvas.hasAttribute('data-v6-cvd-overlay')) return canvas;
+    var stack = canvas.closest && canvas.closest('[data-v6-cvd-stack]');
+    return stack && stack.querySelector ? stack.querySelector('[data-v6-cvd-overlay]') : null;
+  }
+
+  function cvdDataCanvas(canvas) {
+    if (!canvas) return null;
+    if (canvas.hasAttribute && canvas.hasAttribute('data-v6-cvd-canvas')) return canvas;
+    var stack = canvas.closest && canvas.closest('[data-v6-cvd-stack]');
+    return stack && stack.querySelector ? stack.querySelector('[data-v6-cvd-canvas]') : null;
   }
 
   function timeWindow(snap) {
@@ -185,10 +240,20 @@
     return (v >= 0 ? '+' : '') + s;
   }
 
+  var _fmtTimeCache = new Map();
   function fmtTime(ts) {
-    var d = new Date(ts);
-    return d.getUTCHours().toString().padStart(2, '0') + ':' +
-           d.getUTCMinutes().toString().padStart(2, '0');
+    var key = Number(ts) || 0;
+    var cached = _fmtTimeCache.get(key);
+    if (cached) return cached;
+    if (_fmtTimeCache.size >= 2048) {
+      var first = _fmtTimeCache.keys().next();
+      if (!first.done) _fmtTimeCache.delete(first.value);
+    }
+    var d = new Date(key);
+    var label = d.getUTCHours().toString().padStart(2, '0') + ':' +
+      d.getUTCMinutes().toString().padStart(2, '0');
+    _fmtTimeCache.set(key, label);
+    return label;
   }
 
   function drawPaneBg(ctx, pane) {
@@ -500,12 +565,56 @@
     ctx.fillText(Number.isFinite(value) ? fmt(value) : 'waiting', gx + 6, H / 2);
   }
 
+  function drawOverlay(canvas) {
+    var overlay = cvdOverlayCanvas(canvas) || canvas;
+    var model = overlay && overlay._cvdOverlayModel;
+    var s = setup(overlay);
+    if (!s) return;
+    var ctx = s.ctx;
+    ctx.clearRect(0, 0, s.width, s.height);
+    if (!model) return;
+    var cross = V6OF.getChartCrosshair ? V6OF.getChartCrosshair(overlay) : V6OF._fallbackChartCrosshair;
+    if (!cross || !cross.visible || !cross.enabled) return;
+
+    var plot = model.plot;
+    var win = model.win;
+    var span = Math.max(1, win.end - win.start);
+    var crossX = Number.isFinite(cross.x)
+      ? cross.x
+      : (Number.isFinite(cross.time) ? plot.left + (cross.time - win.start) / span * plot.width : NaN);
+    if (!Number.isFinite(crossX) || crossX < plot.left || crossX > plot.left + plot.width) return;
+
+    ctx.save();
+    ctx.strokeStyle = C.crosshair;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(crossX, 0);
+    ctx.lineTo(crossX, s.height);
+    ctx.stroke();
+    ctx.restore();
+
+    var value = Number.isFinite(model.tip) ? model.tip : model.lastValue;
+    if (Number.isFinite(cross.time)) {
+      var hval = findNearestValue(model.points || [], cross.time);
+      if (hval != null) value = hval;
+    }
+    ctx.fillStyle = C.scaleBg;
+    ctx.fillRect(model.gx, Math.max(0, s.height / 2 - 10), Math.max(0, s.width - model.gx), 20);
+    ctx.fillStyle = value >= 0 ? C.buy : C.sell;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.font = '800 10px "JetBrains Mono", Consolas, monospace';
+    ctx.fillText(fmt(value), model.gx + 6, s.height / 2);
+  }
+
   function drawSimple(canvas, state) {
     var perfStart = window.performance ? performance.now() : 0;
     updateThemeColors(state && state.settings && state.settings.bgColor);
     var s = setup(canvas);
     if (!s) return;
     var ctx = s.ctx, W = s.width, H = s.height;
+    var overlayCanvas = cvdOverlayCanvas(canvas);
 
     ctx.fillStyle = C.bg;
     ctx.fillRect(0, 0, W, H);
@@ -531,6 +640,7 @@
     var snap = V6OF.CvdBuckets && V6OF.CvdBuckets.snapshot ? V6OF.CvdBuckets.snapshot(drawPointLimit) : null;
     if (!snap) {
       drawNoData(ctx, plot, gx, H, 'CVD', NaN);
+      if (overlayCanvas) { overlayCanvas._cvdOverlayModel = null; drawOverlay(overlayCanvas); }
       recordPerf('cvd', perfStart);
       return;
     }
@@ -584,6 +694,7 @@
 
     if (!visible.length) {
       drawNoData(ctx, plot, gx, H, data.bucket.label || 'CVD', data.tip);
+      if (overlayCanvas) { overlayCanvas._cvdOverlayModel = null; drawOverlay(overlayCanvas); }
       recordPerf('cvd', perfStart);
       return;
     }
@@ -670,6 +781,19 @@
     ctx.font = '800 10px "JetBrains Mono", Consolas, monospace';
     ctx.fillText(fmt(value), gx + 6, H / 2);
 
+    if (overlayCanvas) {
+      overlayCanvas._cvdState = state;
+      overlayCanvas._cvdOverlayModel = {
+        plot: plot,
+        win: win,
+        points: points,
+        tip: data.tip,
+        lastValue: visible.length ? visible[visible.length - 1].v : data.tip,
+        gx: gx
+      };
+      drawOverlay(overlayCanvas);
+    }
+
     ctx.fillStyle = C.timeLabel;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
@@ -680,7 +804,7 @@
       ctx.fillText(fmtTime(t), plot.left + plot.width * li / labelCount, H - 4);
     }
 
-    if (cross && cross.visible && cross.enabled) {
+    if (false && cross && cross.visible && cross.enabled) {
       var crossX = Number.isFinite(cross.x) ? cross.x : (Number.isFinite(cross.time) ? tx(cross.time) : NaN);
       if (Number.isFinite(crossX) && crossX >= plot.left && crossX <= plot.left + plot.width) {
         ctx.save();
@@ -801,6 +925,7 @@
 
   V6OF.register('UI', 'CvdPanel', {
     draw: function (canvas, state) {
+      canvas = cvdDataCanvas(canvas) || canvas;
       if (!canvas) return;
       canvas._cvdState = state;
       if (canvas._cvdQueued) return;
@@ -809,11 +934,14 @@
       // Bind interactive controls once
       if (!canvas._cvdInteractBound) {
         canvas._cvdInteractBound = true;
+        canvas._cvdInteractAbort = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        var listenerOptions = canvas._cvdInteractAbort ? { signal: canvas._cvdInteractAbort.signal } : false;
+        var wheelListenerOptions = canvas._cvdInteractAbort ? { passive: false, signal: canvas._cvdInteractAbort.signal } : { passive: false };
 
         // Wheel zoom: plain wheel = zoom X of main chart, Ctrl+wheel = zoom Y of CVD
         canvas.addEventListener('wheel', function (e) {
           e.preventDefault();
-          var rect = canvas.getBoundingClientRect();
+          var rect = cachedRect(canvas, false);
           var mx = e.clientX - rect.left;
           var my = e.clientY - rect.top;
           var zoomFactor = e.deltaY > 0 ? 1.12 : 1 / 1.12;
@@ -839,7 +967,7 @@
           } else {
             // Plain wheel = zoom X on main chart
             if (vp) {
-              vp.zoomTime(zoomFactor, mx);
+              vp.zoomTime(zoomFactor, chartAnchorXFromCvd(mx, rect, vp));
             }
           }
           // Force re-draw
@@ -849,11 +977,11 @@
             canvas._cvdQueued = false;
             V6OF.CvdPanel.draw(canvas, state || canvas._cvdState);
           }
-        }, { passive: false });
+        }, wheelListenerOptions);
 
         // Drag pan (horizontal pans time axis of main chart, vertical pans CVD Y axis)
         canvas.addEventListener('pointerdown', function (e) {
-          var rect = canvas.getBoundingClientRect();
+          var rect = cachedRect(canvas, true);
           var mx = e.clientX - rect.left;
           var vp = V6OF.chart;
 
@@ -872,7 +1000,7 @@
             _cvp.dragMode = 'plot';
           }
           canvas.setPointerCapture(e.pointerId);
-        });
+        }, listenerOptions);
 
         canvas.addEventListener('pointermove', function (e) {
           if (!canvas.hasPointerCapture(e.pointerId)) return;
@@ -881,7 +1009,7 @@
           if (Math.abs(dx) > 3 || Math.abs(dy) > 3) _cvp.wasDragging = true;
           if (!_cvp.wasDragging) return;
 
-          var rect = canvas.getBoundingClientRect();
+          var rect = cachedRect(canvas, false);
           var vp = V6OF.chart;
 
           if (_cvp.dragMode === 'value-axis') {
@@ -913,14 +1041,16 @@
             canvas._cvdQueued = false;
             V6OF.CvdPanel.draw(canvas, state || canvas._cvdState);
           }
-        });
+        }, listenerOptions);
 
         canvas.addEventListener('pointerup', function (e) {
           canvas.releasePointerCapture(e.pointerId);
-        });
+          invalidateRectCache(canvas);
+        }, listenerOptions);
         canvas.addEventListener('pointercancel', function (e) {
           canvas.releasePointerCapture(e.pointerId);
-        });
+          invalidateRectCache(canvas);
+        }, listenerOptions);
 
         // Double-click to re-fit
         canvas.addEventListener('dblclick', function () {
@@ -939,11 +1069,24 @@
             canvas._cvdQueued = false;
             V6OF.CvdPanel.draw(canvas, state || canvas._cvdState);
           }
-        });
+        }, listenerOptions);
       }
       var schedule = typeof requestAnimationFrame === 'function' && !document.hidden
         ? requestAnimationFrame : function (fn) { return setTimeout(fn, 33); };
       schedule(function () { canvas._cvdQueued = false; drawSimple(canvas, canvas._cvdState); });
+    },
+    drawNow: function (canvas, state) {
+      canvas = cvdDataCanvas(canvas) || canvas;
+      if (!canvas) return;
+      canvas._cvdState = state || canvas._cvdState;
+      canvas._cvdQueued = false;
+      drawSimple(canvas, canvas._cvdState);
+    },
+    redrawOverlay: function (canvas) {
+      drawOverlay(canvas);
+    },
+    cleanup: function (canvas) {
+      cleanupCanvas(canvas);
     }
   }, 'CvdPanel');
 })();

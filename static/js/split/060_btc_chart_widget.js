@@ -436,7 +436,7 @@
     if (!S.follow && S.userDetached) return;
     S.follow = false;
     S.userDetached = true;
-    console.log('[BTC WIDGET] detached:', reason);
+    V6OF.debugLog('[BTC WIDGET] detached:', reason);
     _updateBtcWidgetLiveButton();
   }
 
@@ -445,7 +445,7 @@
     S.userDetached = false;
     S.userDragging = false;
     S.userGestureActive = false;
-    console.log('[BTC WIDGET] return to live:', reason);
+    V6OF.debugLog('[BTC WIDGET] return to live:', reason);
     _withProgrammaticRange(function () { applyBtcWidgetBestView(); });
     _updateBtcWidgetLiveButton();
   }
@@ -1224,7 +1224,7 @@
     var token = ++S.renderToken;
     var tf = S.timeframe;
 
-    console.log('[BTC-WIDGET] render start token=', token, 'tf=', tf, 'source=', source);
+    V6OF.debugLog('[BTC-WIDGET] render start token=', token, 'tf=', tf, 'source=', source);
 
     // Annule le fetch precedent
     if (S.fetchAbort) {
@@ -1370,6 +1370,9 @@
   document.addEventListener('touchend', function() { S.userIsInteracting = false; }, { passive: true });
 
   function loadLibrary() {
+    var isTodayActive = document.body.getAttribute('data-current-page') === 'today' ||
+      !!document.querySelector('.page[data-page="today"].active');
+    if (!isTodayActive) return;
     var container = document.getElementById('btcChartContainer');
     if (!container) { setTimeout(loadLibrary, 100); return; }
     if (S.chartReady) return;

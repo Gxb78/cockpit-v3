@@ -731,3 +731,19 @@ def market_engine_footprint(fp_kind):
         return app.response_class(payload, mimetype="application/json")
     except Exception as e:
         return jsonify({"error": f"engine footprint proxy failed: {e}"}), 502
+
+
+# === Server time (used by the WS engine as a Flask-readiness probe) ===
+# workers/market_ws_server.py polls GET /api/market/time at startup before
+# backfilling CVD. Without this route it burned its whole retry budget on
+# 404s (10s of startup delay + log spam).
+
+@app.get("/api/market/time")
+def market_time():
+    local_ms = int(_time_mod.time() * 1000)
+    server_time = fetch_binance_server_time()
+    return jsonify({
+        "serverTime": server_time if server_time else local_ms,
+        "localTime": local_ms,
+        "source": "binance" if server_time else "local",
+    })

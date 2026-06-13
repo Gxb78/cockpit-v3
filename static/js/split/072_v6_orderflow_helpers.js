@@ -74,6 +74,7 @@
         markers: s.markers,
         showOhlc: s.showOhlc !== false,
         showCandles: s.showCandles !== false,
+        crosshairSnapOhlc: s.crosshairSnapOhlc || 'off',
         ohlcBodyStyle: s.ohlcBodyStyle || 'candles',
         ohlcBodyWidth: s.ohlcBodyWidth || 0.72,
         ohlcLineWidth: s.ohlcLineWidth || 1,
@@ -148,6 +149,7 @@
     volumeProfileType: { type: 'enum', default: 'visible', values: ['visible', 'session', 'fixed', 'composite'] },
     volumeProfileSide: { type: 'enum', default: 'right', values: ['left', 'right'] },
     volumeProfileStyle: { type: 'enum', default: 'volume', values: ['volume', 'delta', 'split'] },
+    crosshairSnapOhlc: { type: 'enum', default: 'off', values: ['off', 'high', 'low', 'close', 'nearest'] },
     ohlcBodyStyle:  { type: 'enum', default: 'candles', values: ['candles', 'hollow', 'bars'] },
     // ── Number with bounds ──
     minQty:         { type: 'number', default: 0,    min: 0 },

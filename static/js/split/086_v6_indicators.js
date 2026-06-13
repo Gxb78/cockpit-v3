@@ -24,55 +24,110 @@
   // [{ name, params, visible, color, width, dash, fillColor, fillOpacity }]
   var _active = [];
 
-  // ── Computed data cache (keyed by name+params+symbol) ──
-  var _cache = {};
+  // ── Computed data cache — keyed by id + params + candle-structure sig ──
+  // Each entry: { sig, result, ...incremental state }
+  var _dataCache = {};
+
+  // Stable candle signature: changes only on structural shifts (count, first/last
+  // openTime), NOT on every close/volume tick of the forming candle. Incremental
+  // recompute handles the forming candle separately.
+  function candleStructSig(candles) {
+    if (!Array.isArray(candles) || !candles.length) return '0';
+    var f = candles[0], l = candles[candles.length - 1];
+    return candles.length + '|' + (f.openTime || f.time || 0) + '|' + (l.openTime || l.time || 0);
+  }
 
   // ── Built-in computes ──
   function computeSMA(candles, params) {
     var period = params.period || 20;
     var src = params.source || 'close';
+    var len = candles.length;
     var out = [];
-    var sum = 0, count = 0;
-    for (var i = 0; i < candles.length; i++) {
-      var val = Number(candles[i][src]);
-      if (!Number.isFinite(val)) continue;
-      sum += val;
-      count++;
-      if (count > period) {
-        var old = Number(candles[i - period][src]);
-        if (Number.isFinite(old)) sum -= old;
-        count--;
+    if (!len || period < 1) return out;
+
+    var sig = candleStructSig(candles);
+    var key = 'sma:' + period + ':' + src + ':' + sig;
+    var cache = _dataCache[key];
+
+    // Full recompute.
+    if (!cache || cache.sig !== sig) {
+      var sum = 0, count = 0;
+      out = new Array(len);
+      for (var i = 0; i < len; i++) {
+        var val = Number(candles[i][src]);
+        if (!Number.isFinite(val)) { out[i] = null; continue; }
+        sum += val;
+        count++;
+        if (count > period) {
+          var old = i >= period ? Number(candles[i - period][src]) : NaN;
+          if (Number.isFinite(old)) { sum -= old; count--; }
+        }
+        out[i] = count >= period ? { time: candles[i].openTime || candles[i].time, value: sum / count } : null;
       }
-      if (count >= period) {
-        out.push({ time: candles[i].openTime || candles[i].time, value: sum / count });
+      _dataCache[key] = { sig: sig, result: out, sum: sum, count: count, lastIdx: len - 1 };
+      return out;
+    }
+
+    // Same structure: recompute only the last point (forming candle).
+    out = cache.result.slice();
+    var i = len - 1;
+    if (cache.lastIdx === len - 1 && i >= 0) {
+      // Roll back last point's contribution, recompute with new close.
+      var lastVal = Number(candles[i][src]);
+      var prevSum = i > 0 && out[i - 1] ? (out[i - 1].value * period) : 0;
+      if (Number.isFinite(lastVal) && period > 0) {
+        out[i] = { time: candles[i].openTime || candles[i].time, value: (prevSum - (i >= period ? Number(candles[i - period][src]) : 0) + lastVal) / period };
       }
     }
+    cache.result = out;
     return out;
   }
 
   function computeEMA(candles, params) {
     var period = params.period || 20;
     var src = params.source || 'close';
+    var len = candles.length;
+    if (!len || period < 2) return [];
+
+    var sig = candleStructSig(candles);
+    var key = 'ema:' + period + ':' + src + ':' + sig;
+    var cache = _dataCache[key];
     var k = 2 / (period + 1);
-    var out = [];
-    var prev = null;
-    for (var i = 0; i < candles.length; i++) {
-      var val = Number(candles[i][src]);
-      if (!Number.isFinite(val)) continue;
-      if (prev === null) {
-        prev = val;
-        // Seed with SMA for first value
-        var sum = 0, cnt = 0;
-        for (var j = Math.max(0, i - period + 1); j <= i; j++) {
-          var v = Number(candles[j][src]);
-          if (Number.isFinite(v)) { sum += v; cnt++; }
+
+    // Full recompute.
+    if (!cache || cache.sig !== sig) {
+      var prev = null;
+      var out = new Array(len);
+      for (var i = 0; i < len; i++) {
+        var val = Number(candles[i][src]);
+        if (!Number.isFinite(val)) { out[i] = null; continue; }
+        if (prev === null) {
+          // Seed with SMA for the first `period` points
+          var sum = 0, cnt = 0;
+          for (var j = Math.max(0, i - period + 1); j <= i; j++) {
+            var v = Number(candles[j][src]);
+            if (Number.isFinite(v)) { sum += v; cnt++; }
+          }
+          prev = cnt > 0 ? sum / cnt : val;
+        } else {
+          prev = prev + k * (val - prev);
         }
-        if (cnt > 0) prev = sum / cnt;
-      } else {
-        prev = prev + k * (val - prev);
+        out[i] = { time: candles[i].openTime || candles[i].time, value: prev };
       }
-      out.push({ time: candles[i].openTime || candles[i].time, value: prev });
+      _dataCache[key] = { sig: sig, result: out, lastEma: prev, lastIdx: len - 1 };
+      return out;
     }
+
+    // Same structure: recompute only the last point.
+    var out = cache.result.slice();
+    var i = len - 1;
+    if (i > 0 && out[i - 1]) {
+      var prev = out[i - 1].value;
+      var val = Number(candles[i][src]);
+      out[i] = Number.isFinite(val) ? { time: candles[i].openTime || candles[i].time, value: prev + k * (val - prev) } : null;
+      cache.lastEma = out[i] ? out[i].value : prev;
+    }
+    cache.result = out;
     return out;
   }
 
@@ -80,28 +135,40 @@
     var period = params.period || 20;
     var mult = params.multiplier || 2;
     var src = params.source || 'close';
-    var middle = computeSMA(candles, { period: period, source: src });
-    var upper = [], lower = [];
-    for (var i = 0; i < middle.length; i++) {
-      var t = middle[i].time;
-      var sumSq = 0, count = 0;
-      // Find candles around this SMA point
-      for (var j = 0; j < candles.length; j++) {
-        var ct = candles[j].openTime || candles[j].time;
-        if (ct > t) break;
+    var len = candles.length;
+    if (!len || period < 2) return { middle: [], upper: [], lower: [] };
+
+    var sig = candleStructSig(candles);
+    var key = 'bollinger:' + period + ':' + mult + ':' + src + ':' + sig;
+    var cache = _dataCache[key];
+
+    // Full recompute.
+    if (!cache || cache.sig !== sig) {
+      var middle = computeSMA(candles, { period: period, source: src });
+      var upper = [], lower = [];
+      for (var i = 0; i < middle.length; i++) {
+        var t = middle[i].time;
+        var sumSq = 0, count = 0;
+        for (var j = 0; j < candles.length; j++) {
+          var ct = candles[j].openTime || candles[j].time;
+          if (ct > t) break;
+        }
+        var start = Math.max(0, j - period);
+        for (var k = start; k < j && k < candles.length; k++) {
+          var v = Number(candles[k][src]);
+          if (Number.isFinite(v) && middle[i]) { sumSq += Math.pow(v - middle[i].value, 2); count++; }
+        }
+        if (count > 0) {
+          var std = Math.sqrt(sumSq / count);
+          upper.push({ time: t, value: middle[i].value + mult * std });
+          lower.push({ time: t, value: middle[i].value - mult * std });
+        }
       }
-      var start = Math.max(0, j - period);
-      for (var k = start; k < j && k < candles.length; k++) {
-        var v = Number(candles[k][src]);
-        if (Number.isFinite(v)) { sumSq += Math.pow(v - middle[i].value, 2); count++; }
-      }
-      if (count > 0) {
-        var std = Math.sqrt(sumSq / count);
-        upper.push({ time: t, value: middle[i].value + mult * std });
-        lower.push({ time: t, value: middle[i].value - mult * std });
-      }
+      var result = { middle: middle, upper: upper, lower: lower };
+      _dataCache[key] = { sig: sig, result: result };
+      return result;
     }
-    return { middle: middle, upper: upper, lower: lower };
+    return cache.result;
   }
 
   // Register built-ins
@@ -298,7 +365,7 @@
     // Clear all active indicators
     clear: function () {
       _active = [];
-      _cache = {};
+      _dataCache = {};
     },
 
     // Get list of active indicators
@@ -315,15 +382,11 @@
       return out;
     },
 
-    // Compute and cache an indicator
+    // Compute an indicator (delegates to registry; SMA/EMA are now self-caching).
     compute: function (id, candles, params, symbol) {
       var def = _registry[id];
       if (!def || !candles || !candles.length) return null;
-      var key = id + ':' + (symbol || '') + ':' + JSON.stringify(params || {});
-      if (_cache[key]) return _cache[key];
-      var result = def.compute(candles, params || {});
-      _cache[key] = result;
-      return result;
+      return def.compute(candles, params || {});
     },
 
     // Draw all active indicators on the chart

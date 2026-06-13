@@ -85,13 +85,27 @@
       pressureBuy: container.querySelector('[data-v6-tape-pressure-buy]'),
       pressureSell: container.querySelector('[data-v6-tape-pressure-sell]')
     };
+    // Scroll → re-render virtual window
+    var bodyEl = container._v6TapeShell.body;
+    if (bodyEl && !bodyEl._tapeScrollBound) {
+      bodyEl._tapeScrollBound = true;
+      bodyEl.addEventListener('scroll', function () {
+        var s = container._v6TapeShell;
+        if (s && s.body) {
+          Panels.renderTapeInto(container, container._tapeLastTrades || [], container._tapeLastSettings || {});
+        }
+      }, { passive: true });
+    }
   }
 
   Panels.renderTapeInto = function (container, trades, settings) {
     if (!container) return;
     settings = settings || {};
+    container._tapeLastTrades = trades;
+    container._tapeLastSettings = settings;
     var rows = tapeRows(trades, settings);
     var tapeFontSize = Number(settings.tapeFontSize || 10);
+    var rowHeight = Math.max(18, Math.min(28, tapeFontSize + 10));
     ensureTapeShell(container);
     var shell = container._v6TapeShell;
     if (shell && shell.table) {
@@ -106,7 +120,7 @@
     }
     var rowOpts = { maxQty: maxQty };
 
-    // Update pressure bar: ratio of buy vs sell volume
+    // Update pressure bar
     if (shell && shell.pressureBuy && shell.pressureSell && rows.length) {
       var buyVol = 0, sellVol = 0;
       for (var j = 0; j < rows.length; j++) {
@@ -123,17 +137,57 @@
       if (body) body.innerHTML = '<div class="v6-empty">Not available</div>';
       return;
     }
-    if (V6OF.VirtualList && body) {
-      V6OF.VirtualList.render(body, {
-        rows: rows,
-        rowHeight: Math.max(18, Math.min(28, tapeFontSize + 10)),
-        buffer: 10,
-        className: 'v6-tape-window',
-        stickToTop: true,
-        renderRow: function (trade) { return renderTapeRow(trade, rowOpts); }
-      });
-    } else if (body) {
-      body.innerHTML = rows.map(function (t) { return renderTapeRow(t, rowOpts); }).join('');
+
+    // ── Virtual scroll: render only visible rows + buffer ──────────────────
+    if (!body) return;
+    var totalH = rows.length * rowHeight;
+    var viewH = body.clientHeight || 400;
+    var scrollTop = body.scrollTop || 0;
+    var buffer = 10;
+    var firstVisible = Math.max(0, Math.floor(scrollTop / rowHeight) - buffer);
+    var lastVisible = Math.min(rows.length, firstVisible + Math.ceil(viewH / rowHeight) + buffer * 2);
+
+    // Spacer
+    if (!body._tapeSpacer) {
+      body.innerHTML = '<div class="v6-tape-spacer"></div>';
+      body._tapeSpacer = body.firstChild;
+    }
+    var spacer = body._tapeSpacer;
+    if (spacer._tapeLastH !== totalH) {
+      spacer.style.height = totalH + 'px';
+      spacer._tapeLastH = totalH;
+    }
+
+    // Row pool
+    var pool = body._tapePool || (body._tapePool = []);
+    var idx = 0;
+    for (var vi = firstVisible; vi < lastVisible; vi++) {
+      var trade = rows[vi];
+      var html = renderTapeRow(trade, rowOpts);
+      var y = vi * rowHeight;
+      var el = pool[idx];
+      if (!el) {
+        el = document.createElement('div');
+        el.style.position = 'absolute';
+        el.style.left = '0';
+        el.style.right = '0';
+        el.style.height = rowHeight + 'px';
+        el.innerHTML = html;
+        el._tapeHtml = html;
+        spacer.appendChild(el);
+        pool[idx] = el;
+      } else {
+        if (el._tapeHtml !== html) {
+          el.innerHTML = html;
+          el._tapeHtml = html;
+        }
+        el.style.transform = 'translateY(' + y + 'px)';
+      }
+      el.style.display = '';
+      idx++;
+    }
+    for (; idx < pool.length; idx++) {
+      pool[idx].style.display = 'none';
     }
   };
 

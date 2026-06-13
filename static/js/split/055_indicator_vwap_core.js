@@ -261,7 +261,7 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
     var startTime = bounds.startTime;
     var endTime = bounds.endTime;
 
-    console.log('[VWAP BOUNDS]', period, {
+    V6OF.debugLog('[VWAP BOUNDS]', period, {
       mode: config.mode,
       interval: config.interval,
       start: new Date(startTime).toISOString(),
@@ -271,7 +271,7 @@ window.BtcMarketClock = window.BtcMarketClock || (function () {
 
     var raw = await _fetchKlines(symbol, config.interval, startTime, endTime, config.limit);
 
-    console.log('[VWAP RAW]', period, {
+    V6OF.debugLog('[VWAP RAW]', period, {
       count: raw.length,
       first: raw[0] && new Date((raw[0].time || raw[0].openTime || raw[0].t) * 1000).toISOString(),
       last: raw[raw.length - 1] && new Date((raw[raw.length - 1].time || raw[raw.length - 1].openTime || raw[raw.length - 1].t) * 1000).toISOString(),

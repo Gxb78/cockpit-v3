@@ -39,7 +39,7 @@
   function fetchJson(url) {
     return fetch(url).then(function (r) {
       var statusMsg = "HTTP " + r.status + " " + r.statusText;
-      console.log("[fetch network response] endpoint: " + url + " | status: " + statusMsg + " | source: orderflow_layout");
+      V6OF.debugLog("[fetch network response] endpoint: " + url + " | status: " + statusMsg + " | source: orderflow_layout");
       if (!r.ok) {
         throw new Error("HTTP error " + r.status + " (" + url + ")");
       }
@@ -87,6 +87,21 @@
   function restKlinePrefillLimit(tf) {
     var map = { '1m': 100000, '3m': 60000, '5m': 60000, '15m': 40000, '30m': 40000, '1h': 20000, '2h': 20000, '4h': 20000, '6h': 12000, '8h': 12000, '12h': 12000, '1d': 5000 };
     return map[tf] || 20000;
+  }
+
+  var DOM_DEPTH_WS_SILENCE_MS = 10000;
+  var DOM_DEPTH_FALLBACK_COOLDOWN_MS = 30000;
+  var EXO_CVD_MIN_HEIGHT = 72;
+  var EXO_CVD_MAX_HEIGHT = 420;
+  var EXO_CVD_MAX_STAGE_RATIO = 0.45;
+  var EXO_DOM_DEFAULT_WIDTH = 340;
+  var EXO_DOM_MIN_WIDTH = 260;
+  var EXO_DOM_MAX_WIDTH = 720;
+  var EXO_CVD_DEFAULT_HEIGHT = 124;
+  var _domDepthFallbackNotBefore = Date.now() + DOM_DEPTH_WS_SILENCE_MS;
+
+  function delayDomDepthFallback() {
+    _domDepthFallbackNotBefore = Date.now() + DOM_DEPTH_WS_SILENCE_MS;
   }
 
   function tailForRender(list, limit) {
@@ -185,10 +200,10 @@
     var entry = _restCache[url];
     if (!bypassCache && entry && (now - entry.ts) < ttlMs) {
       var age = now - entry.ts;
-      console.log("[fetch cache hit] endpoint: " + url + " | age: " + age + "ms | source: orderflow_layout");
+      V6OF.debugLog("[fetch cache hit] endpoint: " + url + " | age: " + age + "ms | source: orderflow_layout");
       return Promise.resolve(entry.data);
     }
-    console.log("[fetch network start] endpoint: " + url + " | source: orderflow_layout");
+    V6OF.debugLog("[fetch network start] endpoint: " + url + " | source: orderflow_layout");
     return fetchJson(url)
       .then(function(data) {
         _restCache[url] = { data: data, ts: now };
@@ -245,6 +260,7 @@
     }).join('');
 
     var demoBanner = '<div class="v6-demo-banner" data-v6-demo-banner style="display: none;"><span>⚠️ Live Engine Offline — Running in Demo Mode (Mock Data)</span></div>';
+    var reconnectBanner = '<div class="v6-reconnect-banner" data-v6-reconnect-banner style="display: none;"><span data-v6-reconnect-text>Reconnecting to market engine...</span></div>';
     var mountError = '<div class="v6-mount-error-region" data-v6-mount-error role="status" aria-live="polite" data-testid="orderflow-mount-error" hidden><strong>Engine unavailable</strong><span data-v6-mount-error-text>Unable to connect to the orderflow engine.</span></div>';
     var liveStatus = '<div class="sr-only" data-v6-live-status role="status" aria-live="polite" aria-atomic="true" data-testid="orderflow-live-status">Orderflow loading.</div>';
 
@@ -256,6 +272,7 @@
           '<label class="v6-field">Mode<select data-v6-setting="chartMode"><option value="both">Both</option><option value="heatmap">Heatmap</option><option value="footprint">Footprint</option><option value="none">None</option></select></label>',
           '<label class="v6-check"><input type="checkbox" data-v6-setting="showGrid" /><span>Show Grid</span></label>',
           '<label class="v6-check"><input type="checkbox" data-v6-setting="showOhlc" /><span>OHLC candles</span></label>',
+          '<label class="v6-field">Crosshair snap<select data-v6-setting="crosshairSnapOhlc"><option value="off">Time only</option><option value="nearest">Nearest OHLC</option><option value="high">High</option><option value="low">Low</option><option value="close">Close</option></select></label>',
           '<label class="v6-field">OHLC style<select data-v6-setting="ohlcBodyStyle"><option value="candles">Candles</option><option value="hollow">Hollow</option><option value="bars">Bars</option></select></label>',
           '<label class="v6-field">OHLC width<input type="number" min="0.2" max="1" step="0.05" data-v6-setting="ohlcBodyWidth" /></label>',
           '<label class="v6-field">OHLC line<input type="number" min="1" max="4" step="0.25" data-v6-setting="ohlcLineWidth" /></label>',
@@ -316,6 +333,7 @@
     return [
       '<div class="exo-terminal v6-shell" data-orderflow-slot="v6" data-v6-layout="exocharts" role="region" aria-label="Orderflow trading terminal" data-testid="orderflow-v6-slot">',
         demoBanner,
+        reconnectBanner,
         mountError,
         liveStatus,
         // Page navigation dropdown (fixed position, outside topbar flow)
@@ -352,7 +370,7 @@
           '<span class="exo-top-stack"></span>',
           '<span class="exo-top-workspace" data-exo-logo-menu>My workspace</span>',
           '<span class="exo-top-grid"></span>',
-          '<span class="exo-top-widget" data-v6-action="add-widget">Add Widget</span>',
+          '<span class="exo-top-widget" data-v6-action="add-widget">Panels</span>',
           '<span class="exo-top-camera" data-v6-action="screenshot" title="Take screenshot">',
             '<span class="exo-camera-inner"></span>',
           '</span>',
@@ -381,10 +399,17 @@
           '<section class="exo-chart-pane">',
             '<div class="exo-chart-tabs"><span class="exo-tab-title">Chart <button type="button" class="exo-tab-close" data-v6-action="close-panel" data-panel="chart">×</button></span></div>',
             '<div class="exo-chart-stage">',
-              '<canvas class="exo-chart-canvas v6-chart-canvas" data-v6-chart></canvas>',
+              '<div class="exo-chart-canvas v6-chart-layer-stack" data-v6-chart-stack>',
+                '<canvas class="v6-chart-layer v6-chart-layer-static" data-v6-chart-layer="static"></canvas>',
+                '<canvas class="v6-chart-layer v6-chart-layer-data" data-v6-chart-layer="data"></canvas>',
+                '<canvas class="v6-chart-layer v6-chart-layer-overlay v6-chart-canvas" data-v6-chart></canvas>',
+              '</div>',
               '<div class="v6-chart-indicator-stack" data-v6-chart-indicators aria-label="Chart indicators"></div>',
               '<div class="exo-cvd-resizer" data-v6-cvd-resize title="Ajuster la hauteur Chart / CVD"></div>',
-              '<canvas class="exo-cvd-canvas" data-v6-cvd-canvas></canvas>',
+              '<div class="exo-cvd-canvas exo-cvd-layer-stack" data-v6-cvd-stack>',
+                '<canvas class="exo-cvd-layer exo-cvd-layer-data" data-v6-cvd-canvas></canvas>',
+                '<canvas class="exo-cvd-layer exo-cvd-layer-overlay" data-v6-cvd-overlay></canvas>',
+              '</div>',
               '<div class="exo-price-axis"></div>',
               '<div class="exo-time-axis"></div>',
             '</div>',
@@ -626,6 +651,22 @@
     }
   }
 
+  function isDisplayed(el) {
+    if (!el || !el.isConnected) return false;
+    try {
+      var cur = el;
+      while (cur && cur.nodeType === 1) {
+        if (cur.hidden) return false;
+        var style = window.getComputedStyle ? window.getComputedStyle(cur) : null;
+        if (style && (style.display === 'none' || style.visibility === 'hidden')) return false;
+        cur = cur.parentElement;
+      }
+      return true;
+    } catch (_) {
+      return !!(el.offsetWidth || el.offsetHeight || (el.getClientRects && el.getClientRects().length));
+    }
+  }
+
   function deepCloneCachePayload(value) {
     if (value == null || typeof value !== 'object') return value;
     if (Array.isArray(value)) {
@@ -699,6 +740,8 @@
     if (volumeProfileStyle && document.activeElement !== volumeProfileStyle) volumeProfileStyle.value = settings.volumeProfileStyle || 'volume';
     var ohlcBodyStyle = root.querySelector('[data-v6-setting="ohlcBodyStyle"]');
     if (ohlcBodyStyle && document.activeElement !== ohlcBodyStyle) ohlcBodyStyle.value = settings.ohlcBodyStyle || 'candles';
+    var crosshairSnapOhlc = root.querySelector('[data-v6-setting="crosshairSnapOhlc"]');
+    if (crosshairSnapOhlc && document.activeElement !== crosshairSnapOhlc) crosshairSnapOhlc.value = settings.crosshairSnapOhlc || 'off';
 
     // Checkboxes — resolved centrally via SETTINGS_SCHEMA
     var toggles = ['showTape', 'showDOM', 'showCVD', 'showVwap', 'showOhlc', 'showHeatmap', 'showFootprint', 'showLastPrice', 'showGrid', 'showSessionZones', 'showVwapBands', 'alertsEnabled', 'showFootprintVA', 'showVolumeProfile', 'volumeProfileShowPocTrail'];
@@ -871,6 +914,22 @@
     }
   }
 
+  function setExoChartPanelVisible(root, visible) {
+    var chartStage = root && root.querySelector ? root.querySelector('.exo-chart-stage') : null;
+    var leftTools = root && root.querySelector ? root.querySelector('.exo-left-tools') : null;
+    var chartTabs = root && root.querySelector ? root.querySelector('.exo-chart-tabs') : null;
+    if (chartStage) chartStage.style.display = visible ? '' : 'none';
+    if (leftTools) leftTools.style.display = visible ? '' : 'none';
+    if (chartTabs) chartTabs.style.display = '';
+    var chartCloseBtn = root && root.querySelector ? root.querySelector('.exo-chart-tabs .exo-tab-close') : null;
+    if (chartCloseBtn) chartCloseBtn.textContent = visible ? '×' : '+';
+  }
+
+  function isExoChartPanelVisible(root) {
+    var chartStage = root && root.querySelector ? root.querySelector('.exo-chart-stage') : null;
+    return !!chartStage && chartStage.style.display !== 'none';
+  }
+
   function normalizeIngressOrderBook(data, source) {
     var isHL = source === 'hyperliquid';
     var book = null;
@@ -992,6 +1051,31 @@
     return book;
   }
 
+  function isLiveDepthFresh(state, now) {
+    state = state || {};
+    now = now || Date.now();
+    var book = state.orderBook;
+    if (!book || !book.bids || !book.asks) return false;
+    if (book.source === 'rest-depth') return false;
+    var source = state.dataSource || 'binance';
+    var wantSymbol = normalizeSymbol(state.symbol || 'BTC', source);
+    var bookSymbol = book.symbol ? normalizeSymbol(book.symbol, source) : wantSymbol;
+    if (bookSymbol !== wantSymbol) return false;
+    var ts = Number(book.tsLocal || state.lastOrderBookTs || 0);
+    return ts > 0 && (now - ts) < DOM_DEPTH_WS_SILENCE_MS;
+  }
+
+  function shouldFetchDomDepthFallback(store, reason) {
+    if (!store || !store.getState) return false;
+    var state = store.getState() || {};
+    var now = Date.now();
+    if (isLiveDepthFresh(state, now)) return false;
+    if (now < _domDepthFallbackNotBefore) return false;
+    var lastRest = Number(state.restDepthTs || 0);
+    if (lastRest > 0 && (now - lastRest) < DOM_DEPTH_FALLBACK_COOLDOWN_MS) return false;
+    return true;
+  }
+
   function applyRestTrades(store, data, source, symbol, reason) {
     var trades = normalizeIngressTrades(data, source, symbol);
     if (!trades.length) return [];
@@ -1015,6 +1099,17 @@
     return trades;
   }
 
+  function resetChartOnDataChangeSafely(reason, opts) {
+    var vp = V6OF.chart;
+    if (!vp || !vp.resetOnDataChange) return false;
+    opts = opts || {};
+    if (!opts.force && vp.hasRecentUserInteraction && vp.hasRecentUserInteraction(opts.windowMs || 12000)) {
+      return false;
+    }
+    vp.resetOnDataChange();
+    return true;
+  }
+
   function applyRestCandles(store, data, source, timeframe, reason) {
     var candles = normalizeIngressCandles(data, source, timeframe);
     if (!candles.length) return [];
@@ -1027,7 +1122,7 @@
       };
       return patch;
     }, reason || 'rest-klines');
-    if (V6OF.chart && V6OF.chart.resetOnDataChange) V6OF.chart.resetOnDataChange();
+    resetChartOnDataChangeSafely(reason || 'rest-klines');
     return candles;
   }
 
@@ -1040,17 +1135,18 @@
 
   function prefetchDomDepth(store, reason) {
     if (!store) return;
+    if (!shouldFetchDomDepthFallback(store, reason)) return;
     var state = store.getState ? store.getState() : {};
     var source = state.dataSource || 'binance';
     var symbol = normalizeSymbol(state.symbol, source);
     var url = source === 'hyperliquid'
       ? '/api/hyperliquid/orderbook?market=' + symbol
       : '/api/market/depth?symbol=' + symbol + '&limit=5000';
-    var bypass = (reason === 'refresh' || reason === 'symbol-change' || reason === 'reconnect' || reason === 'auto-connect');
+    var bypass = (reason === 'fallback' || reason === 'symbol-change' || reason === 'reconnect' || reason === 'auto-connect');
     _cachedFetch(url, 5000, bypass).then(function (data) {
       var book = applyRestOrderBook(store, data, source, 'rest-depth-' + (reason || 'prefetch'));
       if (!book) return;
-      console.log('[DOM] REST depth prefetch (' + source + '): bids=' + book.bids.length + ' asks=' + book.asks.length + ' reason=' + (reason || ''));
+      V6OF.debugLog('[DOM] REST depth prefetch (' + source + '): bids=' + book.bids.length + ' asks=' + book.asks.length + ' reason=' + (reason || ''));
     }).catch(function (e) {
       console.warn('[DOM] REST depth prefetch failed', e);
     });
@@ -1058,12 +1154,130 @@
 
   function startDomDepthRefresh(root, store) {
     if (!root || !store) return;
-    if (root._v6DomDepthRefreshTimer) clearInterval(root._v6DomDepthRefreshTimer);
+    stopDomDepthRefresh(root);
     root._v6DomDepthRefreshTimer = setInterval(function () {
       if (!root.isConnected) return;
       if (document.body && document.body.getAttribute('data-current-page') !== 'orderflow') return;
-      prefetchDomDepth(store, 'refresh');
-    }, 15000);
+      prefetchDomDepth(store, 'fallback');
+    }, 5000);
+  }
+
+  function stopDomDepthRefresh(root) {
+    if (!root || !root._v6DomDepthRefreshTimer) return;
+    clearInterval(root._v6DomDepthRefreshTimer);
+    root._v6DomDepthRefreshTimer = null;
+  }
+
+  function cleanupResizeListeners(root) {
+    var ctx = root && root._v6LayoutContext;
+    if (!ctx) return;
+    if (ctx.resizeRaf) {
+      try { cancelAnimationFrame(ctx.resizeRaf); } catch (_) {}
+      ctx.resizeRaf = null;
+    }
+    if (ctx.resizeAbortController) {
+      try { ctx.resizeAbortController.abort(); } catch (_) {}
+      ctx.resizeAbortController = null;
+    }
+    (ctx.resizeListenerCleanups || []).forEach(function (fn) {
+      try { fn(); } catch (_) {}
+    });
+    ctx.resizeListenerCleanups = [];
+    ctx.resizeState = null;
+    ctx.cvdResizeState = null;
+    if (root && root.querySelectorAll) {
+      root.querySelectorAll('.exo-resizing').forEach(function (el) {
+        el.classList.remove('exo-resizing');
+      });
+    }
+    if (document.body) {
+      document.body.classList.remove('is-resizing');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+  }
+
+  function cleanupLayoutListeners(ctx) {
+    if (!ctx) return;
+    (ctx.listeners || []).forEach(function (entry) {
+      try {
+        if (entry.type === 'interval' && typeof entry.fn === 'function') {
+          entry.fn();
+        } else if (entry.target && entry.target.removeEventListener) {
+          entry.target.removeEventListener(entry.type, entry.fn);
+        }
+      } catch (_) {}
+    });
+    ctx.listeners = [];
+  }
+
+  function cleanupMountListeners(ctx) {
+    if (!ctx) return;
+    (ctx.mountListeners || []).forEach(function (entry) {
+      try {
+        if (entry.target && entry.target.removeEventListener) {
+          entry.target.removeEventListener(entry.type, entry.fn);
+        }
+      } catch (_) {}
+    });
+    ctx.mountListeners = [];
+  }
+
+  function cleanupClockTimer(ctx) {
+    if (!ctx || !ctx.clockInterval) return;
+    clearInterval(ctx.clockInterval);
+    ctx.clockInterval = null;
+  }
+
+  function resizeCanvasElement(canvas) {
+    if (!canvas) return;
+    if (typeof resizeCanvasForDpr === 'function') {
+      resizeCanvasForDpr(canvas);
+      return;
+    }
+    var host = canvas.parentNode || canvas;
+    var rect = host.getBoundingClientRect ? host.getBoundingClientRect() : { width: canvas.clientWidth, height: canvas.clientHeight };
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.round((rect.width || 1) * dpr));
+    canvas.height = Math.max(1, Math.round((rect.height || 1) * dpr));
+    canvas.style.width = (rect.width || 1) + 'px';
+    canvas.style.height = (rect.height || 1) + 'px';
+  }
+
+  function resizeOrderflowCanvases(root) {
+    if (!root || !root.querySelectorAll) return;
+    root.querySelectorAll('[data-v6-chart-layer], [data-v6-chart], [data-v6-cvd-canvas], [data-v6-cvd-overlay]').forEach(function (canvas) {
+      resizeCanvasElement(canvas);
+    });
+  }
+
+  function finalResizeRender(root) {
+    var st = V6OF.getStore ? V6OF.getStore(root) : null;
+    if (st) render(root, st.getState(), true);
+  }
+
+  function clampExoCvdHeight(root, value) {
+    var n = Number(value);
+    if (!Number.isFinite(n)) n = EXO_CVD_DEFAULT_HEIGHT;
+    var stage = root && root.querySelector ? root.querySelector('.exo-chart-stage') : null;
+    var stageHeight = 0;
+    try {
+      stageHeight = stage ? stage.getBoundingClientRect().height : 0;
+    } catch (_) {
+      stageHeight = 0;
+    }
+    var max = EXO_CVD_MAX_HEIGHT;
+    if (stageHeight > 0) {
+      max = Math.min(EXO_CVD_MAX_HEIGHT, stageHeight * EXO_CVD_MAX_STAGE_RATIO);
+    }
+    max = Math.max(EXO_CVD_MIN_HEIGHT, max);
+    return Math.max(EXO_CVD_MIN_HEIGHT, Math.min(max, n));
+  }
+
+  function clampExoDomWidth(value) {
+    var n = Number(value);
+    if (!Number.isFinite(n)) n = EXO_DOM_DEFAULT_WIDTH;
+    return Math.max(EXO_DOM_MIN_WIDTH, Math.min(EXO_DOM_MAX_WIDTH, n));
   }
 
   function renderEngineBar(root, snapshot, state) {
@@ -1209,6 +1423,26 @@
     setText(region, '[data-v6-mount-error-text]', text);
   }
 
+  function renderReconnectBanner(root, snapshot, state) {
+    var banner = root && root.querySelector('[data-v6-reconnect-banner]');
+    if (!banner || !snapshot || !state) return;
+    var status = snapshot.status || 'disconnected';
+    var freshness = state.dataFreshness;
+    var shouldShow = state.source !== 'mock' && (status === 'connecting' || status === 'error' || freshness === 'rest-fallback');
+    banner.style.display = shouldShow ? 'block' : 'none';
+    if (!shouldShow) return;
+    var stats = snapshot.stats || {};
+    var text = status === 'connecting'
+      ? 'Reconnecting to market engine...'
+      : freshness === 'rest-fallback'
+        ? 'Market engine offline. REST fallback active.'
+        : 'Market engine connection lost. Reconnect resumes on focus or wake.';
+    if (stats.lastError && status === 'error') {
+      text += ' ' + stats.lastError;
+    }
+    setText(root, '[data-v6-reconnect-text]', text);
+  }
+
   function shouldRender(root, panelName, slice, force) {
     if (force) {
       if (!root._v6Cache) root._v6Cache = {};
@@ -1235,11 +1469,13 @@
 
     var engineClient = root._v6EngineClient;
     if (engineClient) {
-      renderEngineBar(root, {
+      var engineSnapshot = {
         status: engineClient.getStatus(),
         stats: engineClient.getStats(),
         paused: engineClient.isPaused()
-      }, state);
+      };
+      renderEngineBar(root, engineSnapshot, state);
+      renderReconnectBanner(root, engineSnapshot, state);
     }
 
     if (state.symbol) {
@@ -1385,7 +1621,7 @@
       sessionProfile: settings.sessionProfile || 'global'
     };
 
-    if (tapeList && V6OF.Panels && V6OF.Panels.renderTapeInto && settings.showTape !== false) {
+    if (tapeList && isDisplayed(tapeList) && V6OF.Panels && V6OF.Panels.renderTapeInto && settings.showTape !== false) {
       if (shouldRender(root, 'tape', tapeSlice, force)) {
         domRenderTasks.push(function () {
           // Incremental, virtualized update: keeps a stable shell and only
@@ -1428,7 +1664,7 @@
         });
       }
     }
-    if (cvd && V6OF.Panels && V6OF.Panels.renderCvdInto && settings.showCVD !== false) {
+    if (cvd && isDisplayed(cvd) && V6OF.Panels && V6OF.Panels.renderCvdInto && settings.showCVD !== false) {
       if (shouldRender(root, 'cvd', cvdSlice, force)) {
         queueRender(root, 'cvd', function () {
           // Incremental update: stable shell preserves the interval <select>;
@@ -1437,7 +1673,8 @@
         });
       }
     }
-    if (shouldRender(root, 'inputs', {
+    var settingsPanel = root.querySelector('[data-v6-panel="settings"]');
+    if (settingsPanel && isDisplayed(settingsPanel) && shouldRender(root, 'inputs', {
       settings: settings,
       symbol: state.symbol,
       timeframe: state.timeframe,
@@ -1461,8 +1698,11 @@
           var cvdCanvas = root.querySelector('[data-v6-cvd-canvas]');
           V6OF.CanvasChart.draw(chartCanvas, makeChartRenderState(state));
           renderChartIndicatorStack(root, state);
-          if (cvdCanvas && V6OF.Panels && V6OF.Panels.CvdPanel && V6OF.Panels.CvdPanel.draw && settings.showCVD !== false) {
+          var cvdHost = cvdCanvas && cvdCanvas.closest ? cvdCanvas.closest('.exo-cvd-canvas, [data-v6-cvd-panel]') : cvdCanvas;
+          if (cvdCanvas && isDisplayed(cvdHost || cvdCanvas) && V6OF.Panels && V6OF.Panels.CvdPanel && V6OF.Panels.CvdPanel.draw && settings.showCVD !== false) {
+            var cross = V6OF.getChartCrosshair ? V6OF.getChartCrosshair(root) : V6OF._fallbackChartCrosshair;
             V6OF.Panels.CvdPanel.draw(cvdCanvas, state, chartCanvas && chartCanvas._v6Viewport, {
+              crosshairTs: cross && cross.visible ? cross.time : null,
               showTimeAxis: false
             });
           }
@@ -1566,6 +1806,10 @@
           menu.remove();
           if (item.action === 'global-settings') {
             root.classList.toggle('exo-settings-open');
+            if (root.classList.contains('exo-settings-open')) {
+              var settingsStore = store && store.getState ? store.getState() : null;
+              if (settingsStore) syncInputs(root, settingsStore);
+            }
           }
         });
         menu.appendChild(btn);
@@ -1615,7 +1859,7 @@
         var stats = snapshot && snapshot.stats ? snapshot.stats : {};
         if (snapshot && snapshot.status === 'connected' && Number(stats.reconnectsCount || 0) > lastReconnectsSeen) {
           lastReconnectsSeen = Number(stats.reconnectsCount || 0);
-          prefetchDomDepth(store, 'reconnect');
+          delayDomDepthFallback();
         }
       });
     }
@@ -1760,6 +2004,10 @@
         // Exocharts layout: toggle settings overlay
         if (root.querySelector('[data-v6-layout="exocharts"]')) {
           root.classList.toggle('exo-settings-open');
+          if (root.classList.contains('exo-settings-open')) {
+            var settingsState = store && store.getState ? store.getState() : null;
+            if (settingsState) syncInputs(root, settingsState);
+          }
         } else if (V6OF.Page && V6OF.Page.Shell && typeof V6OF.Page.Shell.openDockTab === 'function') {
           V6OF.Page.Shell.openDockTab('settings');
         } else {
@@ -1817,6 +2065,20 @@
           drop.appendChild(row);
         }
 
+        function addPanelToggle(label, checked, onChange) {
+          var row = document.createElement('label');
+          row.className = 'exo-widget-row';
+          var cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.checked = !!checked;
+          cb.addEventListener('change', function () {
+            onChange(cb.checked);
+          });
+          row.appendChild(cb);
+          row.appendChild(document.createTextNode(' ' + label));
+          drop.appendChild(row);
+        }
+
         var head = document.createElement('div');
         head.className = 'exo-widget-head';
         head.textContent = 'Indicators';
@@ -1837,6 +2099,11 @@
         drop.appendChild(head2);
 
         addToggle('w-tape', 'Tape', 'showTape');
+        addPanelToggle('Chart', isExoChartPanelVisible(root), function (checked) {
+          setExoChartPanelVisible(root, checked);
+          var st = V6OF.getStore ? V6OF.getStore(root) : store;
+          if (st) setTimeout(function () { render(root, st.getState(), true); }, 50);
+        });
         addToggle('w-dom', 'DOM', 'showDOM');
 
         var head3 = document.createElement('div');
@@ -1958,16 +2225,7 @@
           if (meta) meta.textContent = interval;
           if (V6OF.CvdBuckets) V6OF.CvdBuckets.reset();
           if (V6OF.chart && V6OF.chart.resetOnDataChange) V6OF.chart.resetOnDataChange();
-          // Fetch full depth via REST for deeper DOM ladder
-          var source = state.dataSource || 'binance';
-          var normSymbol = normalizeSymbol(state.symbol, source);
-          var depthUrl = source === 'hyperliquid'
-            ? '/api/hyperliquid/orderbook?market=' + normSymbol
-            : '/api/market/depth?symbol=' + normSymbol + '&limit=5000';
-          _cachedFetch(depthUrl, 5000, true).then(function (data) {
-            var book = applyRestOrderBook(store, data, source, 'rest-depth-timeframe');
-            if (book) console.log('[DOM] REST depth loaded (' + source + '): bids=' + book.bids.length + ' asks=' + book.asks.length);
-          }).catch(function(e) { console.warn('[DOM] REST depth fetch failed', e); });
+          delayDomDepthFallback();
           if (engineClient) {
             engineClient.clearFootprint();
             engineClient.clearTrades();
@@ -1978,7 +2236,7 @@
         var source = btn.getAttribute('data-source');
         if (source && (source !== state.dataSource || state.source === 'mock')) {
           var oldSource = state.dataSource;
-          var patch = { dataSource: source };
+          var patch = { dataSource: source, restDepthTs: 0, restDepthCount: 0, liveDepthCount: 0 };
           if (state.source === 'mock') {
             patch.source = 'live';
             patch.dataFreshness = 'offline';
@@ -2016,13 +2274,7 @@
           var normSymbol = normalizeSymbol(state.symbol, source);
 
           // 1. Depth → DOM ladder
-          var depthUrl = isHL
-            ? '/api/hyperliquid/orderbook?market=' + normSymbol
-            : '/api/market/depth?symbol=' + normSymbol + '&limit=5000';
-          _cachedFetch(depthUrl, 5000, true).then(function(data) {
-            var book = applyRestOrderBook(store, data, source, 'rest-depth');
-            if (book) console.log('[DOM] REST depth: bids=' + book.bids.length + ' asks=' + book.asks.length);
-          }).catch(function(e) { console.warn('[DOM] REST depth failed', e); });
+          delayDomDepthFallback();
 
           // 2. Trades → fill the tape
           var tradesPrefill = restTradePrefillLimit(state.settings);
@@ -2031,7 +2283,7 @@
             : '/api/market/aggtrades?symbol=' + normSymbol + '&limit=' + tradesPrefill;
           _cachedFetch(tradesUrl, 15000, true).then(function(data) {
             var trades = applyRestTrades(store, data, source, normSymbol, 'rest-trades');
-            if (trades.length) console.log('[TAPE] REST trades loaded: ' + trades.length);
+            if (trades.length) V6OF.debugLog('[TAPE] REST trades loaded: ' + trades.length);
           }).catch(function(e) { console.warn('[TAPE] REST trades failed', e); });
 
           // 3. Klines → pre-fill the chart
@@ -2041,7 +2293,7 @@
             : '/api/market/klines?symbol=' + normSymbol + '&interval=' + tf + '&limit=' + klineLimit;
           _cachedFetch(klinesUrl, 60000, true).then(function(data) {
             var candles = applyRestCandles(store, data, source, tf, 'rest-klines');
-            if (candles.length) console.log('[CHART] REST klines loaded: ' + candles.length);
+            if (candles.length) V6OF.debugLog('[CHART] REST klines loaded: ' + candles.length);
           }).catch(function(e) { console.warn('[CHART] REST klines failed', e); });
 
           // Send source switch to the Go engine
@@ -2114,7 +2366,12 @@
           var mockState = V6OF.Mock.createState({ symbol: symbol, timeframe: state.timeframe });
           store.setState(mockState, 'symbol-change-mock');
         } else {
-          store.setState({ symbol: symbol }, 'symbol-change');
+          store.setState({
+            symbol: symbol,
+            restDepthTs: 0,
+            restDepthCount: 0,
+            liveDepthCount: 0
+          }, 'symbol-change');
           if (engineClient) {
             engineClient.clearTrades();
             engineClient.clearHeatmap();
@@ -2123,18 +2380,11 @@
               engineClient.sendMessage({ type: 'symbol_switch', symbol: symbol });
             }
           }
-          prefetchDomDepth(store, 'symbol-change');
+          delayDomDepthFallback();
           var tf = state.timeframe || '1m';
           var source = state.dataSource || 'binance';
           var isHL = source === 'hyperliquid';
           var normSymbol = normalizeSymbol(symbol, source);
-
-          var depthUrl = isHL
-            ? '/api/hyperliquid/orderbook?market=' + normSymbol
-            : '/api/market/depth?symbol=' + normSymbol + '&limit=5000';
-          _cachedFetch(depthUrl, 5000).then(function(data) {
-            applyRestOrderBook(store, data, source, 'rest-depth');
-          }).catch(function(e) { console.warn('[DOM] REST depth failed', e); });
 
           var tradesPrefill = restTradePrefillLimit(state.settings);
           var tradesUrl = isHL
@@ -2184,6 +2434,10 @@
         store.updateSettings({ volumeProfileStyle: input.value });
       } else if (key === 'ohlcBodyStyle') {
         store.updateSettings({ ohlcBodyStyle: input.value === 'bars' || input.value === 'hollow' ? input.value : 'candles' });
+      } else if (key === 'crosshairSnapOhlc') {
+        var snapMode = input.value;
+        if (snapMode !== 'high' && snapMode !== 'low' && snapMode !== 'close' && snapMode !== 'nearest') snapMode = 'off';
+        store.updateSettings({ crosshairSnapOhlc: snapMode });
       } else if (key === 'domGroup') {
         store.updateSettings({ domGroup: Math.max(1, Math.min(100, Number(input.value) || 1)) });
       } else if (key === 'showTape' || key === 'showDOM' || key === 'showCVD' ||
@@ -2284,7 +2538,7 @@
     function wireChartInteractions(root) {
       if (!V6OF.ChartInteractions) return;
       var canvas = root.querySelector('[data-v6-chart]');
-      var cvdCanvas = root.querySelector('[data-v6-cvd-canvas]');
+      var cvdCanvas = root.querySelector('[data-v6-cvd-overlay]') || root.querySelector('[data-v6-cvd-canvas]');
       if (canvas) V6OF.ChartInteractions.attach(canvas);
       if (cvdCanvas) V6OF.ChartInteractions.attachCvd(cvdCanvas);
       V6OF.ChartInteractions.wireToolbar(root, canvas);
@@ -2330,7 +2584,22 @@
       var ctx = this.create(root);
       if (!root || !ctx || !ctx.store) return;
       root.dataset.v6Mounted = '1';
+      root.setAttribute('data-v6-mounted', '1');
       render(root, ctx.store.getState(), true);
+      cleanupMountListeners(ctx);
+      var onDebugGridKey = function (e) {
+        if (!e.ctrlKey || !e.shiftKey || (e.key !== 'G' && e.key !== 'g')) return;
+        e.preventDefault();
+        V6OF.DEBUG_RENDER = !V6OF.DEBUG_RENDER;
+        V6OF.debugLog('Debug Grid: ' + (V6OF.DEBUG_RENDER ? 'ON' : 'OFF'));
+        var activeCanvas = root.querySelector('[data-v6-chart]');
+        if (activeCanvas && V6OF.CanvasChart && ctx.store) {
+          V6OF.CanvasChart.draw(activeCanvas, ctx.store.getState());
+        }
+      };
+      document.addEventListener('keydown', onDebugGridKey);
+      ctx.mountListeners = ctx.mountListeners || [];
+      ctx.mountListeners.push({ target: document, type: 'keydown', fn: onDebugGridKey });
     },
 
     bind: function (root) {
@@ -2402,7 +2671,7 @@
           var canvas = root.querySelector('[data-v6-chart]');
           if (canvas) {
             V6OF.ChartInteractions.attach(canvas);
-            var cvdCanvas = root.querySelector('[data-v6-cvd-canvas]');
+            var cvdCanvas = root.querySelector('[data-v6-cvd-overlay]') || root.querySelector('[data-v6-cvd-canvas]');
             if (cvdCanvas) V6OF.ChartInteractions.attachCvd(cvdCanvas);
             V6OF.ChartInteractions.wireToolbar(root, canvas);
             wired = true;
@@ -2413,98 +2682,123 @@
       }
 
       // ── Exocharts layout: resize handle ──────────────────────────────────
+      cleanupResizeListeners(root);
+      ctx.resizeAbortController = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var resizeListenerOptions = ctx.resizeAbortController ? { signal: ctx.resizeAbortController.signal } : false;
+      ctx.resizeListenerCleanups = [];
+      function addResizeListener(target, type, fn) {
+        if (!target || !target.addEventListener) return;
+        target.addEventListener(type, fn, resizeListenerOptions);
+        ctx.resizeListenerCleanups.push(function () {
+          target.removeEventListener(type, fn);
+        });
+      }
       var resizeHandle = root.querySelector('[data-v6-resize-handle]');
       if (resizeHandle) {
         var domPanel = root.querySelector('.exo-dom-panel');
-        var resizeState = null;
-        resizeHandle.addEventListener('mousedown', function (e) {
+        var onDomResizeStart = function (e) {
           e.preventDefault();
-          resizeState = {
+          var startWidth = clampExoDomWidth(domPanel ? domPanel.getBoundingClientRect().width : EXO_DOM_DEFAULT_WIDTH);
+          ctx.resizeState = {
             startX: e.clientX,
-            startWidth: domPanel ? domPanel.getBoundingClientRect().width : 340
+            startWidth: startWidth,
+            lastWidth: startWidth
           };
           resizeHandle.classList.add('exo-resizing');
           document.body.style.cursor = 'col-resize';
           document.body.style.userSelect = 'none';
-        });
-        document.addEventListener('mousemove', function (e) {
-          if (!resizeState) return;
-          var delta = resizeState.startX - e.clientX;
-          var newWidth = Math.max(260, Math.min(720, resizeState.startWidth + delta));
+        };
+        var onDomResizeMove = function (e) {
+          if (!ctx.resizeState) return;
+          var delta = ctx.resizeState.startX - e.clientX;
+          var newWidth = clampExoDomWidth(ctx.resizeState.startWidth + delta);
+          ctx.resizeState.lastWidth = newWidth;
           root.style.setProperty('--exo-dom', newWidth + 'px');
-          try { localStorage.setItem('cockpitV6.exoDomWidth', String(Math.round(newWidth))); } catch (_) {}
           // Throttle chart redraw to once per frame
-          if (!resizeState._raf) {
-            resizeState._raf = requestAnimationFrame(function () {
-              resizeState._raf = null;
-              var st = V6OF.getStore ? V6OF.getStore(root) : null;
-              if (st) render(root, st.getState(), true);
+          if (!ctx.resizeRaf) {
+            ctx.resizeRaf = requestAnimationFrame(function () {
+              ctx.resizeRaf = null;
+              resizeOrderflowCanvases(root);
             });
           }
-        });
-        document.addEventListener('mouseup', function () {
-          if (!resizeState) return;
-          resizeState = null;
+        };
+        var onDomResizeEnd = function () {
+          if (!ctx.resizeState) return;
+          if (ctx.resizeRaf) {
+            try { cancelAnimationFrame(ctx.resizeRaf); } catch (_) {}
+            ctx.resizeRaf = null;
+          }
+          if (Number.isFinite(ctx.resizeState.lastWidth)) {
+            try { localStorage.setItem('cockpitV6.exoDomWidth', String(Math.round(ctx.resizeState.lastWidth))); } catch (_) {}
+          }
+          ctx.resizeState = null;
           resizeHandle.classList.remove('exo-resizing');
           document.body.style.cursor = '';
           document.body.style.userSelect = '';
-        });
+          finalResizeRender(root);
+        };
+        addResizeListener(resizeHandle, 'mousedown', onDomResizeStart);
+        addResizeListener(document, 'mousemove', onDomResizeMove);
+        addResizeListener(document, 'mouseup', onDomResizeEnd);
         // Restore saved width
         try {
           var savedWidth = localStorage.getItem('cockpitV6.exoDomWidth');
-          if (savedWidth) {
-            root.style.setProperty('--exo-dom', Math.max(260, Math.min(720, Number(savedWidth))) + 'px');
-          }
+          root.style.setProperty('--exo-dom', Math.round(clampExoDomWidth(savedWidth)) + 'px');
         } catch (_) {}
       }
 
       // ── Exocharts layout: logo page navigation menu ───────────────────
       var cvdResizeHandle = root.querySelector('[data-v6-cvd-resize]');
       if (cvdResizeHandle) {
-        var cvdResizeState = null;
-        var chartStage = root.querySelector('.exo-chart-stage');
-        cvdResizeHandle.addEventListener('mousedown', function (e) {
+        var onCvdResizeStart = function (e) {
           e.preventDefault();
-          chartStage = root.querySelector('.exo-chart-stage');
           var cvdCanvas = root.querySelector('[data-v6-cvd-canvas]');
-          cvdResizeState = {
+          var startHeight = clampExoCvdHeight(root, cvdCanvas ? cvdCanvas.getBoundingClientRect().height : EXO_CVD_DEFAULT_HEIGHT);
+          ctx.cvdResizeState = {
             startY: e.clientY,
-            startHeight: cvdCanvas ? cvdCanvas.getBoundingClientRect().height : 124,
-            stageHeight: chartStage ? chartStage.getBoundingClientRect().height : 600
+            startHeight: startHeight,
+            lastHeight: startHeight
           };
           cvdResizeHandle.classList.add('exo-resizing');
           document.body.classList.add('is-resizing');
           document.body.style.cursor = 'row-resize';
           document.body.style.userSelect = 'none';
-        });
-        document.addEventListener('mousemove', function (e) {
-          if (!cvdResizeState) return;
-          var delta = cvdResizeState.startY - e.clientY;
-          var maxHeight = Math.max(92, cvdResizeState.stageHeight - 220);
-          var nextHeight = Math.max(72, Math.min(maxHeight, cvdResizeState.startHeight + delta));
+        };
+        var onCvdResizeMove = function (e) {
+          if (!ctx.cvdResizeState) return;
+          var delta = ctx.cvdResizeState.startY - e.clientY;
+          var nextHeight = clampExoCvdHeight(root, ctx.cvdResizeState.startHeight + delta);
+          ctx.cvdResizeState.lastHeight = nextHeight;
           root.style.setProperty('--exo-cvd-height', Math.round(nextHeight) + 'px');
-          try { localStorage.setItem('cockpitV6.exoCvdHeight', String(Math.round(nextHeight))); } catch (_) {}
-          if (!cvdResizeState._raf) {
-            cvdResizeState._raf = requestAnimationFrame(function () {
-              cvdResizeState._raf = null;
-              var st = V6OF.getStore ? V6OF.getStore(root) : null;
-              if (st) render(root, st.getState(), true);
+          if (!ctx.resizeRaf) {
+            ctx.resizeRaf = requestAnimationFrame(function () {
+              ctx.resizeRaf = null;
+              resizeOrderflowCanvases(root);
             });
           }
-        });
-        document.addEventListener('mouseup', function () {
-          if (!cvdResizeState) return;
-          cvdResizeState = null;
+        };
+        var onCvdResizeEnd = function () {
+          if (!ctx.cvdResizeState) return;
+          if (ctx.resizeRaf) {
+            try { cancelAnimationFrame(ctx.resizeRaf); } catch (_) {}
+            ctx.resizeRaf = null;
+          }
+          if (Number.isFinite(ctx.cvdResizeState.lastHeight)) {
+            try { localStorage.setItem('cockpitV6.exoCvdHeight', String(Math.round(ctx.cvdResizeState.lastHeight))); } catch (_) {}
+          }
+          ctx.cvdResizeState = null;
           cvdResizeHandle.classList.remove('exo-resizing');
           document.body.classList.remove('is-resizing');
           document.body.style.cursor = '';
           document.body.style.userSelect = '';
-        });
+          finalResizeRender(root);
+        };
+        addResizeListener(cvdResizeHandle, 'mousedown', onCvdResizeStart);
+        addResizeListener(document, 'mousemove', onCvdResizeMove);
+        addResizeListener(document, 'mouseup', onCvdResizeEnd);
         try {
           var savedCvdHeight = localStorage.getItem('cockpitV6.exoCvdHeight');
-          if (savedCvdHeight) {
-            root.style.setProperty('--exo-cvd-height', Math.max(72, Math.min(420, Number(savedCvdHeight))) + 'px');
-          }
+          root.style.setProperty('--exo-cvd-height', Math.round(clampExoCvdHeight(root, savedCvdHeight)) + 'px');
         } catch (_) {}
       }
 
@@ -2610,8 +2904,9 @@
           if (statusTime) statusTime.textContent = h + ':' + m + ':' + s;
         }
         updateClock();
-        var clockInterval = setInterval(updateClock, 10000);
-        ctx.listeners.push({ target: null, type: 'interval', fn: function() { clearInterval(clockInterval); } });
+        cleanupClockTimer(ctx);
+        ctx.clockInterval = setInterval(updateClock, 10000);
+        ctx.listeners.push({ target: null, type: 'interval', fn: function() { cleanupClockTimer(ctx); } });
       }
 
       // Initialize and auto-connect the WebSocket engine client on startup
@@ -2623,7 +2918,7 @@
         }, store.getState());
         if (store.getState().source !== 'mock') {
           store.setState({ source: 'live', dataFreshness: 'offline', transportStatus: 'connecting', trades: [] }, 'init-connect');
-          prefetchDomDepth(store, 'init-connect');
+          delayDomDepthFallback();
           startDomDepthRefresh(root, store);
           if (typeof engineClient.connect === 'function') {
             engineClient.connect();
@@ -2661,6 +2956,19 @@
 
     unmount: function (root) {
       if (!root || !root._v6LayoutContext) return;
+      var ctx = root._v6LayoutContext;
+      stopDomDepthRefresh(root);
+      cleanupClockTimer(ctx);
+      cleanupResizeListeners(root);
+      cleanupMountListeners(ctx);
+      if (V6OF.DomPanel && typeof V6OF.DomPanel.cleanup === 'function') {
+        var domContainer = root.querySelector && root.querySelector('[data-v6-dom-list]');
+        try { V6OF.DomPanel.cleanup(domContainer); } catch (_) {}
+      }
+      if (V6OF.Panels && V6OF.Panels.CvdPanel && typeof V6OF.Panels.CvdPanel.cleanup === 'function') {
+        var cvdCanvas = root.querySelector && root.querySelector('[data-v6-cvd-canvas]');
+        try { V6OF.Panels.CvdPanel.cleanup(cvdCanvas); } catch (_) {}
+      }
       root.removeAttribute('data-v6-mounted');
       delete root.dataset.v6Mounted;
     },
@@ -2668,14 +2976,28 @@
     destroy: function (root) {
       if (!root || !root._v6LayoutContext) return;
       var ctx = root._v6LayoutContext;
-      (ctx.listeners || []).forEach(function (entry) {
-        try { entry.target.removeEventListener(entry.type, entry.fn); } catch (_) {}
-      });
+      stopDomDepthRefresh(root);
+      cleanupClockTimer(ctx);
+      cleanupResizeListeners(root);
+      cleanupMountListeners(ctx);
+      cleanupLayoutListeners(ctx);
       (ctx.unsubs || []).forEach(function (unsub) {
         try { unsub(); } catch (_) {}
       });
       if (ctx.engineClient && typeof ctx.engineClient.destroy === 'function') {
         try { ctx.engineClient.destroy(); } catch (_) {}
+      }
+      if (V6OF.CanvasChart && typeof V6OF.CanvasChart.cleanup === 'function') {
+        var chartCanvas = root.querySelector && root.querySelector('[data-v6-chart]');
+        try { V6OF.CanvasChart.cleanup(chartCanvas); } catch (_) {}
+      }
+      if (V6OF.DomPanel && typeof V6OF.DomPanel.cleanup === 'function') {
+        var domContainer = root.querySelector && root.querySelector('[data-v6-dom-list]');
+        try { V6OF.DomPanel.cleanup(domContainer); } catch (_) {}
+      }
+      if (V6OF.Panels && V6OF.Panels.CvdPanel && typeof V6OF.Panels.CvdPanel.cleanup === 'function') {
+        var cvdCanvas = root.querySelector && root.querySelector('[data-v6-cvd-canvas]');
+        try { V6OF.Panels.CvdPanel.cleanup(cvdCanvas); } catch (_) {}
       }
       if (V6OF.clearChartCrosshair) {
         try { V6OF.clearChartCrosshair(root); } catch (_) {}

@@ -166,6 +166,8 @@
     var pendingFootprintCandles = [];
     var intentionalClose = false;
     var listeners = [];
+    var wakeCleanups = [];
+    var lastWakeReconnectAt = 0;
     var generation = 0;
     var depthHistory = [];
     var pendingDepthPoint = null;
@@ -262,7 +264,7 @@
           if (ws && status === 'connected') {
             try {
               ws.send(JSON.stringify({ type: 'cvd_history_request', timeframe: currentTf }));
-              console.log('[V6 Client] requested CVD history for timeframe:', currentTf);
+              V6OF.debugLog('[V6 Client] requested CVD history for timeframe:', currentTf);
             } catch (e) {
               console.warn('[V6 Client] failed to request CVD history:', e);
             }
@@ -271,7 +273,7 @@
         if (currentSymbol !== lastSymbol) {
           lastSymbol = currentSymbol;
           changed = true;
-          console.log('[V6 Client] symbol changed to', currentSymbol, '— will fetch footprint history');
+          V6OF.debugLog('[V6 Client] symbol changed to', currentSymbol, '— will fetch footprint history');
         }
         if (changed && status === 'connected') {
           fetchFootprintHistory();
@@ -810,6 +812,71 @@
       return out;
     }
 
+    // ── Web Worker offload for normalizeRestCandles ─────────────────────────
+    // Deep history can be 40k+ candles (4MB JSON). Parsing + normalizing on the
+    // main thread blocks the UI for 100-500ms. The worker runs the same logic
+    // off the main thread and posts the result back.
+    var _candleWorker = null;
+    var _candleWorkerUrl = null;
+
+    function normalizeRestCandlesAsync(raw, interval) {
+      return new Promise(function (resolve, reject) {
+        // Lazy-init the worker once
+        if (!_candleWorker) {
+          var workerCode = [
+            'var timeframeToMs=' + timeframeToMs.toString() + ';',
+            'self.onmessage=function(e){',
+              'var arr=e.data.raw,interval=e.data.interval,intervalMs=timeframeToMs(interval||"1m"),out=[];',
+              'for(var i=0;i<arr.length;i++){',
+                'var c=arr[i];if(!c)continue;',
+                'var openTime=Number(c.openTime);',
+                'if(!isFinite(openTime)||openTime<=0){openTime=Number(c.time);if(isFinite(openTime)&&openTime>0&&openTime<1e12)openTime*=1000;}',
+                'var closeTime=Number(c.closeTime);',
+                'if(!isFinite(closeTime)||closeTime<=openTime)closeTime=openTime+intervalMs;',
+                'var open=Number(c.open),high=Number(c.high),low=Number(c.low),close=Number(c.close);',
+                'if(!isFinite(openTime)||openTime<=0||!isFinite(open)||open<=0)continue;',
+                'out.push({symbol:c.symbol||"BTC",timeframe:interval||c.timeframe||"1m",intervalMs:intervalMs,',
+                  'openTime:openTime,closeTime:closeTime,open:open,',
+                  'high:isFinite(high)?high:open,low:isFinite(low)?low:open,close:isFinite(close)?close:open,',
+                  'volume:Number(c.volume)||0,priceOnly:true,analyticsSource:"price-only-rest",source:"rest-fallback"});',
+              '}',
+              'out.sort(function(a,b){return a.openTime-b.openTime;});',
+              'self.postMessage({ok:true,result:out});',
+            '};'
+          ].join('\n');
+          _candleWorkerUrl = URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' }));
+          _candleWorker = new Worker(_candleWorkerUrl);
+        }
+
+        var handled = false;
+        _candleWorker.onmessage = function (e) {
+          if (handled) return;
+          handled = true;
+          if (e.data && e.data.ok) resolve(e.data.result);
+          else reject(new Error('Worker failed'));
+        };
+        _candleWorker.onerror = function (err) {
+          if (handled) return;
+          handled = true;
+          // Fallback: run synchronously if worker fails
+          try { resolve(normalizeRestCandles(raw, interval)); } catch (e2) { reject(e2); }
+        };
+        _candleWorker.postMessage({ raw: raw, interval: interval });
+      });
+    }
+
+    // Cleanup worker on destroy
+    function destroyCandleWorker() {
+      if (_candleWorker) {
+        try { _candleWorker.terminate(); } catch (_) {}
+        _candleWorker = null;
+      }
+      if (_candleWorkerUrl) {
+        try { URL.revokeObjectURL(_candleWorkerUrl); } catch (_) {}
+        _candleWorkerUrl = null;
+      }
+    }
+
     function newestCandleOpen(candles) {
       if (!Array.isArray(candles) || !candles.length) return 0;
       return Number(candles[candles.length - 1].openTime || 0);
@@ -825,8 +892,14 @@
       return newest > 0 && Date.now() - newest > intervalMs * 2.5;
     }
 
-    function restKlinesUrl(state, interval) {
-      var limit = deepHistoryLimitForInterval(interval);
+    // Fast first-paint budget: a single Binance page (1000/req) returns in
+    // ~1s, while the deep limit (100k 1m candles = 100 sequential pages)
+    // takes ~60s server-side. The initial paint must never wait on the
+    // deep fetch — fetchDeepHistory merges the rest in the background.
+    var FAST_PAINT_LIMIT = 1500;
+
+    function restKlinesUrl(state, interval, limitOverride) {
+      var limit = Number(limitOverride) > 0 ? Number(limitOverride) : deepHistoryLimitForInterval(interval);
       var src = (state && state.dataSource) || 'binance';
       if (src === 'hyperliquid') {
         var coin = ((state && state.symbol) || 'BTC').replace(/USDT$/i, '') || 'BTC';
@@ -984,7 +1057,7 @@
       } else if (msg.type === 'source_switched') {
         // G3: Go engine confirmed source switch — request fresh CVD history.
         var newSource = msg.source || 'unknown';
-        console.log('[V6] source switched to', newSource);
+        V6OF.debugLog('[V6] source switched to', newSource);
         if (V6OF.CvdBuckets) V6OF.CvdBuckets.reset();
         // Don't clear trades/orderBook — keep old data visible until new exchange sends fresh data
         if (store) {
@@ -1007,7 +1080,7 @@
           var activeTf = (store && store.getState().timeframe) || '1m';
           var intervalMs = timeframeToMs(activeTf);
           V6OF.CvdBuckets.loadHistory(msg.payload, intervalMs);
-          console.log('[V6] loaded CVD history (' + activeTf + '):',
+          V6OF.debugLog('[V6] loaded CVD history (' + activeTf + '):',
             (msg.payload.series ? Object.keys(msg.payload.series).length : 0) + ' series,',
             (msg.payload.deltaVol ? msg.payload.deltaVol.length : 0) + ' delta points');
           if (store) {
@@ -1040,6 +1113,68 @@
       if (reconnectTimer) {
         clearTimeout(reconnectTimer);
         reconnectTimer = null;
+      }
+    }
+
+    function isOrderflowPageActive() {
+      if (typeof document === 'undefined' || !document.body) return true;
+      var page = document.body.getAttribute('data-current-page');
+      return !page || page === 'orderflow';
+    }
+
+    function shouldReconnectOnWake() {
+      if (intentionalClose || !isOrderflowPageActive()) return false;
+      if (!ws || ws.readyState !== WebSocket.OPEN || status !== 'connected') return true;
+      if (!stats.lastMessageTs) return false;
+      return Date.now() - stats.lastMessageTs > STALE_THRESHOLD_MS;
+    }
+
+    function closeSocketSilently() {
+      if (!ws) return;
+      ws.onopen = null;
+      ws.onmessage = null;
+      ws.onerror = null;
+      ws.onclose = null;
+      try { ws.close(); } catch (e) { /* ignore */ }
+      ws = null;
+    }
+
+    function reconnectAfterWake(reason) {
+      if (!shouldReconnectOnWake()) return;
+      var now = Date.now();
+      if (now - lastWakeReconnectAt < 1000) return;
+      lastWakeReconnectAt = now;
+      reconnectAttempt = 0;
+      clearReconnectTimer();
+      intentionalClose = false;
+      generation++;
+      closeSocketSilently();
+      stats.lastError = 'Reconnecting after ' + reason;
+      setStatus('connecting');
+      doConnect(generation);
+      fetchCandleHistory(reason);  // deep is chained after paint completes
+    }
+
+    function bindWakeReconnectHandlers() {
+      if (typeof document !== 'undefined' && document.addEventListener) {
+        var onVisibilityChange = function () {
+          if (document.visibilityState === 'visible') {
+            reconnectAfterWake('visibilitychange');
+          }
+        };
+        document.addEventListener('visibilitychange', onVisibilityChange);
+        wakeCleanups.push(function () {
+          document.removeEventListener('visibilitychange', onVisibilityChange);
+        });
+      }
+      if (typeof window !== 'undefined' && window.addEventListener) {
+        var onFocus = function () {
+          reconnectAfterWake('focus');
+        };
+        window.addEventListener('focus', onFocus);
+        wakeCleanups.push(function () {
+          window.removeEventListener('focus', onFocus);
+        });
       }
     }
 
@@ -1078,7 +1213,7 @@
       );
       reconnectAttempt++;
       stats.reconnectsCount++;
-      console.log('[V6 EngineClient] scheduling reconnect #' + reconnectAttempt + ' in ' + delay + 'ms');
+      V6OF.debugLog('[V6 EngineClient] scheduling reconnect #' + reconnectAttempt + ' in ' + delay + 'ms');
       setStatus('connecting');
 
       reconnectTimer = setTimeout(function () {
@@ -1104,19 +1239,20 @@
         if (gen !== generation) { ws.close(); return; }
         reconnectAttempt = 0;
         setStatus('connected');
-        console.log('[V6 EngineClient] connected to', DEFAULT_URL);
+        V6OF.debugLog('[V6 EngineClient] connected to', DEFAULT_URL);
 
         // Request CVD history for the active timeframe
         var activeTf = (store && store.getState().timeframe) || '1m';
         try {
           ws.send(JSON.stringify({ type: 'cvd_history_request', timeframe: activeTf }));
-          console.log('[V6 Client] requested initial CVD history for timeframe:', activeTf);
+          V6OF.debugLog('[V6 Client] requested initial CVD history for timeframe:', activeTf);
         } catch (e) {
           console.warn('[V6 Client] failed to send initial cvd request:', e);
         }
-        fetchFootprintHistory();
         sendFootprintConfig(true);
         scheduleCandleFallback('ws-open');
+        // fetchFootprintHistory is sequenced after fetchCandleHistory completes
+        // (paint first, then footprint, then deep history).
       };
 
       ws.onmessage = function (event) {
@@ -1133,7 +1269,7 @@
       ws.onclose = function (event) {
         if (gen !== generation) return;
         var reason = event.reason || ('code ' + event.code);
-        console.log('[V6 EngineClient] websocket closed:', reason);
+        V6OF.debugLog('[V6 EngineClient] websocket closed:', reason);
         ws = null;
         if (!intentionalClose) {
           setStatus('error', 'Connection closed: ' + reason);
@@ -1143,20 +1279,54 @@
         }
       };
     }
+    // Union of two candle arrays by openTime; the fresh fetch wins on
+    // overlap (closed klines are immutable, only the forming bar differs).
+    // Prevents a fast 1500-candle refetch from truncating an already-merged
+    // deep history (100k candles) in the cache.
+    function mergeFreshCandles(existing, fresh) {
+      if (!existing || !existing.length) return fresh;
+      if (!fresh || !fresh.length) return existing;
+      var out = [];
+      var i = 0;
+      var j = 0;
+      while (i < existing.length && j < fresh.length) {
+        var oldCandle = existing[i];
+        var newCandle = fresh[j];
+        var oldTime = Number(oldCandle && oldCandle.openTime);
+        var newTime = Number(newCandle && newCandle.openTime);
+        if (oldTime === newTime) {
+          out.push(newCandle);
+          i++;
+          j++;
+        } else if (!Number.isFinite(newTime) || (Number.isFinite(oldTime) && oldTime < newTime)) {
+          out.push(oldCandle);
+          i++;
+        } else {
+          out.push(newCandle);
+          j++;
+        }
+      }
+      while (i < existing.length) out.push(existing[i++]);
+      while (j < fresh.length) out.push(fresh[j++]);
+      return out;
+    }
+
     function fetchCandleHistory(reason) {
       if (!store) return;
       var state = store.getState();
       var interval = state.timeframe || '1m';
       if (!shouldRestBackfill(state, interval)) return;
-      var url = restKlinesUrl(state, interval);
+      // Fast paint: small limit = single Binance page = chart visible in ~1s.
+      // fetchDeepHistory backfills the full depth in the background.
+      var url = restKlinesUrl(state, interval, FAST_PAINT_LIMIT);
       tryFetch(url, 2).then(function (data) {
         var raw = [];
         if (data && Array.isArray(data.candles)) raw = data.candles;
-        var candles = normalizeRestCandles(raw, interval);
+        return normalizeRestCandlesAsync(raw, interval).then(function (candles) {
         if (!candles.length || !store) return;
         store.setState(function (prev) {
           var byIv = Object.assign({}, prev._candlesByInterval || {});
-          byIv[interval] = candles;
+          byIv[interval] = mergeFreshCandles(byIv[interval], candles);
           var patch = {
             _candlesByInterval: byIv,
             source: 'rest-fallback',
@@ -1165,15 +1335,19 @@
             lastMessageAt: Date.now()
           };
           if ((prev.timeframe || '1m') === interval || !(prev.chartCandles && prev.chartCandles.length)) {
-            patch.chartCandles = candles;
+            patch.chartCandles = byIv[interval];
           }
           return patch;
         }, 'rest-candle-fallback-' + (reason || 'connect'));
-        if (V6OF.chart && V6OF.chart.resetOnDataChange && !(state.chartCandles && state.chartCandles.length)) {
+        if (V6OF.chart && V6OF.chart.resetOnDataChange && !(state.chartCandles && state.chartCandles.length) &&
+            !(V6OF.chart.hasRecentUserInteraction && V6OF.chart.hasRecentUserInteraction(12000))) {
           V6OF.chart.resetOnDataChange();
         }
-        console.log('[V6] REST candle fallback loaded', interval, candles.length, reason || '');
+        V6OF.debugLog('[V6] REST candle fallback loaded', interval, candles.length, reason || '');
         fetchFootprintHistory({ symbol: state.symbol || 'BTC', timeframe: interval });
+        // Deep history after paint + footprint — avoids network contention at mount.
+        fetchDeepHistory(reason || 'paint-done');
+        });  // end normalizeRestCandlesAsync.then
       }).catch(function (err) {
         console.warn('[V6] REST candle fallback failed', err);
       });
@@ -1215,7 +1389,7 @@
       tryFetch(url, 2).then(function (data) {
         var raw = [];
         if (data && Array.isArray(data.candles)) raw = data.candles;
-        var older = normalizeRestCandles(raw, interval);
+        return normalizeRestCandlesAsync(raw, interval).then(function (older) {
         if (!older.length || !store) return null;
         store.setState(function (prev) {
           var byIv = Object.assign({}, prev._candlesByInterval || {});
@@ -1227,6 +1401,7 @@
           if ((prev.timeframe || '1m') === interval) patch.chartCandles = merged;
           return patch;
         }, 'deep-history-' + interval);
+        });  // end normalizeRestCandlesAsync.then
       }).catch(function (err) {
         console.warn('[V6] deep history fetch failed', err);
       });
@@ -1265,7 +1440,7 @@
           // Check we actually have candles covering this window
           var fp = state.footprintCandles || [];
           if (fp.length > 0) {
-            console.log('[V6 Client] footprint history already loaded (' + fp.length + ' candles), skipping refetch');
+            V6OF.debugLog('[V6 Client] footprint history already loaded (' + fp.length + ' candles), skipping refetch');
             return Promise.resolve(null);
           }
         }
@@ -1284,7 +1459,7 @@
       if (to > 0) url += '&to=' + encodeURIComponent(Math.floor(to));
       url += '&limit=' + encodeURIComponent(limit);
 
-      console.log('[V6 Client] fetching footprint history from:', url);
+      V6OF.debugLog('[V6 Client] fetching footprint history from:', url);
       
       return fetch(url)
         .then(function (res) {
@@ -1347,7 +1522,7 @@
             };
           }, 'footprint-history-loaded');
           
-          console.log('[V6 Client] footprint history loaded:', candles.length, 'candles');
+          V6OF.debugLog('[V6 Client] footprint history loaded:', candles.length, 'candles');
         })
         .catch(function (err) {
           console.warn('[V6 Client] failed to load footprint history:', err);
@@ -1379,7 +1554,7 @@
       return fetch(url).then(function (res) {
         if (res.ok) return res.json();
         if (retries > 0 && (res.status === 502 || res.status === 503 || res.status === 429)) {
-          console.log('[V6] retry', url, 'status', res.status, 'retries left:', retries);
+          V6OF.debugLog('[V6] retry', url, 'status', res.status, 'retries left:', retries);
           return new Promise(function (resolve) { setTimeout(resolve, 1500); }).then(function () {
             return tryFetch(url, retries - 1);
           });
@@ -1387,6 +1562,8 @@
         throw new Error('HTTP ' + res.status);
       });
     }
+
+    bindWakeReconnectHandlers();
 
     return {
       /**
@@ -1400,8 +1577,7 @@
         intentionalClose = false;
         clearReconnectTimer();
         doConnect(generation);
-        fetchCandleHistory();
-        fetchDeepHistory('connect');
+        fetchCandleHistory();  // paint first — deep history deferred to after paint + footprint
       },
 
       /**
@@ -1585,6 +1761,11 @@
        * Destroy the client (for cleanup).
        */
       destroy: function () {
+        destroyCandleWorker();
+        wakeCleanups.forEach(function (cleanup) {
+          try { cleanup(); } catch (err) { console.warn('[V6 EngineClient] wake cleanup failed', err); }
+        });
+        wakeCleanups = [];
         this.disconnect();
         clearStaleTimer();
         listeners = [];

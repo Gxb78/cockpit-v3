@@ -182,6 +182,5 @@
     };
   }
 
-  // Log successful initialization
-  console.log('[Footprint Integration] Initialized successfully');
+  V6OF.debugLog('[Footprint Integration] Initialized successfully');
 })();

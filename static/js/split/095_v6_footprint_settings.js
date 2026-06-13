@@ -227,5 +227,5 @@
     };
   }
 
-  console.log('[Footprint Settings] Initialized with presets:', getAvailablePresets());
+  V6OF.debugLog('[Footprint Settings] Initialized with presets:', getAvailablePresets());
 })();

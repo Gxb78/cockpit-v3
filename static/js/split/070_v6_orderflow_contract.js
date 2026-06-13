@@ -28,6 +28,22 @@
     return V6OF.Page[pageName];
   };
 
+  V6OF.isDebugEnabled = function () {
+    if (V6OF.DEBUG === true || V6OF.DEBUG_LOG === true) return true;
+    var cfg = window.COCKPIT_CONFIG || {};
+    if (cfg.v6Debug === true || cfg.debugV6 === true) return true;
+    try {
+      return localStorage.getItem('v6Debug') === '1' || localStorage.getItem('debugV6') === '1';
+    } catch (_) {
+      return false;
+    }
+  };
+
+  V6OF.debugLog = function () {
+    if (!V6OF.isDebugEnabled() || !window.console || !console.log) return;
+    console.log.apply(console, arguments);
+  };
+
   V6OF.Page.bootstrap = function (pageName, root) {
     var page = V6OF.Page && V6OF.Page[pageName];
     if (!page) return false;
@@ -255,6 +271,7 @@
           showVwap: true,
           showOhlc: true,
           showCandles: true,
+          crosshairSnapOhlc: 'off',
           ohlcBodyStyle: 'candles',
           ohlcLineWidth: 1,
           ohlcBodyWidth: 0.72,

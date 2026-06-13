@@ -22,6 +22,8 @@
   var ACTIVE_KEY = 'cockpitV6.activeWorkspace';
   var WORKSPACE_SCHEMA_VERSION = 1;
   var _wsSyncTimer = null;
+  var _lastWorkspaceSyncJson = '';
+  var _pendingWorkspaceSyncJson = '';
 
   var LAYER_PRESETS = {
     scalping: {
@@ -234,20 +236,28 @@
   }
 
   function syncWorkspacesToServer() {
+    var payload = {
+      v6_workspaces: {
+        schemaVersion: WORKSPACE_SCHEMA_VERSION,
+        active: getActiveName(),
+        list: getWorkspaces()
+      }
+    };
+    var payloadJson = JSON.stringify(payload);
+    if (!payloadJson || payloadJson === _lastWorkspaceSyncJson || payloadJson === _pendingWorkspaceSyncJson) return;
+    _pendingWorkspaceSyncJson = payloadJson;
     clearTimeout(_wsSyncTimer);
     _wsSyncTimer = setTimeout(function() {
-      var payload = {
-        v6_workspaces: {
-          schemaVersion: WORKSPACE_SCHEMA_VERSION,
-          active: getActiveName(),
-          list: getWorkspaces()
-        }
-      };
+      var body = _pendingWorkspaceSyncJson;
+      _pendingWorkspaceSyncJson = '';
+      if (!body || body === _lastWorkspaceSyncJson) return;
       fetch("/api/user/workspace-profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify(payload)
+        body: body
+      }).then(function(r) {
+        if (r && r.ok) _lastWorkspaceSyncJson = body;
       }).catch(function() {});
     }, 2000);
   }
@@ -259,9 +269,16 @@
         if (!data || !data.workspace_profile || !data.workspace_profile.v6_workspaces) return;
         var serverWs = data.workspace_profile.v6_workspaces;
         if (!serverWs || typeof serverWs !== "object") return;
+        var migratedServer = migrateWorkspacePayload(serverWs);
+        _lastWorkspaceSyncJson = JSON.stringify({
+          v6_workspaces: {
+            schemaVersion: WORKSPACE_SCHEMA_VERSION,
+            active: serverWs.active || migratedServer.active || getActiveName(),
+            list: migratedServer.list
+          }
+        });
         // Only apply if localStorage is empty (new machine)
         if (!localStorage.getItem(WORKSPACES_KEY)) {
-          var migratedServer = migrateWorkspacePayload(serverWs);
           if (migratedServer.list && typeof migratedServer.list === "object") {
             saveWorkspaceEnvelope(migratedServer, false);
           }
@@ -505,7 +522,7 @@
 
       var proceed = function() {
         if (!localStorage.getItem(WORKSPACES_KEY)) {
-          saveWorkspaces(DEFAULT_PRESETS);
+          saveWorkspaceEnvelope(workspaceEnvelope(DEFAULT_PRESETS), false);
         }
         var active = getActiveName();
         var list = getWorkspaces();

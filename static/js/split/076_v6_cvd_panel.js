@@ -219,7 +219,7 @@
 
     var TIME_AXIS_H = opts.showTimeAxis ? (opts.timeAxisHeight || 20) : 0;
     var GUTTER_LEFT  = 4;
-    var GUTTER_RIGHT = 66; // align with chart price-axis width
+    var GUTTER_RIGHT = parseFloat(cs.getPropertyValue('--exo-gutter-right').trim()) || 66;  // CSS token — single source
 
     // Clear
     ctx.fillStyle = bg;

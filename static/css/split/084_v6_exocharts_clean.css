@@ -51,6 +51,9 @@
   --exo-tools: 36px;
   --exo-dom:   340px;
   --exo-cvd-height: 124px;
+  --exo-gutter-right:  66px;
+  --exo-gutter-bottom: 24px;
+  --exo-pad-top:       22px;
 
   /* — typography — */
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
@@ -68,7 +71,7 @@
   background: var(--exo-bg);
   border: 1px solid var(--exo-hairline);
   border-radius: 14px;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: 0 24px 60px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.05);
 }
 
@@ -81,12 +84,12 @@
   grid-template-rows: var(--exo-top) 1fr var(--exo-bottom);
   background: var(--exo-bg);
   color: var(--exo-text);
-  overflow: hidden;
+  overflow: visible;
 }
 
 /* ── Hide v6 skeleton / demo banner in Exocharts mode ─────────────────────── */
-.v6-orderflow-root[data-v6-layout="exocharts"] .v6-initial-skeleton,
-.v6-orderflow-root[data-v6-layout="exocharts"] .v6-demo-banner {
+.v6-orderflow-root[data-v6-mounted="1"] .v6-initial-skeleton,
+.v6-orderflow-root[data-v6-mounted="1"] .v6-demo-banner {
   display: none;
 }
 
@@ -110,7 +113,21 @@
 }
 
 .exo-topbar button,
+.exo-topbar a,
+.exo-topbar input,
 .exo-topbar select,
+.exo-topbar textarea,
+.exo-topbar label,
+.exo-topbar [role="button"],
+.exo-topbar [role="menu"],
+.exo-topbar [role="menuitem"],
+.exo-topbar [tabindex],
+.exo-topbar [data-v6-action],
+.exo-topbar [data-exo-page],
+.exo-topbar [data-exo-logo-menu],
+.exo-topbar [data-window-minimize],
+.exo-topbar [data-window-maximize],
+.exo-topbar [data-window-close],
 .exo-topbar .exo-page-menu,
 .exo-topbar .exo-clock,
 .exo-topbar .exo-conn-wrap {
@@ -464,6 +481,8 @@
   flex-direction: column;
   overflow: hidden;
   background: var(--exo-bg2);
+  cursor: crosshair;
+  touch-action: none;
 }
 
 .exo-chart-canvas {
@@ -473,6 +492,34 @@
   width: 100%;
   height: auto;
   display: block;
+}
+
+.v6-chart-layer-stack {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 220px;
+  width: 100%;
+  display: block;
+  background: var(--exo-bg2);
+}
+
+.v6-chart-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.v6-chart-layer-static,
+.v6-chart-layer-data {
+  pointer-events: none;
+}
+
+.v6-chart-layer-overlay {
+  z-index: 3;
+  cursor: crosshair;
+  touch-action: none;
 }
 
 .exo-cvd-resizer {
@@ -527,6 +574,31 @@
   max-height: min(420px, 45%);
   display: block;
   background: var(--exo-bg2);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.exo-cvd-layer-stack {
+  display: block;
+  background: var(--exo-bg2);
+}
+
+.exo-cvd-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.exo-cvd-layer-data {
+  pointer-events: none;
+}
+
+.exo-cvd-layer-overlay {
+  cursor: crosshair;
+  touch-action: none;
+  background: transparent;
 }
 
 .exo-cvd-hidden .exo-cvd-resizer,
@@ -546,6 +618,11 @@ body.is-resizing * {
 
 .v6-chart-canvas {
   background: var(--exo-bg2);
+}
+
+.v6-chart-layer-stack .v6-chart-canvas,
+.v6-chart-layer-stack .v6-chart-layer {
+  background: transparent;
 }
 
 /* ── DOM panel (right dock, 292px) ─────────────────────────────────────────── */
@@ -649,11 +726,20 @@ body.is-resizing * {
 }
 
 /* Neutral bg for vol/sell/buy/delta */
-.exo-dom-body .v6-dom-cell-vol,
-.exo-dom-body .v6-dom-cell-sell,
-.exo-dom-body .v6-dom-cell-buy,
+.exo-dom-body .v6-dom-cell-vol {
+  background: rgba(var(--v6-accent-rgb), var(--dom-heat-vol, 0));
+}
+
+.exo-dom-body .v6-dom-cell-sell {
+  background: rgba(var(--v6-sell-rgb), var(--dom-heat-sell, 0));
+}
+
+.exo-dom-body .v6-dom-cell-buy {
+  background: rgba(var(--v6-buy-rgb), var(--dom-heat-buy, 0));
+}
+
 .exo-dom-body .v6-dom-cell-delta {
-  background: #0b1015;
+  background: rgba(var(--dom-heat-delta-rgb, var(--v6-buy-rgb)), var(--dom-heat-delta, 0));
 }
 
 /* Price cell — dark center column */
@@ -738,6 +824,7 @@ body.is-resizing * {
   width: 7px;
   height: 22px;
   cursor: col-resize;
+  touch-action: none;
   z-index: 8;
 }
 
@@ -892,6 +979,7 @@ body[data-current-page="orderflow"] .v6-orderflow-root {
   height: 100% !important;
   border-radius: 0 !important;
   border: 0 !important;
+  overflow: visible !important;
   box-shadow: none !important;
 }
 

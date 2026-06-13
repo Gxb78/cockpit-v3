@@ -450,7 +450,7 @@
     computeWallScores();
 
     if (bookCount <= 3) {
-      console.log('[DomLadder v5] Book #' + bookCount +
+      V6OF.debugLog('[DomLadder v5] Book #' + bookCount +
         ' bids=' + ob.bids.length + ' asks=' + ob.asks.length +
         ' tickSize=' + tickSize +
         ' viewMin=' + viewMin + ' viewMax=' + viewMax +

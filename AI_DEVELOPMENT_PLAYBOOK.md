@@ -1495,3 +1495,17 @@ if end_time is not None:
 - Test de non-regression: curl `http://127.0.0.1:5001/api/market/engine/footprint/1m?symbol=BTCUSDT&limit=2` doit retourner 200 avec des candles. Visuel: ouvrir orderflow a froid, aucune bande hachuree ne doit couvrir une periode ou Binance a des klines, et aucune bougie plate ne doit apparaitre la ou TradingView montre une bougie directionnelle. `build.py` puis `node --check static/app.js`.
 
 - Fichiers a surveiller: `static/js/split/077_v6_canvas_chart.js` (mergeCandlesByOpenTime, fillCandleGaps, graftFootprintOntoKline), `static/js/split/078_v6_local_engine_client.js` (fetchFootprintHistory), `app_parts/23_routes_market.py` (proxy engine footprint).
+
+### BUG-20250613-01 - [RESOLU] Batch de 25+ optimisations canvas/DOM/store/tape
+- Symptome: jank au scroll DOM ladder, heatmap re-rasterisee par frame, 5000+ trades dans le DOM tape, fetchs REST paralleles au mount, double source CSS/JS pour les tokens de layout.
+- Cause racine: innerHTML massif, pas de row pool, pas d'offscreen canvas, pas de cache incremental, throttle 50ms fixe, layout triggers (width/top), timers non nettoyes, store sans versionnage.
+- Regle de prevention:
+  1. **DOM virtuel = row pool + innerHTML seulement si contenu change.** Utiliser `_domHtml` comme cache par row. Supprimer `aria-label`/`tabindex=0` des hot paths.
+  2. **Canvas = offscreen + shift incremental.** Heatmap: `_hmCache` offscreen, shift `drawImage` en espace physique, blit snapshot pendant le drag.
+  3. **Layout = transform, pas width/top.** `scaleX()` pour les barres, `translateY()` pour les rows. Transition sur `transform`, pas `width`.
+  4. **Caches = versionnage store.** `_stateVersion` incremente dans `setState`, fast-path dans `mergedChartCandles`/`computeLiveBounds`.
+  5. **Workers = parsing lourd hors main thread.** `normalizeRestCandlesAsync` via Web Worker (Blob URL) pour 40k+ klines.
+  6. **Fetch = sequence, pas parallele.** Paint (1500 candles) d'abord, footprint ensuite, deep history (100k) en dernier.
+  7. **CSS vars = source unique.** `--exo-gutter-right/bottom/pad-top/row` lues au runtime, jamais hardcodees en JS.
+- Test de non-regression: `build.py` puis `node --check static/app.js`. Visuel: DOM ladder fluide a 60fps, heatmap sans pop-in au drag, tape scrollable sans freeze, pas de `Waiting for order book` destructif.
+- Fichiers a surveiller: `075_v6_dom_panel.js`, `077_v6_canvas_chart.js`, `074_v6_tape_panel.js`, `078_v6_local_engine_client.js`, `071_v6_orderflow_store.js`, `086_v6_indicators.js`, `084_v6_exocharts_clean.css`.
