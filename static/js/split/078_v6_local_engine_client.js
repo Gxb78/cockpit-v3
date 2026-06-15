@@ -183,6 +183,20 @@
         (pendingDepthPoint ? 1 : 0);
     }
 
+    function bumpArrayVersion(list) {
+      if (!Array.isArray(list)) return list;
+      list._v6ArrayVersion = (Number(list._v6ArrayVersion) || 0) + 1;
+      return list;
+    }
+
+    function mutateVersionedArray(existing, nextItems) {
+      var target = Array.isArray(existing) ? existing : [];
+      nextItems = Array.isArray(nextItems) ? nextItems : [];
+      target.length = 0;
+      for (var i = 0; i < nextItems.length; i++) target.push(nextItems[i]);
+      return bumpArrayVersion(target);
+    }
+
     function statsSnapshot() {
       var out = Object.assign({}, stats);
       out.queueDepth = pendingQueueDepth();
@@ -357,7 +371,8 @@
           var patch = {};
           if (newTrades.length && !paused) {
             var tradeWindow = renderTradeWindowLimit(state.settings);
-            patch.trades = tradeBuffer.slice(0, tradeWindow);
+            patch.trades = mutateVersionedArray(state.trades, tradeBuffer.slice(0, tradeWindow));
+            patch.tradesVersion = patch.trades._v6ArrayVersion;
             patch.tradeHistoryCount = tradeBuffer.length;
           }
           if (newDeltaBuckets.length) {
@@ -378,9 +393,11 @@
             patch.deltaBucketsByInterval = bucketsByInterval;
             patch.latestDeltaByInterval = latestByInterval;
             var selectedBuckets = bucketsByInterval[selected] || newDeltaBuckets;
-            patch.deltaBuckets = selectedBuckets.length > MAX_UI_DELTA_BUCKET_WINDOW
+            var selectedDeltaWindow = selectedBuckets.length > MAX_UI_DELTA_BUCKET_WINDOW
               ? selectedBuckets.slice(selectedBuckets.length - MAX_UI_DELTA_BUCKET_WINDOW)
               : selectedBuckets;
+            patch.deltaBuckets = mutateVersionedArray(state.deltaBuckets, selectedDeltaWindow);
+            patch.deltaBucketsVersion = patch.deltaBuckets._v6ArrayVersion;
             patch.deltaBucketHistoryCount = selectedBuckets.length;
           }
           if (nextVwap) {
@@ -396,6 +413,8 @@
             patch.lastOrderBookBySymbol = bookBySymbol;
             patch.orderBookCount = (state.orderBookCount || 0) + 1;
             patch.lastOrderBookTs = nextOrderBook.tsLocal || Date.now();
+            patch.lastLiveDepthTs = nextOrderBook.tsLocal || Date.now();
+            patch.lastLiveDepthSymbol = nextOrderBook.symbol || state.selectedDomSymbol || 'BTC';
             patch.liveDepthCount = Math.min(nextOrderBook.bids ? nextOrderBook.bids.length : 0, nextOrderBook.asks ? nextOrderBook.asks.length : 0);
             patch.selectedDomSymbol = nextOrderBook.symbol || state.selectedDomSymbol || 'BTC';
           }
@@ -417,7 +436,8 @@
               frames = frames.slice(frames.length - maxFrames);
             }
             var lastFrame = frames[frames.length - 1] || null;
-            patch.heatmapFrames = frames;
+            patch.heatmapFrames = mutateVersionedArray(state.heatmapFrames, frames);
+            patch.heatmapFramesVersion = patch.heatmapFrames._v6ArrayVersion;
             patch.lastHeatmapFrame = lastFrame;
             patch.heatmapFrameCount = (state.heatmapFrameCount || 0) + nextHeatmapFrames.length;
             patch.lastHeatmapTs = lastFrame ? (lastFrame.tsLocal || Date.now()) : (state.lastHeatmapTs || 0);
@@ -431,7 +451,8 @@
               stats.droppedCount += fpBefore - candles.length;
             }
             var lastCandle = candles[candles.length - 1] || nextFootprintCandles[nextFootprintCandles.length - 1] || null;
-            patch.footprintCandles = candles;
+            patch.footprintCandles = mutateVersionedArray(state.footprintCandles, candles);
+            patch.footprintCandlesVersion = patch.footprintCandles._v6ArrayVersion;
             patch.lastFootprintCandle = lastCandle;
             patch.footprintCandleCount = (state.footprintCandleCount || 0) + nextFootprintCandles.length;
             patch.lastFootprintTs = lastCandle ? (lastCandle.tsLocal || Date.now()) : (state.lastFootprintTs || 0);
@@ -440,6 +461,7 @@
           if (newTrades.length || newDeltaBuckets.length || nextVwap || nextOrderBook || nextHeatmapFrames.length || nextFootprintCandles.length) {
             patch.source = 'live';
             patch.dataFreshness = 'live';
+            patch.loadingPhase = null;
             patch.lastMessageAt = stats.lastMessageTs || Date.now();
             patch.isStale = false;
             // Always normalize the symbol before writing it to the store.
@@ -818,50 +840,105 @@
     // off the main thread and posts the result back.
     var _candleWorker = null;
     var _candleWorkerUrl = null;
+    var _candleWorkerSeq = 0;
+    var _candleWorkerPending = {};
+
+    function ensureCandleWorker() {
+      if (_candleWorker) return _candleWorker;
+      if (typeof Worker === 'undefined' || typeof Blob === 'undefined' || typeof URL === 'undefined') return null;
+      var workerCode = [
+        'var timeframeToMs=' + timeframeToMs.toString() + ';',
+        'function normalize(arr,interval){',
+          'var intervalMs=timeframeToMs(interval||"1m"),out=[];',
+          'arr=Array.isArray(arr)?arr:[];',
+          'for(var i=0;i<arr.length;i++){',
+            'var c=arr[i];if(!c)continue;',
+            'var openTime=Number(c.openTime);',
+            'if(!isFinite(openTime)||openTime<=0){openTime=Number(c.time);if(isFinite(openTime)&&openTime>0&&openTime<1e12)openTime*=1000;}',
+            'var closeTime=Number(c.closeTime);',
+            'if(!isFinite(closeTime)||closeTime<=openTime)closeTime=openTime+intervalMs;',
+            'var open=Number(c.open),high=Number(c.high),low=Number(c.low),close=Number(c.close);',
+            'if(!isFinite(openTime)||openTime<=0||!isFinite(open)||open<=0)continue;',
+            'out.push({symbol:c.symbol||"BTC",timeframe:interval||c.timeframe||"1m",intervalMs:intervalMs,',
+              'openTime:openTime,closeTime:closeTime,open:open,',
+              'high:isFinite(high)?high:open,low:isFinite(low)?low:open,close:isFinite(close)?close:open,',
+              'volume:Number(c.volume)||0,priceOnly:true,analyticsSource:"price-only-rest",source:"rest-fallback"});',
+          '}',
+          'out.sort(function(a,b){return a.openTime-b.openTime;});',
+          'return out;',
+        '}',
+        'self.onmessage=function(e){',
+          'var m=e.data||{},id=m.id;',
+          'function ok(result){self.postMessage({id:id,ok:true,result:result});}',
+          'function fail(err,status){self.postMessage({id:id,ok:false,status:status||0,error:String(err&&err.message||err||"worker failed")});}',
+          'try{',
+            'if(m.mode==="fetch-normalize"){',
+              'fetch(m.url).then(function(res){',
+                'if(!res.ok){var er=new Error("HTTP "+res.status);er.status=res.status;throw er;}',
+                'return res.text();',
+              '}).then(function(text){',
+                'var data=JSON.parse(text);',
+                'ok(normalize(data&&data.candles,m.interval));',
+              '}).catch(function(err){fail(err,err&&err.status);});',
+              'return;',
+            '}',
+            'ok(normalize(m.raw,m.interval));',
+          '}catch(err){fail(err);}',
+        '};'
+      ].join('\n');
+      _candleWorkerUrl = URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' }));
+      _candleWorker = new Worker(_candleWorkerUrl);
+      _candleWorker.onmessage = function (e) {
+        var msg = e.data || {};
+        var pending = _candleWorkerPending[msg.id];
+        if (!pending) return;
+        delete _candleWorkerPending[msg.id];
+        if (msg.ok) pending.resolve(msg.result);
+        else pending.reject(Object.assign(new Error(msg.error || 'Worker failed'), { status: msg.status || 0 }));
+      };
+      _candleWorker.onerror = function (err) {
+        var pending = _candleWorkerPending;
+        _candleWorkerPending = {};
+        Object.keys(pending).forEach(function (id) {
+          pending[id].reject(err);
+        });
+        destroyCandleWorker();
+      };
+      return _candleWorker;
+    }
+
+    function candleWorkerRequest(payload) {
+      return new Promise(function (resolve, reject) {
+        var worker = ensureCandleWorker();
+        if (!worker) {
+          reject(new Error('Worker unavailable'));
+          return;
+        }
+        var id = ++_candleWorkerSeq;
+        payload.id = id;
+        _candleWorkerPending[id] = { resolve: resolve, reject: reject };
+        worker.postMessage(payload);
+      });
+    }
 
     function normalizeRestCandlesAsync(raw, interval) {
-      return new Promise(function (resolve, reject) {
-        // Lazy-init the worker once
-        if (!_candleWorker) {
-          var workerCode = [
-            'var timeframeToMs=' + timeframeToMs.toString() + ';',
-            'self.onmessage=function(e){',
-              'var arr=e.data.raw,interval=e.data.interval,intervalMs=timeframeToMs(interval||"1m"),out=[];',
-              'for(var i=0;i<arr.length;i++){',
-                'var c=arr[i];if(!c)continue;',
-                'var openTime=Number(c.openTime);',
-                'if(!isFinite(openTime)||openTime<=0){openTime=Number(c.time);if(isFinite(openTime)&&openTime>0&&openTime<1e12)openTime*=1000;}',
-                'var closeTime=Number(c.closeTime);',
-                'if(!isFinite(closeTime)||closeTime<=openTime)closeTime=openTime+intervalMs;',
-                'var open=Number(c.open),high=Number(c.high),low=Number(c.low),close=Number(c.close);',
-                'if(!isFinite(openTime)||openTime<=0||!isFinite(open)||open<=0)continue;',
-                'out.push({symbol:c.symbol||"BTC",timeframe:interval||c.timeframe||"1m",intervalMs:intervalMs,',
-                  'openTime:openTime,closeTime:closeTime,open:open,',
-                  'high:isFinite(high)?high:open,low:isFinite(low)?low:open,close:isFinite(close)?close:open,',
-                  'volume:Number(c.volume)||0,priceOnly:true,analyticsSource:"price-only-rest",source:"rest-fallback"});',
-              '}',
-              'out.sort(function(a,b){return a.openTime-b.openTime;});',
-              'self.postMessage({ok:true,result:out});',
-            '};'
-          ].join('\n');
-          _candleWorkerUrl = URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' }));
-          _candleWorker = new Worker(_candleWorkerUrl);
-        }
+      return candleWorkerRequest({ mode: 'normalize', raw: raw, interval: interval }).catch(function () {
+        return normalizeRestCandles(raw, interval);
+      });
+    }
 
-        var handled = false;
-        _candleWorker.onmessage = function (e) {
-          if (handled) return;
-          handled = true;
-          if (e.data && e.data.ok) resolve(e.data.result);
-          else reject(new Error('Worker failed'));
-        };
-        _candleWorker.onerror = function (err) {
-          if (handled) return;
-          handled = true;
-          // Fallback: run synchronously if worker fails
-          try { resolve(normalizeRestCandles(raw, interval)); } catch (e2) { reject(e2); }
-        };
-        _candleWorker.postMessage({ raw: raw, interval: interval });
+    function fetchRestCandlesInWorker(url, interval, retries) {
+      return candleWorkerRequest({ mode: 'fetch-normalize', url: url, interval: interval }).catch(function (err) {
+        if (retries > 0 && (err.status === 502 || err.status === 503 || err.status === 429)) {
+          V6OF.debugLog('[V6] retry worker klines', url, 'status', err.status, 'retries left:', retries);
+          return new Promise(function (resolve) { setTimeout(resolve, 1500); }).then(function () {
+            return fetchRestCandlesInWorker(url, interval, retries - 1);
+          });
+        }
+        return tryFetch(url, retries).then(function (data) {
+          var raw = data && Array.isArray(data.candles) ? data.candles : [];
+          return normalizeRestCandlesAsync(raw, interval);
+        });
       });
     }
 
@@ -871,6 +948,7 @@
         try { _candleWorker.terminate(); } catch (_) {}
         _candleWorker = null;
       }
+      _candleWorkerPending = {};
       if (_candleWorkerUrl) {
         try { URL.revokeObjectURL(_candleWorkerUrl); } catch (_) {}
         _candleWorkerUrl = null;
@@ -1340,7 +1418,7 @@
           return patch;
         }, 'rest-candle-fallback-' + (reason || 'connect'));
         if (V6OF.chart && V6OF.chart.resetOnDataChange && !(state.chartCandles && state.chartCandles.length) &&
-            !(V6OF.chart.hasRecentUserInteraction && V6OF.chart.hasRecentUserInteraction(12000))) {
+            !(V6OF.chart.hasRecentUserInteraction && V6OF.chart.hasRecentUserInteraction(3000))) {
           V6OF.chart.resetOnDataChange();
         }
         V6OF.debugLog('[V6] REST candle fallback loaded', interval, candles.length, reason || '');
@@ -1385,12 +1463,21 @@
       var key = src + '|' + symbol + '|' + interval;
       if (deepHistoryFetched[key]) return;
       deepHistoryFetched[key] = true;
+      // Signal backfill is in progress
+      if (state.dataFreshness === 'warming') {
+        store.setState({ loadingPhase: 'backfill' }, 'backfill-start');
+      }
+      // Capture visible span before deep merge to avoid visual density jump
+      // when 100k candles replace 1.5k — the viewport should keep showing
+      // the same time range instead of snapping to the full history.
+      var vp = V6OF.chart;
+      var savedTimeStart = vp ? vp.timeStart : 0;
+      var savedTimeEnd = vp ? vp.timeEnd : 0;
       var url = restKlinesUrl(state, interval);
-      tryFetch(url, 2).then(function (data) {
-        var raw = [];
-        if (data && Array.isArray(data.candles)) raw = data.candles;
-        return normalizeRestCandlesAsync(raw, interval).then(function (older) {
+      fetchRestCandlesInWorker(url, interval, 2).then(function (older) {
         if (!older.length || !store) return null;
+        // Clear backfill phase
+        store.setState({ loadingPhase: null }, 'backfill-done');
         store.setState(function (prev) {
           var byIv = Object.assign({}, prev._candlesByInterval || {});
           var current = byIv[interval] || (((prev.timeframe || '1m') === interval) ? prev.chartCandles : []) || [];
@@ -1401,7 +1488,19 @@
           if ((prev.timeframe || '1m') === interval) patch.chartCandles = merged;
           return patch;
         }, 'deep-history-' + interval);
-        });  // end normalizeRestCandlesAsync.then
+        // Restore visible span so the deep merge doesn't cause a brutal zoom-out.
+        // The render subscriber fires after the state update above; this
+        // setTimeout defers the restore to after the next paint.
+        if (savedTimeStart > 0 && savedTimeEnd > savedTimeStart + 1000 && vp) {
+          setTimeout(function () {
+            if (vp && vp.timeStart !== savedTimeStart) {
+              vp.timeStart = savedTimeStart;
+              vp.timeEnd = savedTimeEnd;
+              vp.autoFit = true;
+              vp.followLive = true;
+            }
+          }, 0);
+        }
       }).catch(function (err) {
         console.warn('[V6] deep history fetch failed', err);
       });

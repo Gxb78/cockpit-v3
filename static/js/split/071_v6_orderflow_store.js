@@ -210,6 +210,7 @@
     // trader
     symbol: 'trader', timeframe: 'trader', dataSource: 'trader',
     trades: 'trader', orderBook: 'trader', lastOrderBookBySymbol: 'trader',
+    tradesVersion: 'trader', heatmapFramesVersion: 'trader', footprintCandlesVersion: 'trader', deltaBucketsVersion: 'trader',
     orderBookCount: 'trader', lastOrderBookTs: 'trader', selectedDomSymbol: 'trader',
     heatmapFrames: 'trader', heatmapFrameCount: 'trader', lastHeatmapFrame: 'trader',
     lastHeatmapTs: 'trader', selectedHeatmapSymbol: 'trader',

@@ -8,9 +8,27 @@
   var FootprintCore = V6OF.Core && V6OF.Core.FootprintCore;
   var FootprintParser = V6OF.Core && V6OF.Core.FootprintParser;
   var FootprintRenderer = V6OF.UI && V6OF.UI.FootprintRenderer;
+  var MAX_RENDER_FAILURES = 3;
+  var renderFailureCount = 0;
+  var renderDisabled = false;
+  var renderErrorLogged = false;
+
+  function footprintDebugEnabled() {
+    return !!(V6OF.debugFootprint || V6OF.DEBUG_FOOTPRINT);
+  }
+
+  function footprintDebugLog() {
+    if (!footprintDebugEnabled() || !V6OF.debugLog) return;
+    V6OF.debugLog.apply(V6OF, arguments);
+  }
+
+  function footprintDebugError() {
+    if (!footprintDebugEnabled() || !console || !console.error) return;
+    console.error.apply(console, arguments);
+  }
 
   if (!FootprintCore || !FootprintParser || !FootprintRenderer) {
-    console.error('[Footprint Integration] Missing dependencies (Core, Parser, Renderer)');
+    footprintDebugError('[Footprint Integration] Missing dependencies (Core, Parser, Renderer)');
     return;
   }
 
@@ -21,9 +39,10 @@
    * @param {Array} rawFootprints - Raw data from server
    * @param {string} timeframe - Target timeframe ('1m', '5m', etc)
    * @param {number} maxCandles - Max candles to keep
+   * @param {number} tickSize - Price tick used to merge near-identical levels
    * @returns {Array<FootprintCandle>} - Ready-to-render candles
    */
-  function processFootprints(rawFootprints, timeframe, maxCandles) {
+  function processFootprints(rawFootprints, timeframe, maxCandles, tickSize) {
     if (!Array.isArray(rawFootprints)) return [];
 
     // Parse raw data
@@ -32,7 +51,7 @@
 
     // If not 1m, aggregate to target timeframe
     if (timeframe && timeframe !== '1m') {
-      var aggregated = aggregateByTimeframe(parsed, timeframe);
+      var aggregated = aggregateByTimeframe(parsed, timeframe, tickSize);
       return aggregated.slice(-(maxCandles || 100));
     }
 
@@ -44,7 +63,7 @@
    * Aggregate 1m candles to target timeframe
    * Naive approach: group by timeframe bucket and aggregate
    */
-  function aggregateByTimeframe(oneMinCandles, tf) {
+  function aggregateByTimeframe(oneMinCandles, tf, tickSize) {
     if (!oneMinCandles.length) return [];
 
     var tfMs = timeframeToMs(tf);
@@ -62,25 +81,27 @@
     return Object.keys(buckets)
       .sort(function(a, b) { return Number(a) - Number(b); })
       .map(function(bucketTime) {
-        return FootprintParser.aggregateFootprints(buckets[bucketTime], tf);
+        return FootprintParser.aggregateFootprints(buckets[bucketTime], tf, tickSize);
       })
       .filter(function(candle) { return candle !== null; });
   }
 
   /**
-   * Convert timeframe string to milliseconds
+   * Convert timeframe string ('1m', '2h', '1d', '1w', '1M') to milliseconds.
+   * Keep this aligned with the chart timeframe parser.
    */
   function timeframeToMs(tf) {
-    var map = {
-      '1m': 60000,
-      '5m': 5 * 60000,
-      '15m': 15 * 60000,
-      '30m': 30 * 60000,
-      '1h': 60 * 60000,
-      '4h': 4 * 60 * 60000,
-      '1d': 24 * 60 * 60000
-    };
-    return map[String(tf).toLowerCase()];
+    if (!tf) return 0;
+    var match = String(tf).match(/^(\d+)([mhdwM])$/);
+    if (!match) return 0;
+    var val = parseInt(match[1], 10);
+    var unit = match[2];
+    if (unit === 'm') return val * 60000;
+    if (unit === 'h') return val * 3600000;
+    if (unit === 'd') return val * 86400000;
+    if (unit === 'w') return val * 604800000;
+    if (unit === 'M') return val * 2592000000; // ~30d
+    return 0;
   }
 
   /**
@@ -89,6 +110,8 @@
    * DEFENSIVE: multiple validation gates prevent crashes and DOM artifacts
    */
   function renderFootprintsToCanvas(ctx, vp, plot, state, settings) {
+    if (renderDisabled) return false;
+
     // Gate 1: Basic state validation
     if (!state || typeof state !== 'object') return false;
     if (!state.footprintCandles) return false;
@@ -106,10 +129,12 @@
       return false;
     }
 
-    // Gate 4: Filter and validate footprints
-    var validCandles = candles
-      .filter(function(c) { return c !== null && c !== undefined; })
-      .filter(FootprintParser.isValidFootprint);
+    // Gate 4: Footprints are already validated at ingestion (parseFootprintCandles
+    // and aggregateFootprints both call isValidFootprint). Only filter nulls here.
+    var validCandles = [];
+    for (var i = 0; i < candles.length; i++) {
+      if (candles[i]) validCandles.push(candles[i]);
+    }
 
     if (!validCandles.length) return false;
 
@@ -118,16 +143,31 @@
       showPOC: settings && settings.showFootprintPOC !== false,
       showVA: settings && settings.showFootprintVA !== false,
       showImbalances: settings && settings.showFootprintImbalances !== false,
-      showDelta: settings && settings.showFootprintDelta !== false
+      showDelta: settings && settings.showFootprintDelta !== false,
+      tickSize: settings && settings.tickSize
     };
 
     // Gate 6: Safe rendering with error handling
     try {
       FootprintRenderer.renderFootprints(ctx, vp, plot, validCandles, options);
+      renderFailureCount = 0;
+      renderErrorLogged = false;
       return true;
     } catch (e) {
-      console.error('[Footprint Integration] Render error:', e);
-      // Don't crash - just skip rendering this frame
+      renderFailureCount += 1;
+      if (!renderErrorLogged) {
+        footprintDebugError('[Footprint Integration] Render error; disabling footprint after ' + MAX_RENDER_FAILURES + ' consecutive failures:', e);
+        renderErrorLogged = true;
+      }
+      if (renderFailureCount >= MAX_RENDER_FAILURES) {
+        renderDisabled = true;
+        V6OF.footprintRenderDisabled = {
+          disabled: true,
+          failures: renderFailureCount,
+          reason: 'render-error',
+          updatedAt: Date.now()
+        };
+      }
       return false;
     }
   }
@@ -136,6 +176,7 @@
    * Determine if footprint should be visible based on zoom
    */
   function shouldShowFootprint(vp, settings) {
+    if (renderDisabled) return false;
     if (!settings || settings.showFootprint !== true) return false;
 
     // Check zoom level
@@ -156,7 +197,15 @@
   /**
    * Reset footprint cache (clear all footprints)
    */
+  function resetRenderCircuitBreaker() {
+    renderFailureCount = 0;
+    renderDisabled = false;
+    renderErrorLogged = false;
+    V6OF.footprintRenderDisabled = null;
+  }
+
   function resetFootprints() {
+    resetRenderCircuitBreaker();
     return [];
   }
 
@@ -167,6 +216,7 @@
     shouldShowFootprint: shouldShowFootprint,
     updateFootprintState: updateFootprintState,
     resetFootprints: resetFootprints,
+    resetRenderCircuitBreaker: resetRenderCircuitBreaker,
     timeframeToMs: timeframeToMs
   });
 
@@ -178,9 +228,10 @@
       shouldShowFootprint: shouldShowFootprint,
       updateFootprintState: updateFootprintState,
       resetFootprints: resetFootprints,
+      resetRenderCircuitBreaker: resetRenderCircuitBreaker,
       timeframeToMs: timeframeToMs
     };
   }
 
-  V6OF.debugLog('[Footprint Integration] Initialized successfully');
+  footprintDebugLog('[Footprint Integration] Initialized successfully');
 })();

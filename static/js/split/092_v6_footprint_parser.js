@@ -7,13 +7,35 @@
   var V6OF = window.V6OF = window.V6OF || {};
   var FootprintCore = V6OF.Core && V6OF.Core.FootprintCore;
 
+  function footprintDebugEnabled() {
+    return !!(V6OF.debugFootprint || V6OF.DEBUG_FOOTPRINT);
+  }
+
+  function footprintDebugError() {
+    if (!footprintDebugEnabled() || !console || !console.error) return;
+    console.error.apply(console, arguments);
+  }
+
   if (!FootprintCore) {
-    console.error('[Footprint Parser] FootprintCore not available');
+    footprintDebugError('[Footprint Parser] FootprintCore not available');
     return;
   }
 
   var PriceLevel = FootprintCore.PriceLevel;
   var FootprintCandle = FootprintCore.FootprintCandle;
+
+  // Quantize a price to tickSize (if known) or to 8 decimal places.
+  // Used in aggregation to avoid float-precision fragmentation:
+  // e.g. 43250.1 vs 43250.10000000001 must merge into the same level.
+  function quantizePrice(price, tickSize) {
+    if (!Number.isFinite(price)) return 0;
+    if (tickSize && tickSize > 0) return Math.round(price / tickSize) * tickSize;
+    return Math.round(price * 1e8) / 1e8;
+  }
+
+  function priceKey(price, tickSize) {
+    return quantizePrice(price, tickSize).toFixed(8);
+  }
 
   // ===== PARSING =====
 
@@ -92,7 +114,8 @@
    * Aggregate footprints from 1m to target timeframe
    * Takes array of 1m candles, returns aggregated candle
    */
-  function aggregateFootprints(oneMinCandles, targetTf) {
+  function aggregateFootprints(oneMinCandles, targetTf, tickSize) {
+    tickSize = Number(tickSize) || 0;
     if (!Array.isArray(oneMinCandles) || !oneMinCandles.length) {
       return null;
     }
@@ -106,9 +129,9 @@
 
     validCandles.forEach(function(candle) {
       candle.levels.forEach(function(level) {
-        var key = level.price.toFixed(8); // Use string key for precision
+        var key = priceKey(level.price, tickSize);
         if (!levelMap[key]) {
-          levelMap[key] = new PriceLevel(level.price, 0, 0);
+          levelMap[key] = new PriceLevel(quantizePrice(level.price, tickSize), 0, 0);
         }
         levelMap[key].buyVol += level.buyVol;
         levelMap[key].sellVol += level.sellVol;

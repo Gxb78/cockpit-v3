@@ -125,6 +125,35 @@
     });
   }
 
+  // Lightweight redraw for inertia frames: treats the panning as a drag so
+  // the heatmap is blitted from its offscreen cache (no full rasterize),
+  // footprint rendering is skipped (expensive cell overlay), and the CVD
+  // panel only redraws its overlay — not the full histogram.
+  function redrawMomentum(ref) {
+    var root = rootFor(ref);
+    var scope = root || document;
+    var chartCanvas = scope.querySelector ? scope.querySelector('[data-v6-chart]') : null;
+    var store = storeFor(chartCanvas);
+    if (!store) return;
+    var state = store.getState();
+    var wasDragging = !!V6OF.chartIsDragging;
+    V6OF.chartIsDragging = true;
+    if (chartCanvas && V6OF.CanvasChart) {
+      if (V6OF.CanvasChart.drawNow) {
+        V6OF.CanvasChart.drawNow(chartCanvas, state);
+      } else {
+        V6OF.CanvasChart.draw(chartCanvas, state);
+      }
+    }
+    V6OF.chartIsDragging = wasDragging;
+    // CVD: overlay-only redraw (cheap) instead of full histogram rebuild.
+    var cvdCanvas = scope.querySelector ? scope.querySelector('[data-v6-cvd-overlay]') : null;
+    var cvdRenderer = V6OF.Panels && V6OF.Panels.CvdPanel;
+    if (cvdCanvas && cvdRenderer && cvdRenderer.redrawOverlay) {
+      cvdRenderer.redrawOverlay(cvdCanvas);
+    }
+  }
+
   function redrawOverlayAll(ref) {
     var root = rootFor(ref);
     var scope = root || document;
@@ -158,6 +187,13 @@
   var TOUCH_PAN_THRESHOLD = 8;
   var MOMENTUM_MIN_VELOCITY = 0.035; // px/ms
   var MOMENTUM_FRICTION = 0.92;
+
+  // Single monotonic clock for the whole module. Using performance.now()
+  // ( monotonic, sub-ms ) everywhere prevents velocity glitches when
+  // different code paths mix Date.now() and performance.now().
+  function nowMs() {
+    return (window.performance && performance.now) ? performance.now() : Date.now();
+  }
   var momentum = { raf: 0, vx: 0, vy: 0, lastAt: 0, canvas: null };
 
   // ── Touch / pinch state ──
@@ -204,15 +240,22 @@
 
   function recordMomentum(dx, dy, mode) {
     if (!isMomentumPanMode(mode)) return;
-    var now = (window.performance && performance.now) ? performance.now() : Date.now();
+    var now = nowMs();
     var dt = drag.lastMoveAt ? Math.max(8, now - drag.lastMoveAt) : 16;
     drag.lastMoveAt = now;
     drag.velocityX = dx / dt;
     drag.velocityY = dy / dt;
   }
 
+  function prefersReducedMotion() {
+    try {
+      return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    } catch (_) { return false; }
+  }
+
   function startMomentum(canvas, mode) {
     if (!canvas || !isMomentumPanMode(mode) || !drag.moved) return;
+    if (prefersReducedMotion()) return;
     var vx = mode === 'price' ? 0 : drag.velocityX;
     var vy = mode === 'time-pan' ? 0 : drag.velocityY;
     if (Math.hypot(vx, vy) < MOMENTUM_MIN_VELOCITY) return;
@@ -220,20 +263,20 @@
     momentum.canvas = canvas;
     momentum.vx = vx;
     momentum.vy = vy;
-    momentum.lastAt = (window.performance && performance.now) ? performance.now() : Date.now();
+    momentum.lastAt = nowMs();
     var step = function () {
       var vp = ensureViewport();
       if (!vp || drag.active || !momentum.canvas || !momentum.canvas.isConnected) {
         stopMomentum();
         return;
       }
-      var now = (window.performance && performance.now) ? performance.now() : Date.now();
+      var now = nowMs();
       var dt = Math.min(34, Math.max(8, now - momentum.lastAt));
       momentum.lastAt = now;
       var dx = momentum.vx * dt;
       var dy = momentum.vy * dt;
       vp.panByPixels(dx, dy);
-      redrawAll(momentum.canvas);
+      redrawMomentum(momentum.canvas);
       var damping = Math.pow(MOMENTUM_FRICTION, dt / 16.67);
       momentum.vx *= damping;
       momentum.vy *= damping;
@@ -278,7 +321,12 @@
       activeCandleOpenTime: openTime,
       activeCandleCloseTime: Number.isFinite(closeTime) ? closeTime : 0,
       activeCandleSource: pick.source || '',
-      activeCandleSnapshot: Object.assign({}, candle),
+      activeCandleSnapshot: {
+        openTime: candle.openTime,
+        closeTime: candle.closeTime,
+        open: candle.open, high: candle.high, low: candle.low, close: candle.close,
+        volume: candle.volume, source: pick.source || ''
+      },
       activeCandleLocked: nextLocked,
       activeCandleUpdatedAt: Date.now()
     });
@@ -338,16 +386,17 @@
     if (mode === 'low') return Number.isFinite(low) ? low : rawPrice;
     if (mode === 'close') return Number.isFinite(close) ? close : rawPrice;
     if (mode !== 'nearest') return rawPrice;
-    var candidates = [
-      { price: high, dist: Math.abs(rawPrice - high) },
-      { price: low, dist: Math.abs(rawPrice - low) },
-      { price: close, dist: Math.abs(rawPrice - close) }
-    ].filter(function (item) {
-      return Number.isFinite(item.price) && Number.isFinite(item.dist);
-    });
-    if (!candidates.length) return rawPrice;
-    candidates.sort(function (a, b) { return a.dist - b.dist; });
-    return candidates[0].price;
+    // Inline comparison: find the OHLC value closest to rawPrice without
+    // allocating a candidates array + sort on every mousemove.
+    var bestPrice = rawPrice;
+    var bestDist = Infinity;
+    var dh = Math.abs(rawPrice - high);
+    if (Number.isFinite(dh) && dh < bestDist) { bestDist = dh; bestPrice = high; }
+    var dl = Math.abs(rawPrice - low);
+    if (Number.isFinite(dl) && dl < bestDist) { bestDist = dl; bestPrice = low; }
+    var dc = Math.abs(rawPrice - close);
+    if (Number.isFinite(dc) && dc < bestDist) { bestDist = dc; bestPrice = close; }
+    return bestPrice;
   }
 
   V6OF.register('UI', 'ChartInteractions', {
@@ -381,16 +430,22 @@
       var store = storeFor(canvas);
       var state = null;
       var nearest = null;
+      // Snap crosshair to candle center only on the chart canvas.
+      // On the CVD panel the vertical line should track the cursor freely
+      // (CVD has its own time axis — candle snapping there feels jittery).
       if (store) {
         state = store.getState();
-        nearest = nearestCandleForTime(t, state);
-        if (nearest) t = nearest.mid;
+        if (source === 'chart') {
+          nearest = nearestCandleForTime(t, state);
+          if (nearest) t = nearest.mid;
+        }
       }
       var x = vp.timeToX(t);
 
       cross.visible = cross.enabled;
       cross.x = x;
       cross.time = t;
+      cross.snappedCandle = nearest ? nearest.candle : null;
       vp.crosshairTs = t;
       cross.hoveringSource = source;
 
@@ -472,7 +527,9 @@
         return;
       }
 
-      // Wheel over price axis → zoom price only
+      // Wheel over price axis: zoom Y only, anchored on cursor Y.
+      // Wheel over time axis: zoom X only, anchored on cursor X.
+      // Wheel over plot area: zoom both X and Y, anchored on cursor (like TradingView).
       if (isOnPriceAxis(pt.x, pt.y, vp)) {
         wheelState.zoomMode = 'price';
         vp.zoomPrice(factor, pt.y);
@@ -480,8 +537,9 @@
         wheelState.zoomMode = 'time';
         vp.zoomTime(factor, pt.x);
       } else {
-        wheelState.zoomMode = 'time';
+        wheelState.zoomMode = 'both';
         vp.zoomTime(factor, pt.x);
+        vp.zoomPrice(factor, pt.y);
       }
 
       cross.x = pt.x;
@@ -530,7 +588,7 @@
       drag.clickX = pt.x;
       drag.clickY = pt.y;
       drag.moved = false;
-      drag.lastMoveAt = 0;
+      drag.lastMoveAt = nowMs();
       drag.velocityX = 0;
       drag.velocityY = 0;
 
@@ -771,7 +829,7 @@
       drag.clickX = pt.x;
       drag.clickY = pt.y;
       drag.moved = false;
-      drag.lastMoveAt = 0;
+      drag.lastMoveAt = nowMs();
       drag.velocityX = 0;
       drag.velocityY = 0;
       drag.startViewport = {
@@ -819,6 +877,8 @@
     // ── Touch handlers (pinch-to-zoom + two-finger pan) ──
 
     onTouchStart: function (canvas, event) {
+      // Kill any running inertia immediately — new input takes over.
+      stopMomentum();
       if (event.touches.length === 1) {
         // Single finger: keep page scroll available until a chart pan really starts.
         var t = event.touches[0];
@@ -957,16 +1017,7 @@
       if (!vp) return;
       if (drag.lastDragAt && Date.now() - drag.lastDragAt < 180) return;
 
-      // Check if click is on the "▶ LIVE" button
-      var btn = V6OF._followLiveBtn;
-      if (btn) {
-        var pt = localPoint(canvas, event);
-        if (pt.x >= btn.x && pt.x <= btn.x + btn.w && pt.y >= btn.y && pt.y <= btn.y + btn.h) {
-          if (vp.goLive) vp.goLive();
-          redrawAll(canvas);
-          return;
-        }
-      }
+      // GO LIVE button is now a DOM element - click handled by its own listener.
 
       // Axis click zoom
       var pt2 = localPoint(canvas, event);
@@ -1088,6 +1139,111 @@
       redrawAll(canvas);
     },
 
+    // ── Right-click context menu ──────────────────────────────────
+    _handleContextMenu: function (canvas, event) {
+      event.preventDefault();
+      event.stopPropagation();
+      var vp = ensureViewport();
+      if (!vp) return;
+      var pt = localPoint(canvas, event);
+      var store = storeFor(canvas);
+      var state = store && store.getState ? store.getState() : {};
+      var ui = (state && state.ui) || {};
+      var settings = (state && state.settings) || {};
+      var hasPinned = !!(ui.pinnedCandle);
+
+      // Remove any existing context menu
+      var existing = document.querySelector('.v6-context-menu');
+      if (existing) existing.remove();
+
+      var menu = document.createElement('div');
+      menu.className = 'v6-context-menu';
+      menu.style.cssText = 'position:fixed;z-index:9999;min-width:160px;background:var(--exo-surface,#1a1a2e);border:1px solid var(--exo-border,#333);border-radius:6px;padding:4px 0;box-shadow:0 4px 16px rgba(0,0,0,.5);font-size:12px;';
+
+      function addItem(label, action, danger) {
+        var item = document.createElement('div');
+        item.textContent = label;
+        item.style.cssText = 'padding:6px 12px;cursor:pointer;color:' + (danger ? 'var(--exo-danger,#f44)' : 'var(--exo-text,#ccc)') + ';white-space:nowrap;';
+        item.addEventListener('mouseenter', function () { item.style.background = 'var(--exo-hover,#2a2a4a)'; });
+        item.addEventListener('mouseleave', function () { item.style.background = ''; });
+        item.addEventListener('click', function (e) {
+          e.stopPropagation();
+          menu.remove();
+          if (action) action();
+        });
+        menu.appendChild(item);
+      }
+
+      function addSep() {
+        var sep = document.createElement('div');
+        sep.style.cssText = 'height:1px;background:var(--exo-border,#333);margin:4px 0;';
+        menu.appendChild(sep);
+      }
+
+      if (hasPinned) {
+        addItem('Unlock Candle', function () {
+          if (store && store.updateUi) store.updateUi({ pinnedCandle: null, activeCandleLocked: false });
+          redrawAll(canvas);
+        });
+      } else if (ui.activeCandleLocked) {
+        addItem('Unlock Crosshair', function () {
+          if (store && store.updateUi) store.updateUi({ activeCandleLocked: false, activeCandleOpenTime: 0, activeCandleCloseTime: 0 });
+          redrawAll(canvas);
+        });
+      } else if (ui.activeCandleOpenTime) {
+        addItem('Lock Crosshair', function () {
+          if (store && store.updateUi) store.updateUi({ activeCandleLocked: true, pinnedCandle: ui.activeCandleSnapshot || { openTime: ui.activeCandleOpenTime, closeTime: ui.activeCandleCloseTime, source: ui.activeCandleSource } });
+          redrawAll(canvas);
+        });
+      }
+
+      addSep();
+      addItem('Reset View', function () {
+        if (vp.fitPriceToData) vp.fitPriceToData();
+        if (vp.fitTimeToData) vp.fitTimeToData();
+        redrawAll(canvas);
+      });
+      addItem('Go Live', function () {
+        if (vp.goLive) vp.goLive();
+        else { vp.followLive = true; vp.autoFit = true; }
+        redrawAll(canvas);
+      });
+
+      addSep();
+      addItem('Add Marker', function () {
+        var ts = vp.xToTime(pt.x);
+        ts = snapTimeToCandle(ts, state);
+        var text = prompt('Marker text:', '');
+        if (text && text.trim() && store && store.updateSettings) {
+          var markers = (settings.markers || []).slice();
+          markers.push({ ts: ts, text: text.trim(), type: 'user' });
+          store.updateSettings({ markers: markers });
+          redrawAll(canvas);
+        }
+      });
+
+      document.body.appendChild(menu);
+
+      // Position: flip if would overflow viewport
+      var menuRect = menu.getBoundingClientRect();
+      var x = event.clientX;
+      var y = event.clientY;
+      if (x + menuRect.width > window.innerWidth - 4) x = window.innerWidth - menuRect.width - 4;
+      if (y + menuRect.height > window.innerHeight - 4) y = window.innerHeight - menuRect.height - 4;
+      menu.style.left = x + 'px';
+      menu.style.top = y + 'px';
+
+      // Close on outside click (capture-phase, synchronous)
+      function closeMenu(e) {
+        if (!menu.parentNode) return;
+        if (!menu.contains(e.target)) {
+          menu.remove();
+          document.removeEventListener('click', closeMenu, true);
+        }
+      }
+      document.addEventListener('click', closeMenu, true);
+    },
+
     attach: function (canvas) {
       if (!canvas) return;
       if (canvas._v6IxAttached) return; // idempotent
@@ -1101,6 +1257,7 @@
         wheel: function (e) { self.onWheel(canvas, e); },
         click: function (e) { self._handleChartClick(canvas, e); },
         dblClick: function (e) { self._handleChartDblClick(canvas, e); },
+        contextMenu: function (e) { self._handleContextMenu(canvas, e); },
         touchS: function (e) { self.onTouchStart(canvas, e); },
         touchM: function (e) { self.onTouchMove(canvas, e); },
         touchE: function (e) { self.onTouchEnd(canvas, e); }
@@ -1113,6 +1270,7 @@
       canvas.addEventListener('wheel', handlers.wheel, { passive: false });
       canvas.addEventListener('click', handlers.click);
       canvas.addEventListener('dblclick', handlers.dblClick);
+      canvas.addEventListener('contextmenu', handlers.contextMenu);
       window.addEventListener('mousemove', handlers.dragMove);
       window.addEventListener('mouseup', handlers.up);
       // Touch events
@@ -1155,6 +1313,7 @@
       canvas.removeEventListener('wheel', h.wheel);
       canvas.removeEventListener('click', h.click);
       canvas.removeEventListener('dblclick', h.dblClick);
+      canvas.removeEventListener('contextmenu', h.contextMenu);
       window.removeEventListener('mousemove', h.dragMove);
       window.removeEventListener('mouseup', h.up);
       canvas.removeEventListener('touchstart', h.touchS);
@@ -1175,7 +1334,8 @@
         down: function (e) { self.onCvdPointerDown(canvas, e); },
         dragMove: function (e) { self.onPointerMove(canvas, e); },
         up: function (e) { self.onPointerUp(canvas, e); },
-        wheel: function (e) { self.onCvdWheel(canvas, e); }
+        wheel: function (e) { self.onCvdWheel(canvas, e); },
+        contextMenu: function (e) { self._handleContextMenu(canvas, e); }
       };
 
       canvas._v6CvdIxHandlers = handlers;
@@ -1183,6 +1343,7 @@
       canvas.addEventListener('mouseleave', handlers.leave);
       canvas.addEventListener('mousedown', handlers.down);
       canvas.addEventListener('wheel', handlers.wheel, { passive: false });
+      canvas.addEventListener('contextmenu', handlers.contextMenu);
       window.addEventListener('mousemove', handlers.dragMove);
       window.addEventListener('mouseup', handlers.up);
       canvas._v6CvdIxAttached = true;
@@ -1196,6 +1357,7 @@
       canvas.removeEventListener('mouseleave', h.leave);
       canvas.removeEventListener('mousedown', h.down);
       canvas.removeEventListener('wheel', h.wheel);
+      canvas.removeEventListener('contextmenu', h.contextMenu);
       window.removeEventListener('mousemove', h.dragMove);
       window.removeEventListener('mouseup', h.up);
       canvas._v6CvdIxHandlers = null;

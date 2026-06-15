@@ -32,28 +32,42 @@
   var GUTTER_BOTTOM = _readLayoutToken('--exo-gutter-bottom', 24);
   var PAD_TOP       = _readLayoutToken('--exo-pad-top', 22);
   var PAD_LEFT = 8;
+
+  // Color tokens — read once at module load, fallback to hardcoded.
+  // Re-read after theme changes via refreshColorTokens().
+  function _readColorToken(name, fallback) {
+    try {
+      var el = document.getElementById('v6-orderflow-root') || document.body;
+      var v = window.getComputedStyle(el).getPropertyValue(name).trim();
+      if (v) return v;
+    } catch (e) { /* DOM not ready */ }
+    return fallback;
+  }
+  var COL = {};
+  function refreshColorTokens() {
+    COL.accent       = _readColorToken('--exo-accent', '#38d3ee');
+    COL.accentBg     = _readColorToken('--exo-accent-bg', '#04121a');
+    COL.crosshair    = _readColorToken('--exo-crosshair', 'rgba(203, 213, 225, 0.4)');
+    COL.lastPrice    = _readColorToken('--exo-last-price', 'rgba(148, 163, 184, 0.4)');
+    COL.badgeBg      = _readColorToken('--exo-badge-bg', '#000000');
+    COL.badgeBorder  = _readColorToken('--exo-badge-border', 'rgba(255, 255, 255, 0.15)');
+    COL.badgeText    = _readColorToken('--exo-badge-text', '#ffffff');
+    COL.badgeDim     = _readColorToken('--exo-badge-dim', '#94a3b8');
+    COL.muted1       = _readColorToken('--exo-muted-1', 'rgba(148, 163, 184, 0.04)');
+    COL.muted2       = _readColorToken('--exo-muted-2', 'rgba(148, 163, 184, 0.08)');
+    COL.muted3       = _readColorToken('--exo-muted-3', 'rgba(148, 163, 184, 0.10)');
+    COL.muted4       = _readColorToken('--exo-muted-4', 'rgba(148, 163, 184, 0.20)');
+    COL.muted5       = _readColorToken('--exo-muted-5', 'rgba(148, 163, 184, 0.32)');
+    COL.muted6       = _readColorToken('--exo-muted-6', 'rgba(148, 163, 184, 0.72)');
+    COL.textDim      = _readColorToken('--exo-text-dim', 'rgba(203, 213, 225, 0.55)');
+    COL.textDim2     = _readColorToken('--exo-text-dim2', 'rgba(203, 213, 225, 0.70)');
+    COL.accentSoft   = _readColorToken('--exo-accent-soft', 'rgba(56, 211, 238, 0.70)');
+  }
+  refreshColorTokens();
   var DEFAULT_EMIT_MS = 500;
   var RENDER_WINDOW_PAD_RATIO = 0.35;
   var MAX_RENDER_CANDLES = 1800;
   var MAX_RENDER_FOOTPRINTS = 1400;
-
-  // Pre-built 8×8 diagonal hatch pattern for synthetic (gap-fill) candles.
-  // Replaces the per-frame stroke loop at drawCandlesVp.
-  var _synthPatternCanvas = null;
-  function _ensureSynthPattern() {
-    if (_synthPatternCanvas) return _synthPatternCanvas;
-    var pc = document.createElement('canvas');
-    pc.width = 8; pc.height = 8;
-    var pctx = pc.getContext('2d');
-    pctx.strokeStyle = 'rgba(148, 163, 184, 0.32)';
-    pctx.lineWidth = 1;
-    pctx.beginPath();
-    pctx.moveTo(0, 8);
-    pctx.lineTo(8, 0);
-    pctx.stroke();
-    _synthPatternCanvas = pc;
-    return pc;
-  }
 
   function recordPerf(name, startedAt) {
     if (!window.performance || !startedAt) return;
@@ -126,12 +140,13 @@
     return updateCanvasSizeCache(canvas, canvas.clientWidth || 1, canvas.clientHeight || 1);
   }
 
-  function setupCanvas(canvas) {
+  function setupCanvas(canvas, maxDpr) {
     if (!canvas) return null;
     var size = getCanvasCachedSize(canvas);
     var width = size.width;
     var height = size.height;
-    var dpr = window.devicePixelRatio || 1;
+    var rawDpr = window.devicePixelRatio || 1;
+    var dpr = maxDpr && maxDpr > 0 ? Math.min(rawDpr, maxDpr) : rawDpr;
     canvas._v6LastDpr = dpr;
     if (canvas.width !== Math.floor(width * dpr) || canvas.height !== Math.floor(height * dpr)) {
       canvas.width = Math.floor(width * dpr);
@@ -150,23 +165,44 @@
   }
 
   function setupChartLayers(canvas) {
-    var overlay = setupCanvas(canvas);
+    var overlay = setupCanvas(canvas, 2);     // overlay (crosshair): cap DPR 2
     if (!overlay) return null;
     var staticCanvas = chartLayerCanvas(canvas, 'static');
     var dataCanvas = chartLayerCanvas(canvas, 'data');
-    var staticSetup = staticCanvas ? setupCanvas(staticCanvas) : overlay;
-    var dataSetup = dataCanvas ? setupCanvas(dataCanvas) : overlay;
+    var annotCanvas = chartLayerCanvas(canvas, 'annotation');
+    var staticSetup = staticCanvas ? setupCanvas(staticCanvas) : overlay;      // static (grid/axes): full DPR for crisp text
+    var dataSetup = dataCanvas ? setupCanvas(dataCanvas, 2) : overlay;          // data (candles/heatmap/FP): cap DPR 2
+    var annotSetup = annotCanvas ? setupCanvas(annotCanvas, 2) : overlay;       // annotation (VP/bookmarks): cap DPR 2
+    // Pin each layer's transform to its own effective DPR (already capped
+    // by setupCanvas). All layers share the same CSS size but buffer sizes
+    // differ: static uses raw DPR for crisp grid text; data/overlay/annot
+    // are capped at 2× to keep fillrate manageable on 4K+ screens.
+    var dprOverlay = canvas._v6LastDpr || 1;
+    overlay.ctx.setTransform(dprOverlay, 0, 0, dprOverlay, 0, 0);
+    if (staticSetup !== overlay) {
+      var dprStatic = staticCanvas ? (staticCanvas._v6LastDpr || 1) : dprOverlay;
+      staticSetup.ctx.setTransform(dprStatic, 0, 0, dprStatic, 0, 0);
+    }
+    if (dataSetup !== overlay) {
+      var dprData = dataCanvas ? (dataCanvas._v6LastDpr || 1) : dprOverlay;
+      dataSetup.ctx.setTransform(dprData, 0, 0, dprData, 0, 0);
+    }
+    if (annotSetup !== overlay) {
+      var dprAnnot = annotCanvas ? (annotCanvas._v6LastDpr || 1) : dprOverlay;
+      annotSetup.ctx.setTransform(dprAnnot, 0, 0, dprAnnot, 0, 0);
+    }
     return {
       width: overlay.width,
       height: overlay.height,
       overlay: overlay,
       data: dataSetup,
+      annotation: annotSetup,
       statik: staticSetup
     };
   }
 
   // ===================================================================
-  // LIVE CHART ENGINE â€” viewport-based time/price space
+  // LIVE CHART ENGINE — viewport-based time/price space
   // ===================================================================
 
   function clamp01(value) {
@@ -235,65 +271,25 @@
     return 0;
   }
 
-  function fillCandleGaps(candles, intervalMs) {
-    if (!Array.isArray(candles) || candles.length < 2) return candles || [];
-    intervalMs = Math.max(1000, Number(intervalMs) || 60000);
-    var out = [];
-    var maxSynthetic = 240;
-    var syntheticCount = 0;
-    var totalGaps = 0;      // all gaps detected (before cap)
-    var truncated = false;  // true if cap was hit
-    for (var i = 0; i < candles.length; i++) {
-      var current = candles[i];
-      if (!current || !Number.isFinite(Number(current.openTime))) continue;
-      if (out.length) {
-        var prev = out[out.length - 1];
-        var prevStart = candleStartTs(prev);
-        var currentStart = candleStartTs(current);
-        var gap = currentStart - prevStart;
-        if (gap > intervalMs * 1.5 && gap < intervalMs * 1000) {
-          var nextOpen = prevStart + intervalMs;
-          var carry = Number(prev.close);
-          if (!Number.isFinite(carry) || carry <= 0) carry = Number(current.open);
-          var gapCandles = Math.round(gap / intervalMs) - 1;
-          totalGaps += gapCandles;
-          while (nextOpen < currentStart - intervalMs * 0.5) {
-            if (syntheticCount >= maxSynthetic) { truncated = true; break; }
-            out.push({
-              symbol: current.symbol || prev.symbol || 'BTC',
-              timeframe: current.timeframe || prev.timeframe,
-              intervalMs: intervalMs,
-              openTime: nextOpen,
-              closeTime: nextOpen + intervalMs,
-              open: carry,
-              high: carry,
-              low: carry,
-              close: carry,
-              volume: 0,
-              synthetic: true,
-              source: 'gap-fill'
-            });
-            syntheticCount++;
-            nextOpen += intervalMs;
-          }
-        }
-      }
-      out.push(current);
-    }
-    V6OF.chartGapFill = { count: syntheticCount, totalGaps: totalGaps, truncated: truncated, updatedAt: Date.now() };
-    if (truncated) {
-      console.warn('fillCandleGaps: capped at ' + maxSynthetic + ' synthetics, ' + totalGaps + ' gaps total — data may have holes');
-    }
-    return out;
+  function quantizeFootprintPrice(price, tickSize) {
+    if (!Number.isFinite(price)) return 0;
+    tickSize = Number(tickSize) || 0;
+    if (tickSize > 0) return Math.round(price / tickSize) * tickSize;
+    return Math.round(price * 1e8) / 1e8;
   }
 
-  function mergeFootprintLevels(target, source) {
+  function footprintPriceKey(price, tickSize) {
+    return quantizeFootprintPrice(price, tickSize).toFixed(8);
+  }
+
+  function mergeFootprintLevels(target, source, tickSize) {
     target = target || {};
     (Array.isArray(source) ? source : []).forEach(function (lv) {
       var price = Number(lv && lv.price);
       if (!Number.isFinite(price)) return;
-      var key = String(price);
-      var cur = target[key] || { price: price, buyVol: 0, sellVol: 0, delta: 0, totalVol: 0, trades: 0 };
+      var snappedPrice = quantizeFootprintPrice(price, tickSize);
+      var key = footprintPriceKey(price, tickSize);
+      var cur = target[key] || { price: snappedPrice, buyVol: 0, sellVol: 0, delta: 0, totalVol: 0, trades: 0 };
       var buy = Number(lv.buyVol || 0);
       var sell = Number(lv.sellVol || 0);
       var total = Number(lv.totalVol);
@@ -307,7 +303,7 @@
     return target;
   }
 
-  function aggregateFootprintsToTimeframe(footprints, tf) {
+  function aggregateFootprintsToTimeframe(footprints, tf, tickSize) {
     var interval = timeframeToMs(tf);
     if (!interval || interval <= 60000) return Array.isArray(footprints) ? footprints : [];
     var buckets = {};
@@ -359,7 +355,7 @@
       bucket.delta = bucket.buyVol - bucket.sellVol;
       bucket.tsLocal = Math.max(bucket.tsLocal || 0, Number(fp.tsLocal || 0) || 0);
       bucket.closed = bucket.closed && fp.closed === true;
-      mergeFootprintLevels(bucket._levelsByPrice, fp.levels);
+      mergeFootprintLevels(bucket._levelsByPrice, fp.levels, tickSize);
     });
     return Object.keys(buckets).map(Number).sort(function (a, b) { return a - b; }).map(function (key) {
       var bucket = buckets[key];
@@ -433,8 +429,7 @@
     }
     while (i < history.length) out.push(history[i++]);
     while (j < liveCandles.length) out.push(liveCandles[j++]);
-    var interval = timeframeToMs(tf) || (out.length ? normalizeCandleInterval(out[out.length - 1], 60000) : 60000);
-    return fillCandleGaps(out, interval);
+    return out;
   }
 
   // Convert hex color (#3ddc97) to rgba string with alpha
@@ -477,18 +472,51 @@
   var _mergedCandlesCache = null;
   var _mergedCandlesSig = '';
   var _mergedCandlesVersion = -1;
+  var _mergedCandlesSrcHist = null;
+  var _mergedCandlesSrcFp = null;
   var _aggregatedFpSrc = null;
+  var _aggregatedFpVersion = -1;
   var _aggregatedFpTf = '';
+  var _aggregatedFpTickSize = 0;
   var _aggregatedFpCache = null;
   var _boundsCache = null;
   var _boundsSrcFrames = null;
   var _boundsSrcCandles = null;
   var _boundsSrcHeatmap = null;
-  var _boundsVersion = -1;
+  var _boundsFramesVersion = -1;
   var _heatmapBoundsCache = null;
   var _heatmapBoundsFirst = null;
   var _heatmapBoundsLast = null;
   var _heatmapBoundsLen = 0;
+  var _renderDataCache = null;
+  var _renderDataSig = '';
+  var _renderDataBaseRef = null;
+  var _renderDataHeatmapRef = null;
+  var _renderDataFootprintRef = null;
+
+  function arrayVersion(list) {
+    return Array.isArray(list) ? (Number(list._v6ArrayVersion) || 0) : 0;
+  }
+
+  function renderWindowSignature(win) {
+    return Math.round(win.start) + ':' + Math.round(win.end);
+  }
+
+  function renderDataSignature(state, win, baseCandles, heatmapFrames, footprintCandles) {
+    state = state || {};
+    var settings = state.settings || {};
+    return [
+      renderWindowSignature(win),
+      state.timeframe || '1m',
+      Number(settings.tickSize) || 0,
+      arrayVersion(baseCandles),
+      arrayVersion(heatmapFrames),
+      arrayVersion(footprintCandles),
+      Array.isArray(baseCandles) ? baseCandles.length : 0,
+      Array.isArray(heatmapFrames) ? heatmapFrames.length : 0,
+      Array.isArray(footprintCandles) ? footprintCandles.length : 0
+    ].join('|');
+  }
 
   function candleListSignature(list) {
     if (!Array.isArray(list) || !list.length) return '0';
@@ -505,14 +533,18 @@
     ].join(':');
   }
 
-  function aggregateFootprintsToTimeframeCached(footprints, tf) {
+  function aggregateFootprintsToTimeframeCached(footprints, tf, tickSize) {
     if (tf === '1m') return Array.isArray(footprints) ? footprints : [];
-    if (_aggregatedFpCache && _aggregatedFpSrc === footprints && _aggregatedFpTf === tf) {
+    tickSize = Number(tickSize) || 0;
+    var fpVersion = arrayVersion(footprints);
+    if (_aggregatedFpCache && _aggregatedFpSrc === footprints && _aggregatedFpVersion === fpVersion && _aggregatedFpTf === tf && _aggregatedFpTickSize === tickSize) {
       return _aggregatedFpCache;
     }
-    _aggregatedFpCache = aggregateFootprintsToTimeframe(footprints, tf);
+    _aggregatedFpCache = aggregateFootprintsToTimeframe(footprints, tf, tickSize);
     _aggregatedFpSrc = footprints;
+    _aggregatedFpVersion = fpVersion;
     _aggregatedFpTf = tf;
+    _aggregatedFpTickSize = tickSize;
     return _aggregatedFpCache;
   }
 
@@ -603,11 +635,20 @@
 
   function buildRenderData(state, vp, baseCandles, heatmapFrames, footprintCandles) {
     var win = renderTimeWindow(vp);
+    var sig = renderDataSignature(state, win, baseCandles, heatmapFrames, footprintCandles);
+    if (_renderDataCache &&
+        _renderDataSig === sig &&
+        _renderDataBaseRef === baseCandles &&
+        _renderDataHeatmapRef === heatmapFrames &&
+        _renderDataFootprintRef === footprintCandles) {
+      return _renderDataCache;
+    }
     var visibleCandles = sliceByTimeWindow(baseCandles, win.start, win.end, candleStartTs, candleEndTs);
     var visibleHeatmap = sliceByTimeWindow(heatmapFrames, win.start, win.end, frameTs, frameTs);
-    var visibleFootprints = sliceByTimeWindow(footprintCandles, win.start, win.end, candleStartTs, candleEndTs, MAX_RENDER_FOOTPRINTS);
+    var renderFootprints = alignFootprintsToKlines(footprintCandles, baseCandles);
+    var visibleFootprints = sliceByTimeWindow(renderFootprints, win.start, win.end, candleStartTs, candleEndTs, MAX_RENDER_FOOTPRINTS);
     var drawCandles = downsampleCandlesForRender(visibleCandles, MAX_RENDER_CANDLES);
-    return {
+    _renderDataCache = {
       fullCandles: baseCandles,
       candles: visibleCandles,
       drawCandles: drawCandles,
@@ -619,7 +660,7 @@
         footprintCandles: visibleFootprints,
         _fullChartCandles: baseCandles,
         _fullHeatmapFrames: heatmapFrames,
-        _fullFootprintCandles: footprintCandles,
+        _fullFootprintCandles: renderFootprints,
         _renderLod: {
           candles: visibleCandles.length,
           drawCandles: drawCandles.length,
@@ -628,6 +669,73 @@
         }
       })
     };
+    _renderDataSig = sig;
+    _renderDataBaseRef = baseCandles;
+    _renderDataHeatmapRef = heatmapFrames;
+    _renderDataFootprintRef = footprintCandles;
+    return _renderDataCache;
+  }
+
+  function cloneFootprintLevelWithPrice(level, price) {
+    var out = {};
+    for (var k in level) { if (Object.prototype.hasOwnProperty.call(level, k)) out[k] = level[k]; }
+    out.price = price;
+    return out;
+  }
+
+  function remapFootprintPriceToKline(price, footprint, kline) {
+    price = Number(price);
+    if (!Number.isFinite(price)) return price;
+    var fpHigh = Number(footprint && footprint.high);
+    var fpLow = Number(footprint && footprint.low);
+    var klHigh = Number(kline && kline.high);
+    var klLow = Number(kline && kline.low);
+    if (!Number.isFinite(fpHigh) || !Number.isFinite(fpLow) || !Number.isFinite(klHigh) || !Number.isFinite(klLow)) return price;
+    if (fpHigh <= fpLow || klHigh <= klLow) return price;
+    if (Math.abs(fpHigh - klHigh) < 1e-9 && Math.abs(fpLow - klLow) < 1e-9) return price;
+    var ratio = (price - fpLow) / (fpHigh - fpLow);
+    return klLow + ratio * (klHigh - klLow);
+  }
+
+  function alignFootprintToKline(footprint, kline) {
+    if (!footprint || !kline || !Array.isArray(footprint.levels) || !footprint.levels.length) return footprint;
+    var out = {};
+    for (var k in footprint) { if (Object.prototype.hasOwnProperty.call(footprint, k)) out[k] = footprint[k]; }
+    ['openTime', 'closeTime', 'open', 'high', 'low', 'close', 'time', 'intervalMs'].forEach(function (key) {
+      if (kline[key] != null) out[key] = kline[key];
+    });
+    out.levels = footprint.levels.map(function (level) {
+      return cloneFootprintLevelWithPrice(level, remapFootprintPriceToKline(level && level.price, footprint, kline));
+    }).sort(function (a, b) { return b.price - a.price; });
+    if (Number.isFinite(Number(footprint.poc))) out.poc = remapFootprintPriceToKline(footprint.poc, footprint, kline);
+    if (footprint.va) {
+      out.va = {};
+      for (var vk in footprint.va) { if (Object.prototype.hasOwnProperty.call(footprint.va, vk)) out.va[vk] = footprint.va[vk]; }
+      if (Number.isFinite(Number(footprint.va.high))) out.va.high = remapFootprintPriceToKline(footprint.va.high, footprint, kline);
+      if (Number.isFinite(Number(footprint.va.low))) out.va.low = remapFootprintPriceToKline(footprint.va.low, footprint, kline);
+    }
+    out._priceAlignedToKline = true;
+    return out;
+  }
+
+  function alignFootprintsToKlines(footprints, klines) {
+    footprints = Array.isArray(footprints) ? footprints : [];
+    klines = Array.isArray(klines) ? klines : [];
+    if (!footprints.length || !klines.length) return footprints;
+    var fpByOpen = {};
+    footprints.forEach(function (fp) {
+      var t = candleStartTs(fp);
+      if (t) fpByOpen[t] = fp;
+    });
+    var out = [];
+    klines.forEach(function (kline) {
+      var open = candleStartTs(kline);
+      if (!open) return;
+      var fp = (Array.isArray(kline.levels) && kline.levels.length ? kline : null) || fpByOpen[open];
+      if (!fp || !Array.isArray(fp.levels) || !fp.levels.length) return;
+      out.push(alignFootprintToKline(fp, kline));
+    });
+    return out.length ? out : footprints;
   }
 
   // Compute combined data extents (time + price) across the visible live data.
@@ -639,24 +747,29 @@
     // Live footprint candles are emitted as 1m bars. Aggregate them to the
     // active chart timeframe before merging so HTF views get the forming bar.
     var tf = state.timeframe || '1m';
-    var ver = state._stateVersion || 0;
-    // Fast-path: version unchanged → no data could have changed.
-    if (_mergedCandlesCache && _mergedCandlesVersion === ver) {
+    var tickSize = Number(state && state.settings && state.settings.tickSize) || 0;
+    var dataVersion = tf + '|' + tickSize + '|' + arrayVersion(hist) + '|' + arrayVersion(fp);
+    // Fast-path: source data versions unchanged → no candle merge work.
+    if (_mergedCandlesCache && _mergedCandlesVersion === dataVersion && _mergedCandlesSrcHist === hist && _mergedCandlesSrcFp === fp) {
       return _mergedCandlesCache;
     }
-    var sig = tf + '|' + candleListSignature(hist) + '|' + candleListSignature(fp);
+    var sig = tf + '|' + tickSize + '|' + candleListSignature(hist) + '|' + candleListSignature(fp);
 
     if (_mergedCandlesCache && _mergedCandlesSig === sig) {
-      _mergedCandlesVersion = ver;
+      _mergedCandlesVersion = dataVersion;
+      _mergedCandlesSrcHist = hist;
+      _mergedCandlesSrcFp = fp;
       return _mergedCandlesCache;
     }
 
-    var liveCandles = aggregateFootprintsToTimeframeCached(fp, tf);
+    var liveCandles = aggregateFootprintsToTimeframeCached(fp, tf, tickSize);
     var out = mergeCandlesByOpenTime(hist, liveCandles, tf);
 
     _mergedCandlesCache = out;
     _mergedCandlesSig = sig;
-    _mergedCandlesVersion = ver;
+    _mergedCandlesVersion = dataVersion;
+    _mergedCandlesSrcHist = hist;
+    _mergedCandlesSrcFp = fp;
     return out;
   }
 
@@ -731,9 +844,9 @@
   function computeLiveBounds(state, showHeatmap) {
     var frames = showHeatmap && Array.isArray(state.heatmapFrames) ? state.heatmapFrames : [];
     var candles = mergedChartCandles(state);
-    var ver = state._stateVersion || 0;
-    // Fast-path: version + refs unchanged → nothing could have changed.
-    if (_boundsCache && _boundsVersion === ver &&
+    var framesVersion = arrayVersion(frames);
+    // Fast-path: data refs + versions unchanged → nothing could have changed.
+    if (_boundsCache && _boundsFramesVersion === framesVersion &&
         _boundsSrcFrames === frames &&
         _boundsSrcCandles === candles &&
         _boundsSrcHeatmap === showHeatmap) {
@@ -768,7 +881,7 @@
     _boundsSrcFrames = frames;
     _boundsSrcCandles = candles;
     _boundsSrcHeatmap = showHeatmap;
-    _boundsVersion = ver;
+    _boundsFramesVersion = framesVersion;
     return bounds;
   }
 
@@ -864,19 +977,19 @@
     var d = new Date(ts);
     var label;
 
-    // Step >= 24h â†’ date format "03 Jun"
+    // Step >= 24h → date format "03 Jun"
     if (step >= 86400000) {
       label = pad2(d.getUTCDate()) + ' ' + MONTHS_SHORT[d.getUTCMonth()];
       return cacheSet(_timeLabelCache, key, label, TIME_LABEL_CACHE_LIMIT);
     }
 
-    // Sub-minute (step < 60000) â†’ "HH:MM:SS"
+    // Sub-minute (step < 60000) → "HH:MM:SS"
     if (step < 60000) {
       label = pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes()) + ':' + pad2(d.getUTCSeconds());
       return cacheSet(_timeLabelCache, key, label, TIME_LABEL_CACHE_LIMIT);
     }
 
-    // Step >= 1m â†’ "HH:MM"
+    // Step >= 1m → "HH:MM"
     label = pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes());
     return cacheSet(_timeLabelCache, key, label, TIME_LABEL_CACHE_LIMIT);
   }
@@ -1017,7 +1130,7 @@
   // Offscreen heatmap canvas for incremental rendering.
   // Full re-rasterize only on price-range change or significant pan;
   // live follow (right-shift) just shifts + draws the new column(s).
-  var _hmCache = null; // { canvas, ctx, timeStart, timeEnd, priceMin, priceMax, plotW, plotH }
+  var _hmCache = null; // { canvas, ctx, timeStart, timeEnd, priceMin, priceMax, plotW, plotH, sig }
 
   function drawHeatmapVp(ctx, vp, plot, frames, settings) {
     if (!Array.isArray(frames) || !frames.length) return false;
@@ -1034,9 +1147,13 @@
     // ── Offscreen canvas lifecycle ──────────────────────────────────────────
     var offW = Math.round(plotW * dpr);
     var offH = Math.round(plotH * dpr);
+    // Signature of all settings that affect heatmap pixel output.
+    // If any of these change, the cached offscreen snapshot is stale.
+    var hmSig = (settings.bgColor || '') + '|' + (settings.tickSize || 1) + '|' + (settings.heatmapOpacity != null ? settings.heatmapOpacity : '') + '|' + (settings.heatmapPalette || '');
     var needFull = !_hmCache
       || _hmCache.plotW !== plotW || _hmCache.plotH !== plotH
-      || _hmCache.priceMin !== vp.priceMin || _hmCache.priceMax !== vp.priceMax;
+      || _hmCache.priceMin !== vp.priceMin || _hmCache.priceMax !== vp.priceMax
+      || _hmCache.sig !== hmSig;
     var needRecreate = needFull || (_hmCache.canvas.width !== offW || _hmCache.canvas.height !== offH);
 
     if (!_hmCache) _hmCache = {};
@@ -1139,6 +1256,7 @@
     _hmCache.timeEnd = vp.timeEnd;
     _hmCache.priceMin = vp.priceMin;
     _hmCache.priceMax = vp.priceMax;
+    _hmCache.sig = hmSig;
 
     // ── Blit offscreen to main canvas ───────────────────────────────────────
     ctx.drawImage(offCanvas, plot.left, plot.top);
@@ -1179,31 +1297,6 @@
       var colRgba = selected ? palette.selected : (up ? palette.up : palette.down);
       var yOpen = vp.priceToY(c.open);
       var yClose = vp.priceToY(c.close);
-      if (c.synthetic) {
-        var synthX = Math.max(plot.left, x1 + 1);
-        var synthW = Math.max(2, Math.min(plot.left + plot.width, x2 - 1) - synthX);
-        ctx.fillStyle = 'rgba(148, 163, 184, 0.08)';
-        ctx.fillRect(synthX, plot.top, synthW, plot.height);
-        // Diagonal hatch via pre-built pattern — avoids per-frame stroke loop.
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(synthX, plot.top, synthW, plot.height);
-        ctx.clip();
-        ctx.fillStyle = ctx._synthHatchPattern || (ctx._synthHatchPattern = ctx.createPattern(_ensureSynthPattern(), 'repeat'));
-        ctx.fillRect(synthX, plot.top, synthW, plot.height);
-        ctx.restore();
-        // Draw synthetic candle marker line (use dark color, not white)
-        ctx.setLineDash([3, 3]);
-        ctx.strokeStyle = 'rgba(107, 114, 128, 0.45)';  // Dark gray instead of white
-        ctx.beginPath();
-        ctx.moveTo(synthX, yClose);
-        ctx.lineTo(synthX + synthW, yClose);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle = 'rgba(107, 114, 128, 0.55)';  // Dark gray instead of white
-        ctx.fillRect(xc - 1, yClose - 1, 2, 2);
-        continue;
-      }
       ctx.strokeStyle = colRgba;
       ctx.fillStyle = colRgba;
       ctx.lineWidth = selected ? Math.max(1.8, lineWidth + 0.75) : lineWidth;
@@ -1680,58 +1773,24 @@
     ctx.restore();
   }
 
-  function drawCrosshairTooltip(ctx, x, y, vp, plot, candle) {
-    if (!candle) return;
-    var isUp = candle.close >= candle.open;
-    var col = isUp ? '#22c55e' : '#ef4444';
-    var lines = [
-      'O ' + V6OF.format.price(candle.open) + '  H ' + V6OF.format.price(candle.high),
-      'L ' + V6OF.format.price(candle.low) + '  C ' + V6OF.format.price(candle.close),
-      'Vol ' + V6OF.format.qty(candle.volume || 0)
-    ];
-    if (Number.isFinite(candle.delta)) {
-      var d = Number(candle.delta);
-      lines.push('Î” ' + (d >= 0 ? '+' : '') + d.toFixed(1));
-    }
-    if (candle.priceOnly) {
-      lines.push('Price-only REST');
-    }
-    if (candle.synthetic) {
-      lines.push('Synthetic gap-fill');
-    }
-    var lh = 15;
-    var pw = (candle.priceOnly || candle.synthetic) ? 174 : 156, ph = 4 + lines.length * lh + 6;
-    var px = x + 14;
-    var py = y - ph / 2;
-    // Keep tooltip inside the plot bounds
-    if (px + pw > plot.left + plot.width) px = x - pw - 14;
-    if (py < plot.top) py = plot.top + 4;
-    if (py + ph > plot.top + plot.height) py = plot.top + plot.height - ph - 4;
-
-    ctx.save();
-    ctx.fillStyle = 'rgba(8, 11, 18, 0.94)';
-    ctx.fillRect(px, py, pw, ph);
-    ctx.strokeStyle = col;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(px, py, pw, ph);
-    ctx.fillStyle = 'rgba(226, 232, 240, 0.96)';
-    ctx.font = 'bold 10px JetBrains Mono, Consolas, monospace';
-    lines.forEach(function (line, i) {
-      ctx.fillText(line, px + 8, py + 4 + i * lh + lh - 4);
-    });
-    ctx.restore();
-  }
-
   function drawCrosshair(ctx, vp, plot, candles, ref) {
     var cross = V6OF.getChartCrosshair ? V6OF.getChartCrosshair(ref) : V6OF._fallbackChartCrosshair;
     if (!cross || !cross.visible || !cross.enabled) return;
     var x = cross.x;
     var y = cross.y;
 
-    // Snap to nearest candle (time axis only) if candles are available.
+    // Use the candle already found by the mousemove handler (stored on
+    // cross.snappedCandle) to avoid a redundant binary search on every frame.
     var snappedX = x;
     var snappedCandle = null;
-    if (Array.isArray(candles) && candles.length) {
+    // Candle snapping is decided by the mousemove handler (084): it sets
+    // cross.snappedCandle when hovering the chart, and leaves it null on
+    // the CVD panel so the line tracks the cursor freely.
+    if (cross.snappedCandle) {
+      snappedCandle = cross.snappedCandle;
+      snappedX = vp.timeToX(candleMidTs(snappedCandle));
+    } else if (cross.hoveringSource !== 'cvd' && Array.isArray(candles) && candles.length) {
+      // Fallback: binary search only if source is not CVD and handler didn't pre-compute.
       var mouseTime = vp.xToTime(x);
       snappedCandle = nearestCandleAt(candles, mouseTime);
       if (snappedCandle) {
@@ -1742,11 +1801,11 @@
     if (snappedX < plot.left || snappedX > plot.left + plot.width) return;
 
     ctx.save();
-    ctx.strokeStyle = 'rgba(203, 213, 225, 0.4)';
+    ctx.strokeStyle = COL.crosshair;
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
     
-    // Vertical line (snapped to candle center â€” always drawn)
+    // Vertical line (snapped to candle center — always drawn)
     ctx.beginPath();
     ctx.moveTo(snappedX, plot.top);
     ctx.lineTo(snappedX, plot.top + plot.height);
@@ -1760,44 +1819,77 @@
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Price readout (right gutter)
+      // Price readout (right gutter) — snapped to device pixels
       var price = vp.yToPrice(y);
       var priceText = V6OF.format.price(price);
-      ctx.fillStyle = 'rgba(56, 211, 238, 0.95)';
-      ctx.fillRect(plot.left + plot.width, y - 8, GUTTER_RIGHT, 16);
-      ctx.fillStyle = '#04121a';
+      var badgeY = Math.round(y - 8);
+      ctx.fillStyle = COL.accent;
+      ctx.fillRect(plot.left + plot.width, badgeY, GUTTER_RIGHT, 16);
+      ctx.fillStyle = COL.accentBg;
       ctx.font = 'bold 10px JetBrains Mono, Consolas, monospace';
       ctx.textAlign = 'left';
-      ctx.fillText(priceText, plot.left + plot.width + 5, y + 3);
+      ctx.fillText(priceText, plot.left + plot.width + 5, badgeY + 11);
     } else {
       ctx.setLineDash([]);
     }
 
-    // Time readout (bottom axis) â€” snapped to candle time
+    // Time readout (bottom axis) — snapped to candle time
     // Toujours afficher la date (DD Mon HH:MM:SS) pour savoir exactement
-    // quel jour on survole, mÃªme sur un viewport < 24h.
+    // quel jour on survole, même sur un viewport < 24h.
     var snappedTs = vp.xToTime(snappedX);
+    // Reuse the step already computed during the full draw (drawGridAndScales).
+    // Avoids a full timeTicks() recompute on every crosshair frame.
     var axisStep = (vp && Number.isFinite(vp._timeAxisStep) && vp._timeAxisStep > 0)
       ? vp._timeAxisStep
-      : timeTicks(vp.timeStart, vp.timeEnd, 7).step;
+      : 60000;  // 1m fallback — only hit before the first full draw
     var timeText = V6OF.timeAxisDate(snappedTs) + ' ' + timeAxisLabel(snappedTs, axisStep);
-    var tw = 130;
     var xhairGB = (vp && vp._gutterBottom != null) ? vp._gutterBottom : GUTTER_BOTTOM;
-    ctx.fillStyle = 'rgba(56, 211, 238, 0.95)';
-    if (xhairGB > 2) ctx.fillRect(snappedX - tw / 2, plot.top + plot.height, tw, xhairGB - 2);
-    ctx.fillStyle = '#04121a';
+    // Measure text to size the badge instead of hardcoding width.
     ctx.font = 'bold 9px JetBrains Mono, Consolas, monospace';
+    var padX = 8;
+    var tw = Math.ceil(ctx.measureText(timeText).width) + padX * 2;
+    var badgeX2 = Math.round(snappedX - tw / 2);
+    // Clamp inside plot area so the badge never overflows the chart.
+    if (badgeX2 < plot.left) badgeX2 = plot.left;
+    if (badgeX2 + tw > plot.left + plot.width) badgeX2 = plot.left + plot.width - tw;
+    var badgeW2 = tw;
+    ctx.fillStyle = COL.accent;
+    if (xhairGB > 2) ctx.fillRect(badgeX2, plot.top + plot.height, badgeW2, xhairGB - 2);
+    ctx.fillStyle = COL.accentBg;
     ctx.textAlign = 'center';
-    ctx.fillText(timeText, snappedX, plot.top + plot.height + 15);
+    ctx.fillText(timeText, badgeX2 + badgeW2 / 2, plot.top + plot.height + 15);
     ctx.restore();
-
-    // Tooltip disabled â€” user doesn't want the OHLC rectangle
-    // if (cross.hoveringSource === 'chart') {
-    //   drawCrosshairTooltip(ctx, snappedX, y, vp, plot, snappedCandle);
-    // }
   }
 
-  function drawLiveInfo(ctx, vp, plot, state, settings) {
+  // Lazy-create or reuse a DOM <button> for the GO LIVE action.
+  // Accessible (focusable, keyboard-activatable, screen-reader label),
+  // free hit-test (browser-native), no per-frame canvas rasterize.
+  function ensureGoLiveButton(canvas) {
+    if (!canvas || !canvas.parentElement) return null;
+    var existing = canvas.parentElement.querySelector('[data-v6-go-live]');
+    if (existing) return existing;
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'v6-go-live-btn';
+    btn.setAttribute('data-v6-go-live', '');
+    btn.setAttribute('aria-label', 'Go to live data');
+    btn.textContent = 'GO LIVE';
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      var vp = V6OF.chart;
+      if (vp && vp.goLive) vp.goLive();
+      var store = V6OF.Store || (V6OF.orderflowStore);
+      if (store && store.getState) {
+        if (V6OF.CanvasChart && V6OF.CanvasChart.draw) {
+          V6OF.CanvasChart.draw(canvas, store.getState());
+        }
+      }
+    });
+    canvas.parentElement.appendChild(btn);
+    return btn;
+  }
+
+  function drawLiveInfo(ctx, vp, plot, state, settings, canvas) {
     settings = settings || {};
     var layers = [];
     if (settings.showOhlc !== false && settings.showCandles !== false) layers.push('OHLC');
@@ -1805,47 +1897,43 @@
     if (settings.showFootprint === true) layers.push('Footprint');
     var modeLabel = layers.length ? layers.join(' + ') : 'No layers';
 
+    // HUD: symbol + layer mode — bottom-left of plot area to avoid
+    // collision with the DOM indicator stack at top-left.
+    var hudY = plot.top + plot.height - 4;
+    var hudX = plot.left + 4;
     ctx.textAlign = 'left';
-    ctx.fillStyle = 'rgba(203, 213, 225, 0.70)';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = COL.textDim;
     ctx.font = '10px JetBrains Mono, Consolas, monospace';
-    ctx.fillText((state.symbol || 'BTC') + '  ' + modeLabel, plot.left, 14);
+    var hudText = (state.symbol || 'BTC') + '  ' + modeLabel;
+    ctx.fillText(hudText, hudX, hudY);
+    canvas._v6HudRight = hudX + Math.ceil(ctx.measureText(hudText).width) + 12;
 
-    // Follow-live state badge / button
+    // Follow-live state: DOM button (accessible, focusable, free hit-test)
     var follow = !!vp.followLive;
+    var liveBtn = ensureGoLiveButton(canvas);
+    if (liveBtn) {
+      if (follow) {
+        liveBtn.style.display = 'none';
+      } else {
+        liveBtn.style.display = '';
+        liveBtn.style.right = '8px';
+        liveBtn.style.top = '4px';
+      }
+    }
+    // LIVE text badge stays on canvas (read-only indicator, not interactive)
     if (follow) {
       ctx.font = 'bold 9px JetBrains Mono, Consolas, monospace';
       ctx.fillStyle = 'rgba(69, 209, 143, 0.85)';
-      ctx.fillText('LIVE', plot.left + 138, 14);
-      V6OF._followLiveBtn = null;
-    } else {
-      // Clickable pill button to re-enter live mode
-      var btnW = 54, btnH = 18, btnX = plot.left + plot.width - btnW - 8, btnY = 4;
-      ctx.fillStyle = 'rgba(245, 158, 11, 0.10)';
-      ctx.strokeStyle = 'rgba(245, 158, 11, 0.42)';
-      ctx.lineWidth = 1;
-      roundRect(ctx, btnX, btnY, btnW, btnH, 4);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(245, 158, 11, 0.86)';
-      ctx.font = 'bold 9px JetBrains Mono, Consolas, monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText('GO LIVE', btnX + btnW / 2, btnY + 12);
-      ctx.textAlign = 'left';
-      V6OF._followLiveBtn = { x: btnX, y: btnY, w: btnW, h: btnH };
+      ctx.fillText('LIVE', canvas._v6HudRight, hudY);
     }
+    V6OF._followLiveBtn = null; // legacy hit-test disabled
 
     if (state.isStale) {
       ctx.fillStyle = 'rgba(239, 99, 117, 0.86)';
       ctx.font = 'bold 10px JetBrains Mono, Consolas, monospace';
-      ctx.fillText('STALE', plot.left + plot.width - 56, 14);
-    }
-
-    // Data gap: fillCandleGaps hit its synthetic cap — some gaps are unfilled.
-    var gf = V6OF.chartGapFill;
-    if (gf && gf.truncated) {
-      ctx.fillStyle = 'rgba(245, 158, 11, 0.88)';
-      ctx.font = 'bold 9px JetBrains Mono, Consolas, monospace';
-      ctx.fillText('DATA GAP', plot.left + plot.width - 72, 28);
+      ctx.textAlign = 'right';
+      ctx.fillText('STALE', plot.left + plot.width - 4, hudY);
     }
   }
 
@@ -1862,28 +1950,28 @@
   function drawLastPriceBadge(ctx, canvas, plot, lastPrice, lastY, closeTime) {
     var gx = plot.left + plot.width;
     var badgeH = 32;
-    var badgeY = lastY - badgeH / 2;
+    var badgeY = Math.round(lastY - badgeH / 2);
     var badgeX = gx + 1;
     var badgeW = GUTTER_RIGHT - 2;
     var textX = gx + GUTTER_RIGHT / 2;
     var countdownY = lastY + 7;
 
     ctx.save();
-    ctx.fillStyle = '#000000';
+    ctx.fillStyle = COL.badgeBg;
     roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 3);
     ctx.fill();
 
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.strokeStyle = COL.badgeBorder;
     ctx.lineWidth = 1;
     ctx.stroke();
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = COL.badgeText;
     ctx.font = 'bold 11px JetBrains Mono, Consolas, monospace';
     ctx.fillText(V6OF.format.price(lastPrice), textX, lastY - 6);
 
-    ctx.fillStyle = '#94a3b8';
+    ctx.fillStyle = COL.badgeDim;
     ctx.font = '10px JetBrains Mono, Consolas, monospace';
     ctx.fillText(closeTime ? countdownTextForCloseTime(closeTime) : '00:00', textX, countdownY);
     ctx.restore();
@@ -1919,7 +2007,7 @@
     ctx.fillRect(label.x, label.y, label.w, label.h);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#94a3b8';
+    ctx.fillStyle = COL.badgeDim;
     ctx.font = '10px JetBrains Mono, Consolas, monospace';
     ctx.fillText(countdownTextForCloseTime(label.closeTime), label.textX, label.textY);
     ctx.restore();
@@ -1935,7 +2023,7 @@
     ctx.fillRect(0, 0, width, height);
 
     // Subtle grid
-    ctx.strokeStyle = 'rgba(148, 163, 184, 0.04)';
+    ctx.strokeStyle = COL.muted1;
     ctx.lineWidth = 1;
     for (var gx = 0; gx < width; gx += 80) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, height); ctx.stroke(); }
     for (var gy = 0; gy < height; gy += 50) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(width, gy); ctx.stroke(); }
@@ -1951,13 +2039,13 @@
     ctx.translate(cx, cy - 24);
     ctx.lineWidth = 2.5;
     // Track ring
-    ctx.strokeStyle = 'rgba(148, 163, 184, 0.10)';
+    ctx.strokeStyle = COL.muted3;
     ctx.beginPath();
     ctx.arc(0, 0, spinnerR, 0, Math.PI * 2);
     ctx.stroke();
     // Spinning arc
     var arcLen = 1.2 + Math.sin(now / 600) * 0.5;
-    ctx.strokeStyle = 'rgba(56, 211, 238, 0.70)';
+    ctx.strokeStyle = COL.accentSoft;
     ctx.beginPath();
     ctx.arc(0, 0, spinnerR, spinnerAngle, spinnerAngle + arcLen);
     ctx.stroke();
@@ -1965,7 +2053,7 @@
 
     // Label
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(203, 213, 225, 0.55)';
+    ctx.fillStyle = COL.textDim;
     ctx.font = '13px Inter, system-ui, sans-serif';
     ctx.fillText('Loading market data\u2026', cx, cy + 10);
 
@@ -2036,7 +2124,7 @@
     ctx.fillStyle = 'rgba(226, 232, 240, 0.82)';
     ctx.font = 'bold 13px Inter, system-ui, sans-serif';
     ctx.fillText(cause.title, 18, 32);
-    ctx.fillStyle = 'rgba(148, 163, 184, 0.72)';
+    ctx.fillStyle = COL.muted6;
     ctx.font = '12px Inter, system-ui, sans-serif';
     ctx.fillText(cause.detail, 18, 52);
   }
@@ -2047,6 +2135,7 @@
     var staticCtx = setup.statik && setup.statik.ctx ? setup.statik.ctx : ctx;
     var dataCtx = setup.data && setup.data.ctx ? setup.data.ctx : ctx;
     var overlayCtx = setup.overlay && setup.overlay.ctx ? setup.overlay.ctx : ctx;
+    var annotCtx = setup.annotation && setup.annotation.ctx ? setup.annotation.ctx : ctx;
     var settings = (state && state.settings) || {};
     var heatmapFrames = Array.isArray(state.heatmapFrames) ? state.heatmapFrames : [];
     var footprintCandles = Array.isArray(state.footprintCandles) ? state.footprintCandles : [];
@@ -2058,11 +2147,24 @@
     var showFootprint = false;  // resolved after viewport init below
     var showCandles = settings.showOhlc !== false && settings.showCandles !== false;  // Always show OHLC unless explicitly disabled
 
-    staticCtx.clearRect(0, 0, width, height);
-    dataCtx.clearRect(0, 0, width, height);
-    overlayCtx.clearRect(0, 0, width, height);
-    staticCtx.fillStyle = settings.bgColor || '#080b12';
-    staticCtx.fillRect(0, 0, width, height);
+    // Clear data + overlay layers every frame (they always change).
+    // Static layer is NOT cleared here — it is conditionally re-rendered
+    // (or preserved) after viewport sync based on a cache signature.
+    var hasStaticLayer = !!(setup.statik && setup.statik.ctx && setup.statik.ctx !== ctx);
+    if (hasStaticLayer) {
+      dataCtx.clearRect(0, 0, width, height);
+      overlayCtx.clearRect(0, 0, width, height);
+      if (annotCtx !== overlayCtx) annotCtx.clearRect(0, 0, width, height);
+      if (dataCtx !== overlayCtx) {
+        dataCtx.fillStyle = settings.bgColor || '#080b12';
+        dataCtx.fillRect(0, 0, width, height);
+      }
+    } else {
+      // Single-canvas mode: clear everything, fill bg.
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = settings.bgColor || '#080b12';
+      ctx.fillRect(0, 0, width, height);
+    }
 
     var bounds = computeLiveBounds(state, showHeatmap);
     // Pass candle interval so the viewport can compute a candle-count-based
@@ -2126,7 +2228,25 @@
       if (visRange) { vp.smoothPriceRange(visRange.min, visRange.max); }
     }
 
-    drawGridAndScales(staticCtx, vp, plot, settings);
+    // ── Static layer cache: grid + axes + bg are expensive to rasterize
+    // (many text fills, stroke paths) but only change when geometry, price/
+    // time range, or display settings change. Skip re-render when unchanged.
+    var dpr = window.devicePixelRatio || 1;
+    var staticSig = [
+      plot.left, plot.top, plot.width, plot.height,
+      vp.priceMin, vp.priceMax, vp.timeStart, vp.timeEnd,
+      dpr, settings.bgColor || '', settings.showGrid, effectiveGutterBottom
+    ].join('|');
+    var staticCanvasEl = setup.statik && setup.statik.ctx ? (chartLayerCanvas(canvas, 'static') || canvas) : canvas;
+    if (!hasStaticLayer || staticCanvasEl._v6StaticSig !== staticSig) {
+      if (hasStaticLayer) {
+        staticCtx.clearRect(0, 0, width, height);
+        staticCtx.fillStyle = settings.bgColor || '#080b12';
+        staticCtx.fillRect(0, 0, width, height);
+      }
+      drawGridAndScales(staticCtx, vp, plot, settings);
+      staticCanvasEl._v6StaticSig = staticSig;
+    }
 
     var isInteractiveDrag = !!V6OF.chartIsDragging;
 
@@ -2156,7 +2276,7 @@
     }
     dataCtx.restore();
 
-    // â”€â”€ Indicator overlays (EMA, SMA, Bollinger, etc.) â”€â”€
+    // ── Indicator overlays (EMA, SMA, Bollinger, etc.) ──
     if (V6OF.Indicators && V6OF.Indicators.drawAll) {
       dataCtx.save();
       dataCtx.beginPath();
@@ -2167,58 +2287,20 @@
     }
     drawBuiltInChartIndicators(dataCtx, vp, drawCandles, renderState, settings);
 
-    // Reference price lines (mid / bid / ask / poc / vwap)
-    var lastFrame = heatmapFrames.length ? heatmapFrames[heatmapFrames.length - 1] : null;
-    var lastCandle = footprintCandles.length ? footprintCandles[footprintCandles.length - 1] : null;
-    var book = state.orderBook;
-    var mid = book && Number.isFinite(book.mid) ? book.mid : (lastFrame ? lastFrame.mid : NaN);
-    var bestBid = book && Number.isFinite(book.bestBid) ? book.bestBid : (lastFrame ? lastFrame.bestBid : NaN);
-    var bestAsk = book && Number.isFinite(book.bestAsk) ? book.bestAsk : (lastFrame ? lastFrame.bestAsk : NaN);
-    // MID removed â€” keep chart clean
-    // drawPriceLineVp(ctx, vp, plot, Number(mid), 'rgba(56, 211, 238, 0.92)', 'MID', false);
-    // BID / ASK removed â€” keep chart clean
-    // drawPriceLineVp(ctx, vp, plot, Number(bestBid), 'rgba(61, 220, 151, 0.86)', 'BID', true);
-    // drawPriceLineVp(ctx, vp, plot, Number(bestAsk), 'rgba(255, 95, 115, 0.86)', 'ASK', true);
-    // Last price marker (current price) â€” dashed, anchored to price axis
-    if (settings.showLastPrice !== false) {
-      var lastPrice = 0;
-      var trades = state.trades || [];
-      if (trades.length) {
-        var last = trades[0];
-        if (Number.isFinite(last.price)) lastPrice = last.price;
-      }
-      if (!lastPrice && Number.isFinite(mid)) lastPrice = mid;
-      if (lastPrice && Number.isFinite(lastPrice) && lastPrice >= vp.priceMin && lastPrice <= vp.priceMax) {
-        var lastY = vp.priceToY(lastPrice);
-        
-        // Dotted line spanning chart (up to the price axis)
-        overlayCtx.save();
-        overlayCtx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
-        overlayCtx.lineWidth = 1;
-        overlayCtx.setLineDash([1, 2]);
-        overlayCtx.beginPath();
-        overlayCtx.moveTo(plot.left, lastY);
-        overlayCtx.lineTo(plot.left + plot.width, lastY);
-        overlayCtx.stroke();
-        overlayCtx.restore();
-
-        drawLastPriceBadge(overlayCtx, canvas, plot, lastPrice, lastY, lastCandleCloseTime(baseCandles));
-      } else if (canvas) {
-        canvas._v6CountdownLabel = null;
-      }
-    } else if (canvas) {
-      canvas._v6CountdownLabel = null;
-    }
-    if (false && showFootprint && lastCandle) drawPriceLineVp(overlayCtx, vp, plot, Number(lastCandle.poc), 'rgba(248, 195, 93, 0.94)', 'POC', true);
-    // VWAP removed â€” keep chart clean
+    // Reference price lines (mid / bid / ask / poc / vwap) — all rendered by
+    // internalDrawOverlay now; this section is intentionally empty.
+    // Last price line + badge: rendered exclusively by internalDrawOverlay
+    // to avoid double-draw. Only null-out countdown label here.
+    if (canvas) canvas._v6CountdownLabel = null;
+    // VWAP removed — keep chart clean
     // if (settings.showVwap !== false && state.vwap && Number.isFinite(state.vwap.value)) {
     //   drawPriceLineVp(ctx, vp, plot, Number(state.vwap.value),
     //     state.vwap.isWarm ? 'rgba(245, 158, 11, 0.92)' : 'rgba(245, 158, 11, 0.6)', 'VWAP', true);
     // }
 
     // Selection is shown by coloring the selected candle yellow in drawCandlesVp.
-    drawVolumeProfile(overlayCtx, vp, plot, renderState, canvas);
-    drawTimelineBookmarks(overlayCtx, vp, plot, renderState, canvas);
+    drawVolumeProfile(annotCtx, vp, plot, renderState, canvas);
+    drawTimelineBookmarks(annotCtx, vp, plot, renderState, canvas);
     drawCrosshair(overlayCtx, vp, plot, renderCandles.length ? renderCandles : baseCandles, canvas);
 
     // Debug grid overlay (when V6OF.DEBUG_RENDER = true)
@@ -2235,8 +2317,8 @@
     }
     V6OF._followLiveBtn = null;
 
-    // Status badges (LIVE, STALE, DATA GAP, etc.) on the overlay layer.
-    drawLiveInfo(overlayCtx, vp, plot, state, settings);
+    // Status badges (LIVE, STALE) on the overlay layer.
+    drawLiveInfo(overlayCtx, vp, plot, state, settings, canvas);
   }
 
   function internalDraw(canvas, state) {
@@ -2247,21 +2329,37 @@
     var width = setup.width;
     var height = setup.height;
     // Live-only: always render the live chart engine. No mock path.
+    if (width < 20 || height < 15) return;
     drawLive(ctx, setup, state || {}, canvas);
     recordPerf('chart', perfStart);
   }
 
   function internalDrawOverlay(canvas, state) {
-    var setup = setupCanvas(canvas);
-    if (!setup) return;
+    var layers = setupChartLayers(canvas);
+    if (!layers) return;
+    var setup = layers.overlay;
     var ctx = setup.ctx;
-    var width = setup.width;
-    var height = setup.height;
+    var annotCtx = (layers.annotation && layers.annotation.ctx && layers.annotation.ctx !== ctx)
+      ? layers.annotation.ctx : null;
+    var width = layers.width;
+    var height = layers.height;
+    if (width < 20 || height < 15) return;
     var vp = V6OF.chart;
     var plot = vp && vp.plot;
     if (!vp || !plot) return;
+    // Resync plot if canvas was resized since the last full draw:
+    // overlay draws on mousemove must use the current geometry, not a stale plot.
+    var effGB = (canvas._v6suppressBottomGutter) ? 0 : GUTTER_BOTTOM;
+    var expectedW = Math.max(1, width - PAD_LEFT - GUTTER_RIGHT);
+    var expectedH = Math.max(1, height - PAD_TOP - effGB);
+    if (Math.abs(plot.width - expectedW) > 0.5 || Math.abs(plot.height - expectedH) > 0.5) {
+      plot = { left: PAD_LEFT, top: PAD_TOP, width: expectedW, height: expectedH };
+      vp._gutterBottom = effGB;
+      vp.setPlot(plot);
+    }
     state = state || canvas._v6PendingState || {};
     var baseCandles = mergedChartCandles(state);
+    canvas._v6OverlayCandles = baseCandles;
     var heatmapFrames = Array.isArray(state.heatmapFrames) ? state.heatmapFrames : [];
     var footprintCandles = Array.isArray(state.footprintCandles) ? state.footprintCandles : [];
     var settings = state.settings || {};
@@ -2279,7 +2377,7 @@
       if (lastPrice && Number.isFinite(lastPrice) && lastPrice >= vp.priceMin && lastPrice <= vp.priceMax) {
         var lastY = vp.priceToY(lastPrice);
         ctx.save();
-        ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
+        ctx.strokeStyle = COL.lastPrice;
         ctx.lineWidth = 1;
         ctx.setLineDash([1, 2]);
         ctx.beginPath();
@@ -2295,16 +2393,50 @@
       canvas._v6CountdownLabel = null;
     }
 
-    drawVolumeProfile(ctx, vp, plot, state, canvas);
-    drawTimelineBookmarks(ctx, vp, plot, state, canvas);
+    // ── Annotation layer (volume profile + bookmarks) ──────────────
+    // These don't depend on mouse position — only on data + viewport.
+    // Cache by signature so mousemove frames skip the heavy recompute.
+    var hasAnnotLayer = !!annotCtx;
+    if (hasAnnotLayer) {
+      var annotSig = (vp.timeStart || 0) + '|' + (vp.timeEnd || 0) + '|'
+        + (vp.priceMin || 0) + '|' + (vp.priceMax || 0) + '|'
+        + (plot.left || 0) + '|' + (plot.top || 0) + '|'
+        + (plot.width || 0) + '|' + (plot.height || 0) + '|'
+        + (canvas._v6StateVersion || 0) + '|'
+        + (settings.showVolumeProfile ? '1' : '0') + '|'
+        + (settings.volumeProfileType || '') + '|'
+        + (settings.volumeProfileSide || '') + '|'
+        + (settings.volumeProfileStyle || '') + '|'
+        + (settings.volumeProfileValueArea || '') + '|'
+        + (settings.volumeProfileShowPocTrail ? '1' : '0');
+      var annotCanvas = chartLayerCanvas(canvas, 'annotation');
+      if (annotCanvas && annotCanvas._v6AnnotSig === annotSig) {
+        // Cache hit — annotation layer is still valid, skip redraw.
+      } else {
+        annotCtx.clearRect(0, 0, width, height);
+        drawVolumeProfile(annotCtx, vp, plot, state, canvas);
+        drawTimelineBookmarks(annotCtx, vp, plot, state, canvas);
+        if (annotCanvas) annotCanvas._v6AnnotSig = annotSig;
+      }
+    } else {
+      // Single-canvas fallback — no separate annotation layer available.
+      drawVolumeProfile(ctx, vp, plot, state, canvas);
+      drawTimelineBookmarks(ctx, vp, plot, state, canvas);
+    }
+
+    // ── Crosshair (overlay) — always redrawn, depends on mouse ──────
     drawCrosshair(ctx, vp, plot, baseCandles, canvas);
   }
 
   var countdownTickerId = null;
   var countdownTickerCanvas = null;
+  var countdownTickerToken = 0;
+  var countdownTickerInstalling = false;
   var activeChartCanvas = null;
   var dprMediaQuery = null;
   var dprMediaHandler = null;
+  var dprWatcherQuery = '';
+  var dprWatcherInstalling = false;
 
   function isOrderflowPageActive(canvas) {
     if (!canvas || !canvas.isConnected) return false;
@@ -2318,6 +2450,8 @@
       countdownTickerId = null;
     }
     countdownTickerCanvas = null;
+    countdownTickerToken += 1;
+    countdownTickerInstalling = false;
   }
 
   function ensureCountdownTicker(canvas) {
@@ -2326,8 +2460,12 @@
       return;
     }
     countdownTickerCanvas = canvas;
-    if (countdownTickerId != null) return;
+    if (countdownTickerId != null || countdownTickerInstalling) return;
+    countdownTickerInstalling = true;
+    var token = countdownTickerToken + 1;
+    countdownTickerToken = token;
     countdownTickerId = setInterval(function () {
+      if (token !== countdownTickerToken) return;
       if (document.hidden) return;  // pause in background tabs
       var cv = countdownTickerCanvas;
       if (!isOrderflowPageActive(cv)) {
@@ -2339,6 +2477,7 @@
         drawCountdownLabelOnly(cv);
       }
     }, 1000);
+    countdownTickerInstalling = false;
   }
 
   function removeDprWatcher() {
@@ -2350,30 +2489,48 @@
     }
     dprMediaQuery = null;
     dprMediaHandler = null;
+    dprWatcherQuery = '';
+    dprWatcherInstalling = false;
   }
 
   function redrawAfterDprChange() {
     var canvas = activeChartCanvas;
     installDprWatcher(canvas);
     if (!isOrderflowPageActive(canvas) || !canvas._v6PendingState) return;
+    // Invalidate DPR on all chart layers so setupCanvas re-allocates backing
+    // stores at the new resolution (not just the overlay canvas).
     canvas._v6LastDpr = 0;
+    var staticC = chartLayerCanvas(canvas, 'static');
+    var dataC = chartLayerCanvas(canvas, 'data');
+    var annotC = chartLayerCanvas(canvas, 'annotation');
+    if (staticC) staticC._v6LastDpr = 0;
+    if (dataC) dataC._v6LastDpr = 0;
+    if (annotC) { annotC._v6LastDpr = 0; annotC._v6AnnotSig = null; }
     V6OF.CanvasChart.draw(canvas);
   }
 
   function installDprWatcher(canvas) {
     activeChartCanvas = canvas || activeChartCanvas;
+    if (!isOrderflowPageActive(activeChartCanvas)) {
+      removeDprWatcher();
+      return;
+    }
     if (!window.matchMedia) return;
     var dpr = window.devicePixelRatio || 1;
     var query = '(resolution: ' + dpr + 'dppx)';
-    if (dprMediaQuery && dprMediaQuery.media === query) return;
+    if (dprWatcherInstalling) return;
+    if (dprMediaQuery && dprMediaHandler && dprWatcherQuery === query && dprMediaQuery.media === query) return;
+    dprWatcherInstalling = true;
     removeDprWatcher();
     dprMediaHandler = redrawAfterDprChange;
     dprMediaQuery = window.matchMedia(query);
+    dprWatcherQuery = query;
     if (typeof dprMediaQuery.addEventListener === 'function') {
       dprMediaQuery.addEventListener('change', dprMediaHandler);
     } else if (typeof dprMediaQuery.addListener === 'function') {
       dprMediaQuery.addListener(dprMediaHandler);
     }
+    dprWatcherInstalling = false;
   }
 
   V6OF.register('UI', 'CanvasChart', {
@@ -2445,17 +2602,26 @@
       _heatmapBoundsFirst = null;
       _heatmapBoundsLast = null;
       _heatmapBoundsLen = 0;
+      _renderDataCache = null;
+      _renderDataSig = '';
+      _renderDataBaseRef = null;
+      _renderDataHeatmapRef = null;
+      _renderDataFootprintRef = null;
       _mergedCandlesCache = null;
       _mergedCandlesSig = '';
       _mergedCandlesVersion = -1;
+      _mergedCandlesSrcHist = null;
+      _mergedCandlesSrcFp = null;
       _aggregatedFpCache = null;
       _aggregatedFpSrc = null;
+      _aggregatedFpVersion = -1;
       _aggregatedFpTf = '';
+      _aggregatedFpTickSize = 0;
       _boundsCache = null;
       _boundsSrcFrames = null;
       _boundsSrcCandles = null;
       _boundsSrcHeatmap = null;
-      _boundsVersion = -1;
+      _boundsFramesVersion = -1;
       _emaCache = {};
       _vwapCache = null;
       _paletteCache = null;
@@ -2531,6 +2697,9 @@
     var hoveredBookmark = null;
 
     ctx.save();
+    ctx.beginPath();
+    ctx.rect(plot.left, plot.top, plot.width, plot.height);
+    ctx.clip();
 
     bookmarks.forEach(function (b) {
       if (!Number.isFinite(b.ts)) return;
@@ -2604,7 +2773,7 @@
       ctx.font = '11px Inter, system-ui, sans-serif';
       ctx.fillText(contentText, px + 8, py + 32);
 
-      ctx.fillStyle = '#94a3b8';
+      ctx.fillStyle = COL.badgeDim;
       ctx.font = '10px JetBrains Mono, Consolas, monospace';
       ctx.fillText('Time: ' + timeText, px + 8, py + 48);
     }
@@ -2803,6 +2972,18 @@
       left = right - profileWidth;
     }
 
+    var upHex = settings.upColor || '#089981';
+    var downHex = settings.downColor || '#f23645';
+
+    // ── Draw volume profile bar (horizontal histogram) ────────────
+
+    // Clip all volume profile drawing to the plot rect so nothing
+    // bleeds into the price-axis gutter or time-axis footer.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(plot.left, plot.top, plot.width, plot.height);
+    ctx.clip();
+
     // Shading container background
     ctx.save();
     ctx.fillStyle = settings.theme === 'dark-tv' ? 'rgba(30, 34, 45, 0.45)' : 'rgba(255, 255, 255, 0.6)';
@@ -2827,15 +3008,6 @@
     ctx.font = '700 9px "JetBrains Mono", Consolas, monospace';
     ctx.fillText(volumeProfileType.toUpperCase() + ' PROFILE (' + volumeProfileStyle.toUpperCase() + ')', left + 8, plot.top + 16);
     ctx.restore();
-
-    // Clip profile drawing to plot rect
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(plot.left, plot.top, plot.width, plot.height);
-    ctx.clip();
-
-    var upHex = settings.upColor || '#089981';
-    var downHex = settings.downColor || '#f23645';
 
     levels.forEach(function (lv) {
       var y = vp.priceToY(lv.price);
@@ -2903,7 +3075,7 @@
         ctx.fillStyle = downHex;
         ctx.fillRect(center, y - rowPixels / 2, sellWidth, rowPixels - 0.5);
 
-        ctx.fillStyle = 'rgba(148, 163, 184, 0.2)';
+        ctx.fillStyle = COL.muted4;
         ctx.fillRect(center - 0.5, y - rowPixels / 2, 1, rowPixels - 0.5);
       }
 
@@ -3043,7 +3215,7 @@
       ctx.save();
       [startX, endX].forEach(function (hx) {
         ctx.fillStyle = '#f59e0b';
-        ctx.strokeStyle = '#ffffff';
+        ctx.strokeStyle = COL.badgeText;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.arc(hx, handleY, 6, 0, Math.PI * 2);

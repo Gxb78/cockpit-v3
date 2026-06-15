@@ -26,6 +26,13 @@
   var STORAGE_LEFT_WIDTH_KEY = 'cockpitV6.leftColWidth';
   var STORAGE_HEIGHT_KEY = 'cockpitV6.cvdStripHeight';
 
+  function isExoLayout(root) {
+    return !!(root && root.querySelector && (
+      root.querySelector('.exo-workspace') ||
+      root.querySelector('.exo-dom-panel')
+    ));
+  }
+
   function applyCvdHeight(root, cvdStrip, height) {
     if (!cvdStrip || !height) return;
     var h = Math.max(MIN_CVD_HEIGHT, Math.min(MAX_CVD_HEIGHT, parseInt(height, 10)));
@@ -33,6 +40,51 @@
     cvdStrip.style.flex = '0 0 ' + h + 'px';
     var centerCol = root && root.querySelector('.v6-center-col');
     if (centerCol) centerCol.style.setProperty('--v6-cvd-strip-height', h + 'px');
+  }
+
+  function scheduleAfterPaint(fn) {
+    var raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null;
+    if (raf) {
+      raf(function () { setTimeout(fn, 0); });
+    } else {
+      setTimeout(fn, 0);
+    }
+  }
+
+  function readSavedSizes() {
+    try {
+      return {
+        width: localStorage.getItem(STORAGE_WIDTH_KEY),
+        leftWidth: localStorage.getItem(STORAGE_LEFT_WIDTH_KEY),
+        height: localStorage.getItem(STORAGE_HEIGHT_KEY)
+      };
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function restoreSavedSizesDeferred(root, rightCol, leftCol, cvdStrip) {
+    scheduleAfterPaint(function () {
+      if (!root || isExoLayout(root)) return;
+      var saved = readSavedSizes();
+      if (saved.width) {
+        var w = Math.max(MIN_RIGHT_WIDTH, Math.min(MAX_RIGHT_WIDTH, parseInt(saved.width, 10)));
+        rightCol.style.width = w + 'px';
+        rightCol.style.flex = '0 1 ' + w + 'px';
+      }
+      if (saved.leftWidth && leftCol) {
+        var wl = Math.max(MIN_RIGHT_WIDTH, Math.min(MAX_RIGHT_WIDTH, parseInt(saved.leftWidth, 10)));
+        leftCol.style.width = wl + 'px';
+        leftCol.style.flex = '0 1 ' + wl + 'px';
+      }
+      if (saved.height) {
+        var h = Math.max(MIN_CVD_HEIGHT, Math.min(MAX_CVD_HEIGHT, parseInt(saved.height, 10)));
+        applyCvdHeight(root, cvdStrip, h);
+      } else {
+        applyCvdHeight(root, cvdStrip, cvdStrip.offsetHeight || MIN_CVD_HEIGHT);
+      }
+      redrawCharts(root);
+    });
   }
 
   var redrawQueued = false;
@@ -64,6 +116,7 @@
   V6OF.register('UI', 'ResizablePanels', {
     init: function (root) {
       if (!root) return;
+      if (isExoLayout(root)) return;
       var mainArea = root.querySelector('.v6-main-area');
       var centerCol = root.querySelector('.v6-center-col');
       var rightCol = root.querySelector('.v6-right-col');
@@ -71,28 +124,7 @@
       var cvdStrip = root.querySelector('[data-v6-cvd-strip]');
       if (!mainArea || !centerCol || !rightCol || !cvdStrip) return;
 
-      // Restore sizes
-      var savedWidth = localStorage.getItem(STORAGE_WIDTH_KEY);
-      if (savedWidth) {
-        var w = Math.max(MIN_RIGHT_WIDTH, Math.min(MAX_RIGHT_WIDTH, parseInt(savedWidth, 10)));
-        rightCol.style.width = w + 'px';
-        rightCol.style.flex = '0 1 ' + w + 'px';
-      }
-
-      var savedLeftWidth = localStorage.getItem(STORAGE_LEFT_WIDTH_KEY);
-      if (savedLeftWidth && leftCol) {
-        var wl = Math.max(MIN_RIGHT_WIDTH, Math.min(MAX_RIGHT_WIDTH, parseInt(savedLeftWidth, 10)));
-        leftCol.style.width = wl + 'px';
-        leftCol.style.flex = '0 1 ' + wl + 'px';
-      }
-
-      var savedHeight = localStorage.getItem(STORAGE_HEIGHT_KEY);
-      if (savedHeight) {
-        var h = Math.max(MIN_CVD_HEIGHT, Math.min(MAX_CVD_HEIGHT, parseInt(savedHeight, 10)));
-        applyCvdHeight(root, cvdStrip, h);
-      } else {
-        applyCvdHeight(root, cvdStrip, cvdStrip.offsetHeight || MIN_CVD_HEIGHT);
-      }
+      restoreSavedSizesDeferred(root, rightCol, leftCol, cvdStrip);
 
       // 1. Horizontal Resize (Right Dock Width)
       var handleH = root.querySelector('.v6-resize-h');
@@ -226,6 +258,7 @@
 
     restoreSizes: function (root, width, height, leftWidth) {
       if (!root) return;
+      if (isExoLayout(root)) return;
       var rightCol = root.querySelector('.v6-right-col');
       var leftCol = root.querySelector('[data-v6-left-col]');
       var cvdStrip = root.querySelector('[data-v6-cvd-strip]');

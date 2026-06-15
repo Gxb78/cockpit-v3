@@ -7,8 +7,17 @@
   var V6OF = window.V6OF = window.V6OF || {};
   var FootprintCore = V6OF.Core && V6OF.Core.FootprintCore;
 
+  function footprintDebugEnabled() {
+    return !!(V6OF.debugFootprint || V6OF.DEBUG_FOOTPRINT);
+  }
+
+  function footprintDebugError() {
+    if (!footprintDebugEnabled() || !console || !console.error) return;
+    console.error.apply(console, arguments);
+  }
+
   if (!FootprintCore) {
-    console.error('[Footprint Renderer] FootprintCore not available');
+    footprintDebugError('[Footprint Renderer] FootprintCore not available');
     return;
   }
 
@@ -26,6 +35,34 @@
   var MIN_LEVEL_HEIGHT = 2;
   var COLUMN_GAP = 1;
   var POC_WIDTH = 3;
+
+  function normalizeTickSize(options, candle) {
+    var tick = Number(options && options.tickSize);
+    if (Number.isFinite(tick) && tick > 0) return tick;
+
+    var levels = candle && Array.isArray(candle.levels) ? candle.levels : [];
+    var prices = levels.map(function(level) { return Number(level && level.price); })
+      .filter(function(price) { return Number.isFinite(price); })
+      .sort(function(a, b) { return a - b; });
+    var minStep = Infinity;
+    for (var i = 1; i < prices.length; i++) {
+      var step = Math.abs(prices[i] - prices[i - 1]);
+      if (step > 0 && step < minStep) minStep = step;
+    }
+    return Number.isFinite(minStep) ? minStep : 1;
+  }
+
+  function priceLevelHeight(vp, price, tickSize) {
+    price = Number(price);
+    tickSize = Number(tickSize);
+    if (!vp || typeof vp.priceToY !== 'function' || !Number.isFinite(price) || !Number.isFinite(tickSize) || tickSize <= 0) {
+      return MIN_LEVEL_HEIGHT;
+    }
+    var y = vp.priceToY(price);
+    var yTick = vp.priceToY(price + tickSize);
+    var h = Math.abs(y - yTick);
+    return Math.max(MIN_LEVEL_HEIGHT, Number.isFinite(h) ? h : 0);
+  }
 
   /**
    * Render single footprint candle
@@ -63,11 +100,12 @@
 
     // Find max volume at any level for scaling
     var maxVol = candle.maxPriceLevelVol || 1;
+    var tickSize = normalizeTickSize(options, candle);
 
     // Draw each price level
     candle.levels.forEach(function(level) {
       var y = vp.priceToY(level.price);
-      var levelHeight = Math.max(MIN_LEVEL_HEIGHT, vp.priceToY(level.price - (vp.priceMax - vp.priceMin) / 100));
+      var levelHeight = priceLevelHeight(vp, level.price, tickSize);
 
       // Scale volume: proportion of max volume × column width
       var buyWidth = (level.buyVol / maxVol) * columnWidth;
@@ -98,7 +136,7 @@
     if (showImbalances) {
       var imbalances = FootprintCore.findImbalances(candle.levels, 3);
       imbalances.forEach(function(level) {
-        drawImbalanceHighlight(ctx, x, x + width, level.price, vp);
+        drawImbalanceHighlight(ctx, x, x + width, level.price, vp, tickSize);
       });
     }
   }
@@ -106,12 +144,37 @@
   /**
    * Draw a single volume bar
    */
+  function colorWithAlpha(color, alpha) {
+    alpha = Math.max(0, Math.min(1, Number(alpha)));
+    color = String(color || '').trim();
+
+    var hex = color.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (hex) {
+      var raw = hex[1];
+      if (raw.length === 3) {
+        raw = raw.charAt(0) + raw.charAt(0) + raw.charAt(1) + raw.charAt(1) + raw.charAt(2) + raw.charAt(2);
+      }
+      var n = parseInt(raw, 16);
+      var r = (n >> 16) & 255;
+      var g = (n >> 8) & 255;
+      var b = n & 255;
+      return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+    }
+
+    var rgb = color.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*[\d.]+)?\s*\)$/i);
+    if (rgb) {
+      return 'rgba(' + Number(rgb[1]) + ',' + Number(rgb[2]) + ',' + Number(rgb[3]) + ',' + alpha + ')';
+    }
+
+    return color || 'rgba(85,93,111,' + alpha + ')';
+  }
+
   function drawBar(ctx, x, y, width, height, color, delta) {
     if (width <= 0 || height <= 0) return;
 
     // Vary opacity based on delta strength
     var opacity = Math.min(1, 0.3 + Math.abs(delta) / 1000);
-    ctx.fillStyle = color.replace('rgb(', 'rgba(').replace(')', ', ' + opacity + ')');
+    ctx.fillStyle = colorWithAlpha(color, opacity);
     ctx.fillRect(Math.round(x), Math.round(y), Math.max(1, Math.round(width)), Math.max(1, Math.round(height)));
   }
 
@@ -149,9 +212,9 @@
   /**
    * Highlight imbalance at specific price level
    */
-  function drawImbalanceHighlight(ctx, x, x2, price, vp) {
+  function drawImbalanceHighlight(ctx, x, x2, price, vp, tickSize) {
     var y = Math.round(vp.priceToY(price));
-    var levelHeight = Math.max(2, Math.abs(vp.priceToY(price - 1) - y));
+    var levelHeight = priceLevelHeight(vp, price, tickSize);
 
     ctx.fillStyle = COLORS.imbalance;
     ctx.fillRect(
@@ -193,18 +256,25 @@
    * Returns: 'ohlc', 'footprint-simple', 'footprint-full'
    */
   function recommendDisplayMode(vp) {
-    if (!vp) return 'ohlc';
+    if (!vp || !vp.plot || !vp.plot.width) return 'ohlc';
 
-    var timeSpan = vp.timeEnd - vp.timeStart;
-    var oneDay = 86400000; // 24h in ms
+    // Base visibility on pixels-per-candle, not absolute time spans.
+    // A 1m candle at 40px and a 1h candle at 40px are equally readable;
+    // absolute time thresholds (30d, 1d) don't reflect that.
+    var intervalMs = vp.candleIntervalMs || 60000;
+    var span = vp.timeEnd - vp.timeStart;
+    if (!span || span <= 0) return 'ohlc';
+    var candlesInView = span / intervalMs;
+    if (candlesInView <= 0) return 'ohlc';
+    var pxCandle = vp.plot.width / candlesInView;
 
-    // Show OHLC only if zoomed out
-    if (timeSpan > oneDay * 30) return 'ohlc';
+    // Too narrow for any footprint text — OHLC only
+    if (pxCandle < 40) return 'ohlc';
 
-    // Show simple footprint if moderately zoomed
-    if (timeSpan > oneDay) return 'footprint-simple';
+    // Moderate width — simplified footprint (POC + delta only)
+    if (pxCandle < 80) return 'footprint-simple';
 
-    // Show full footprint if well zoomed
+    // Wide enough for full footprint (levels, imbalances, VA)
     return 'footprint-full';
   }
 

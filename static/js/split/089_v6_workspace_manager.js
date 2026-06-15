@@ -136,6 +136,30 @@
     }
   };
 
+  function clampNumber(value, fallback, min, max) {
+    var n = Number(value);
+    if (!isFinite(n)) n = fallback;
+    return Math.max(min, Math.min(max, n));
+  }
+
+  function isExoLayout(root) {
+    return !!(root && root.querySelector && (
+      root.querySelector('.exo-workspace') ||
+      root.querySelector('.exo-dom-panel')
+    ));
+  }
+
+  function restoreExoSizes(root, config) {
+    if (!isExoLayout(root) || !config) return false;
+    if (config.rightColWidth) {
+      root.style.setProperty('--exo-dom', Math.round(clampNumber(config.rightColWidth, 340, 260, 720)) + 'px');
+    }
+    if (config.cvdStripHeight) {
+      root.style.setProperty('--exo-cvd-height', Math.round(clampNumber(config.cvdStripHeight, 124, 72, 420)) + 'px');
+    }
+    return true;
+  }
+
   function cloneWorkspaces(list) {
     var out = {};
     Object.keys(list || {}).forEach(function (name) {
@@ -870,7 +894,7 @@
       });
       if (store.updateUi) store.updateUi({ layerPreset: layerPreset });
 
-      if (V6OF.ResizablePanels) {
+      if (!restoreExoSizes(root, config) && V6OF.ResizablePanels) {
         V6OF.ResizablePanels.restoreSizes(root, config.rightColWidth, config.cvdStripHeight, config.leftColWidth);
       }
 

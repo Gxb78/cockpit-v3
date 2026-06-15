@@ -137,7 +137,8 @@
     var w = Math.max(1, rect.width || canvas.clientWidth || 1);
     var h = Math.max(1, rect.height || canvas.clientHeight || 1);
     canvas._cvdRectCache = { left: rect.left, top: rect.top, width: w, height: h };
-    var dpr = window.devicePixelRatio || 1;
+    var rawDpr = window.devicePixelRatio || 1;
+    var dpr = Math.min(rawDpr, 2);  // cap fillrate on 4K+ screens
     if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
       canvas.width = Math.floor(w * dpr);
       canvas.height = Math.floor(h * dpr);

@@ -28,7 +28,15 @@
 
   // Hard limits to avoid degenerate / crashing viewports.
   var MIN_TIME_SPAN_MS = 4000;            // 4s
-  var MAX_TIME_SPAN_MS = 365 * 24 * 3600 * 1000; // 1an (pour daily 1440 bougies)
+  // Base max span (1 year) for small timeframes. Larger timeframes get a
+  // proportionally larger max so daily charts can zoom out to several years.
+  var BASE_MAX_TIME_SPAN_MS = 365 * 24 * 3600 * 1000;
+  // Max viewable span for a given candle interval. Target: ~5000 candles.
+  // 1m -> ~3.5d, 1h -> ~208d, 1d -> ~13.7y, 1w -> ~96y. Floor: 1 year.
+  function maxSpanForInterval(intervalMs) {
+    if (!isNum(intervalMs) || intervalMs <= 0) intervalMs = 60000;
+    return Math.max(BASE_MAX_TIME_SPAN_MS, intervalMs * 5000);
+  }
   var MIN_PRICE_SPAN = 0.5;               // absolute price units
   var LIVE_EDGE_PAD_RATIO = 0.04;         // keep newest data slightly off the right edge
 
@@ -105,24 +113,43 @@
     vp.priceSpan = priceSpan;
     vp.userInteractionAt = 0;
 
-    vp.markUserInteraction = function () {
+    vp.userInteractionExpiresAt = 0;
+
+    // Mark a user-initiated interaction so that followLive/autoFit don't fight
+    // the user. durationMs: how long the lock should hold after the last
+    // interaction. Pan/zoom use a short window (3s); programmatic fits
+    // should not lock at all.
+    vp.markUserInteraction = function (durationMs) {
+      var hold = isNum(durationMs) ? durationMs : 3000;
       vp.userInteractionAt = Date.now();
+      vp.userInteractionExpiresAt = vp.userInteractionAt + hold;
     };
 
     vp.hasRecentUserInteraction = function (windowMs) {
-      windowMs = isNum(windowMs) ? windowMs : 12000;
-      return !!V6OF.chartIsDragging || (vp.userInteractionAt > 0 && Date.now() - vp.userInteractionAt < windowMs);
+      windowMs = isNum(windowMs) ? windowMs : 3000;
+      // Active drag always counts as interaction regardless of timestamp.
+      if (!!V6OF.chartIsDragging) return true;
+      // Use the per-call windowMs if it's longer than the stored expiry,
+      // otherwise use the expiry (respects the duration set by markUserInteraction).
+      var threshold = Math.max(vp.userInteractionExpiresAt, vp.userInteractionAt + windowMs);
+      return vp.userInteractionAt > 0 && Date.now() < threshold;
     };
 
     // ---- Explicit range setters (used by interactions / external code) ----
     vp.setTimeRange = function (start, end) {
       if (!isNum(start) || !isNum(end) || end <= start) return;
-      var span = clamp(end - start, MIN_TIME_SPAN_MS, MAX_TIME_SPAN_MS);
+      var maxSpan = maxSpanForInterval(vp.candleIntervalMs);
+      var span = clamp(end - start, MIN_TIME_SPAN_MS, maxSpan);
       var mid = (start + end) / 2;
       if (vp.dataTimeMax > vp.dataTimeMin) {
         var dataSpan = vp.dataTimeMax - vp.dataTimeMin;
-        var pad = Math.max(dataSpan * 8, span * 2, 24 * 3600 * 1000);
-        mid = clamp(mid, vp.dataTimeMin - pad, vp.dataTimeMax + pad);
+        // Asymmetric pan limits: allow generous look-ahead on the right
+        // (like TradingView — traders need empty space to project levels)
+        // but keep the left tighter (scrolling into ancient empty history
+        // is useless and wastes render cycles).
+        var leftPad = Math.max(dataSpan * 0.5, span * 1.5, 6 * 3600 * 1000);
+        var rightPad = Math.max(dataSpan * 1.0, span * 3.0, 24 * 3600 * 1000);
+        mid = clamp(mid, vp.dataTimeMin - leftPad, vp.dataTimeMax + rightPad);
       }
       vp.timeStart = mid - span / 2;
       vp.timeEnd = mid + span / 2;
@@ -172,7 +199,7 @@
           // Estimate candle interval, default to 1m. This ensures a stable
           // 80-candle view regardless of how much data has been loaded so far.
           var interval = Math.max(1000, Number(bounds.candleIntervalMs) || 60000);
-          var span = clamp(interval * TARGET_CANDLES, MIN_TIME_SPAN_MS, MAX_TIME_SPAN_MS);
+          var span = clamp(interval * TARGET_CANDLES, MIN_TIME_SPAN_MS, maxSpanForInterval(interval));
           var pad = span * LIVE_EDGE_PAD_RATIO;
           vp.timeEnd = bounds.timeMax + pad;
           vp.timeStart = vp.timeEnd - span;
@@ -208,9 +235,8 @@
 
     // ---- Fit / reset / follow ----
     vp.fitTimeToData = function () {
-      vp.markUserInteraction();
       if (vp.dataTimeMax > vp.dataTimeMin) {
-        var span = clamp(vp.dataTimeMax - vp.dataTimeMin, MIN_TIME_SPAN_MS, MAX_TIME_SPAN_MS);
+        var span = clamp(vp.dataTimeMax - vp.dataTimeMin, MIN_TIME_SPAN_MS, maxSpanForInterval(vp.candleIntervalMs));
         var pad = span * LIVE_EDGE_PAD_RATIO;
         vp.timeEnd = vp.dataTimeMax + pad;
         vp.timeStart = vp.timeEnd - span;
@@ -218,7 +244,6 @@
     };
 
     vp.fitPriceToData = function () {
-      vp.markUserInteraction();
       if (vp.dataPriceMax > vp.dataPriceMin) {
         vp.priceMin = vp.dataPriceMin;
         vp.priceMax = vp.dataPriceMax;
@@ -226,6 +251,7 @@
       vp.autoFit = true;
       // Reset lerp target so next smoothPriceRange snaps immediately.
       vp._smoothPriceTarget = null;
+      vp._smoothPriceTs = 0;
     };
 
     // Smooth price-range transitions to avoid vertical jumps when the visible
@@ -233,25 +259,43 @@
     // factor: 0 = no smoothing, 0.25 = slow follow. Default 0.22 per frame (~30fps).
     vp.smoothPriceRange = function (targetMin, targetMax, factor) {
       if (!isNum(targetMin) || !isNum(targetMax) || targetMax <= targetMin) return;
-      factor = isNum(factor) ? clamp(factor, 0, 1) : 0.22;
+      // Frame-rate independent lerp. The legacy fixed factor (0.22) assumed
+      // 60fps. Convert to a per-second rate and derive the actual factor
+      // from elapsed time so smoothing is identical at 30/60/144fps.
+      // rate = -ln(1 - 0.22) / (1/60) ≈ 16.56 per second.
+      var rate = (isNum(factor) && factor > 0 && factor < 1)
+        ? -Math.log(1 - factor) * 60   // convert custom factor the same way
+        : 16.56;
+      var now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      var lastTs = vp._smoothPriceTs || 0;
+      var dtMs = (lastTs > 0) ? Math.min(100, now - lastTs) : 100; // clamp to avoid huge jumps after tab switch
+      vp._smoothPriceTs = now;
+      var f = 1 - Math.exp(-rate * dtMs / 1000);
       var prev = vp._smoothPriceTarget;
       // Snap on first call, after reset, or if the target jumped >2x the current span.
       var curSpan = vp.priceMax - vp.priceMin;
       var tgtSpan = targetMax - targetMin;
       var shouldSnap = !prev || curSpan <= 0 || tgtSpan > curSpan * 2.5 || curSpan > tgtSpan * 2.5;
       vp._smoothPriceTarget = { min: targetMin, max: targetMax };
-      if (shouldSnap || factor >= 1) {
+      if (shouldSnap || f >= 1) {
         vp.priceMin = targetMin;
         vp.priceMax = targetMax;
         return;
       }
       // Lerp toward target.
-      vp.priceMin = vp.priceMin + (targetMin - vp.priceMin) * factor;
-      vp.priceMax = vp.priceMax + (targetMax - vp.priceMax) * factor;
+      vp.priceMin = vp.priceMin + (targetMin - vp.priceMin) * f;
+      vp.priceMax = vp.priceMax + (targetMax - vp.priceMax) * f;
+      // Snap to target when residual delta is sub-pixel: prevents infinite
+      // asymptotic micro-redraws on an otherwise idle chart. Epsilon is
+      // relative to the current span (works for BTC and sub-cent alts).
+      var eps = curSpan * 1e-5;
+      if (Math.abs(vp.priceMin - targetMin) < eps && Math.abs(vp.priceMax - targetMax) < eps) {
+        vp.priceMin = targetMin;
+        vp.priceMax = targetMax;
+      }
     };
 
     vp.fitToData = function () {
-      vp.markUserInteraction();
       vp.fitTimeToData();
       vp.fitPriceToData();
       vp.followLive = true;
@@ -269,15 +313,14 @@
       vp.dataPriceMin = 0;
       vp.dataPriceMax = 1;
       vp._smoothPriceTarget = null;
+      vp._smoothPriceTs = 0;
     };
 
     vp.resetView = function () {
-      vp.markUserInteraction();
       vp.fitToData();
     };
 
     vp.goLive = function () {
-      vp.markUserInteraction();
       vp.followLive = true;
       if (vp.dataTimeMax > vp.dataTimeMin) {
         var keep = timeSpan();
@@ -300,17 +343,43 @@
       var p = vp.plot;
       if (dx) {
         var dt = dx / p.width * timeSpan();
-        // Pixel-smooth panning — no candle-interval snapping. Snapping here
-        // caused drag-pan to feel "stuck" until the cumulative delta crossed
-        // half a candle width, then jump a whole candle at once.
-        vp.setTimeRange(vp.timeStart - dt, vp.timeEnd - dt);
+        // Direct translation — no setTimeRange to avoid mid-recentering that
+        // causes non-linear drag near the edges (elastic feeling).
+        // Clamp only the hard limits so the window stops cleanly at bounds.
+        var newStart = vp.timeStart - dt;
+        var newEnd = vp.timeEnd - dt;
+        if (vp.dataTimeMax > vp.dataTimeMin) {
+          var dataSpan = vp.dataTimeMax - vp.dataTimeMin;
+          var span = timeSpan();
+          var leftPad = Math.max(dataSpan * 0.5, span * 1.5, 6 * 3600 * 1000);
+          var rightPad = Math.max(dataSpan * 1.0, span * 3.0, 24 * 3600 * 1000);
+          var minMid = vp.dataTimeMin - leftPad;
+          var maxMid = vp.dataTimeMax + rightPad;
+          var mid = (newStart + newEnd) / 2;
+          if (mid < minMid) { newStart += (minMid - mid); newEnd += (minMid - mid); }
+          else if (mid > maxMid) { newStart += (maxMid - mid); newEnd += (maxMid - mid); }
+        }
+        vp.timeStart = newStart;
+        vp.timeEnd = newEnd;
         vp.markUserInteraction();
-        // Any pan disables follow-live (user is exploring history).
         vp.followLive = false;
       }
       if (dy) {
         var dp = dy / p.height * priceSpan();
-        vp.setPriceRange(vp.priceMin + dp, vp.priceMax + dp);
+        var newMin = vp.priceMin + dp;
+        var newMax = vp.priceMax + dp;
+        if (vp.dataPriceMax > vp.dataPriceMin) {
+          var dataSpanP = vp.dataPriceMax - vp.dataPriceMin;
+          var pSpan = priceSpan();
+          var padP = Math.max(dataSpanP * 8, pSpan * 2, 1000);
+          var minMidP = vp.dataPriceMin - padP;
+          var maxMidP = vp.dataPriceMax + padP;
+          var midP = (newMin + newMax) / 2;
+          if (midP < minMidP) { newMin += (minMidP - midP); newMax += (minMidP - midP); }
+          else if (midP > maxMidP) { newMin += (maxMidP - midP); newMax += (maxMidP - midP); }
+        }
+        vp.priceMin = newMin;
+        vp.priceMax = newMax;
         vp.markUserInteraction();
       }
     };
@@ -320,11 +389,14 @@
       if (!isNum(factor) || factor <= 0) return;
       vp.markUserInteraction();
       var anchorTime = isNum(anchorX) ? vp.xToTime(anchorX) : (vp.timeStart + vp.timeEnd) / 2;
-      var newSpan = clamp(timeSpan() * factor, MIN_TIME_SPAN_MS, MAX_TIME_SPAN_MS);
+      var newSpan = clamp(timeSpan() * factor, MIN_TIME_SPAN_MS, maxSpanForInterval(vp.candleIntervalMs));
       var leftFrac = (anchorTime - vp.timeStart) / timeSpan();
       vp.setTimeRange(anchorTime - leftFrac * newSpan, anchorTime - leftFrac * newSpan + newSpan);
-      // Zooming keeps follow-live only if the newest data is still at the edge.
-      if (vp.timeEnd < vp.dataTimeMax) vp.followLive = false;
+      // Zoom is a user action: it can only disable follow-live, never
+      // re-enable it. A zoom-out from the live edge may push timeEnd past
+      // dataTimeMax, but that must not resume auto-following.
+      var wasLive = vp.followLive;
+      vp.followLive = wasLive ? (vp.timeEnd >= vp.dataTimeMax) : false;
     };
 
     vp.zoomPrice = function (factor, anchorY) {

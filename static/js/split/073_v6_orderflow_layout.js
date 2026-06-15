@@ -351,6 +351,7 @@
             '<span class="exo-page-icon">⚙</span> Settings',
           '</button>',
         '</div>',
+        '<div class="exo-clip-shell" data-exo-clip-shell>',
         // ═══ TOPBAR (25px) ═══
         '<header class="exo-topbar">',
           // App logo → page navigation menu
@@ -402,6 +403,7 @@
               '<div class="exo-chart-canvas v6-chart-layer-stack" data-v6-chart-stack>',
                 '<canvas class="v6-chart-layer v6-chart-layer-static" data-v6-chart-layer="static"></canvas>',
                 '<canvas class="v6-chart-layer v6-chart-layer-data" data-v6-chart-layer="data"></canvas>',
+                '<canvas class="v6-chart-layer v6-chart-layer-annotation" data-v6-chart-layer="annotation"></canvas>',
                 '<canvas class="v6-chart-layer v6-chart-layer-overlay v6-chart-canvas" data-v6-chart></canvas>',
               '</div>',
               '<div class="v6-chart-indicator-stack" data-v6-chart-indicators aria-label="Chart indicators"></div>',
@@ -436,6 +438,7 @@
           '<div class="v6-sb-sec"><span class="v6-sb-lbl">Local Time:</span><span class="v6-sb-val" data-v6-status-time>--</span></div>',
           '<div class="v6-sb-sec"><span class="v6-sb-lbl">Buffer:</span><span class="v6-sb-val">T: <strong data-v6-status-buffer-trades>0</strong> | HM: <strong data-v6-status-buffer-heatmap>0</strong> | FP: <strong data-v6-status-buffer-footprint>0</strong></span></div>',
         '</footer>',
+        '</div>',
         // Hidden settings container (for syncInputs + data-v6-setting persistence)
         hiddenSettings,
         // Hidden freshness labels (keep JS hooks alive)
@@ -690,6 +693,8 @@
       deltaBucketsByInterval: deepCloneCachePayload(state.deltaBucketsByInterval || {}),
       latestDeltaByInterval: deepCloneCachePayload(state.latestDeltaByInterval || {}),
       restDepthTs: deepCloneCachePayload(state.restDepthTs || 0),
+      lastLiveDepthTs: deepCloneCachePayload(state.lastLiveDepthTs || 0),
+      lastLiveDepthSymbol: deepCloneCachePayload(state.lastLiveDepthSymbol || ''),
       restTradesTs: deepCloneCachePayload(state.restTradesTs || 0),
       restKlinesTs: deepCloneCachePayload(state.restKlinesTs || 0)
     };
@@ -700,6 +705,7 @@
       dataSource: source,
       source: 'live',
       dataFreshness: 'warming',
+      loadingPhase: null,
       trades: [],
       orderBook: null,
       orderBookCount: 0,
@@ -716,6 +722,8 @@
       deltaBuckets: [],
       depthHistory: [],
       restDepthTs: 0,
+      lastLiveDepthTs: 0,
+      lastLiveDepthSymbol: '',
       restTradesTs: 0,
       restKlinesTs: 0
     };
@@ -1054,14 +1062,19 @@
   function isLiveDepthFresh(state, now) {
     state = state || {};
     now = now || Date.now();
-    var book = state.orderBook;
-    if (!book || !book.bids || !book.asks) return false;
-    if (book.source === 'rest-depth') return false;
     var source = state.dataSource || 'binance';
     var wantSymbol = normalizeSymbol(state.symbol || 'BTC', source);
-    var bookSymbol = book.symbol ? normalizeSymbol(book.symbol, source) : wantSymbol;
-    if (bookSymbol !== wantSymbol) return false;
-    var ts = Number(book.tsLocal || state.lastOrderBookTs || 0);
+    var liveSymbol = state.lastLiveDepthSymbol ? normalizeSymbol(state.lastLiveDepthSymbol, source) : wantSymbol;
+    if (liveSymbol !== wantSymbol) return false;
+    var liveCount = Number(state.liveDepthCount || 0);
+    if (liveCount <= 0) return false;
+    var ts = Number(state.lastLiveDepthTs || 0);
+    if (!ts) {
+      var book = state.orderBook;
+      if (book && book.source !== 'rest-depth') {
+        ts = Number(book.tsLocal || state.lastOrderBookTs || 0);
+      }
+    }
     return ts > 0 && (now - ts) < DOM_DEPTH_WS_SILENCE_MS;
   }
 
@@ -1103,7 +1116,7 @@
     var vp = V6OF.chart;
     if (!vp || !vp.resetOnDataChange) return false;
     opts = opts || {};
-    if (!opts.force && vp.hasRecentUserInteraction && vp.hasRecentUserInteraction(opts.windowMs || 12000)) {
+    if (!opts.force && vp.hasRecentUserInteraction && vp.hasRecentUserInteraction(opts.windowMs || 3000)) {
       return false;
     }
     vp.resetOnDataChange();
@@ -1158,6 +1171,7 @@
     root._v6DomDepthRefreshTimer = setInterval(function () {
       if (!root.isConnected) return;
       if (document.body && document.body.getAttribute('data-current-page') !== 'orderflow') return;
+      if (isLiveDepthFresh(store.getState ? store.getState() : {}, Date.now())) return;
       prefetchDomDepth(store, 'fallback');
     }, 5000);
   }
@@ -1175,10 +1189,23 @@
       try { cancelAnimationFrame(ctx.resizeRaf); } catch (_) {}
       ctx.resizeRaf = null;
     }
+    if (ctx.windowResizeRaf) {
+      try { cancelAnimationFrame(ctx.windowResizeRaf); } catch (_) {}
+      ctx.windowResizeRaf = null;
+    }
+    if (ctx.windowResizeFinalTimer) {
+      clearTimeout(ctx.windowResizeFinalTimer);
+      ctx.windowResizeFinalTimer = null;
+    }
+    if (ctx.coalescedRenderTimer) {
+      clearTimeout(ctx.coalescedRenderTimer);
+      ctx.coalescedRenderTimer = null;
+    }
     if (ctx.resizeAbortController) {
       try { ctx.resizeAbortController.abort(); } catch (_) {}
       ctx.resizeAbortController = null;
     }
+    cleanupActiveResizeDrag(ctx);
     (ctx.resizeListenerCleanups || []).forEach(function (fn) {
       try { fn(); } catch (_) {}
     });
@@ -1195,6 +1222,19 @@
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     }
+  }
+
+  function cleanupActiveResizeDrag(ctx) {
+    if (!ctx) return;
+    if (ctx.resizeDragAbortController) {
+      try { ctx.resizeDragAbortController.abort(); } catch (_) {}
+      ctx.resizeDragAbortController = null;
+    }
+    (ctx.resizeDragCleanups || []).forEach(function (fn) {
+      try { fn(); } catch (_) {}
+    });
+    ctx.resizeDragCleanups = [];
+    ctx.resizePointerCapture = null;
   }
 
   function cleanupLayoutListeners(ctx) {
@@ -1252,8 +1292,69 @@
   }
 
   function finalResizeRender(root) {
+    resizeOrderflowCanvases(root);
     var st = V6OF.getStore ? V6OF.getStore(root) : null;
-    if (st) render(root, st.getState(), true);
+    if (st) redrawResizeTargets(root, st.getState());
+  }
+
+  function scheduleWindowResizeRender(root, store, ctx) {
+    if (!root || !store || !ctx) return;
+    if (!ctx.windowResizeRaf) {
+      ctx.windowResizeRaf = requestAnimationFrame(function () {
+        ctx.windowResizeRaf = null;
+        var state = store.getState();
+        resizeOrderflowCanvases(root);
+        redrawResizeTargets(root, state);
+      });
+    }
+    if (ctx.windowResizeFinalTimer) clearTimeout(ctx.windowResizeFinalTimer);
+    ctx.windowResizeFinalTimer = setTimeout(function () {
+      ctx.windowResizeFinalTimer = null;
+      render(root, store.getState(), true);
+    }, 180);
+  }
+
+  function scheduleCoalescedRender(root, store, ctx, delayMs) {
+    if (!root || !store || !ctx) return;
+    if (ctx.coalescedRenderTimer) clearTimeout(ctx.coalescedRenderTimer);
+    ctx.coalescedRenderTimer = setTimeout(function () {
+      ctx.coalescedRenderTimer = null;
+      render(root, store.getState(), true);
+    }, Math.max(0, Math.round(Number(delayMs) || 0)));
+  }
+
+  function redrawResizeTargets(root, state) {
+    if (!root || !state) return;
+    var settings = state.settings || {};
+    var chartCanvas = root.querySelector('[data-v6-chart]');
+    if (chartCanvas && V6OF.CanvasChart && V6OF.CanvasChart.draw) {
+      V6OF.CanvasChart.draw(chartCanvas, makeChartRenderState(state));
+      renderChartIndicatorStack(root, state);
+    }
+
+    var cvdCanvas = root.querySelector('[data-v6-cvd-canvas]');
+    var cvdHost = cvdCanvas && cvdCanvas.closest ? cvdCanvas.closest('.exo-cvd-canvas, [data-v6-cvd-panel]') : cvdCanvas;
+    if (cvdCanvas && isDisplayed(cvdHost || cvdCanvas) && V6OF.Panels && V6OF.Panels.CvdPanel && V6OF.Panels.CvdPanel.draw && settings.showCVD !== false) {
+      var cross = V6OF.getChartCrosshair ? V6OF.getChartCrosshair(root) : V6OF._fallbackChartCrosshair;
+      V6OF.Panels.CvdPanel.draw(cvdCanvas, state, chartCanvas && chartCanvas._v6Viewport, {
+        crosshairTs: cross && cross.visible ? cross.time : null,
+        showTimeAxis: false
+      });
+    }
+
+    var domList = root.querySelector('[data-v6-dom-list]');
+    if (domList && V6OF.DomPanel && settings.showDOM !== false) {
+      V6OF.DomPanel.render(domList, V6OF.DomLadder ? V6OF.DomLadder.snapshot() : null, state);
+    }
+  }
+
+  function scheduleResizePreview(ctx) {
+    if (!ctx || ctx.resizeRaf) return;
+    ctx.resizeRaf = requestAnimationFrame(function () {
+      ctx.resizeRaf = null;
+      // During drag, CSS layout scales the existing canvas bitmap. Reallocate
+      // backing buffers only in finalResizeRender() on pointerup/cancel.
+    });
   }
 
   function clampExoCvdHeight(root, value) {
@@ -1278,6 +1379,40 @@
     var n = Number(value);
     if (!Number.isFinite(n)) n = EXO_DOM_DEFAULT_WIDTH;
     return Math.max(EXO_DOM_MIN_WIDTH, Math.min(EXO_DOM_MAX_WIDTH, n));
+  }
+
+  function scheduleAfterPaint(fn) {
+    var raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null;
+    if (raf) {
+      raf(function () { setTimeout(fn, 0); });
+    } else {
+      setTimeout(fn, 0);
+    }
+  }
+
+  function readExoResizePrefs() {
+    try {
+      return {
+        domWidth: localStorage.getItem('cockpitV6.exoDomWidth'),
+        cvdHeight: localStorage.getItem('cockpitV6.exoCvdHeight')
+      };
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function restoreExoResizePrefsDeferred(root) {
+    scheduleAfterPaint(function () {
+      if (!root || !root.querySelector || !root.querySelector('.exo-workspace')) return;
+      var saved = readExoResizePrefs();
+      if (saved.domWidth) {
+        root.style.setProperty('--exo-dom', Math.round(clampExoDomWidth(saved.domWidth)) + 'px');
+      }
+      if (saved.cvdHeight) {
+        root.style.setProperty('--exo-cvd-height', Math.round(clampExoCvdHeight(root, saved.cvdHeight)) + 'px');
+      }
+      finalResizeRender(root);
+    });
   }
 
   function renderEngineBar(root, snapshot, state) {
@@ -1371,6 +1506,9 @@
     if (badge) {
       if (state && state.source === 'mock') {
         badge.textContent = 'V6 MOCK / No live data';
+        badge.className = 'v6-badge';
+      } else if (state && state.loadingPhase === 'backfill') {
+        badge.textContent = 'V6 BACKFILL / Loading history\u2026';
         badge.className = 'v6-badge';
       } else if (state && state.dataFreshness === 'warming') {
         badge.textContent = 'V6 WARMING / Loading source';
@@ -1832,16 +1970,16 @@
       menu.style.top = (anchorRect.top - menuRect.height - 4) + 'px';
     }
 
-    // Close on outside click
+    // Close on outside click — capture-phase listener attached synchronously.
+    // The opening click is flagged so the handler skips it (no setTimeout race).
     function closeMenu(e) {
+      if (e._menuOpening) return;
       if (!menu.contains(e.target) && e.target !== anchor && !anchor.contains(e.target)) {
         menu.remove();
-        document.removeEventListener('click', closeMenu);
+        document.removeEventListener('click', closeMenu, true);
       }
     }
-    setTimeout(function () {
-      document.addEventListener('click', closeMenu);
-    }, 10);
+    document.addEventListener('click', closeMenu, true);
   }
 
   function bind(root, store) {
@@ -2021,6 +2159,7 @@
         }
       } else if (action === 'dom-settings') {
         // Floating DOM settings menu
+        event._menuOpening = true;
         showFloatingMenu(root, btn, [
           { type: 'label', text: 'Value Mode' },
           { type: 'select', key: 'domValueMode', options: [
@@ -2102,7 +2241,7 @@
         addPanelToggle('Chart', isExoChartPanelVisible(root), function (checked) {
           setExoChartPanelVisible(root, checked);
           var st = V6OF.getStore ? V6OF.getStore(root) : store;
-          if (st) setTimeout(function () { render(root, st.getState(), true); }, 50);
+          scheduleCoalescedRender(root, st, ctx, 50);
         });
         addToggle('w-dom', 'DOM', 'showDOM');
 
@@ -2135,14 +2274,15 @@
           drop.style.left = (window.innerWidth - dropRect.width - 8) + 'px';
         }
 
-        // Close on outside click
+        // Close on outside click — capture-phase listener attached synchronously.
         function closeDrop(e) {
+          if (e._menuOpening) return;
           if (!drop.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
             drop.remove();
-            document.removeEventListener('click', closeDrop);
+            document.removeEventListener('click', closeDrop, true);
           }
         }
-        setTimeout(function () { document.addEventListener('click', closeDrop); }, 10);
+        document.addEventListener('click', closeDrop, true);
       } else if (action === 'close-panel') {
         var panelName = btn.getAttribute('data-panel');
         var workspace = root.querySelector('.exo-workspace');
@@ -2165,7 +2305,7 @@
           }
           // Force chart redraw after layout change
           var _st1 = V6OF.getStore ? V6OF.getStore(root) : null;
-          if (_st1) setTimeout(function() { render(root, _st1.getState(), true); }, 150);
+          scheduleCoalescedRender(root, _st1, ctx, 150);
         } else if (panelName === 'chart') {
           var chartStage = root.querySelector('.exo-chart-stage');
           var leftTools = root.querySelector('.exo-left-tools');
@@ -2182,7 +2322,7 @@
           }
           // Force chart redraw after layout change
           var _st2 = V6OF.getStore ? V6OF.getStore(root) : null;
-          if (_st2) setTimeout(function() { render(root, _st2.getState(), true); }, 150);
+          scheduleCoalescedRender(root, _st2, ctx, 150);
         }
       } else if (action === 'layer') {
         var layerKeys = { candles: 'showCandles', bubbles: 'showBubbles', heatmap: 'showHeatmap', footprint: 'showFootprint' };
@@ -2236,7 +2376,7 @@
         var source = btn.getAttribute('data-source');
         if (source && (source !== state.dataSource || state.source === 'mock')) {
           var oldSource = state.dataSource;
-          var patch = { dataSource: source, restDepthTs: 0, restDepthCount: 0, liveDepthCount: 0 };
+          var patch = { dataSource: source, restDepthTs: 0, restDepthCount: 0, liveDepthCount: 0, lastLiveDepthTs: 0, lastLiveDepthSymbol: '' };
           if (state.source === 'mock') {
             patch.source = 'live';
             patch.dataFreshness = 'offline';
@@ -2370,7 +2510,9 @@
             symbol: symbol,
             restDepthTs: 0,
             restDepthCount: 0,
-            liveDepthCount: 0
+            liveDepthCount: 0,
+            lastLiveDepthTs: 0,
+            lastLiveDepthSymbol: ''
           }, 'symbol-change');
           if (engineClient) {
             engineClient.clearTrades();
@@ -2589,6 +2731,8 @@
       cleanupMountListeners(ctx);
       var onDebugGridKey = function (e) {
         if (!e.ctrlKey || !e.shiftKey || (e.key !== 'G' && e.key !== 'g')) return;
+        // Only active when focus is within the orderflow app (not when e.g. a browser input is focused)
+        if (!root.contains(document.activeElement)) return;
         e.preventDefault();
         V6OF.DEBUG_RENDER = !V6OF.DEBUG_RENDER;
         V6OF.debugLog('Debug Grid: ' + (V6OF.DEBUG_RENDER ? 'ON' : 'OFF'));
@@ -2693,6 +2837,31 @@
           target.removeEventListener(type, fn);
         });
       }
+      function beginResizeDragListeners(handle, pointerId, moveFn, endFn) {
+        cleanupActiveResizeDrag(ctx);
+        ctx.resizeDragAbortController = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        ctx.resizeDragCleanups = [];
+        var dragOptions = ctx.resizeDragAbortController ? { signal: ctx.resizeDragAbortController.signal } : false;
+        var target = handle && handle.addEventListener ? handle : document;
+        if (handle && typeof handle.setPointerCapture === 'function' && pointerId != null) {
+          try { handle.setPointerCapture(pointerId); } catch (_) {}
+          ctx.resizePointerCapture = { handle: handle, pointerId: pointerId };
+        } else {
+          ctx.resizePointerCapture = null;
+        }
+        target.addEventListener('pointermove', moveFn, dragOptions);
+        target.addEventListener('pointerup', endFn, dragOptions);
+        target.addEventListener('pointercancel', endFn, dragOptions);
+        ctx.resizeDragCleanups.push(function () {
+          if (ctx.resizePointerCapture && ctx.resizePointerCapture.handle && typeof ctx.resizePointerCapture.handle.releasePointerCapture === 'function') {
+            try { ctx.resizePointerCapture.handle.releasePointerCapture(ctx.resizePointerCapture.pointerId); } catch (_) {}
+          }
+          target.removeEventListener('pointermove', moveFn);
+          target.removeEventListener('pointerup', endFn);
+          target.removeEventListener('pointercancel', endFn);
+          ctx.resizePointerCapture = null;
+        });
+      }
       var resizeHandle = root.querySelector('[data-v6-resize-handle]');
       if (resizeHandle) {
         var domPanel = root.querySelector('.exo-dom-panel');
@@ -2707,6 +2876,7 @@
           resizeHandle.classList.add('exo-resizing');
           document.body.style.cursor = 'col-resize';
           document.body.style.userSelect = 'none';
+          beginResizeDragListeners(resizeHandle, e.pointerId, onDomResizeMove, onDomResizeEnd);
         };
         var onDomResizeMove = function (e) {
           if (!ctx.resizeState) return;
@@ -2714,13 +2884,7 @@
           var newWidth = clampExoDomWidth(ctx.resizeState.startWidth + delta);
           ctx.resizeState.lastWidth = newWidth;
           root.style.setProperty('--exo-dom', newWidth + 'px');
-          // Throttle chart redraw to once per frame
-          if (!ctx.resizeRaf) {
-            ctx.resizeRaf = requestAnimationFrame(function () {
-              ctx.resizeRaf = null;
-              resizeOrderflowCanvases(root);
-            });
-          }
+          scheduleResizePreview(ctx);
         };
         var onDomResizeEnd = function () {
           if (!ctx.resizeState) return;
@@ -2735,16 +2899,10 @@
           resizeHandle.classList.remove('exo-resizing');
           document.body.style.cursor = '';
           document.body.style.userSelect = '';
+          cleanupActiveResizeDrag(ctx);
           finalResizeRender(root);
         };
-        addResizeListener(resizeHandle, 'mousedown', onDomResizeStart);
-        addResizeListener(document, 'mousemove', onDomResizeMove);
-        addResizeListener(document, 'mouseup', onDomResizeEnd);
-        // Restore saved width
-        try {
-          var savedWidth = localStorage.getItem('cockpitV6.exoDomWidth');
-          root.style.setProperty('--exo-dom', Math.round(clampExoDomWidth(savedWidth)) + 'px');
-        } catch (_) {}
+        addResizeListener(resizeHandle, 'pointerdown', onDomResizeStart);
       }
 
       // ── Exocharts layout: logo page navigation menu ───────────────────
@@ -2763,6 +2921,7 @@
           document.body.classList.add('is-resizing');
           document.body.style.cursor = 'row-resize';
           document.body.style.userSelect = 'none';
+          beginResizeDragListeners(cvdResizeHandle, e.pointerId, onCvdResizeMove, onCvdResizeEnd);
         };
         var onCvdResizeMove = function (e) {
           if (!ctx.cvdResizeState) return;
@@ -2770,12 +2929,7 @@
           var nextHeight = clampExoCvdHeight(root, ctx.cvdResizeState.startHeight + delta);
           ctx.cvdResizeState.lastHeight = nextHeight;
           root.style.setProperty('--exo-cvd-height', Math.round(nextHeight) + 'px');
-          if (!ctx.resizeRaf) {
-            ctx.resizeRaf = requestAnimationFrame(function () {
-              ctx.resizeRaf = null;
-              resizeOrderflowCanvases(root);
-            });
-          }
+          scheduleResizePreview(ctx);
         };
         var onCvdResizeEnd = function () {
           if (!ctx.cvdResizeState) return;
@@ -2791,23 +2945,29 @@
           document.body.classList.remove('is-resizing');
           document.body.style.cursor = '';
           document.body.style.userSelect = '';
+          cleanupActiveResizeDrag(ctx);
           finalResizeRender(root);
         };
-        addResizeListener(cvdResizeHandle, 'mousedown', onCvdResizeStart);
-        addResizeListener(document, 'mousemove', onCvdResizeMove);
-        addResizeListener(document, 'mouseup', onCvdResizeEnd);
-        try {
-          var savedCvdHeight = localStorage.getItem('cockpitV6.exoCvdHeight');
-          root.style.setProperty('--exo-cvd-height', Math.round(clampExoCvdHeight(root, savedCvdHeight)) + 'px');
-        } catch (_) {}
+        addResizeListener(cvdResizeHandle, 'pointerdown', onCvdResizeStart);
       }
+      restoreExoResizePrefsDeferred(root);
 
       var logoBtn = root.querySelector('[data-exo-logo-menu]');
       var pageMenu = root.querySelector('[data-exo-page-menu]');
       if (logoBtn && pageMenu) {
+        // Close on outside click — capture-phase listener attached synchronously.
+        // Permanent listener since pageMenu is reused (hidden/shown), not recreated.
+        document.addEventListener('click', function (e) {
+          if (e._pageMenuOpening) return;
+          if (!pageMenu.hidden && !pageMenu.contains(e.target) && !e.target.closest('[data-exo-logo-menu]')) {
+            pageMenu.hidden = true;
+          }
+        }, true);
+
         logoBtn.addEventListener('click', function (e) {
           e.stopPropagation();
           e.preventDefault();
+          e._pageMenuOpening = true;
           var isHidden = pageMenu.hidden;
           pageMenu.hidden = !isHidden;
           if (!isHidden) {
@@ -2832,16 +2992,13 @@
             goPage(page);
           }
         });
-        // Close on outside click
-        document.addEventListener('click', function (e) {
-          if (!pageMenu.hidden && !pageMenu.contains(e.target) && !e.target.closest('[data-exo-logo-menu]')) {
-            pageMenu.hidden = true;
-          }
-        });
       }
 
       // ── Exocharts layout: window controls ─────────────────────────────
-      if (root.querySelector('[data-window-close]')) {
+      var winMin = root.querySelector('[data-window-minimize]');
+      var winMax = root.querySelector('[data-window-maximize]');
+      var winClose = root.querySelector('[data-window-close]');
+      if (winMin || winMax || winClose) {
         function winAction(type) {
           // Wails
           if (window.runtime) {
@@ -2866,9 +3023,9 @@
           if (type === 'close') window.close();
           if (typeof toast === 'function') toast('Desktop app mode only', 'info');
         }
-        root.querySelector('[data-window-minimize]').addEventListener('click', function () { winAction('min'); });
-        root.querySelector('[data-window-maximize]').addEventListener('click', function () { winAction('max'); });
-        root.querySelector('[data-window-close]').addEventListener('click', function () { winAction('close'); });
+        if (winMin) winMin.addEventListener('click', function () { winAction('min'); });
+        if (winMax) winMax.addEventListener('click', function () { winAction('max'); });
+        if (winClose) winClose.addEventListener('click', function () { winAction('close'); });
       }
 
       // ── Old nav popup cleanup (replaced by exo-page-menu above) ────────
@@ -2933,7 +3090,7 @@
       }
 
       var onResize = function () {
-        render(root, store.getState(), true);
+        scheduleWindowResizeRender(root, store, ctx);
       };
       window.addEventListener('resize', onResize);
       ctx.listeners.push({ target: window, type: 'resize', fn: onResize });

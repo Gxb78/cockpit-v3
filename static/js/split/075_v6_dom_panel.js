@@ -180,12 +180,14 @@
     return src.indexOf('binance') >= 0 ? 'Binance kline' : src;
   }
 
-  function updatePriceGapIndicator(container, snap, state) {
+  function updatePriceGapIndicator(container, snap, state, settings) {
     var refs = container && container._domStatRefs;
     var els = refs && refs['price-gap'];
     if (!els || !els.length) return;
     var domMid = Number(snap && snap.midPrice);
     var chartClose = latestChartClose(state);
+    var useTicks = !!(settings && settings.domGapTicks);
+    var tickSize = Number(snap && snap.tickSize) || 0;
     var text = 'DOM/CHART -';
     var mode = 'is-empty';
     var title = 'DOM mid and chart last close unavailable';
@@ -196,7 +198,9 @@
       var warn = Math.max(spread * 2, chartClose * 0.0005);
       var alert = Math.max(spread * 5, chartClose * 0.002);
       mode = Math.abs(gap) >= alert ? 'is-alert' : (Math.abs(gap) >= warn ? 'is-warn' : 'is-ok');
-      text = 'DOM-CHART ' + fmtGap(gap);
+      var displayGap = (useTicks && tickSize > 0) ? (gap / tickSize) : gap;
+      var displayUnit = (useTicks && tickSize > 0) ? 't' : '';
+      text = 'DOM-CHART ' + fmtGap(displayGap) + displayUnit;
       title = 'DOM mid ' + fmtPrice(domMid) +
         ' vs chart close ' + fmtPrice(chartClose) +
         ' (' + fmtGap(pct) + '%). DOM source: ' + sourceLabel(state, snap) +
@@ -220,7 +224,7 @@
     setStat(container, 'seq',    domSequenceLabel(snap));
     setStat(container, 'gap',    String(domGapCount(snap)));
     setStat(container, 'drop',   String(domDroppedCount(state, snap)));
-    updatePriceGapIndicator(container, snap, state);
+    updatePriceGapIndicator(container, snap, state, settings);
     syncControls(container, snap.priceGrouping || 25, settings);
     // Σ BID / Σ ASK footer
     var sigmaFoot = container.querySelector('[data-v6-dom-sigma]');
@@ -244,9 +248,14 @@
 
   var autoCenter   = true;
   var userScrolled = false;
+  // Cached layout values to avoid forced reflows (clientHeight/scrollTop reads).
+  // Updated by ResizeObserver (height) and scroll handler (scrollTop).
+  var _viewportH = 0;
+  var _scrollTop = 0;
   var lastMidTick  = null;      // pour detecter le mouvement du mid
   var followRaf    = null;
   var followPending = null;
+  var smoothScrollRaf = null;  // ongoing smooth center animation
 
   // ── Center on a tick (smooth si le mid a bouge, instant sinon) ──
 
@@ -264,21 +273,48 @@
     if (!body || tick == null) return;
     var container = body.closest && body.closest('[data-v6-dom-list]');
     var rowIndex     = maxTick - tick;
-    var targetCenter = Math.max(0, Math.round((body.clientHeight - DOM_ROW_HEIGHT) * 0.48));
+    var targetCenter = Math.max(0, Math.round((_viewportH || body.clientHeight) - DOM_ROW_HEIGHT) * 0.48);
     var nextTop      = Math.max(0, rowIndex * DOM_ROW_HEIGHT - targetCenter);
-    if (container) suppressScrollDetection(container, smooth ? 700 : 0);
-    if (smooth && typeof body.scrollTo === 'function') {
-      body.scrollTo({ top: nextTop, behavior: 'smooth' });
+
+    // Cancel any ongoing smooth animation
+    if (smoothScrollRaf) { cancelAnimationFrame(smoothScrollRaf); smoothScrollRaf = null; }
+
+    if (smooth) {
+      // Manual smooth scroll: animate scrollTop over ~250ms with an ease-out
+      // curve, re-rendering the virtual window each frame so rows stay aligned.
+      // Native scrollTo({behavior:'smooth'}) doesn't fire scroll events on every
+      // frame, so the virtual window desyncs — we control the render ourselves.
+      var startTop = _scrollTop;
+      var delta = nextTop - startTop;
+      var duration = 250;
+      var startTime = (window.performance && performance.now) ? performance.now() : Date.now();
+      if (container) suppressScrollDetection(container, duration + 100);
+      function animateScroll() {
+        var elapsed = ((window.performance && performance.now) ? performance.now() : Date.now()) - startTime;
+        var t = Math.min(1, elapsed / duration);
+        // ease-out cubic
+        var eased = 1 - Math.pow(1 - t, 3);
+        body.scrollTop = startTop + delta * eased;
+        _scrollTop = body.scrollTop;
+        if (container && container._domLastSnap) {
+          renderVirtual(body, container._domLastSnap, container._domLastLive || 0,
+            (container._domLastState && container._domLastState.settings) || {});
+        }
+        if (t < 1) {
+          smoothScrollRaf = requestAnimationFrame(animateScroll);
+        } else {
+          smoothScrollRaf = null;
+        }
+      }
+      smoothScrollRaf = requestAnimationFrame(animateScroll);
     } else {
+      if (container) suppressScrollDetection(container, 0);
       body.scrollTop = nextTop;
-    }
-    // Re-render the virtual window for the NEW scrollTop immediately. renderVirtual
-    // keys off body.scrollTop; without this, an auto-center leaves the rows
-    // rendered for the previous (pre-scroll) position and stranded off-screen —
-    // the cause of the "empty ladder on load" until you click Follow mid.
-    if (container && container._domLastSnap) {
-      renderVirtual(body, container._domLastSnap, container._domLastLive || 0,
-        (container._domLastState && container._domLastState.settings) || {});
+      _scrollTop = nextTop;
+      if (container && container._domLastSnap) {
+        renderVirtual(body, container._domLastSnap, container._domLastLive || 0,
+          (container._domLastState && container._domLastState.settings) || {});
+      }
     }
   }
 
@@ -294,7 +330,7 @@
       weight: 10,
       label: 'VOL',
       render: function (ctx) {
-        var style = 'width:' + ctx.widths.vol + '; flex-shrink:0;';
+        var style = '';
         var raw = (Number(ctx.lv.buyVol) || 0) + (Number(ctx.lv.sellVol) || 0);
         return '<div class="v6-dom-cell v6-dom-cell-vol" style="' + style + '">' + fmtMode(raw, false, ctx.vctx) + '</div>';
       }
@@ -303,7 +339,7 @@
       weight: 9,
       label: 'SELL',
       render: function (ctx) {
-        var style = 'width:' + ctx.widths.sell + '; flex-shrink:0;';
+        var style = '';
         return '<div class="v6-dom-cell v6-dom-cell-sell" style="' + style + '">' + fmtMode(ctx.lv.sellVol, false, ctx.vctx) + '</div>';
       }
     },
@@ -311,7 +347,7 @@
       weight: 9,
       label: 'BUY',
       render: function (ctx) {
-        var style = 'width:' + ctx.widths.buy + '; flex-shrink:0;';
+        var style = '';
         return '<div class="v6-dom-cell v6-dom-cell-buy" style="' + style + '">' + fmtMode(ctx.lv.buyVol, false, ctx.vctx) + '</div>';
       }
     },
@@ -319,8 +355,8 @@
       weight: 18,
       label: 'BID',
       render: function (ctx) {
-        var style = 'width:' + ctx.widths.bid + '; flex-shrink:0;';
-        return '<div class="v6-dom-cell v6-dom-cell-bid' + ctx.bidChangeClass + '" style="' + style + '" role="gridcell" tabindex="-1">' +
+        var style = '';
+        return '<div class="v6-dom-cell v6-dom-cell-bid' + ctx.bidChangeClass + '" style="' + style + '" aria-hidden="true">' +
           '<div class="v6-dom-bar is-bid" style="transform:scaleX(' + (ctx.bidPct / 100).toFixed(3) + ')"></div>' +
           '<span class="v6-dom-val">' + (ctx.bidText === '0' ? '' : ctx.bidText) + '</span>' +
         '</div>';
@@ -330,16 +366,16 @@
       weight: 16,
       label: 'PRICE',
       render: function (ctx) {
-        var style = 'width:' + ctx.widths.price + '; flex-shrink:0;';
-        return '<div class="v6-dom-cell v6-dom-cell-price" style="' + style + '" role="gridcell" tabindex="-1" >' + ctx.marker + ctx.priceText + ctx.liveBadge + '</div>';
+        var style = '';
+        return '<div class="v6-dom-cell v6-dom-cell-price" style="' + style + '" aria-hidden="true">' + ctx.marker + ctx.priceText + ctx.liveBadge + '</div>';
       }
     },
     ask: {
       weight: 18,
       label: 'ASK',
       render: function (ctx) {
-        var style = 'width:' + ctx.widths.ask + '; flex-shrink:0;';
-        return '<div class="v6-dom-cell v6-dom-cell-ask' + ctx.askChangeClass + '" style="' + style + '" role="gridcell" tabindex="-1" >' +
+        var style = '';
+        return '<div class="v6-dom-cell v6-dom-cell-ask' + ctx.askChangeClass + '" style="' + style + '" aria-hidden="true">' +
           '<div class="v6-dom-bar is-ask" style="transform:scaleX(' + (ctx.askPct / 100).toFixed(3) + ')"></div>' +
           '<span class="v6-dom-val">' + (ctx.askText === '0' ? '' : ctx.askText) + '</span>' +
         '</div>';
@@ -349,7 +385,7 @@
       weight: 10,
       label: 'DELTA',
       render: function (ctx) {
-        var style = 'width:' + ctx.widths.delta + '; flex-shrink:0;';
+        var style = '';
         return '<div class="v6-dom-cell v6-dom-cell-delta" style="' + style + '">' + fmtModeSigned(ctx.lv.delta, ctx.vctx) + '</div>';
       }
     },
@@ -357,7 +393,7 @@
       weight: 8,
       label: 'IMB',
       render: function (ctx) {
-        var style = 'width:' + ctx.widths.imb + '; flex-shrink:0;';
+        var style = '';
         return '<div class="v6-dom-cell v6-dom-cell-imb ' + ctx.imSide + '" style="' + style + '">' + ctx.imText + '</div>';
       }
     },
@@ -365,7 +401,7 @@
       weight: 5,
       label: 'STK',
       render: function (ctx) {
-        var style = 'width:' + ctx.widths.stack + '; flex-shrink:0;';
+        var style = '';
         return '<div class="v6-dom-cell v6-dom-cell-stack ' + ctx.imSide + '" style="' + style + '">' + ctx.stackText + '</div>';
       }
     },
@@ -373,7 +409,7 @@
       weight: 7,
       label: 'ABS',
       render: function (ctx) {
-        var style = 'width:' + ctx.widths.abs + '; flex-shrink:0;';
+        var style = '';
         return '<div class="v6-dom-cell v6-dom-cell-abs ' + ctx.absSide + '" style="' + style + '">' + ctx.absText + '</div>';
       }
     }
@@ -557,7 +593,12 @@
       '</div>' +
       // ── Column headers + ladder ──────────────────────────────────────────────
       '<div class="v6-dom-cols"></div>' +
-      '<div class="v6-dom-body" role="grid" aria-label="Depth of market price ladder"></div>' +
+      // DOM structure for automated testing / a11y:
+      //   .v6-dom-body[role=list]
+      //     └ .v6-dom-row-wrap[data-price-key]          ← stable hook (pool element)
+      //       └ .v6-dom-row[role=listitem][aria-label]  ← visible row (rebuilt on sig change)
+      //           └ .v6-dom-cell[aria-hidden=true]      ← individual bid/price/ask cells
+      '<div class="v6-dom-body" role="list" aria-label="Depth of market price ladder"></div>' +
       '<div class="v6-dom-stale-overlay" data-dom-stale-overlay hidden aria-live="polite">' +
         '<strong>Stale DOM</strong><span data-dom-stale-text>Waiting for order book</span>' +
       '</div>' +
@@ -582,6 +623,7 @@
           '<option value="contracts">Contracts</option>' +
           '<option value="ticks">Ticks</option>' +
         '</select></label>' +
+        '<label class="v6-dom-glbl v6-dom-gap-ticks-wrap" title="Show DOM-CHART gap in ticks instead of price"><input type="checkbox" class="v6-dom-gap-ticks"> Gap: ticks</label>' +
       '</div>';
   }
 
@@ -627,6 +669,11 @@
     if (modeSel && document.activeElement !== modeSel) {
       var mode = normalizeValueMode(settings && settings.domValueMode);
       if (String(modeSel.value) !== mode) modeSel.value = mode;
+    }
+    var gapChk = container.querySelector('.v6-dom-gap-ticks');
+    if (gapChk) {
+      var checked = !!(settings && settings.domGapTicks);
+      if (gapChk.checked !== checked) gapChk.checked = checked;
     }
   }
 
@@ -791,8 +838,12 @@
     var row = rowHost && rowHost.firstElementChild;
     if (!row) return;
     var sig = heatSignature(heat, delta);
-    if (rowHost._domHeatSig === sig) return;
-    rowHost._domHeatSig = sig;
+    // Signature lives on the styled element itself, not the pool host.
+    // After an innerHTML reparse the child is new and has no _domHeatSig,
+    // so vars are re-applied correctly. After a no-op (same heat), the
+    // signature matches and we skip — no risk of stale host-level cache.
+    if (row._domHeatSig === sig) return;
+    row._domHeatSig = sig;
     row.style.setProperty('--dom-heat-vol', heatAlphaText(heat && heat.vol));
     row.style.setProperty('--dom-heat-sell', heatAlphaText(heat && heat.sell));
     row.style.setProperty('--dom-heat-buy', heatAlphaText(heat && heat.buy));
@@ -867,10 +918,9 @@
     }).join('');
 
     var y_snap = Math.round(y);
-    var rowW = Math.max(1, Math.round(widths._total || totalColumnWidth(cols, widths)));
     return '<div class="' + cls + '"' +
-      ' style="position:absolute;left:0;width:' + rowW + 'px;height:' + DOM_ROW_HEIGHT + 'px;transform:translateY(' + y_snap + 'px)"' +
-      ' data-price-key="' + lv.priceKey + '" role="row" >' +
+      ' style="transform:translateY(' + y_snap + 'px)"' +
+      ' data-price-key="' + lv.priceKey + '" role="listitem" aria-label="' + rowLabel + '">' +
       cellsHtml +
       '</div>';
   }
@@ -965,7 +1015,7 @@
     //    scrollTop qu'un book live qui se met a jour / se retrecit provoque (ce qui
     //    vidait le ladder, notamment apres un resize).
     //  • Manuel: modele virtual-scroll classique (grand spacer + offsets absolus).
-    var viewport = body.clientHeight;
+    var viewport = _viewportH || body.clientHeight;
     if (!(viewport > 0)) viewport = DOM_ROW_HEIGHT * 20;
 
     var following = autoCenter && !userScrolled && Number.isFinite(snap.midTick);
@@ -979,13 +1029,13 @@
       lastRow       = Math.min(totalTicks - 1, firstRow + visN);
       rowOffsetBase = firstRow;   // rows positioned relative to the viewport top
       spacerH       = viewport;   // container does not scroll
-      if (body.scrollTop !== 0) {
+      if (_scrollTop !== 0) {
         var ctn2 = body.closest && body.closest('[data-v6-dom-list]');
         if (ctn2) suppressScrollDetection(ctn2, 0);
         body.scrollTop = 0;
       }
     } else {
-      var scrollTop = body.scrollTop;
+      var scrollTop = _scrollTop;
       firstRow      = Math.max(0, Math.floor(scrollTop / DOM_ROW_HEIGHT) - OVERSCAN);
       lastRow       = Math.min(totalTicks - 1, firstRow + Math.ceil(viewport / DOM_ROW_HEIGHT) + OVERSCAN * 2);
       rowOffsetBase = 0;          // absolute offsets within the tall spacer
@@ -1011,28 +1061,77 @@
       virt.spacer.style.backgroundImage = columnBoundaryBackground(cols, widths);
       virt._lastBgSig = bgSig;
     }
+    // Set column width CSS vars on the container so cells can use
+    // width:var(--col-bid) in CSS instead of inline style per cell.
+    if (virt._lastWidthSig !== bgSig) {
+      cols.forEach(function (c) {
+        virt.spacer.style.setProperty("--col-" + c, widths[c] || "40px");
+      });
+      virt.spacer.style.setProperty("--col-total", totalW + "px");
+      virt._lastWidthSig = bgSig;
+    }
 
     var startTick = maxTick - firstRow;
     var endTick   = maxTick - lastRow;
 
     // 5. Max bid/ask pour les barres.
     // book: stable viewMin/viewMax, visible: rows currently rendered in the scroll window.
+    // Cache: global max computed once per snap; visible max cached by (snap, range).
     var scaleMinTick = (settings && settings.domScaleMode) === 'visible' ? endTick : minTick;
     var scaleMaxTick = (settings && settings.domScaleMode) === 'visible' ? startTick : maxTick;
-    var maxBid = 1, maxAsk = 1, maxVol = 1, maxSell = 1, maxBuy = 1, maxAbsDelta = 1;
-    book.forEach(function (lv) {
-      if (lv.tick < scaleMinTick || lv.tick > scaleMaxTick) return;
-      if (lv.bidSize > maxBid) maxBid = lv.bidSize;
-      if (lv.askSize > maxAsk) maxAsk = lv.askSize;
-      var bv = Number(lv.buyVol) || 0;
-      var sv = Number(lv.sellVol) || 0;
-      var vol = bv + sv;
-      if (vol > maxVol) maxVol = vol;
-      if (sv > maxSell) maxSell = sv;
-      if (bv > maxBuy) maxBuy = bv;
-      var ad = Math.abs(Number(lv.delta) || 0);
-      if (ad > maxAbsDelta) maxAbsDelta = ad;
-    });
+    var maxBid, maxAsk, maxVol, maxSell, maxBuy, maxAbsDelta;
+    if (scaleMinTick === minTick && scaleMaxTick === maxTick) {
+      // ── book mode (or visible range == full range): use global snap cache ──
+      if (!body._snapMaxCache || body._snapMaxCache.snap !== snap) {
+        var gm = { snap: snap, maxBid: 1, maxAsk: 1, maxVol: 1, maxSell: 1, maxBuy: 1, maxAbsDelta: 1 };
+        book.forEach(function (lv) {
+          if (lv.bidSize > gm.maxBid) gm.maxBid = lv.bidSize;
+          if (lv.askSize > gm.maxAsk) gm.maxAsk = lv.askSize;
+          var bv = Number(lv.buyVol) || 0;
+          var sv = Number(lv.sellVol) || 0;
+          var vol = bv + sv;
+          if (vol > gm.maxVol) gm.maxVol = vol;
+          if (sv > gm.maxSell) gm.maxSell = sv;
+          if (bv > gm.maxBuy) gm.maxBuy = bv;
+          var ad = Math.abs(Number(lv.delta) || 0);
+          if (ad > gm.maxAbsDelta) gm.maxAbsDelta = ad;
+        });
+        body._snapMaxCache = gm;
+      }
+      maxBid = body._snapMaxCache.maxBid;
+      maxAsk = body._snapMaxCache.maxAsk;
+      maxVol = body._snapMaxCache.maxVol;
+      maxSell = body._snapMaxCache.maxSell;
+      maxBuy = body._snapMaxCache.maxBuy;
+      maxAbsDelta = body._snapMaxCache.maxAbsDelta;
+    } else {
+      // ── visible mode: cache by (snap, scaleMinTick, scaleMaxTick) ──
+      if (!body._visMaxCache || body._visMaxCache.snap !== snap ||
+          body._visMaxCache.min !== scaleMinTick || body._visMaxCache.max !== scaleMaxTick) {
+        var vm = { snap: snap, min: scaleMinTick, max: scaleMaxTick,
+                   maxBid: 1, maxAsk: 1, maxVol: 1, maxSell: 1, maxBuy: 1, maxAbsDelta: 1 };
+        book.forEach(function (lv) {
+          if (lv.tick < scaleMinTick || lv.tick > scaleMaxTick) return;
+          if (lv.bidSize > vm.maxBid) vm.maxBid = lv.bidSize;
+          if (lv.askSize > vm.maxAsk) vm.maxAsk = lv.askSize;
+          var bv = Number(lv.buyVol) || 0;
+          var sv = Number(lv.sellVol) || 0;
+          var vol = bv + sv;
+          if (vol > vm.maxVol) vm.maxVol = vol;
+          if (sv > vm.maxSell) vm.maxSell = sv;
+          if (bv > vm.maxBuy) vm.maxBuy = bv;
+          var ad = Math.abs(Number(lv.delta) || 0);
+          if (ad > vm.maxAbsDelta) vm.maxAbsDelta = ad;
+        });
+        body._visMaxCache = vm;
+      }
+      maxBid = body._visMaxCache.maxBid;
+      maxAsk = body._visMaxCache.maxAsk;
+      maxVol = body._visMaxCache.maxVol;
+      maxSell = body._visMaxCache.maxSell;
+      maxBuy = body._visMaxCache.maxBuy;
+      maxAbsDelta = body._visMaxCache.maxAbsDelta;
+    }
 
     // 6. Parametres de rendu
     var valueMode   = normalizeValueMode(settings && settings.domValueMode);
@@ -1050,7 +1149,25 @@
     var midTick     = snap.midTick;
     var bestBidTick = snap.bestBidTick;
     var bestAskTick = snap.bestAskTick;
-    var analyticsByTick = computeDomAnalytics(book, minTick, maxTick, settings);
+    // analyticsByTick: cached per-snap with viewport-bounded computation.
+    // Padding = minStack ticks on each side so streak detection isn't truncated.
+    var analyticsByTick = null;
+    var analyRatio = Math.max(1.5, Math.min(8, Number(settings && settings.imbalanceRatio) || 3));
+    var analyStack = Math.max(2, Math.min(6, Math.round(Number(settings && settings.imbalanceStack) || 3)));
+    var analySig = (snap && snap.sequence || 0) + '|' + analyRatio + '|' + analyStack + '|' + startTick + '|' + endTick;
+    if (!body._analyCache || body._analyCache.sig !== analySig) {
+      var aMin = minTick;
+      var aMax = maxTick;
+      if ((settings && settings.domScaleMode) === 'visible') {
+        // Viewport-bounded: only compute for the visible range + padding for streaks
+        aMin = Math.max(minTick, endTick - analyStack);
+        aMax = Math.min(maxTick, startTick + analyStack);
+      }
+      analyticsByTick = computeDomAnalytics(book, aMin, aMax, settings);
+      body._analyCache = { sig: analySig, data: analyticsByTick };
+    } else {
+      analyticsByTick = body._analyCache.data;
+    }
 
     // 7. DOM row pool — reuses existing row elements instead of innerHTML rebuild.
     //    Only updates className, style, and content for rows that actually changed.
@@ -1077,30 +1194,52 @@
         buy: heatAlpha((Number(lv.buyVol) || 0) / maxBuy),
         delta: heatAlpha(Math.abs(Number(lv.delta) || 0) / maxAbsDelta)
       };
-      var rowHtml = renderRow(lv, y, maxBid, maxAsk, liveTick, midTick, bestBidTick, bestAskTick, live, vctx, sizeThreshold, analyticsByTick[tick], cols, widths, heat);
+      // Lightweight signature: concatenate only the fields that affect
+      // the row's HTML output. If this matches the cached signature, skip
+      // renderRow entirely (no string building, no cols.map, no template concat).
+      // Skip rendering of truly empty rows (no bid/ask/vol/delta/analytics)
+      // unless they are the mid, live, best-bid or best-ask tick — those are
+      // structurally important markers even with zero size.
+      var a = analyticsByTick[tick];
+      var isMarkerTick = (tick === midTick || tick === liveTick || tick === bestBidTick || tick === bestAskTick);
+      var isEmptyRow = !lv.bidSize && !lv.askSize && !lv.buyVol && !lv.sellVol &&
+        !(Number(lv.delta)) && !lv.wallScore && !a && !isMarkerTick;
+      if (isEmptyRow) continue;
+
+      var rowSig = lv.tick + '|' + lv.bidSize + '|' + lv.askSize + '|' + lv.priceKey + '|' +
+        (isFinite(lv.delta) ? lv.delta : 0) + '|' + lv.wallScore + '|' +
+        lv.prevBidSize + '|' + lv.prevAskSize + '|' +
+        (a ? (a.imbalance ? a.imbalance.side + a.imbalance.ratio : '') + '~' + (a.stack || '') + '~' + (a.absorption || '') : '') + '|' +
+        (heat ? heat.vol + '~' + heat.buy + '~' + heat.sell + '~' + heat.delta : '') + '|' +
+        liveTick + '|' + midTick + '|' + bestBidTick + '|' + bestAskTick + '|' + live + '|' +
+        maxBid + '|' + maxAsk + '|' + (widths._total || 0) + '|' + cols.join(',');
 
       // Get or create row element from pool
       var rowEl = pool[rowIdx];
       if (!rowEl) {
+        var rowHtml = renderRow(lv, y, maxBid, maxAsk, liveTick, midTick, bestBidTick, bestAskTick, live, vctx, sizeThreshold, analyticsByTick[tick], cols, widths, heat);
         rowEl = document.createElement('div');
+        rowEl.className = 'v6-dom-row-wrap';
         rowEl.innerHTML = rowHtml;  // first render: parse HTML once
-        rowEl._domHtml = rowHtml;
-        rowEl._domHeatSig = null;
+        rowEl._domSig = rowSig;
         rowEl._domPriceKey = pk;
+        rowEl.setAttribute('data-price-key', pk);
         virt.spacer.appendChild(rowEl);
         pool[rowIdx] = rowEl;
-      } else {
-        // Reuse: update only what changed
-        if (rowEl._domHtml !== rowHtml) {
-          rowEl.innerHTML = rowHtml;  // content changed — parse new HTML
-          rowEl._domHtml = rowHtml;
-          rowEl._domHeatSig = null;
-        } else {
-          // Content same — just reposition and re-class
-          rowEl.style.transform = 'translateY(' + Math.round(y) + 'px)';
-          rowEl.style.width = Math.max(1, Math.round(widths._total || totalColumnWidth(cols, widths))) + 'px';
-        }
+      } else if (rowEl._domSig === rowSig) {
+        // Signature unchanged: skip renderRow entirely.
+        // Just reposition (y may have changed due to scroll/resize).
+        // Width is inherited via CSS var --col-total on the container.
+        rowEl.style.transform = 'translateY(' + Math.round(y) + 'px)';
         rowEl._domPriceKey = pk;
+        rowEl.setAttribute('data-price-key', pk);
+      } else {
+        // Signature changed: rebuild HTML and reparse.
+        var rowHtml2 = renderRow(lv, y, maxBid, maxAsk, liveTick, midTick, bestBidTick, bestAskTick, live, vctx, sizeThreshold, analyticsByTick[tick], cols, widths, heat);
+        rowEl.innerHTML = rowHtml2;
+        rowEl._domSig = rowSig;
+        rowEl._domPriceKey = pk;
+        rowEl.setAttribute('data-price-key', pk);
       }
       applyRowHeatVars(rowEl, heat, lv.delta);
       rowEl.style.display = '';
@@ -1111,6 +1250,15 @@
     // Hide unused rows (don't remove — keep in pool for reuse)
     for (; rowIdx < pool.length; rowIdx++) {
       pool[rowIdx].style.display = 'none';
+    }
+    // Shrink pool: if it's significantly larger than what we needed this frame,
+    // remove the excess nodes entirely. This prevents memory bloat when the
+    // user switches from a fine tick size (many rows) to a coarse one (few).
+    // Threshold: 2x the high-water mark of used rows + 20 slack.
+    var maxPoolSize = Math.max(used * 2 + 20, 40);
+    while (pool.length > maxPoolSize) {
+      var extra = pool.pop();
+      if (extra && extra.parentNode) extra.parentNode.removeChild(extra);
     }
   }
 
@@ -1132,10 +1280,10 @@
     // the ladder can be left scrolled to the top with the mid far off-screen; if
     // the mid is then stable, a move-only check would never recenter → blank ladder.
     var midOffset = (maxTick - midTick) * DOM_ROW_HEIGHT;
-    var viewport  = body.clientHeight || 0;
+    var viewport  = _viewportH || body.clientHeight || 0;
     var midVisible = viewport > 0 &&
-      midOffset >= body.scrollTop &&
-      midOffset <= body.scrollTop + viewport - DOM_ROW_HEIGHT;
+      midOffset >= _scrollTop &&
+      midOffset <= _scrollTop + viewport - DOM_ROW_HEIGHT;
     var moved = lastMidTick == null || Math.abs(midTick - lastMidTick) >= threshold;
     if (!moved && midVisible) return;
     lastMidTick = midTick;
@@ -1147,11 +1295,9 @@
       followRaf = null;
       followPending = null;
       if (!pending || !pending.body || !pending.body.isConnected) return;
-      // Instant (not smooth): a smooth scroll animates over ~600ms while the
-      // virtual window is re-rendered from an early, low scrollTop, leaving the
-      // rows stranded off-screen. Snapping fires a single scroll → one aligned
-      // re-render, so the ladder always shows the mid band.
-      centerOnTick(pending.body, pending.midTick, pending.maxTick, false);
+      // Smooth animation: centerOnTick now handles the smooth scroll with
+      // per-frame virtual window re-renders, keeping rows aligned throughout.
+      centerOnTick(pending.body, pending.midTick, pending.maxTick, true);
     });
   }
 
@@ -1284,7 +1430,7 @@
     setStat(container, 'seq',    domSequenceLabel(snap));
     setStat(container, 'gap',    String(domGapCount(snap)));
     setStat(container, 'drop',   String(domDroppedCount(state, snap)));
-    updatePriceGapIndicator(container, snap, state);
+    updatePriceGapIndicator(container, snap, state, settings);
     syncControls(container, snap.priceGrouping || 25, settings);
 
     // ── Memorisation pour le scroll handler ──
@@ -1302,9 +1448,6 @@
     if (!container._domHasCentered || (body && body._domNeedsCenter)) {
       container._domHasCentered = true;
       if (body) body._domNeedsCenter = false;
-      // Hide the empty overlay now that we have data.
-      var emptyOverlay = container.querySelector('[data-dom-empty-overlay]');
-      if (emptyOverlay) { emptyOverlay.hidden = true; emptyOverlay.classList.remove('is-visible'); }
       var midTick = snap.midTick;
       var maxTick = snap.viewMax != null ? snap.viewMax : snap.maxTick;
       if (body && Number.isFinite(midTick) && Number.isFinite(maxTick)) {
@@ -1313,12 +1456,24 @@
         }
         autoCenter = true;
         userScrolled = false;
+        // Synchronous render FIRST so rows are in the DOM before we hide the overlay.
+        // This eliminates the flash of empty body between overlay-hide and first paint.
+        centerOnTick(body, midTick, maxTick, true);
+        renderVirtual(body, snap, live, settings);
+        // Now hide the empty overlay — rows are already painted.
+        var emptyOverlay = container.querySelector('[data-dom-empty-overlay]');
+        if (emptyOverlay) { emptyOverlay.hidden = true; emptyOverlay.classList.remove('is-visible'); }
+        // Double RAF for a final re-center paint (layout may shift after first render).
         requestAnimationFrame(function () {
           requestAnimationFrame(function () {
-            centerOnTick(body, midTick, maxTick, false);
+            centerOnTick(body, midTick, maxTick, true);
             renderVirtual(body, snap, live, settings);
           });
         });
+      } else {
+        // No valid mid/max tick — still hide overlay since we have data.
+        var emptyOverlay2 = container.querySelector('[data-dom-empty-overlay]');
+        if (emptyOverlay2) { emptyOverlay2.hidden = true; emptyOverlay2.classList.remove('is-visible'); }
       }
     }
   }
@@ -1409,7 +1564,7 @@
         var body = getBody(container);
         if (body && container._domLastSnap) {
           var s = container._domLastSnap;
-          centerOnTick(body, s.midTick, s.maxTick, false);  // instant — avoids misaligned rows during smooth animation
+          centerOnTick(body, s.midTick, s.maxTick, true);  // instant — avoids misaligned rows during smooth animation
           requestAnimationFrame(function () {
             renderVirtual(body, s, container._domLastLive || 0,
               (container._domLastState && container._domLastState.settings) || {});
@@ -1419,12 +1574,17 @@
       if (target.closest('.v6-dom-value-mode') && onSettingsPatch) {
         onSettingsPatch({ domValueMode: normalizeValueMode(target.value) });
       }
+      var gapChk = target.closest('.v6-dom-gap-ticks');
+      if (gapChk && onSettingsPatch) {
+        onSettingsPatch({ domGapTicks: gapChk.checked });
+      }
     });
 
     // Scroll → re-render virtuel + detection user scroll
     var body = getBody(container);
     if (body) {
       body.addEventListener('scroll', function () {
+        _scrollTop = body.scrollTop;
         // _suppressScrollDetection covers programmatic scrolls (centerOnTick / follow).
         // It must ONLY skip the "user disabled auto-follow" side effect — the
         // virtual window must STILL be re-rendered so rows stay aligned with the
@@ -1472,7 +1632,7 @@
               var midOff = (maxTickL - s.midTick) * DOM_ROW_HEIGHT;
               var wheelDelta = event && Number.isFinite(Number(event.deltaY)) ? Number(event.deltaY) : 0;
               suppressScrollDetection(container, 0);
-              body.scrollTop = Math.max(0, midOff - body.clientHeight / 2 + wheelDelta);
+              body.scrollTop = Math.max(0, midOff - (_viewportH || body.clientHeight) / 2 + wheelDelta);
               // scrollTop triggers the native scroll event → _domScrollRaf → renderVirtual
             }
           }
@@ -1482,9 +1642,12 @@
       // Resize → re-render (which re-centers on the mid). A window/dock/panel
       // resize changes the body height and resets scrollTop; without this the
       // ladder stays blank until the next order-book tick happens to re-render.
+      _viewportH = body.clientHeight;
+      _scrollTop = body.scrollTop;
       if (typeof ResizeObserver === 'function' && !body._domResizeObs) {
         var roRaf = null;
         body._domResizeObs = new ResizeObserver(function () {
+          _viewportH = body.clientHeight;
           if (roRaf) return;
           roRaf = requestAnimationFrame(function () {
             roRaf = null;

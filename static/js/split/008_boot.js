@@ -37,7 +37,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   state.breakdownSortMode = loadBreakdownSortMode();
   // Restaurer la derniere page active (#55)
   var lastPage = localStorage.getItem("lastPage");
-  if (lastPage && ["today","journal","insights","chart","orderflow","settings"].indexOf(lastPage) >= 0) {
+  if (lastPage && ["today","journal","insights","orderflow","settings"].indexOf(lastPage) >= 0) {
     state.currentPage = lastPage;
   }
   // Sync the DOM to the restored page. The template marks "today" active by
